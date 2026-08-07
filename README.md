@@ -8,7 +8,11 @@ The app defaults to Showdown’s animated XY sprites and caches CDN resources in
 
 ## Preview
 
-[![Watch the 30-second Showdown! dual-screen preview](media/showdown-promo-poster.jpg)](media/showdown-promo.mp4)
+<video controls playsinline preload="metadata" width="480" poster="https://raw.githubusercontent.com/castdrian/showdown-ds/main/media/showdown-promo-poster.jpg">
+  <source src="https://raw.githubusercontent.com/castdrian/showdown-ds/main/media/showdown-promo.mp4" type="video/mp4">
+</video>
+
+[Open the 30-second dual-screen preview](media/showdown-promo.mp4)
 
 ## Android setup
 

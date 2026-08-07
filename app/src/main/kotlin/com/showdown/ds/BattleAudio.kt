@@ -2,6 +2,7 @@ package com.showdown.ds
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
@@ -22,11 +23,13 @@ class BattleAudio(
     private var bgmFile: File? = null
     private var bgmPlayer: MediaPlayer? = null
     private var activeMovePlayer: MediaPlayer? = null
+    private var activeMoveStop: Runnable? = null
     private var bgmPrepared = false
     private var soundEffectsEnabled = true
     private var musicEnabled = false
     private val moveSoundDirectory = File(context.cacheDir, "move-sfx").apply { mkdirs() }
     private val moveSoundCache = ConcurrentHashMap<String, File>()
+    private val moveDurationCache = ConcurrentHashMap<String, Long>()
     private val pendingMoveSounds = ConcurrentHashMap.newKeySet<String>()
     private val moveSoundCallbacks = mutableMapOf<String, MutableList<(File?) -> Unit>>()
     private val moveSoundLock = Any()
@@ -72,8 +75,7 @@ class BattleAudio(
         mainHandler.removeCallbacks(loopCheck)
         bgmPlayer?.release()
         bgmPlayer = null
-        activeMovePlayer?.release()
-        activeMovePlayer = null
+        stopActiveMove()
         moveSoundTimeline.beginMove()
         moveSoundExecutor.shutdownNow()
     }
@@ -104,16 +106,22 @@ class BattleAudio(
         moves.forEach { loadMoveSound(it) { } }
     }
 
-    fun playMove(move: String) {
+    fun planMovePresentation(move: String, visualDurationMillis: Long) =
+        MovePresentationTiming.plan(visualDurationMillis, moveDurationMillis(move))
+
+    fun playMove(move: String, presentationDurationMillis: Long) {
         if (!soundEffectsEnabled) return
+        if (presentationDurationMillis <= 0L) return
         val moveToken = moveSoundTimeline.beginMove(SystemClock.elapsedRealtime())
-        activeMovePlayer?.let {
-            it.release()
+        stopActiveMove()
+        val id = resourceId(move)
+        val audioDurationMillis = moveDurationMillis(move)
+        if (audioDurationMillis <= 0L) return
+        moveSoundCache[id]?.let { file ->
+            playMoveFile(file, audioDurationMillis, presentationDurationMillis, moveToken)
+            return
         }
-        activeMovePlayer = null
-        loadMoveSound(move) { file ->
-            if (moveSoundTimeline.isPlayable(moveToken, SystemClock.elapsedRealtime())) file?.let { playMoveFile(it, moveToken) }
-        }
+        playMoveAsset(id, audioDurationMillis, presentationDurationMillis, moveToken)
     }
 
     fun playCry(species: String) {
@@ -219,25 +227,85 @@ class BattleAudio(
         }
     }
 
-    private fun playMoveFile(file: File, moveToken: Long) {
-        val player = MediaPlayer().apply {
+    private fun playMoveAsset(id: String, audioDurationMillis: Long, presentationDurationMillis: Long, moveToken: Long) {
+        val player = runCatching {
+            context.assets.openFd("move-sfx/$id.mp3").use { asset ->
+                MediaPlayer().apply {
+                    setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
+                }
+            }
+        }.getOrNull() ?: return
+        startMovePlayer(player, audioDurationMillis, presentationDurationMillis, moveToken)
+    }
+
+    private fun playMoveFile(file: File, audioDurationMillis: Long, presentationDurationMillis: Long, moveToken: Long) {
+        val player = runCatching {
+            MediaPlayer().apply { setDataSource(file.path) }
+        }.getOrNull() ?: return
+        startMovePlayer(player, audioDurationMillis, presentationDurationMillis, moveToken)
+    }
+
+    private fun startMovePlayer(player: MediaPlayer, audioDurationMillis: Long, presentationDurationMillis: Long, moveToken: Long) {
+        val visualDispatchAtMillis = SystemClock.elapsedRealtime()
+        player.apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            setDataSource(file.path)
             setVolume(0.72f, 0.72f)
             setOnPreparedListener {
-                if (activeMovePlayer !== this || !moveSoundTimeline.isPlayable(moveToken, SystemClock.elapsedRealtime())) {
+                val remainingPresentationMillis = presentationDurationMillis - (SystemClock.elapsedRealtime() - visualDispatchAtMillis)
+                if (activeMovePlayer !== this || !moveSoundTimeline.isPlayable(moveToken, SystemClock.elapsedRealtime()) || remainingPresentationMillis <= 0L) {
                     release()
                     return@setOnPreparedListener
                 }
+                isLooping = audioDurationMillis < remainingPresentationMillis
                 start()
+                val stop = Runnable {
+                    if (activeMovePlayer === this) {
+                        activeMovePlayer = null
+                        release()
+                    }
+                }
+                activeMoveStop = stop
+                mainHandler.postDelayed(stop, remainingPresentationMillis)
             }
             setOnCompletionListener {
-                if (activeMovePlayer === this) activeMovePlayer = null
+                if (activeMovePlayer === this) {
+                    activeMovePlayer = null
+                    activeMoveStop?.let(mainHandler::removeCallbacks)
+                    activeMoveStop = null
+                }
                 release()
             }
             prepareAsync()
         }
         activeMovePlayer = player
+    }
+
+    private fun stopActiveMove() {
+        activeMoveStop?.let(mainHandler::removeCallbacks)
+        activeMoveStop = null
+        activeMovePlayer?.let { player ->
+            runCatching { player.stop() }
+            player.release()
+        }
+        activeMovePlayer = null
+    }
+
+    private fun moveDurationMillis(move: String): Long {
+        val id = resourceId(move)
+        moveDurationCache[id]?.let { return it }
+        val duration = runCatching {
+            context.assets.openFd("move-sfx/$id.mp3").use { asset ->
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                } finally {
+                    retriever.release()
+                }
+            }
+        }.getOrDefault(0L)
+        if (duration > 0L) moveDurationCache[id] = duration
+        return duration
     }
 
     private fun resourceId(value: String) = value.lowercase().replace(Regex("[^a-z0-9]"), "")
