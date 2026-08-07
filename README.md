@@ -8,7 +8,7 @@ The app defaults to Showdown’s animated XY sprites and caches CDN resources in
 
 ## Preview
 
-[![Watch the 30-second Showdown! dual-screen preview](media/showdown-promo-poster.jpg)](media/showdown-promo.mp4)
+https://github.com/user-attachments/assets/62ef66c8-0a18-4949-9539-828e9f4e31b1
 
 ## Android setup
 
