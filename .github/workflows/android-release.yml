@@ -5,9 +5,23 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create
+        required: true
+        type: string
+      channel:
+        description: Release channel
+        required: true
+        default: alpha
+        type: choice
+        options:
+          - alpha
+          - beta
+          - stable
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   GRADLE_VERSION: '8.13'
@@ -19,6 +33,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -42,11 +58,86 @@ jobs:
       - name: Set up Gradle caching
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build release APK
+      - name: Prepare signed release version
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          REQUESTED_CHANNEL: ${{ inputs.channel || '' }}
+          SHOWDOWN_KEYSTORE_BASE64: ${{ secrets.SHOWDOWN_KEYSTORE_BASE64 }}
+          SHOWDOWN_KEYSTORE_PASSWORD: ${{ secrets.SHOWDOWN_KEYSTORE_PASSWORD }}
+          SHOWDOWN_KEY_ALIAS: ${{ secrets.SHOWDOWN_KEY_ALIAS }}
+          SHOWDOWN_KEY_PASSWORD: ${{ secrets.SHOWDOWN_KEY_PASSWORD }}
+        run: |
+          case "$RELEASE_TAG" in
+            v[0-9]*.[0-9]*.[0-9]*|v[0-9]*.[0-9]*.[0-9]*-[a-z]*.[0-9]*) ;;
+            *) exit 1 ;;
+          esac
+          test -n "$SHOWDOWN_KEYSTORE_BASE64"
+          test -n "$SHOWDOWN_KEYSTORE_PASSWORD"
+          test -n "$SHOWDOWN_KEY_ALIAS"
+          test -n "$SHOWDOWN_KEY_PASSWORD"
+          release_version="${RELEASE_TAG#v}"
+          numeric_version="${release_version%%-*}"
+          IFS=. read -r major minor patch <<EOF
+          $numeric_version
+          EOF
+          case "$major:$minor:$patch" in
+            *[!0-9:]*|*::*|:*|*:) exit 1 ;;
+          esac
+          test "$minor" -le 999
+          test "$patch" -le 999
+          release_code=$((major * 1000000 + minor * 1000 + patch))
+          test "$release_code" -gt 0
+          test "$release_code" -le 2147483647
+          keystore_path="$RUNNER_TEMP/showdown-release.jks"
+          printf '%s' "$SHOWDOWN_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          echo "SHOWDOWN_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+          echo "SHOWDOWN_VERSION_NAME=$release_version" >> "$GITHUB_ENV"
+          echo "SHOWDOWN_VERSION_CODE=$release_code" >> "$GITHUB_ENV"
+          case "$RELEASE_TAG" in
+            *-alpha.*) inferred_channel=alpha ;;
+            *-beta.*) inferred_channel=beta ;;
+            *) inferred_channel=stable ;;
+          esac
+          release_channel="${REQUESTED_CHANNEL:-$inferred_channel}"
+          case "$release_channel" in
+            alpha|beta|stable) ;;
+            *) exit 1 ;;
+          esac
+          case "$release_channel:$inferred_channel" in
+            alpha:alpha|beta:beta|stable:stable) ;;
+            *) exit 1 ;;
+          esac
+          if [[ "$release_channel" == "stable" ]]; then
+            prerelease=false
+          else
+            prerelease=true
+          fi
+          echo "channel=$release_channel" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Build installable release APK
         run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Stage Obtainium APK
+        id: apk
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          apk_name="Showdown-${RELEASE_TAG}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/$apk_name"
+          echo "path=$RUNNER_TEMP/$apk_name" >> "$GITHUB_OUTPUT"
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
           name: showdown-ds-release
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          path: ${{ steps.apk.outputs.path }}
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ steps.release.outputs.prerelease }}
+          files: ${{ steps.apk.outputs.path }}

@@ -1,0 +1,61 @@
+name: Build latest AYN Thor emulator overlay
+
+on:
+  workflow_dispatch:
+    inputs:
+      emulator_ref:
+        description: Android Emulator manifest branch
+        required: true
+        default: emu-main-dev
+        type: string
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ayn-thor-emulator-overlay
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Android Emulator source
+        env:
+          EMULATOR_REF: ${{ inputs.emulator_ref || 'emu-main-dev' }}
+        run: |
+          source_root="$RUNNER_TEMP/aemu-$GITHUB_RUN_ID"
+          rm -rf "$source_root"
+          mkdir -p "$source_root"
+          curl --fail --silent --show-error --location https://storage.googleapis.com/git-repo-downloads/repo --output "$RUNNER_TEMP/repo"
+          chmod +x "$RUNNER_TEMP/repo"
+          cd "$source_root"
+          "$RUNNER_TEMP/repo" init -u https://android.googlesource.com/platform/manifest -b "$EMULATOR_REF"
+          "$RUNNER_TEMP/repo" sync -c -j4
+          printf '%s' "$source_root" > "$RUNNER_TEMP/aemu-source-root"
+
+      - name: Build patched QEMU
+        run: |
+          source_root="$(cat "$RUNNER_TEMP/aemu-source-root")"
+          qemu_root="$source_root/external/qemu"
+          git -C "$qemu_root" apply --check "$GITHUB_WORKSPACE/tools/android-emulator/ayn-thor-single-window.patch"
+          git -C "$qemu_root" apply "$GITHUB_WORKSPACE/tools/android-emulator/ayn-thor-single-window.patch"
+          "$qemu_root/android/rebuild.sh" --out "$source_root/objs-showdown-ds"
+          qemu_binary="$(find "$source_root/objs-showdown-ds" -type f -name qemu-system-aarch64 -print -quit)"
+          test -n "$qemu_binary"
+          mkdir -p "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64"
+          cp "$qemu_binary" "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64/qemu-system-aarch64"
+
+      - name: Upload patched emulator overlay
+        uses: actions/upload-artifact@v4
+        with:
+          name: ayn-thor-emulator-overlay-darwin-aarch64
+          path: ${{ runner.temp }}/ayn-thor-emulator-overlay
+          retention-days: 30

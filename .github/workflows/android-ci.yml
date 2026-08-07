@@ -12,11 +12,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GRADLE_VERSION: '8.13'
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-24.04
 
     steps:
@@ -45,10 +49,29 @@ jobs:
       - name: Set up Gradle caching
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
-        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Validate Showdown protocol contracts
+        run: |
+          gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest \
+            --tests com.showdown.ds.OfficialBattleTranscriptTest \
+            --tests com.showdown.ds.ShowdownProtocolContractTest \
+            --tests com.showdown.ds.ShowdownServerEndpointTest \
+            --tests com.showdown.ds.ShowdownAssetPathsTest
+
+      - name: Run full unit suite and build debug APK
+        run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: showdown-ds-test-results
+          path: |
+            app/build/test-results/testDebugUnitTest
+            app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: warn
 
       - name: Upload debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: showdown-ds-debug

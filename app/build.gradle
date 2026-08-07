@@ -1,18 +1,23 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
 }
 
+def releaseKeystorePath = System.getenv('SHOWDOWN_KEYSTORE_PATH')
+def releaseVersionName = System.getenv('SHOWDOWN_VERSION_NAME') ?: '0.1.0'
+def releaseVersionCode = (System.getenv('SHOWDOWN_VERSION_CODE') ?: '1').toInteger()
+
 android {
-    namespace 'com.showdown.ds'
+    namespace 'dev.adrian.showdown'
     compileSdk 34
     ndkVersion '27.3.13750724'
 
     defaultConfig {
-        applicationId 'com.showdown.ds'
+        applicationId 'dev.adrian.showdown'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName '0.1.0'
+        versionCode releaseVersionCode
+        versionName releaseVersionName
 
         ndk {
             abiFilters 'arm64-v8a', 'x86_64'
@@ -25,6 +30,17 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (releaseKeystorePath != null) {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv('SHOWDOWN_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('SHOWDOWN_KEY_ALIAS')
+                keyPassword System.getenv('SHOWDOWN_KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix '.debug'
@@ -32,6 +48,7 @@ android {
         }
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -39,6 +56,10 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
     }
 
     externalNativeBuild {
@@ -53,4 +74,10 @@ android {
             useLegacyPackaging false
         }
     }
+}
+
+dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:5.3.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
 }

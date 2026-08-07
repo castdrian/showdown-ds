@@ -1,0 +1,572 @@
+package com.showdown.ds
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Shader
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.View
+import dev.adrian.showdown.R
+import java.util.Locale
+import kotlin.math.min
+
+class BattleSceneView(
+    context: Context,
+    private val session: BattleSession,
+    private val spriteCache: ShowdownSpriteCache
+) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val source = Rect()
+    private val destination = RectF()
+    private val logo: Bitmap? = BitmapFactory.decodeResource(resources, R.drawable.showdown_logo)
+    private var backdrop: Bitmap? = null
+    private var playerSprite: ShowdownSpriteCache.SpriteAsset? = null
+    private var opponentSprite: ShowdownSpriteCache.SpriteAsset? = null
+    private var playerPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
+    private var opponentPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
+    private var playerTrainerSprite: ShowdownSpriteCache.SpriteAsset? = null
+    private var opponentTrainerSprite: ShowdownSpriteCache.SpriteAsset? = null
+    private var requestedPlayerSprite = ""
+    private var requestedOpponentSprite = ""
+    private var requestedPlayerTrainer = false
+    private var requestedOpponentTrainer = false
+    private var requestedBackdrop = ""
+    private val effectAssets = mutableMapOf<String, Bitmap>()
+    private val requestedEffects = mutableSetOf<String>()
+    private var inspectedPlayer: Boolean? = null
+    private val playerInspectBounds = RectF()
+    private val opponentInspectBounds = RectF()
+
+    private data class HpColors(val fill: Int, val highlight: Int, val shadow: Int)
+
+    init {
+        setWillNotDraw(false)
+        spriteCache.requestPlaceholder(true) {
+            playerPlaceholder = it
+            invalidate()
+        }
+        spriteCache.requestPlaceholder(false) {
+            opponentPlaceholder = it
+            invalidate()
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val width = width.toFloat()
+        val height = height.toFloat()
+        val scale = min(width / 1920f, height / 1080f)
+        val singles = session.isSinglesBattle()
+        val playerX = width * 0.27f
+        val playerY = height * if (singles) 0.68f else 0.66f
+        val opponentX = width * 0.73f
+        val opponentY = height * if (singles) 0.45f else 0.42f
+        playerInspectBounds.set(width * 0.05f, height * 0.28f, width * 0.57f, height * 0.88f)
+        opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
+        requestResources()
+        drawBackdrop(canvas, width, height)
+        drawTrainer(canvas, width * 0.11f, height * if (singles) 0.74f else 0.67f, scale, true)
+        drawTrainer(canvas, width * 0.89f, height * if (singles) 0.35f else 0.31f, scale, false)
+        drawCombatant(canvas, opponentX, opponentY, scale * if (singles) 1.30f else 1.05f, false, session.opponentCondition)
+        drawCombatant(canvas, playerX, playerY, scale * if (singles) 1.50f else 1.16f, true, session.playerCondition)
+        drawHeader(canvas, width, scale)
+        drawStatusCard(
+            canvas,
+            RectF(width * 0.025f, height * 0.80f, width * 0.295f, height * 0.96f),
+            session.playerName,
+            session.playerPokemon,
+            session.playerLevel,
+            session.playerGender,
+            session.playerHp,
+            session.playerCondition,
+            session.playerHealthFraction(),
+            scale
+        )
+        drawStatusCard(
+            canvas,
+            RectF(width * 0.705f, height * 0.035f, width * 0.975f, height * 0.195f),
+            session.opponentName,
+            session.opponentPokemon,
+            session.opponentLevel,
+            session.opponentGender,
+            session.opponentHp,
+            session.opponentCondition,
+            session.opponentHealthFraction(),
+            scale
+        )
+        drawInspectSheet(canvas, width, height, scale)
+        drawBattleFeed(canvas, width, height, scale)
+        drawTurnBadge(canvas, width, height, scale)
+        if (
+            isFainting(session.playerPokemon, session.playerCondition) ||
+            isFainting(session.opponentPokemon, session.opponentCondition) ||
+            (playerSprite ?: playerPlaceholder)?.isAnimated == true ||
+            (opponentSprite ?: opponentPlaceholder)?.isAnimated == true
+        ) {
+            postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                return playerInspectBounds.contains(event.x, event.y) ||
+                    opponentInspectBounds.contains(event.x, event.y) ||
+                    inspectedPlayer != null
+            }
+            MotionEvent.ACTION_UP -> {
+                val requestedPlayer = when {
+                    playerInspectBounds.contains(event.x, event.y) -> true
+                    opponentInspectBounds.contains(event.x, event.y) -> false
+                    else -> null
+                }
+                inspectedPlayer = if (requestedPlayer == null || requestedPlayer == inspectedPlayer) null else requestedPlayer
+                invalidate()
+                performClick()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                return inspectedPlayer != null
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+
+    private fun requestResources() {
+        val backdropName = session.showdownBackdrop()
+        if (backdropName != requestedBackdrop) {
+            requestedBackdrop = backdropName
+            backdrop = null
+            spriteCache.requestBackdrop(backdropName) { asset ->
+                if (backdropName == requestedBackdrop) {
+                    backdrop = asset
+                    invalidate()
+                }
+            }
+        }
+        val playerKey = "${session.spriteStyle}:${session.playerPokemon}"
+        if (playerKey != requestedPlayerSprite) {
+            requestedPlayerSprite = playerKey
+            playerSprite = null
+            spriteCache.requestPokemon(session.playerPokemon, true, session.spriteStyle) { asset ->
+                if (playerKey == requestedPlayerSprite) {
+                    playerSprite = asset
+                    invalidate()
+                }
+            }
+        }
+        val opponentKey = "${session.spriteStyle}:${session.opponentPokemon}"
+        if (opponentKey != requestedOpponentSprite) {
+            requestedOpponentSprite = opponentKey
+            opponentSprite = null
+            spriteCache.requestPokemon(session.opponentPokemon, false, session.spriteStyle) { asset ->
+                if (opponentKey == requestedOpponentSprite) {
+                    opponentSprite = asset
+                    invalidate()
+                }
+            }
+        }
+        if (!requestedPlayerTrainer) {
+            requestedPlayerTrainer = true
+            spriteCache.requestTrainer("red") { asset ->
+                playerTrainerSprite = asset
+                invalidate()
+            }
+        }
+        if (!requestedOpponentTrainer) {
+            requestedOpponentTrainer = true
+            spriteCache.requestTrainer("gladion") { asset ->
+                opponentTrainerSprite = asset
+                invalidate()
+            }
+        }
+        SHOWDOWN_EFFECTS.forEach { name ->
+            if (requestedEffects.add(name)) {
+                spriteCache.requestEffect(name) { asset ->
+                    if (asset != null) effectAssets[name] = asset
+                    invalidate()
+                }
+            }
+        }
+    }
+
+    private fun drawBackdrop(canvas: Canvas, width: Float, height: Float) {
+        paint.shader = LinearGradient(0f, 0f, width, height, Color.rgb(10, 21, 40), Color.rgb(34, 12, 58), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width, height, paint)
+        paint.shader = null
+        backdrop?.let {
+            source.set(0, 0, it.width, it.height)
+            destination.set(0f, 0f, width, height)
+            paint.alpha = 212
+            canvas.drawBitmap(it, source, destination, paint)
+            paint.alpha = 255
+        }
+    }
+
+    private fun drawCombatant(canvas: Canvas, centerX: Float, centerY: Float, scale: Float, player: Boolean, condition: String) {
+        val pokemon = if (player) session.playerPokemon else session.opponentPokemon
+        val faintProgress = faintProgress(pokemon, condition)
+        if (faintProgress >= 1f) return
+        val sprite = if (player) playerSprite ?: playerPlaceholder else opponentSprite ?: opponentPlaceholder
+        sprite ?: return
+        val spriteWidth = 290f * scale
+        val spriteHeight = 300f * scale
+        val easedFaint = faintProgress * faintProgress
+        sprite.draw(
+            canvas,
+            RectF(
+                centerX - spriteWidth / 2f,
+                centerY - spriteHeight * 0.68f - 240f * scale * easedFaint,
+                centerX + spriteWidth / 2f,
+                centerY + spriteHeight * 0.32f - 240f * scale * easedFaint
+            ),
+            SystemClock.elapsedRealtime(),
+            alpha = ((1f - easedFaint) * 255f).toInt()
+        )
+    }
+
+    private fun faintProgress(pokemon: String, condition: String): Float {
+        if (!condition.contains("FNT", true)) return 0f
+        if (!pokemon.equals(session.latestFaintedPokemon, true)) return 1f
+        return ((System.nanoTime() - session.latestFaintAtNanos) / 520_000_000f).coerceIn(0f, 1f)
+    }
+
+    private fun isFainting(pokemon: String, condition: String) =
+        condition.contains("FNT", true) && faintProgress(pokemon, condition) < 1f
+
+    private fun drawTrainer(canvas: Canvas, centerX: Float, centerY: Float, scale: Float, player: Boolean) {
+        val sprite = if (player) playerTrainerSprite else opponentTrainerSprite
+        if (sprite != null) {
+            val trainerWidth = 155f * scale
+            val trainerHeight = 245f * scale
+            sprite.draw(
+                canvas,
+                RectF(centerX - trainerWidth / 2f, centerY - trainerHeight / 2f, centerX + trainerWidth / 2f, centerY + trainerHeight / 2f),
+                SystemClock.elapsedRealtime(),
+                player
+            )
+            return
+        }
+        val accent = if (player) CYAN else MAGENTA
+        paint.color = Color.argb(130, Color.red(accent), Color.green(accent), Color.blue(accent))
+        canvas.drawCircle(centerX, centerY - 48f * scale, 26f * scale, paint)
+        paint.color = Color.argb(220, 13, 24, 51)
+        canvas.drawRoundRect(RectF(centerX - 34f * scale, centerY - 18f * scale, centerX + 34f * scale, centerY + 76f * scale), 15f * scale, 15f * scale, paint)
+    }
+
+    private fun drawHeader(canvas: Canvas, width: Float, scale: Float) {
+        val padding = 30f * scale
+        val innerInset = 10f * scale
+        val iconSize = 42f * scale
+        val iconGap = 12f * scale
+        val title = "SHOWDOWN!"
+        val format = session.format.uppercase(Locale.ROOT)
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textSize = 25f * scale
+        val titleLeft = padding + innerInset + iconSize + iconGap
+        val titleWidth = paint.measureText(title)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 14f * scale
+        val formatWidth = paint.measureText(format)
+        val headerRight = (titleLeft + maxOf(titleWidth, formatWidth) + innerInset).coerceAtMost(width - padding)
+        val formatAvailableWidth = (headerRight - titleLeft - innerInset).coerceAtLeast(0f)
+        val displayedFormat = ellipsizeToWidth(format, formatAvailableWidth, paint)
+        paint.color = Color.argb(200, 5, 12, 29)
+        canvas.drawRoundRect(RectF(padding, padding, headerRight, padding + 58f * scale), 16f * scale, 16f * scale, paint)
+        logo?.let {
+            source.set(0, 0, it.width, it.height)
+            destination.set(padding + innerInset, padding + 8f * scale, padding + innerInset + iconSize, padding + 50f * scale)
+            canvas.drawBitmap(it, source, destination, paint)
+        }
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textSize = 25f * scale
+        paint.color = INK
+        canvas.drawText(title, titleLeft, padding + 31f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 14f * scale
+        paint.color = CYAN
+        canvas.drawText(displayedFormat, titleLeft + scale, padding + 48f * scale, paint)
+    }
+
+    private fun drawInspectSheet(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        val playerSide = inspectedPlayer ?: return
+        val details = if (playerSide) session.playerDetails() else session.opponentDetails()
+        val bounds = if (playerSide) {
+            RectF(width * 0.025f, height * 0.14f, width * 0.49f, height * 0.85f)
+        } else {
+            RectF(width * 0.51f, height * 0.16f, width * 0.975f, height * 0.87f)
+        }
+        paint.color = Color.argb(246, 7, 14, 32)
+        canvas.drawRoundRect(bounds, 26f * scale, 26f * scale, paint)
+        paint.color = if (playerSide) CYAN else MAGENTA
+        canvas.drawRoundRect(RectF(bounds.left, bounds.top, bounds.left + 8f * scale, bounds.bottom), 5f * scale, 5f * scale, paint)
+        val left = bounds.left + 34f * scale
+        val right = bounds.right - 32f * scale
+        var row = bounds.top + 70f * scale
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 42f * scale
+        paint.color = INK
+        canvas.drawText(ellipsizeToWidth(details.name, right - left - 168f * scale, paint), left, row, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.textSize = 30f * scale
+        paint.color = if (playerSide) CYAN else MAGENTA
+        canvas.drawText("Lv.${details.level}${details.gender}", right, row, paint)
+        paint.textAlign = Paint.Align.LEFT
+        row += 42f * scale
+        var badgeLeft = left
+        details.types.forEach { type ->
+            val badgeWidth = (type.length * 17f + 50f) * scale
+            paint.color = typeColor(type)
+            canvas.drawRoundRect(RectF(badgeLeft, row, badgeLeft + badgeWidth, row + 40f * scale), 16f * scale, 16f * scale, paint)
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = 19f * scale
+            paint.color = Color.WHITE
+            canvas.drawText(type, badgeLeft + badgeWidth / 2f, row + 27f * scale, paint)
+            paint.textAlign = Paint.Align.LEFT
+            badgeLeft += badgeWidth + 10f * scale
+        }
+        row += 88f * scale
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 27f * scale
+        paint.color = MUTED
+        canvas.drawText("HP", left, row, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.color = INK
+        canvas.drawText("${details.hp}  ${details.condition}", right, row, paint)
+        paint.textAlign = Paint.Align.LEFT
+        row += 52f * scale
+        paint.color = MUTED
+        canvas.drawText("Ability", left, row, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.color = INK
+        canvas.drawText(ellipsizeToWidth(details.ability, right - left - 150f * scale, paint), right, row, paint)
+        paint.textAlign = Paint.Align.LEFT
+        row += 49f * scale
+        paint.color = MUTED
+        canvas.drawText("Item", left, row, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.color = INK
+        canvas.drawText(ellipsizeToWidth(details.item, right - left - 110f * scale, paint), right, row, paint)
+        paint.textAlign = Paint.Align.LEFT
+        row += 57f * scale
+        paint.color = MUTED
+        paint.textSize = 24f * scale
+        canvas.drawText(ellipsizeToWidth(details.stats, right - left, paint), left, row, paint)
+        row += 47f * scale
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 25f * scale
+        paint.color = if (playerSide) CYAN else MAGENTA
+        canvas.drawText("Known moves", left, row, paint)
+        row += 40f * scale
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 24f * scale
+        details.moves.take(4).forEach { move ->
+            paint.color = INK
+            canvas.drawText("• $move", left, row, paint)
+            row += 31f * scale
+        }
+        paint.textSize = 20f * scale
+        paint.color = MUTED
+        canvas.drawText("Tap this Pokémon or outside the sheet to dismiss", left, bounds.bottom - 22f * scale, paint)
+    }
+
+    private fun typeColor(type: String) = when (type) {
+        "FIRE" -> Color.rgb(239, 100, 76)
+        "WATER" -> Color.rgb(74, 152, 244)
+        "GRASS" -> Color.rgb(85, 177, 105)
+        "ELECTRIC" -> Color.rgb(222, 180, 52)
+        "DARK" -> Color.rgb(103, 78, 118)
+        "FAIRY" -> Color.rgb(219, 116, 178)
+        "POISON" -> Color.rgb(148, 88, 170)
+        "DRAGON" -> Color.rgb(92, 102, 215)
+        "GROUND" -> Color.rgb(195, 145, 82)
+        "FLYING" -> Color.rgb(117, 157, 220)
+        "GHOST" -> Color.rgb(100, 83, 152)
+        "STEEL" -> Color.rgb(125, 145, 163)
+        else -> Color.rgb(110, 137, 168)
+    }
+
+    private fun drawStatusCard(
+        canvas: Canvas,
+        bounds: RectF,
+        trainer: String,
+        pokemon: String,
+        level: String,
+        gender: String,
+        hp: String,
+        condition: String,
+        fraction: Float,
+        scale: Float
+    ) {
+        val height = bounds.height()
+        paint.color = Color.argb(232, 16, 20, 26)
+        canvas.drawRoundRect(bounds, height * 0.15f, height * 0.15f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.rgb(104, 111, 120)
+        canvas.drawRoundRect(RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale), height * 0.15f, height * 0.15f, paint)
+        paint.style = Paint.Style.FILL
+        val textLeft = bounds.left + 20f * scale
+        val textRight = bounds.right - 20f * scale
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        val levelLabel = "Lv.$level$gender"
+        paint.textSize = height * 0.19f
+        val levelWidth = paint.measureText(levelLabel)
+        val nameAvailableWidth = (textRight - textLeft - levelWidth - 12f * scale).coerceAtLeast(0f)
+        var nameTextSize = height * 0.27f
+        while (nameTextSize > height * 0.15f) {
+            paint.textSize = nameTextSize
+            if (paint.measureText(pokemon) <= nameAvailableWidth) break
+            nameTextSize -= scale
+        }
+        paint.textSize = nameTextSize
+        val displayedPokemon = ellipsizeToWidth(pokemon, nameAvailableWidth, paint)
+        paint.color = INK
+        canvas.drawText(displayedPokemon, textLeft, bounds.top + height * 0.29f, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.textSize = height * 0.19f
+        paint.color = Color.rgb(232, 232, 232)
+        canvas.drawText(levelLabel, textRight, bounds.top + height * 0.29f, paint)
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = height * 0.17f
+        paint.color = MUTED
+        canvas.drawText(trainer.uppercase(Locale.ROOT), textLeft, bounds.top + height * 0.51f, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.color = Color.rgb(238, 238, 238)
+        canvas.drawText(hp.substringBefore(' '), textRight, bounds.top + height * 0.51f, paint)
+        paint.textAlign = Paint.Align.LEFT
+        val barTop = bounds.top + height * 0.57f
+        val barBottom = barTop + height * 0.23f
+        val track = RectF(textLeft, barTop, textRight, barBottom)
+        paint.shader = LinearGradient(track.left, track.top, track.left, track.bottom, Color.rgb(55, 63, 72), Color.rgb(12, 17, 22), Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(track, height * 0.07f, height * 0.07f, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb(150, 229, 238, 245)
+        canvas.drawRoundRect(RectF(track.left + scale, track.top + scale, track.right - scale, track.bottom - scale), height * 0.06f, height * 0.06f, paint)
+        paint.style = Paint.Style.FILL
+        val inner = RectF(track.left + 3f * scale, track.top + 3f * scale, track.right - 3f * scale, track.bottom - 3f * scale)
+        val colors = healthColors(fraction)
+        val hpRight = inner.left + inner.width() * fraction
+        if (hpRight > inner.left) {
+            val fill = RectF(inner.left, inner.top, hpRight, inner.bottom)
+            paint.shader = LinearGradient(
+                fill.left,
+                fill.top,
+                fill.left,
+                fill.bottom,
+                intArrayOf(colors.highlight, colors.fill, colors.shadow),
+                floatArrayOf(0f, 0.54f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawRoundRect(fill, height * 0.045f, height * 0.045f, paint)
+            paint.shader = null
+        }
+        val ballSize = height * 0.18f
+        val ballGap = ballSize * 0.12f
+        val ballStart = textRight - ballSize * 6f - ballGap * 5f
+        val ballTop = bounds.bottom - height * 0.19f
+        effectAssets["pokeball.png"]?.let { ball ->
+            source.set(0, 0, ball.width, ball.height)
+            repeat(6) { index ->
+                val left = ballStart + index * (ballSize + ballGap)
+                destination.set(left, ballTop, left + ballSize, ballTop + ballSize)
+                canvas.drawBitmap(ball, source, destination, paint)
+            }
+        }
+    }
+
+    private fun healthColors(fraction: Float) = when {
+        fraction > 0.5f -> HpColors(
+            Color.rgb(0, 187, 81),
+            Color.rgb(0, 221, 96),
+            Color.rgb(0, 119, 52)
+        )
+        fraction > 0.2f -> HpColors(
+            Color.rgb(245, 213, 56),
+            Color.rgb(248, 227, 121),
+            Color.rgb(190, 159, 10)
+        )
+        else -> HpColors(
+            Color.rgb(238, 73, 40),
+            Color.rgb(243, 127, 103),
+            Color.rgb(163, 38, 13)
+        )
+    }
+
+    private fun drawTurnBadge(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        val badgeWidth = 120f * scale
+        val badgeHeight = 42f * scale
+        val left = width * 0.5f - badgeWidth / 2f
+        val top = height - badgeHeight - 20f * scale
+        val badge = RectF(left, top, left + badgeWidth, top + badgeHeight)
+        paint.color = Color.argb(220, 8, 39, 62)
+        canvas.drawRoundRect(badge, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb(170, 74, 231, 255)
+        canvas.drawRoundRect(badge, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 20f * scale
+        paint.color = INK
+        canvas.drawText("TURN ${session.turn}", width * 0.5f, top + badgeHeight * 0.64f, paint)
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
+        val arrival = min(1f, age / 0.18f)
+        val exit = ((age - 4.1f) / 0.5f).coerceIn(0f, 1f)
+        val alpha = (1f - exit) * min(1f, 0.3f + arrival)
+        val left = width * 0.40f + (1f - arrival) * width * 0.06f
+        val right = width * 0.92f
+        val top = height * 0.79f
+        val bottom = height * 0.885f
+        paint.color = Color.argb((185f * alpha).toInt(), 4, 24, 43)
+        canvas.drawRoundRect(RectF(left, top, right, bottom), 18f * scale, 18f * scale, paint)
+        paint.color = Color.argb((255f * alpha).toInt(), 74, 231, 255)
+        canvas.drawRoundRect(RectF(left, top, left + 6f * scale, bottom), 3f * scale, 3f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 25f * scale
+        paint.color = Color.argb((255f * alpha).toInt(), 240, 247, 255)
+        canvas.drawText(ellipsize(session.latestBattleEvent, 48), left + 22f * scale, top + 54f * scale, paint)
+    }
+
+    private fun ellipsize(value: String, maximum: Int) = if (value.length <= maximum) value else "${value.take(maximum - 1)}…"
+
+    private fun ellipsizeToWidth(value: String, maximumWidth: Float, textPaint: Paint): String {
+        if (textPaint.measureText(value) <= maximumWidth) return value
+        var end = value.length
+        while (end > 1) {
+            val candidate = "${value.take(end - 1)}…"
+            if (textPaint.measureText(candidate) <= maximumWidth) return candidate
+            end -= 1
+        }
+        return "…"
+    }
+
+    private companion object {
+        val SHOWDOWN_EFFECTS = listOf("pokeball.png")
+        const val INK = 0xFFF0F7FF.toInt()
+        const val CYAN = 0xFF4AE7FF.toInt()
+        const val MAGENTA = 0xFFFF49B0.toInt()
+        const val MUTED = 0xFFBBD1EA.toInt()
+    }
+}

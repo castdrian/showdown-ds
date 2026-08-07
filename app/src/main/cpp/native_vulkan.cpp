@@ -48,9 +48,9 @@ bool createInstance() {
 
     VkApplicationInfo applicationInfo{};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    applicationInfo.pApplicationName = "showdown-ds";
+    applicationInfo.pApplicationName = "Showdown!";
     applicationInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-    applicationInfo.pEngineName = "showdown-ds";
+    applicationInfo.pEngineName = "Showdown!";
     applicationInfo.engineVersion = VK_MAKE_VERSION(0, 1, 0);
     applicationInfo.apiVersion = VK_API_VERSION_1_0;
 
