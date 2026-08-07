@@ -18,11 +18,14 @@ class BattleSession {
         WAIT
     }
 
-    enum class MatchFormat(val id: String, val label: String, val menuLabel: String) {
-        GEN6_RANDOM("gen6randombattle", "[Gen 6] Random Battle", "Gen 6 Random"),
-        GEN7_RANDOM("gen7randombattle", "[Gen 7] Random Battle", "Gen 7 Random"),
-        GEN8_RANDOM("gen8randombattle", "[Gen 8] Random Battle", "Gen 8 Random"),
-        GEN9_RANDOM("gen9randombattle", "[Gen 9] Random Battle", "Gen 9 Random")
+    data class MatchFormat(val id: String, val label: String, val menuLabel: String = label) {
+        companion object {
+            val GEN6_RANDOM = MatchFormat("gen6randombattle", "[Gen 6] Random Battle", "Gen 6 Random")
+            val GEN7_RANDOM = MatchFormat("gen7randombattle", "[Gen 7] Random Battle", "Gen 7 Random")
+            val GEN8_RANDOM = MatchFormat("gen8randombattle", "[Gen 8] Random Battle", "Gen 8 Random")
+            val GEN9_RANDOM = MatchFormat("gen9randombattle", "[Gen 9] Random Battle", "Gen 9 Random")
+            val defaults = listOf(GEN6_RANDOM, GEN7_RANDOM, GEN8_RANDOM, GEN9_RANDOM)
+        }
     }
 
     enum class SpriteStyle {
@@ -31,6 +34,7 @@ class BattleSession {
     }
 
     enum class FeedbackType {
+        ENTRY,
         POKEMON_CRY,
         MOVE,
         HIT
@@ -98,7 +102,9 @@ class BattleSession {
         val actor: String = "",
         val target: String = "",
         val move: String = "",
-        val impact: HitImpact = HitImpact.NORMAL
+        val impact: HitImpact = HitImpact.NORMAL,
+        val delayMillis: Long = 0L,
+        val message: String = ""
     )
 
     data class PokemonDetails(
@@ -111,7 +117,17 @@ class BattleSession {
         val ability: String,
         val item: String,
         val moves: List<String>,
-        val stats: String
+        val stats: String,
+        val pokeball: String = "pokeball"
+    )
+
+    data class BattleInfo(
+        val weather: String,
+        val terrain: String,
+        val playerSideConditions: List<String>,
+        val opponentSideConditions: List<String>,
+        val playerBoosts: Map<String, Int>,
+        val opponentBoosts: Map<String, Int>
     )
 
     private data class PendingHit(
@@ -129,6 +145,9 @@ class BattleSession {
     private val chatListeners = mutableListOf<ChatListener>()
     private val protocolListeners = mutableListOf<ProtocolListener>()
     private val protocolHistory = mutableListOf<String>()
+    private var moveTypeResolver: ((String) -> String?)? = null
+    private var pokemonTypeResolver: ((String) -> List<String>?)? = null
+    private val availableMatchFormats = MatchFormat.defaults.toMutableList()
     private val battleLog = mutableListOf("Battle started.", "Incineroar entered the field.", "Tapu Koko's Electric Surge activated!")
     private val chatMessages = mutableListOf("[Battle] Welcome to Showdown!", "[System] Controller and touch input are ready.")
     private val activityMessages = mutableListOf<String>().apply {
@@ -164,12 +183,21 @@ class BattleSession {
         listOf("Thunderbolt", "Dazzling Gleam", "Volt Switch", "Roost"),
         "HP 70 · SpA 95 · Spe 130"
     )
+    private val opponentTeamDetails = mutableListOf(opponentDetails)
     private var battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
     private var pendingHit: PendingHit? = null
     private var requestId: Int? = null
     private val sideNames = mutableMapOf<String, String>()
     private var playerSlot = "p1"
     private var localUsername: String? = null
+    private var openingEntrances = 0
+    private var latestOpeningEntranceAtNanos = 0L
+    private var weather = ""
+    private var terrain = ""
+    private val playerSideConditions = mutableListOf<String>()
+    private val opponentSideConditions = mutableListOf<String>()
+    private val playerBoosts = mutableMapOf<String, Int>()
+    private val opponentBoosts = mutableMapOf<String, Int>()
 
     var panel = Panel.MOVES
         private set
@@ -223,6 +251,10 @@ class BattleSession {
         private set
     var latestFaintAtNanos = 0L
         private set
+    var playerEntryAtNanos = 0L
+        private set
+    var opponentEntryAtNanos = 0L
+        private set
     var decisionAvailable = true
         private set
     var decisionKind = DecisionKind.MOVE
@@ -241,10 +273,55 @@ class BattleSession {
         private set
     var selectedGimmick: BattleGimmick? = null
         private set
+    var battleFinished = false
+        private set
 
     fun playerHealthFraction() = healthFraction(playerHp)
 
     fun opponentHealthFraction() = healthFraction(opponentHp)
+
+    fun hasActivePlayerCombatant() = !playerCondition.contains("FNT", true)
+
+    fun hasActiveOpponentCombatant() = !opponentCondition.contains("FNT", true)
+
+    fun isBattleFinished() = battleFinished
+
+    fun battleInfo() = BattleInfo(
+        weather,
+        terrain,
+        playerSideConditions.toList(),
+        opponentSideConditions.toList(),
+        playerBoosts.toMap(),
+        opponentBoosts.toMap()
+    )
+
+    fun setMoveTypeResolver(resolver: (String) -> String?) {
+        moveTypeResolver = resolver
+        val resolvedMoves = moves.map { move ->
+            if (move.type != "UNKNOWN") move else move.copy(type = resolver(move.name) ?: move.type)
+        }
+        if (resolvedMoves == moves) return
+        moves.clear()
+        moves += resolvedMoves
+        playerDetails = playerDetails.copy(moves = moves.map { it.name })
+        notifyListeners()
+    }
+
+    fun setPokemonTypeResolver(resolver: (String) -> List<String>?) {
+        pokemonTypeResolver = resolver
+        val updatedTeam = teamDetails.map { details -> details.withResolvedTypes() }
+        val updatedPlayer = playerDetails.withResolvedTypes()
+        val updatedOpponent = opponentDetails.withResolvedTypes()
+        val updatedOpponentTeam = opponentTeamDetails.map { details -> details.withResolvedTypes() }
+        if (updatedTeam == teamDetails && updatedPlayer == playerDetails && updatedOpponent == opponentDetails && updatedOpponentTeam == opponentTeamDetails) return
+        teamDetails.clear()
+        teamDetails += updatedTeam
+        playerDetails = updatedPlayer
+        opponentDetails = updatedOpponent
+        opponentTeamDetails.clear()
+        opponentTeamDetails += updatedOpponentTeam
+        notifyListeners()
+    }
 
     fun moves() = moves.toList()
 
@@ -260,6 +337,10 @@ class BattleSession {
 
     fun opponentDetails() = opponentDetails
 
+    fun playerPartyDetails() = teamDetails.toList()
+
+    fun opponentPartyDetails() = opponentTeamDetails.toList()
+
     fun focusedTeamDetails() = teamDetails.getOrElse(focusedTeam) { playerDetails }
 
     fun teamMemberDetails(index: Int) = teamDetails.getOrElse(index) { playerDetails }
@@ -267,6 +348,8 @@ class BattleSession {
     fun teamCondition(index: Int) = teamDetails.getOrNull(index)?.condition.orEmpty()
 
     fun availableGimmicks() = availableGimmicks.toList()
+
+    fun availableMatchFormats() = availableMatchFormats.toList()
 
     fun isSinglesBattle() = !format.contains("doubles", true) && !format.contains("multi", true)
 
@@ -336,9 +419,30 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun presentBattleEvent(message: String) {
+        if (message.isBlank()) return
+        latestBattleEvent = message
+        latestBattleEventAtNanos = System.nanoTime()
+        notifyListeners()
+    }
+
+    fun sendOutMessage(pokemon: String, playerSide: Boolean) =
+        if (playerSide) "Go! $pokemon!" else "$opponentName sent out $pokemon!"
+
     fun setMatchFormat(format: MatchFormat) {
         matchFormat = format
         status = "Battle format: ${format.label}"
+        notifyListeners()
+    }
+
+    fun applyServerFormats(lines: List<String>) {
+        val formats = lines.flatMap(::parseServerFormats)
+        if (formats.isEmpty()) return
+        val selected = formats.firstOrNull { it.id == matchFormat.id } ?: matchFormat
+        availableMatchFormats.clear()
+        availableMatchFormats += formats
+        if (availableMatchFormats.none { it.id == selected.id }) availableMatchFormats += selected
+        matchFormat = selected
         notifyListeners()
     }
 
@@ -411,6 +515,7 @@ class BattleSession {
                 appendLog("$playerPokemon chose ${gimmick?.label?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
+                selectedGimmick = null
                 decisionListeners.toList().forEach { it.onDecision(choice) }
             }
             Panel.TEAM -> confirmTeamSelection()
@@ -473,6 +578,7 @@ class BattleSession {
                 "tier" -> if (fields.size > 2) format = fields[2]
                 "turn" -> applyTurn(fields)
                 "switch", "drag", "replace" -> applySwitch(fields)
+                "poke" -> applyPoke(fields)
                 "move" -> {
                     publishPendingHit()
                     applyMove(fields)
@@ -491,6 +597,17 @@ class BattleSession {
                 "-ability" -> applyAbility(fields)
                 "-item" -> applyItem(fields)
                 "-enditem" -> applyItem(fields, "No item")
+                "-weather" -> applyWeather(fields)
+                "-fieldstart" -> applyFieldEffect(fields, true)
+                "-fieldend" -> applyFieldEffect(fields, false)
+                "-sidestart" -> applySideCondition(fields, true)
+                "-sideend" -> applySideCondition(fields, false)
+                "-boost" -> applyBoost(fields, 1)
+                "-unboost" -> applyBoost(fields, -1)
+                "-setboost" -> applySetBoost(fields)
+                "-clearallboost" -> clearAllBoosts()
+                "-clearboost" -> clearBoosts(fields)
+                "-clearnegativeboost" -> clearNegativeBoosts(fields)
                 "detailschange", "-formechange", "-mega", "-primal" -> applyFormChange(fields)
                 "-terastallize" -> applyTerastallize(fields)
                 "faint" -> applyFaint(fields)
@@ -508,6 +625,18 @@ class BattleSession {
         if (fields.getOrNull(2) != "battle") return
         battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
         selectedGimmick = null
+        battleFinished = false
+        openingEntrances = 0
+        latestOpeningEntranceAtNanos = 0L
+        playerEntryAtNanos = 0L
+        opponentEntryAtNanos = 0L
+        opponentTeamDetails.clear()
+        weather = ""
+        terrain = ""
+        playerSideConditions.clear()
+        opponentSideConditions.clear()
+        playerBoosts.clear()
+        opponentBoosts.clear()
         status = "Battle starting"
     }
 
@@ -529,16 +658,19 @@ class BattleSession {
     private fun applySwitch(fields: List<String>) {
         if (fields.size < 5) return
         val pokemon = fields[3].substringBefore(',')
+        val playerSide = isPlayerSide(fields[2])
+        val entryDelayMillis = queueEntry(playerSide)
         when {
-            isPlayerSide(fields[2]) -> {
+            playerSide -> {
                 playerPokemon = pokemon
                 playerHp = fields[4]
                 applyDetails(true, fields[3])
                 playerCondition = condition(fields[4])
                 val index = team.indexOfFirst { it.equals(pokemon, true) }
-                val activeDetails = if (index >= 0) teamDetails[index] else playerDetails
+                val activeDetails = if (index >= 0) teamDetails[index] else playerDetails.copy(name = pokemon, types = resolvedTypes(pokemon))
                 playerDetails = activeDetails.copy(
                     name = pokemon,
+                    types = resolvedTypes(pokemon, activeDetails.types),
                     level = playerLevel,
                     gender = playerGender,
                     hp = playerHp,
@@ -553,15 +685,56 @@ class BattleSession {
                 opponentCondition = condition(fields[4])
                 opponentDetails = opponentDetails.copy(
                     name = pokemon,
+                    types = resolvedTypes(pokemon),
                     level = opponentLevel,
                     gender = opponentGender,
                     hp = opponentHp,
                     condition = opponentCondition
                 )
+                updateOpponentParty(opponentDetails)
             }
         }
-        appendLog("$pokemon entered the field.")
-        publishFeedback(BattleFeedback(FeedbackType.POKEMON_CRY, actor = pokemon))
+        val message = sendOutMessage(pokemon, playerSide)
+        appendLog(message)
+        publishFeedback(BattleFeedback(FeedbackType.ENTRY, actor = pokemon, delayMillis = entryDelayMillis, message = message))
+        publishFeedback(BattleFeedback(FeedbackType.POKEMON_CRY, actor = pokemon, delayMillis = entryDelayMillis))
+    }
+
+    private fun applyPoke(fields: List<String>) {
+        if (fields.size < 4 || isPlayerSide(fields[2])) return
+        val details = fields[3]
+        val pokemon = details.substringBefore(',')
+        val levelGender = parseDetails(details)
+        val existing = opponentTeamDetails.firstOrNull { it.name.equals(pokemon, true) }
+        updateOpponentParty(
+            existing?.copy(level = levelGender.first, gender = levelGender.second, types = resolvedTypes(pokemon, existing.types)) ?: PokemonDetails(
+                name = pokemon,
+                types = resolvedTypes(pokemon),
+                level = levelGender.first,
+                gender = levelGender.second,
+                hp = "100/100",
+                condition = "READY",
+                ability = "Unknown ability",
+                item = "Unknown item",
+                moves = emptyList(),
+                stats = ""
+            )
+        )
+    }
+
+    private fun queueEntry(playerSide: Boolean): Long {
+        val nowNanos = System.nanoTime()
+        val entranceAtNanos = when (openingEntrances) {
+            0 -> nowNanos
+            1 -> maxOf(nowNanos, latestOpeningEntranceAtNanos + BattleSceneTiming.summonDurationNanos)
+            else -> nowNanos
+        }
+        if (playerSide) playerEntryAtNanos = entranceAtNanos else opponentEntryAtNanos = entranceAtNanos
+        if (openingEntrances < 2) {
+            latestOpeningEntranceAtNanos = entranceAtNanos
+            openingEntrances += 1
+        }
+        return ((entranceAtNanos - nowNanos) / 1_000_000L).coerceAtLeast(0L)
     }
 
     private fun applyMove(fields: List<String>) {
@@ -586,6 +759,7 @@ class BattleSession {
                 opponentHp = fields[3]
                 opponentCondition = condition(fields[3])
                 opponentDetails = opponentDetails.copy(hp = opponentHp, condition = opponentCondition)
+                updateOpponentParty(opponentDetails)
             }
         }
     }
@@ -603,6 +777,7 @@ class BattleSession {
             opponentHp = "0 fnt"
             opponentCondition = "FNT"
             opponentDetails = opponentDetails.copy(hp = opponentHp, condition = opponentCondition)
+            updateOpponentParty(opponentDetails)
         }
         appendLog("$pokemon fainted.")
     }
@@ -616,6 +791,7 @@ class BattleSession {
         } else {
             opponentCondition = status
             opponentDetails = opponentDetails.copy(condition = status)
+            updateOpponentParty(opponentDetails)
         }
     }
 
@@ -626,11 +802,11 @@ class BattleSession {
         if (isPlayerSide(actor)) {
             playerPokemon = species
             applyDetails(true, details)
-            updatePlayerDetails { it.copy(name = species, level = playerLevel, gender = playerGender) }
+            updatePlayerDetails { it.copy(name = species, types = resolvedTypes(species), level = playerLevel, gender = playerGender) }
         } else {
             opponentPokemon = species
             applyDetails(false, details)
-            opponentDetails = opponentDetails.copy(name = species, level = opponentLevel, gender = opponentGender)
+            opponentDetails = opponentDetails.copy(name = species, types = resolvedTypes(species), level = opponentLevel, gender = opponentGender)
         }
         appendLog("$species changed form.")
     }
@@ -689,9 +865,10 @@ class BattleSession {
                 val move = requestMoves.getJSONObject(index)
                 val pp = move.optInt("pp", 0)
                 val power = move.optInt("basePower", 0).takeIf { it > 0 }?.toString() ?: "—"
+                val name = move.optString("move", "Move ${index + 1}")
                 moves += MoveOption(
-                    move.optString("move", "Move ${index + 1}"),
-                    move.optString("type", "NORMAL").uppercase(),
+                    name,
+                    move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: moveTypeResolver?.invoke(name) ?: "UNKNOWN",
                     pp,
                     move.optInt("maxpp", pp),
                     move.optString("category", "Status"),
@@ -719,6 +896,8 @@ class BattleSession {
             decisionAvailable = false
             decisionKind = DecisionKind.WAIT
             requestId = null
+            selectedGimmick = null
+            battleFinished = true
         }
     }
 
@@ -773,6 +952,64 @@ class BattleSession {
             else -> opponentDetails = opponentDetails.copy(item = item)
         }
     }
+
+    private fun applyWeather(fields: List<String>) {
+        weather = fields.getOrNull(2)?.takeUnless { it.equals("none", true) }.orEmpty()
+    }
+
+    private fun applyFieldEffect(fields: List<String>, enabled: Boolean) {
+        val effect = battleEffectName(fields.getOrNull(2)).takeIf { it.contains("Terrain", true) } ?: return
+        if (enabled) terrain = effect else if (terrain.equals(effect, true)) terrain = ""
+    }
+
+    private fun applySideCondition(fields: List<String>, enabled: Boolean) {
+        val side = fields.getOrNull(2) ?: return
+        val effect = battleEffectName(fields.getOrNull(3)).ifBlank { return }
+        val conditions = if (isPlayerSide(side)) playerSideConditions else opponentSideConditions
+        if (enabled) {
+            if (effect !in conditions) conditions += effect
+        } else {
+            conditions.removeAll { it.equals(effect, true) }
+        }
+    }
+
+    private fun applyBoost(fields: List<String>, direction: Int) {
+        val side = fields.getOrNull(2) ?: return
+        val stat = fields.getOrNull(3)?.lowercase()?.takeIf { it in BOOST_STATS } ?: return
+        val amount = fields.getOrNull(4)?.toIntOrNull() ?: return
+        val boosts = if (isPlayerSide(side)) playerBoosts else opponentBoosts
+        updateBoost(boosts, stat, (boosts[stat] ?: 0) + amount * direction)
+    }
+
+    private fun applySetBoost(fields: List<String>) {
+        val side = fields.getOrNull(2) ?: return
+        val stat = fields.getOrNull(3)?.lowercase()?.takeIf { it in BOOST_STATS } ?: return
+        val amount = fields.getOrNull(4)?.toIntOrNull() ?: return
+        updateBoost(if (isPlayerSide(side)) playerBoosts else opponentBoosts, stat, amount)
+    }
+
+    private fun clearAllBoosts() {
+        playerBoosts.clear()
+        opponentBoosts.clear()
+    }
+
+    private fun clearBoosts(fields: List<String>) {
+        val side = fields.getOrNull(2) ?: return
+        if (isPlayerSide(side)) playerBoosts.clear() else opponentBoosts.clear()
+    }
+
+    private fun clearNegativeBoosts(fields: List<String>) {
+        val side = fields.getOrNull(2) ?: return
+        val boosts = if (isPlayerSide(side)) playerBoosts else opponentBoosts
+        boosts.filterValues { it < 0 }.keys.toList().forEach(boosts::remove)
+    }
+
+    private fun updateBoost(boosts: MutableMap<String, Int>, stat: String, value: Int) {
+        val bounded = value.coerceIn(-6, 6)
+        if (bounded == 0) boosts.remove(stat) else boosts[stat] = bounded
+    }
+
+    private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
 
     private fun updatePlayerDetails(transform: (PokemonDetails) -> PokemonDetails) {
         val previous = playerDetails
@@ -940,7 +1177,7 @@ class BattleSession {
             } ?: known?.moves.orEmpty()
             synced += PokemonDetails(
                 name,
-                known?.types.orEmpty(),
+                resolvedTypes(name, known?.types.orEmpty()),
                 levelGender.first,
                 levelGender.second,
                 condition,
@@ -948,7 +1185,8 @@ class BattleSession {
                 entry.optString("baseAbility", known?.ability ?: "Unknown ability"),
                 entry.optString("item", known?.item ?: "Unknown item").ifBlank { "Unknown item" },
                 knownMoves,
-                known?.stats.orEmpty()
+                known?.stats.orEmpty(),
+                entry.optString("pokeball", known?.pokeball ?: "pokeball")
             )
         }
         if (synced.isEmpty()) return
@@ -965,6 +1203,20 @@ class BattleSession {
             playerGender = details.gender
         }
     }
+
+    private fun updateOpponentParty(details: PokemonDetails) {
+        val index = opponentTeamDetails.indexOfFirst { it.name.equals(details.name, true) }
+        if (index >= 0) {
+            opponentTeamDetails[index] = details
+        } else if (opponentTeamDetails.size < 6) {
+            opponentTeamDetails += details
+        }
+    }
+
+    private fun PokemonDetails.withResolvedTypes() = copy(types = resolvedTypes(name, types))
+
+    private fun resolvedTypes(species: String, current: List<String> = emptyList()) =
+        current.ifEmpty { pokemonTypeResolver?.invoke(species).orEmpty() }
 
     private fun applyDetails(player: Boolean, details: String) {
         val parsed = parseDetails(details)
@@ -1027,7 +1279,28 @@ class BattleSession {
         clientActionListeners.toList().forEach { it.onClientAction(action) }
     }
 
-    private companion object {
+    companion object {
+        private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+
+        fun parseServerFormats(line: String): List<MatchFormat> {
+            if (!line.startsWith("|formats|")) return emptyList()
+            var skipSectionTitle = false
+            return line.split('|').drop(2).mapNotNull { token ->
+                if (token.startsWith(',')) {
+                    skipSectionTitle = true
+                    return@mapNotNull null
+                }
+                if (skipSectionTitle) {
+                    skipSectionTitle = false
+                    return@mapNotNull null
+                }
+                val label = token.substringBefore(',').trim()
+                if (!label.startsWith('[')) return@mapNotNull null
+                val id = label.lowercase().filter(Char::isLetterOrDigit)
+                id.takeIf { it.isNotBlank() }?.let { MatchFormat(it, label) }
+            }.distinctBy(MatchFormat::id)
+        }
+
         val SHOWDOWN_BACKDROPS = arrayOf(
             "bg-aquacordetown.jpg",
             "bg-beach.jpg",

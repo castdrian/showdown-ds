@@ -2,10 +2,12 @@ package com.showdown.ds
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
@@ -38,6 +40,7 @@ class CommandDeckView(
     private val gimmickBounds = arrayOfNulls<RectF>(4)
     private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
     private val requestedTeamSprites = mutableSetOf<String>()
+    private val typeIcons = mutableMapOf<String, Bitmap?>()
     private var activityChatBounds: RectF? = null
     private var zPowerSymbol: Bitmap? = null
     private var pressedMoveIndex: Int? = null
@@ -133,86 +136,71 @@ class CommandDeckView(
     }
 
     private fun drawBackground(canvas: Canvas, width: Float, height: Float) {
-        paint.shader = LinearGradient(0f, 0f, width, height, Color.rgb(9, 27, 44), Color.rgb(17, 83, 79), Shader.TileMode.CLAMP)
+        paint.shader = LinearGradient(0f, 0f, width, height, Color.rgb(8, 17, 28), Color.rgb(18, 43, 47), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width, height, paint)
+        paint.shader = RadialGradient(width * 0.84f, height * 0.12f, width * 0.72f, Color.argb(48, 78, 205, 231), Color.argb(0, 78, 205, 231), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, width, height, paint)
         paint.shader = null
     }
 
     private fun drawTopBand(canvas: Canvas, width: Float, scale: Float) {
-        val band = RectF(20f * scale, 18f * scale, width - 20f * scale, 112f * scale)
-        paint.shader = LinearGradient(band.left, band.top, band.right, band.bottom, Color.argb(226, 27, 42, 66), Color.argb(205, 12, 28, 48), Shader.TileMode.CLAMP)
+        val band = RectF(20f * scale, 16f * scale, width - 20f * scale, 92f * scale)
+        paint.shader = LinearGradient(band.left, band.top, band.right, band.bottom, Color.rgb(18, 41, 59), Color.rgb(7, 21, 35), Shader.TileMode.CLAMP)
         canvas.drawRoundRect(band, 24f * scale, 24f * scale, paint)
         paint.shader = null
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f * scale
-        paint.color = Color.argb(95, 229, 245, 255)
+        paint.strokeWidth = 1.5f * scale
+        paint.color = Color.argb(132, 104, 165, 190)
         canvas.drawRoundRect(band, 24f * scale, 24f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = 39f * scale
-        paint.color = PAPER
-        canvas.drawText("What will ${session.playerPokemon} do?", 42f * scale, 54f * scale, paint)
+        paint.textSize = 29f * scale
+        paint.color = Color.rgb(226, 238, 244)
+        canvas.drawText("${session.playerPokemon}'s turn", 44f * scale, 48f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = 25f * scale
-        paint.color = MUTED
-        canvas.drawText(session.status, 43f * scale, 89f * scale, paint)
-        val turnWidth = 142f * scale
-        val turn = RectF(width - 44f * scale - turnWidth, 39f * scale, width - 44f * scale, 92f * scale)
-        paint.color = Color.argb(185, 56, 197, 181)
+        paint.textSize = 22f * scale
+        paint.color = Color.rgb(139, 180, 201)
+        canvas.drawText(ellipsize(session.latestBattleEvent.ifBlank { session.status }, 78), 44f * scale, 75f * scale, paint)
+        val turnWidth = 122f * scale
+        val turn = RectF(width - 44f * scale - turnWidth, 29f * scale, width - 44f * scale, 78f * scale)
+        paint.shader = LinearGradient(turn.left, turn.top, turn.right, turn.bottom, Color.rgb(31, 134, 145), Color.rgb(11, 74, 103), Shader.TileMode.CLAMP)
         canvas.drawRoundRect(turn, 18f * scale, 18f * scale, paint)
+        paint.shader = null
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.color = PAPER
-        paint.textSize = 24f * scale
+        paint.color = Color.rgb(228, 241, 242)
+        paint.textSize = 20f * scale
         canvas.drawText("Turn ${session.turn}", turn.centerX(), turn.centerY() + 8f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawTabs(canvas: Canvas, width: Float, scale: Float) {
-        val top = 132f * scale
+        val top = 108f * scale
         val gap = 12f * scale
         val left = 34f * scale
         val tabWidth = (width - left * 2f - gap * 3f) / 4f
-        val tabHeight = 68f * scale
+        val tabHeight = 56f * scale
         TABS.forEachIndexed { index, panel ->
             val tabLeft = left + index * (tabWidth + gap)
             val bounds = RectF(tabLeft, top, tabLeft + tabWidth, top + tabHeight)
             tabBounds[index] = bounds
             val selected = session.panel == panel
             if (selected) {
-                paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.rgb(47, 191, 178), Color.rgb(17, 112, 105), Shader.TileMode.CLAMP)
+                paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.rgb(29, 122, 133), Color.rgb(12, 73, 101), Shader.TileMode.CLAMP)
             } else {
-                paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.argb(188, 30, 54, 74), Color.argb(160, 13, 33, 50), Shader.TileMode.CLAMP)
+                paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.argb(168, 37, 67, 86), Color.argb(154, 13, 31, 48), Shader.TileMode.CLAMP)
             }
-            canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
+            canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
             paint.shader = null
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 2f * scale
-            paint.color = if (selected) Color.argb(178, 224, 255, 250) else Color.argb(90, 224, 244, 255)
-            canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
+            paint.strokeWidth = if (selected) 2.5f * scale else 1.25f * scale
+            paint.color = if (selected) Color.rgb(131, 204, 200) else Color.argb(110, 166, 197, 216)
+            canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
             paint.style = Paint.Style.FILL
-            if (selected) {
-                paint.shader = LinearGradient(
-                    bounds.left,
-                    bounds.top + 5f * scale,
-                    bounds.left,
-                    bounds.centerY(),
-                    Color.argb(82, 255, 255, 255),
-                    Color.argb(0, 255, 255, 255),
-                    Shader.TileMode.CLAMP
-                )
-                canvas.drawRoundRect(
-                    RectF(bounds.left + 4f * scale, bounds.top + 4f * scale, bounds.right - 4f * scale, bounds.bottom - 4f * scale),
-                    13f * scale,
-                    13f * scale,
-                    paint
-                )
-                paint.shader = null
-            }
             paint.textAlign = Paint.Align.CENTER
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = 25f * scale
-            paint.color = if (selected) PAPER else Color.rgb(214, 232, 242)
+            paint.textSize = 23f * scale
+            paint.color = if (selected) Color.rgb(225, 240, 242) else Color.rgb(198, 215, 226)
             canvas.drawText(tabName(panel), tabLeft + tabWidth / 2f, top + tabHeight * 0.60f, paint)
         }
         paint.textAlign = Paint.Align.LEFT
@@ -228,80 +216,229 @@ class CommandDeckView(
     }
 
     private fun drawMoves(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        if (session.isBattleFinished()) {
+            moveBounds.fill(null)
+            gimmickBounds.fill(null)
+            drawCompletedBattle(canvas, width, height, scale)
+            return
+        }
         val moves = session.moves()
-        val left = 38f * scale
-        val top = 216f * scale
-        val gap = 16f * scale
-        val cardWidth = (width - left * 2f - gap) / 2f
-        val cardHeight = minOf(266f * scale, (height - top - 240f * scale - gap) / 2f)
+        val panelTop = 184f * scale
+        val left = 44f * scale
+        val consoleRight = 438f * scale
+        val moveLeft = 470f * scale
+        val moveRight = width - 38f * scale
+        val gap = 12f * scale
+        val cardHeight = minOf(158f * scale, (height - panelTop - 188f * scale - gap * 3f) / 4f)
+        val panelBottom = panelTop + cardHeight * 4f + gap * 3f
+        drawBattleConsole(canvas, RectF(left, panelTop, consoleRight, panelBottom), moves, scale)
         repeat(4) { index ->
-            val row = index / 2
-            val column = index % 2
-            val x = left + column * (cardWidth + gap)
-            val y = top + row * (cardHeight + gap)
-            val bounds = RectF(x, y, x + cardWidth, y + cardHeight)
+            val y = panelTop + index * (cardHeight + gap)
+            val bounds = RectF(moveLeft, y, moveRight, y + cardHeight)
             moveBounds[index] = bounds
             val move = moves.getOrNull(index)
-            if (move == null) drawUnavailableMove(canvas, bounds, scale) else drawMoveCard(canvas, bounds, move, index == session.focusedMove, movePressProgress(index), scale)
+            if (move == null) drawUnavailableMove(canvas, bounds, scale) else drawMoveRow(canvas, bounds, move, index == session.focusedMove, movePressProgress(index), scale)
         }
-        drawGimmicks(canvas, RectF(left, top + cardHeight * 2f + gap + 22f * scale, width - left, height - 32f * scale), scale)
     }
 
-    private fun drawMoveCard(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, focused: Boolean, pressProgress: Float, scale: Float) {
-        val palette = movePalette(move.type)
-        val pressed = pressProgress > 0f
-        val pressDepth = pressProgress * 10f * scale
-        val card = RectF(bounds).apply { offset(0f, pressDepth) }
-        paint.style = Paint.Style.FILL
-        paint.color = Color.argb(210, Color.red(palette.shadow), Color.green(palette.shadow), Color.blue(palette.shadow))
-        canvas.drawRoundRect(RectF(bounds.left, bounds.top + 13f * scale, bounds.right, bounds.bottom + 13f * scale), 24f * scale, 24f * scale, paint)
-        paint.shader = LinearGradient(
-            card.left,
-            card.top,
-            card.left,
-            card.bottom,
-            intArrayOf(palette.highlight, palette.base, palette.shadow),
-            floatArrayOf(0f, 0.42f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawRoundRect(card, 24f * scale, 24f * scale, paint)
+    private fun drawCompletedBattle(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        val card = RectF(42f * scale, 246f * scale, width - 42f * scale, 590f * scale)
+        paint.shader = LinearGradient(card.left, card.top, card.right, card.bottom, Color.rgb(27, 58, 74), Color.rgb(10, 26, 41), Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(card, 32f * scale, 32f * scale, paint)
         paint.shader = null
-        paint.shader = LinearGradient(
-            card.left,
-            card.top,
-            card.left,
-            card.top + card.height() * 0.34f,
-            Color.argb(if (pressed) 20 else 62, 255, 255, 255),
-            Color.argb(0, 255, 255, 255),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawRoundRect(RectF(card.left + 3f * scale, card.top + 3f * scale, card.right - 3f * scale, card.bottom - 3f * scale), 21f * scale, 21f * scale, paint)
-        paint.shader = null
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = if (focused) 5f * scale else 3f * scale
-        paint.color = if (focused) PAPER else palette.edge
-        canvas.drawRoundRect(RectF(card.left + 2f * scale, card.top + 2f * scale, card.right - 2f * scale, card.bottom - 2f * scale), 21f * scale, 21f * scale, paint)
-        paint.style = Paint.Style.FILL
-        drawMovePressAnimation(canvas, card, palette, pressProgress, scale)
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textAlign = Paint.Align.CENTER
-        paint.textSize = moveNameSize(move.name, scale)
-        drawOutlinedText(canvas, move.name, card.centerX(), card.top + card.height() * 0.37f, Color.rgb(8, 18, 28), PAPER, 3f * scale)
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = 37f * scale
-        drawOutlinedText(canvas, "PP ${move.pp}/${move.maxPp}", card.centerX(), card.top + card.height() * 0.61f, Color.rgb(8, 18, 28), PAPER, 2f * scale)
-        val effectiveness = effectiveness(move.type)
-        val labelBounds = RectF(card.left + 26f * scale, card.bottom - 66f * scale, card.right - 26f * scale, card.bottom - 20f * scale)
-        paint.color = effectiveness.color
-        canvas.drawRoundRect(labelBounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2f * scale
-        paint.color = Color.argb(170, 255, 255, 255)
-        canvas.drawRoundRect(labelBounds, 18f * scale, 18f * scale, paint)
+        paint.color = Color.argb(184, 112, 216, 255)
+        canvas.drawRoundRect(card, 32f * scale, 32f * scale, paint)
         paint.style = Paint.Style.FILL
-        paint.textSize = 26f * scale
-        drawOutlinedText(canvas, effectiveness.label, labelBounds.centerX(), labelBounds.centerY() + 9f * scale, Color.rgb(7, 17, 26), PAPER, 2f * scale)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 46f * scale
+        paint.color = PAPER
+        canvas.drawText("Battle complete", card.centerX(), card.top + 128f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 30f * scale
+        paint.color = Color.rgb(190, 218, 235)
+        canvas.drawText(session.status, card.centerX(), card.top + 190f * scale, paint)
+        paint.textSize = 25f * scale
+        paint.color = Color.rgb(129, 205, 236)
+        canvas.drawText("Open Menu to find another battle", card.centerX(), card.top + 258f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawBattleConsole(canvas: Canvas, bounds: RectF, moves: List<BattleSession.MoveOption>, scale: Float) {
+        paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.rgb(17, 47, 63), Color.rgb(6, 21, 34), Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(bounds, 25f * scale, 25f * scale, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f * scale
+        paint.color = Color.argb(174, 117, 187, 211)
+        canvas.drawRoundRect(bounds, 25f * scale, 25f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 17f * scale
+        paint.color = Color.rgb(153, 224, 220)
+        canvas.drawText("BATTLE INFO", bounds.left + 28f * scale, bounds.top + 42f * scale, paint)
+        val battleInfo = session.battleInfo()
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 16f * scale
+        paint.color = Color.rgb(153, 224, 220)
+        canvas.drawText("FIELD", bounds.left + 28f * scale, bounds.top + 78f * scale, paint)
+        val fieldTop = bounds.top + 90f * scale
+        val fieldGap = 8f * scale
+        val fieldWidth = (bounds.width() - 56f * scale - fieldGap) / 2f
+        drawBattleInfoPill(canvas, RectF(bounds.left + 28f * scale, fieldTop, bounds.left + 28f * scale + fieldWidth, fieldTop + 36f * scale), displayFieldEffect(battleInfo.weather, "Clear"), Color.rgb(54, 153, 184), scale)
+        drawBattleInfoPill(canvas, RectF(bounds.left + 28f * scale + fieldWidth + fieldGap, fieldTop, bounds.right - 28f * scale, fieldTop + 36f * scale), displayFieldEffect(battleInfo.terrain, "No terrain"), Color.rgb(86, 156, 127), scale)
+        drawBattleInfoLine(canvas, "YOUR SIDE", battleInfo.playerSideConditions.ifEmpty { listOf("No conditions") }.joinToString(" · "), bounds.left + 28f * scale, bounds.top + 164f * scale, Color.rgb(144, 207, 220), scale)
+        drawBattleInfoLine(canvas, "OPPONENT", battleInfo.opponentSideConditions.ifEmpty { listOf("No conditions") }.joinToString(" · "), bounds.left + 28f * scale, bounds.top + 208f * scale, Color.rgb(187, 208, 224), scale)
+        drawBattleInfoLine(canvas, "YOUR BOOSTS", displayBoosts(battleInfo.playerBoosts), bounds.left + 28f * scale, bounds.top + 252f * scale, Color.rgb(116, 220, 162), scale)
+        drawBattleInfoLine(canvas, "FOE BOOSTS", displayBoosts(battleInfo.opponentBoosts), bounds.left + 28f * scale, bounds.top + 296f * scale, Color.rgb(224, 169, 190), scale)
+        val inspectedMove = moves.getOrNull(session.focusedMove)
+        if (inspectedMove != null) {
+            val specialTop = bounds.bottom - 145f * scale
+            val info = RectF(bounds.left + 18f * scale, bounds.top + 322f * scale, bounds.right - 18f * scale, specialTop - 22f * scale)
+            paint.color = Color.argb(166, 2, 14, 25)
+            canvas.drawRoundRect(info, 20f * scale, 20f * scale, paint)
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = 16f * scale
+            paint.color = Color.rgb(121, 209, 227)
+            canvas.drawText("MOVE INFO", info.left + 20f * scale, info.top + 32f * scale, paint)
+            paint.textSize = 27f * scale
+            paint.color = PAPER
+            canvas.drawText(ellipsize(inspectedMove.name, 19), info.left + 20f * scale, info.top + 75f * scale, paint)
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            paint.textSize = 19f * scale
+            paint.color = Color.rgb(187, 213, 228)
+            canvas.drawText("${inspectedMove.category} · Power ${inspectedMove.power}", info.left + 20f * scale, info.top + 100f * scale, paint)
+            canvas.drawText("Accuracy ${inspectedMove.accuracy}", info.left + 20f * scale, info.top + 123f * scale, paint)
+        }
+        val specialTop = bounds.bottom - 145f * scale
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 16f * scale
+        paint.color = Color.rgb(153, 224, 220)
+        canvas.drawText("SPECIAL", bounds.left + 28f * scale, specialTop - 12f * scale, paint)
+        drawGimmicks(canvas, RectF(bounds.left + 18f * scale, specialTop, bounds.right - 18f * scale, bounds.bottom - 18f * scale), scale)
+    }
+
+    private fun drawBattleInfoPill(canvas: Canvas, bounds: RectF, value: String, color: Int, scale: Float) {
+        paint.color = Color.argb(138, Color.red(color), Color.green(color), Color.blue(color))
+        canvas.drawRoundRect(bounds, 12f * scale, 12f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = 15f * scale
+        drawSoftText(canvas, ellipsize(value, 16), bounds.centerX(), bounds.centerY() + 5f * scale, PAPER, 0.3f * scale)
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawBattleInfoLine(canvas: Canvas, label: String, value: String, left: Float, baseline: Float, color: Int, scale: Float) {
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 14f * scale
+        paint.color = color
+        canvas.drawText(label, left, baseline, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 17f * scale
+        paint.color = Color.rgb(205, 222, 231)
+        canvas.drawText(ellipsize(value, 33), left, baseline + 21f * scale, paint)
+    }
+
+    private fun displayFieldEffect(value: String, fallback: String) = when (value) {
+        "RainDance" -> "Rain"
+        "Sandstorm" -> "Sandstorm"
+        "SunnyDay" -> "Sun"
+        "Snow" -> "Snow"
+        "Hail" -> "Hail"
+        else -> value.ifBlank { fallback }
+    }
+
+    private fun displayBoosts(boosts: Map<String, Int>) = boosts.entries.joinToString(" · ") { (stat, value) ->
+        "${BOOST_NAMES[stat] ?: stat.uppercase()} ${if (value > 0) "+" else ""}$value"
+    }.ifBlank { "Neutral" }
+
+    private fun drawMoveRow(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, focused: Boolean, pressProgress: Float, scale: Float) {
+        val palette = movePalette(move.type)
+        val pressDepth = pressProgress * 6f * scale
+        val card = RectF(bounds).apply { offset(0f, pressDepth) }
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(232, 1, 10, 18)
+        canvas.drawPath(moveRowPath(RectF(bounds).apply { offset(0f, 8f * scale) }, scale), paint)
+        val surface = RectF(card.left + 2f * scale, card.top + 2f * scale, card.right - 2f * scale, card.bottom - 6f * scale)
+        paint.shader = LinearGradient(
+            surface.left,
+            surface.top,
+            surface.right,
+            surface.bottom,
+            intArrayOf(palette.highlight, palette.base, palette.shadow),
+            floatArrayOf(0f, 0.52f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawPath(moveRowPath(surface, scale), paint)
+        paint.shader = null
+        paint.color = Color.argb(194, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
+        canvas.drawRoundRect(RectF(surface.left + 13f * scale, surface.top + 12f * scale, surface.left + 19f * scale, surface.bottom - 12f * scale), 3f * scale, 3f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = if (focused) 3f * scale else 1.5f * scale
+        paint.color = if (focused) Color.rgb(225, 255, 247) else Color.argb(174, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
+        canvas.drawPath(moveRowPath(surface, scale), paint)
+        paint.style = Paint.Style.FILL
+        if (focused) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 2f * scale
+            paint.color = Color.argb(154, 118, 239, 223)
+            canvas.drawPath(moveRowPath(RectF(surface).apply { inset(-4f * scale, -4f * scale) }, scale), paint)
+            paint.style = Paint.Style.FILL
+        }
+        drawMovePressAnimation(canvas, surface, palette, pressProgress, scale)
+        val iconChip = RectF(surface.right - 84f * scale, surface.top + 14f * scale, surface.right - 24f * scale, surface.top + 54f * scale)
+        paint.color = Color.argb(108, 0, 14, 25)
+        canvas.drawRoundRect(iconChip, 16f * scale, 16f * scale, paint)
+        typeIcon(move.type)?.let { icon ->
+            source.set(0, 0, icon.width, icon.height)
+            destination.set(iconChip.centerX() - 17f * scale, iconChip.centerY() - 17f * scale, iconChip.centerX() + 17f * scale, iconChip.centerY() + 17f * scale)
+            canvas.drawBitmap(icon, source, destination, paint)
+        }
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textAlign = Paint.Align.LEFT
+        paint.textSize = moveNameSize(move.name, scale)
+        drawSoftText(canvas, move.name, surface.left + 42f * scale, surface.top + 54f * scale, PAPER, 0.85f * scale)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 24f * scale
+        drawSoftText(canvas, "PP ${move.pp} / ${move.maxPp}", surface.left + 42f * scale, surface.bottom - 23f * scale, PAPER, 0.65f * scale)
+        val effectiveness = effectiveness(move.type)
+        paint.color = effectiveness.color
+        paint.textAlign = Paint.Align.RIGHT
+        paint.textSize = 18f * scale
+        drawSoftText(canvas, effectiveness.label, surface.right - 24f * scale, surface.bottom - 24f * scale, effectiveness.color, 0.35f * scale)
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun moveRowPath(bounds: RectF, scale: Float): Path {
+        val notch = 16f * scale
+        val corner = 20f * scale
+        return Path().apply {
+            moveTo(bounds.left + notch, bounds.top)
+            lineTo(bounds.right - corner, bounds.top)
+            quadTo(bounds.right, bounds.top, bounds.right, bounds.top + corner)
+            lineTo(bounds.right, bounds.bottom - corner)
+            quadTo(bounds.right, bounds.bottom, bounds.right - corner, bounds.bottom)
+            lineTo(bounds.left + notch, bounds.bottom)
+            lineTo(bounds.left, bounds.centerY() + notch)
+            lineTo(bounds.left + 10f * scale, bounds.centerY())
+            lineTo(bounds.left, bounds.centerY() - notch)
+            close()
+        }
+    }
+
+    private fun drawSoftText(canvas: Canvas, text: String, centerX: Float, baseline: Float, color: Int, radius: Float) {
+        paint.style = Paint.Style.FILL
+        paint.color = color
+        paint.setShadowLayer(radius, 0f, radius * 0.45f, Color.argb(72, 3, 11, 20))
+        canvas.drawText(text, centerX, baseline, paint)
+        paint.clearShadowLayer()
+    }
+
+    private fun typeIcon(type: String): Bitmap? = typeIcons.getOrPut(type) {
+        val resourceId = resources.getIdentifier("type_${type.lowercase()}", "drawable", context.packageName)
+        if (resourceId == 0) null else BitmapFactory.decodeResource(resources, resourceId)
     }
 
     private fun drawOutlinedText(canvas: Canvas, text: String, centerX: Float, baseline: Float, outline: Int, fill: Int, width: Float) {
@@ -319,7 +456,7 @@ class CommandDeckView(
         val expansion = (1f - progress) * 16f * scale
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = (3f + 5f * progress) * scale
-        paint.color = Color.argb((70f + 140f * progress).toInt(), Color.red(palette.highlight), Color.green(palette.highlight), Color.blue(palette.highlight))
+        paint.color = Color.argb((64f + 126f * progress).toInt(), Color.red(FOCUS), Color.green(FOCUS), Color.blue(FOCUS))
         canvas.drawRoundRect(RectF(card.left - expansion, card.top - expansion, card.right + expansion, card.bottom + expansion), 28f * scale, 28f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.shader = RadialGradient(
@@ -348,9 +485,19 @@ class CommandDeckView(
     private fun drawGimmicks(canvas: Canvas, bounds: RectF, scale: Float) {
         gimmickBounds.fill(null)
         val gimmicks = session.availableGimmicks()
-        if (gimmicks.isEmpty()) return
+        if (gimmicks.isEmpty()) {
+            paint.color = Color.argb(92, 8, 25, 39)
+            canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            paint.textAlign = Paint.Align.CENTER
+            paint.textSize = 16f * scale
+            paint.color = Color.rgb(123, 158, 178)
+            canvas.drawText("No special action this turn", bounds.centerX(), bounds.centerY() + 6f * scale, paint)
+            paint.textAlign = Paint.Align.LEFT
+            return
+        }
         val phase = SystemClock.elapsedRealtime() / 1000f
-        val gap = 14f * scale
+        val gap = 10f * scale
         val width = (bounds.width() - gap * (gimmicks.size - 1)) / gimmicks.size
         gimmicks.forEachIndexed { index, gimmick ->
             val left = bounds.left + index * (width + gap)
@@ -369,31 +516,32 @@ class CommandDeckView(
                     Shader.TileMode.CLAMP
                 )
             } else {
-                paint.shader = LinearGradient(card.left, card.top, card.right, card.bottom, Color.rgb(31, 38, 46), Color.rgb(14, 20, 28), Shader.TileMode.CLAMP)
+                paint.shader = LinearGradient(card.left, card.top, card.right, card.bottom, Color.rgb(39, 70, 88), Color.rgb(13, 31, 47), Shader.TileMode.CLAMP)
             }
             canvas.drawRoundRect(card, 26f * scale, 26f * scale, paint)
             paint.shader = null
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = if (selected) 7f * scale else 3f * scale
-            paint.color = if (selected) Color.argb((180f + 75f * glow).toInt(), 255, 255, 255) else Color.rgb(136, 136, 136)
+            paint.strokeWidth = if (selected) 5f * scale else 2f * scale
+            paint.color = if (selected) Color.argb((180f + 75f * glow).toInt(), 255, 255, 255) else Color.rgb(127, 184, 202)
             canvas.drawRoundRect(card, 26f * scale, 26f * scale, paint)
             paint.style = Paint.Style.FILL
-            val emblemSize = minOf(card.height() * 0.37f, if (gimmicks.size > 2) 72f * scale else 108f * scale)
-            val emblemY = card.top + card.height() * 0.29f
+            val emblemSize = minOf(card.height() * 0.42f, if (gimmicks.size > 2) 62f * scale else 118f * scale)
+            val emblemY = card.top + card.height() * 0.34f
             drawGimmickAsset(canvas, gimmick, card.centerX(), emblemY, emblemSize)
             paint.textAlign = Paint.Align.CENTER
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = if (gimmicks.size > 2) 26f * scale else 46f * scale
+            paint.textSize = if (gimmicks.size > 2) 18f * scale else 34f * scale
             paint.color = if (selected) Color.rgb(22, 22, 22) else PAPER
-            canvas.drawText(gimmick.label, card.centerX(), card.top + card.height() * 0.66f, paint)
+            if (gimmick != BattleSession.BattleGimmick.Z_POWER) canvas.drawText(gimmick.label.first().toString(), card.centerX(), card.top + card.height() * 0.48f, paint)
+            canvas.drawText(gimmick.label, card.centerX(), card.top + card.height() * 0.79f, paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawUnavailableMove(canvas: Canvas, bounds: RectF, scale: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(160, 36, 20, 48)
-        canvas.drawRoundRect(bounds, 22f * scale, 22f * scale, paint)
+        paint.color = Color.argb(160, 30, 43, 58)
+        canvas.drawPath(moveRowPath(bounds, scale), paint)
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = 27f * scale
         paint.color = Color.rgb(224, 191, 220)
@@ -404,10 +552,10 @@ class CommandDeckView(
     private fun effectiveness(type: String): Effectiveness {
         val multiplier = session.opponentDetails().types.fold(1f) { total, defender -> total * typeMultiplier(type, defender) }
         return when {
-            multiplier == 0f -> Effectiveness("No effect", 0xFF536370.toInt())
-            multiplier > 1f -> Effectiveness("Super effective", 0xFF23885F.toInt())
-            multiplier < 1f -> Effectiveness("Not very effective", 0xFFC45D3D.toInt())
-            else -> Effectiveness("Effective", 0xFF226F9E.toInt())
+            multiplier == 0f -> Effectiveness("No effect", 0xFFC4D0DD.toInt())
+            multiplier > 1f -> Effectiveness("Super effective", 0xFF77E4A5.toInt())
+            multiplier < 1f -> Effectiveness("Not very effective", 0xFFFFA7C1.toInt())
+            else -> Effectiveness("Effective", 0xFFC8D9EA.toInt())
         }
     }
 
@@ -434,9 +582,9 @@ class CommandDeckView(
     }
 
     private fun moveNameSize(name: String, scale: Float) = when {
-        name.length > 15 -> 44f * scale
-        name.length > 11 -> 50f * scale
-        else -> 58f * scale
+        name.length > 15 -> 28f * scale
+        name.length > 11 -> 31f * scale
+        else -> 35f * scale
     }
 
     private fun drawGimmickAsset(
@@ -714,25 +862,52 @@ class CommandDeckView(
         BattleSession.Panel.MENU -> "Menu"
     }
 
-    private fun movePalette(type: String) = when (type) {
-        "FIGHTING" -> MovePalette(0xFFF06B82.toInt(), 0xFFD3425F.toInt(), 0xFF702131.toInt(), 0xFFFFB5C1.toInt())
-        "FLYING" -> MovePalette(0xFFB9D3FF.toInt(), 0xFF7398D0.toInt(), 0xFF2E4D7C.toInt(), 0xFFE1EDFF.toInt())
-        "POISON" -> MovePalette(0xFFE497F5.toInt(), 0xFFB763CF.toInt(), 0xFF592469.toInt(), 0xFFF3C9FF.toInt())
-        "GROUND" -> MovePalette(0xFFFFC989.toInt(), 0xFFD69654.toInt(), 0xFF70401D.toInt(), 0xFFFFE0BB.toInt())
-        "ROCK" -> MovePalette(0xFFF0D078.toInt(), 0xFFB99A4B.toInt(), 0xFF5D4A20.toInt(), 0xFFFFE6A6.toInt())
-        "BUG" -> MovePalette(0xFFD2E468.toInt(), 0xFF92A43A.toInt(), 0xFF46551A.toInt(), 0xFFE7F8A3.toInt())
-        "GHOST" -> MovePalette(0xFFB198DE.toInt(), 0xFF70559E.toInt(), 0xFF352456.toInt(), 0xFFD8CBFF.toInt())
-        "STEEL" -> MovePalette(0xFFD7E2EB.toInt(), 0xFF8899A8.toInt(), 0xFF3F4D58.toInt(), 0xFFF0F6FA.toInt())
-        "FIRE" -> MovePalette(0xFFFF9970.toInt(), 0xFFEA6848.toInt(), 0xFF742616.toInt(), 0xFFFFC9B7.toInt())
-        "WATER" -> MovePalette(0xFF71B7FF.toInt(), 0xFF3B82D0.toInt(), 0xFF163B78.toInt(), 0xFFBFE1FF.toInt())
-        "GRASS" -> MovePalette(0xFF8FEA92.toInt(), 0xFF4EA75A.toInt(), 0xFF1D592B.toInt(), 0xFFC3F7BF.toInt())
-        "ELECTRIC" -> MovePalette(0xFFFFE36C.toInt(), 0xFFD8A416.toInt(), 0xFF6C4D08.toInt(), 0xFFFFF2B3.toInt())
-        "PSYCHIC" -> MovePalette(0xFFFF95B7.toInt(), 0xFFD85583.toInt(), 0xFF6E1D3C.toInt(), 0xFFFFC5D8.toInt())
-        "ICE" -> MovePalette(0xFFB8F0FA.toInt(), 0xFF53B9CC.toInt(), 0xFF1C6071.toInt(), 0xFFD8FAFF.toInt())
-        "DRAGON" -> MovePalette(0xFFA494FF.toInt(), 0xFF6959CC.toInt(), 0xFF30256F.toInt(), 0xFFD4CCFF.toInt())
-        "DARK" -> MovePalette(0xFF9D8073.toInt(), 0xFF705548.toInt(), 0xFF34221D.toInt(), 0xFFD5B9A9.toInt())
-        "FAIRY" -> MovePalette(0xFFFFB6E3.toInt(), 0xFFDD76B6.toInt(), 0xFF732B58.toInt(), 0xFFFFD6EF.toInt())
-        else -> MovePalette(0xFFE5E8E6.toInt(), 0xFF999C99.toInt(), 0xFF454946.toInt(), 0xFFF7F8F6.toInt())
+    private fun movePalette(type: String): MovePalette {
+        val canonical = when (type) {
+            "NORMAL" -> Color.rgb(145, 151, 159)
+            "FIRE" -> Color.rgb(250, 112, 60)
+            "WATER" -> Color.rgb(93, 144, 246)
+            "ELECTRIC" -> Color.rgb(245, 202, 48)
+            "GRASS" -> Color.rgb(93, 194, 102)
+            "ICE" -> Color.rgb(104, 204, 221)
+            "FIGHTING" -> Color.rgb(216, 69, 62)
+            "POISON" -> Color.rgb(177, 83, 188)
+            "GROUND" -> Color.rgb(208, 150, 77)
+            "FLYING" -> Color.rgb(125, 144, 236)
+            "PSYCHIC" -> Color.rgb(241, 91, 151)
+            "BUG" -> Color.rgb(151, 181, 50)
+            "ROCK" -> Color.rgb(178, 145, 67)
+            "GHOST" -> Color.rgb(105, 88, 173)
+            "DRAGON" -> Color.rgb(105, 83, 236)
+            "DARK" -> Color.rgb(118, 88, 72)
+            "STEEL" -> Color.rgb(126, 145, 171)
+            "FAIRY" -> Color.rgb(232, 128, 177)
+            else -> Color.rgb(89, 107, 127)
+        }
+        val base = if (type == "NORMAL" || type == "DARK") canonical else vibrant(canonical)
+        return MovePalette(
+            blend(base, PAPER, 0.10f),
+            blend(base, Color.BLACK, 0.08f),
+            blend(base, Color.BLACK, 0.48f),
+            blend(base, PAPER, 0.22f)
+        )
+    }
+
+    private fun vibrant(color: Int): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+        hsv[1] = (hsv[1] * 1.52f + 0.14f).coerceAtMost(1f)
+        hsv[2] = (hsv[2] * 1.18f).coerceAtMost(1f)
+        return Color.HSVToColor(hsv)
+    }
+
+    private fun blend(first: Int, second: Int, ratio: Float): Int {
+        val inverse = 1f - ratio
+        return Color.rgb(
+            (Color.red(first) * inverse + Color.red(second) * ratio).toInt(),
+            (Color.green(first) * inverse + Color.green(second) * ratio).toInt(),
+            (Color.blue(first) * inverse + Color.blue(second) * ratio).toInt()
+        )
     }
 
     private fun ellipsize(text: String, maximum: Int) = if (text.length <= maximum) text else "${text.take(maximum - 1)}…"
@@ -741,7 +916,9 @@ class CommandDeckView(
         val TABS = arrayOf(BattleSession.Panel.MOVES, BattleSession.Panel.TEAM, BattleSession.Panel.ACTIVITY, BattleSession.Panel.MENU)
         const val PAPER = 0xFFEFF8FF.toInt()
         const val CYAN = 0xFF3EE5FF.toInt()
+        const val FOCUS = 0xFF70D8FF.toInt()
         const val MAGENTA = 0xFFFF4AB0.toInt()
         const val MUTED = 0xFF97B1D1.toInt()
+        val BOOST_NAMES = mapOf("atk" to "Atk", "def" to "Def", "spa" to "Sp. Atk", "spd" to "Sp. Def", "spe" to "Speed", "accuracy" to "Accuracy", "evasion" to "Evasion")
     }
 }

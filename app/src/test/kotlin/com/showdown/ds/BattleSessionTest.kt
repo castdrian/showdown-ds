@@ -2,6 +2,7 @@ package com.showdown.ds
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,6 +41,23 @@ class BattleSessionTest {
         assertEquals(7, session.turn)
         assertEquals("[Gen 7] OU", session.format)
         assertTrue(session.battleLog().last().contains("Flare Blitz"))
+    }
+
+    @Test
+    fun openingCombatantsEnterInProtocolOrder() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p1a: Incineroar|Incineroar, L50, M|316/316"
+            )
+        )
+
+        assertTrue(session.playerEntryAtNanos - session.opponentEntryAtNanos >= BattleSceneTiming.summonDurationNanos)
+        assertEquals("Go! Incineroar!", session.sendOutMessage("Incineroar", true))
+        assertEquals("GLADION sent out Tapu Koko!", session.sendOutMessage("Tapu Koko", false))
     }
 
     @Test
@@ -122,6 +140,7 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertTrue(session.chatMessages().last().contains("/choose move 1 zmove"))
+        assertNull(session.selectedGimmick)
     }
 
     @Test
@@ -163,6 +182,7 @@ class BattleSessionTest {
         assertEquals("0 fnt", session.opponentHp)
         assertEquals(0f, session.opponentHealthFraction())
         assertEquals("ADRIAN won the battle.", session.status)
+        assertTrue(session.isBattleFinished())
         assertTrue(feedback.any { it.type == BattleSession.FeedbackType.POKEMON_CRY && it.actor == "Incineroar" })
         assertTrue(feedback.any { it.type == BattleSession.FeedbackType.MOVE && it.move == "Flare Blitz" })
         assertTrue(feedback.any { it.type == BattleSession.FeedbackType.HIT && it.impact == BattleSession.HitImpact.SUPER_EFFECTIVE_CRITICAL })
@@ -171,6 +191,31 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertTrue(session.chatMessages().last().contains("/choose move 1|28"))
+    }
+
+    @Test
+    fun faintedCombatantIsRemovedFromTheBattlePresentation() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Incineroar|Incineroar, L50, M|316/316",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100"
+            )
+        )
+
+        assertTrue(session.hasActivePlayerCombatant())
+        assertTrue(session.hasActiveOpponentCombatant())
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-damage|p2a: Tapu Koko|0 fnt",
+                "|faint|p2a: Tapu Koko"
+            )
+        )
+
+        assertTrue(session.hasActivePlayerCombatant())
+        assertTrue(!session.hasActiveOpponentCombatant())
     }
 
     @Test
@@ -187,6 +232,76 @@ class BattleSessionTest {
 
         assertEquals("Incineroar used Flare Blitz!", session.latestMoveEvent)
         assertEquals("It's super effective!", session.latestBattleEvent)
+    }
+
+    @Test
+    fun liveRequestsResolveMissingMoveTypesFromTheOfficialMoveDex() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Low Kick\",\"pp\":20},{\"move\":\"U-turn\",\"pp\":20},{\"move\":\"Knock Off\",\"pp\":20}]}]}")
+
+        assertEquals(listOf("UNKNOWN", "UNKNOWN", "UNKNOWN"), session.moves().map { it.type })
+
+        session.setMoveTypeResolver(mapOf("Low Kick" to "FIGHTING", "U-turn" to "BUG", "Knock Off" to "DARK")::get)
+
+        assertEquals(listOf("FIGHTING", "BUG", "DARK"), session.moves().map { it.type })
+    }
+
+    @Test
+    fun liveRequestsAndSwitchesResolveOfficialPokemonTypes() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver(
+            mapOf(
+                "Mewtwo" to listOf("PSYCHIC"),
+                "Magikarp" to listOf("WATER")
+            )::get
+        )
+
+        session.applyProtocolLine(
+            "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Mewtwo\",\"details\":\"Mewtwo, L50\",\"condition\":\"353/353\",\"active\":true}]}}"
+        )
+        session.applyProtocolLine("|switch|p2a: Magikarp|Magikarp, L1, F|11/11")
+
+        assertEquals(listOf("PSYCHIC"), session.teamMemberDetails(0).types)
+        assertEquals(listOf("WATER"), session.opponentDetails().types)
+    }
+
+    @Test
+    fun battleInfoTracksFieldEffectsSideConditionsAndBoosts() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-weather|RainDance",
+                "|-fieldstart|move: Electric Terrain",
+                "|-sidestart|p1: ADRIAN|move: Stealth Rock",
+                "|-sidestart|p2: GLADION|move: Reflect",
+                "|-boost|p1a: Incineroar|atk|2",
+                "|-unboost|p2a: Tapu Koko|spe|1"
+            )
+        )
+
+        assertEquals("RainDance", session.battleInfo().weather)
+        assertEquals("Electric Terrain", session.battleInfo().terrain)
+        assertEquals(listOf("Stealth Rock"), session.battleInfo().playerSideConditions)
+        assertEquals(listOf("Reflect"), session.battleInfo().opponentSideConditions)
+        assertEquals(mapOf("atk" to 2), session.battleInfo().playerBoosts)
+        assertEquals(mapOf("spe" to -1), session.battleInfo().opponentBoosts)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-weather|none",
+                "|-fieldend|move: Electric Terrain",
+                "|-sideend|p1: ADRIAN|move: Stealth Rock",
+                "|-clearallboost|"
+            )
+        )
+
+        assertEquals("", session.battleInfo().weather)
+        assertEquals("", session.battleInfo().terrain)
+        assertTrue(session.battleInfo().playerSideConditions.isEmpty())
+        assertTrue(session.battleInfo().playerBoosts.isEmpty())
+        assertTrue(session.battleInfo().opponentBoosts.isEmpty())
     }
 
     @Test
@@ -283,6 +398,18 @@ class BattleSessionTest {
     }
 
     @Test
+    fun livePartyDetailsPreserveBallMetadata() {
+        val session = BattleSession()
+
+        session.applyProtocolLine(
+            "|request|{\"wait\":true,\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50, M\",\"condition\":\"0 fnt\",\"pokeball\":\"ultraball\"}]}}"
+        )
+
+        assertEquals("ultraball", session.playerPartyDetails().first().pokeball)
+        assertEquals("FNT", session.playerPartyDetails().first().condition)
+    }
+
+    @Test
     fun unmatchedSwitchDoesNotOverwriteAnUnrelatedPartyMember() {
         val session = BattleSession()
 
@@ -325,6 +452,24 @@ class BattleSessionTest {
         session.selectMenuItem(0)
         session.confirmSelection()
         assertTrue(session.status.contains("[Gen 9] Random Battle"))
+    }
+
+    @Test
+    fun serverFormatCatalogDrivesTheAvailableBattleFormats() {
+        val session = BattleSession()
+
+        session.applyServerFormats(
+            listOf(
+                "|formats|,LL|,1|S/V Singles|[Gen 9] Random Battle,4f|[Gen 7] Random Battle,4f|,4|Past Gens Singles|[Gen 7] OU,e"
+            )
+        )
+
+        assertEquals(
+            listOf("gen9randombattle", "gen7randombattle", "gen7ou"),
+            session.availableMatchFormats().map { it.id }
+        )
+        session.setMatchFormat(session.availableMatchFormats().last())
+        assertEquals("[Gen 7] OU", session.matchFormat.label)
     }
 
     @Test

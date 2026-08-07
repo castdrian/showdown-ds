@@ -54,6 +54,7 @@ jobs:
           gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest \
             --tests com.showdown.ds.OfficialBattleTranscriptTest \
             --tests com.showdown.ds.ShowdownProtocolContractTest \
+            --tests com.showdown.ds.ShowdownSocketFramesTest \
             --tests com.showdown.ds.ShowdownServerEndpointTest \
             --tests com.showdown.ds.ShowdownAssetPathsTest
 

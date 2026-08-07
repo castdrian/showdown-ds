@@ -36,6 +36,23 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     ) {
         val isAnimated get() = movie != null || animatedDrawable != null
 
+        fun trimHorizontalTransparentPadding(): SpriteAsset {
+            val image = bitmap ?: return this
+            var left = image.width
+            var right = -1
+            for (y in 0 until image.height) {
+                for (x in 0 until image.width) {
+                    if ((image.getPixel(x, y) ushr 24) != 0) {
+                        left = minOf(left, x)
+                        right = maxOf(right, x)
+                    }
+                }
+            }
+            if (right < left) return this
+            if (left == 0 && right == image.width - 1) return this
+            return fromBitmap(Bitmap.createBitmap(image, left, 0, right - left + 1, image.height))
+        }
+
         fun draw(canvas: Canvas, destination: RectF, elapsedMillis: Long, flipHorizontally: Boolean = false, alpha: Int = 255) {
             val scale = min(destination.width() / width, destination.height() / height)
             val drawWidth = width * scale
@@ -103,7 +120,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {
-        requestSprite(ShowdownAssetPaths.trainer(trainer), receiver)
+        requestSprite(ShowdownAssetPaths.trainer(trainer)) { receiver(it?.trimHorizontalTransparentPadding()) }
     }
 
     fun requestBackdrop(name: String = "bg-aquacordetown.jpg", receiver: (Bitmap?) -> Unit) {
@@ -118,8 +135,22 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
     }
 
+    fun requestPokemonBallSheet(receiver: (Bitmap?) -> Unit) {
+        requestBytes("sprites/pokemonicons-pokeball-sheet.png") { file ->
+            receiver(file?.let { BitmapFactory.decodeFile(it.path) })
+        }
+    }
+
     fun requestAudio(path: String, receiver: (File?) -> Unit) {
         requestBytes(path, receiver)
+    }
+
+    fun requestMoveDex(receiver: (File?) -> Unit) {
+        requestBytes("data/moves.json", receiver)
+    }
+
+    fun requestPokedex(receiver: (File?) -> Unit) {
+        requestBytes("data/pokedex.json", receiver)
     }
 
     override fun close() {
@@ -166,7 +197,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val source = ImageDecoder.createSource(file)
                 (ImageDecoder.decodeDrawable(source) as? AnimatedImageDrawable)?.let(SpriteAsset::fromAnimatedDrawable)
-                    ?: Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 }?.let(SpriteAsset::fromMovie)
             } else {
                 Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 }?.let(SpriteAsset::fromMovie)
             }

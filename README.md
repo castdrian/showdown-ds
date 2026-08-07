@@ -2,9 +2,9 @@
 
 Dual Screen Pokémon Showdown! client for Android with a native Vulkan foundation and an AYN Thor-focused emulator profile.
 
-The top display is a full battle scene with Showdown CDN Pokémon and trainer sprites, Showdown’s own battle-animation mapping in a transparent effects layer, and an unobtrusive live battle feed. The lower display is a touch-first command deck for battle decisions, team selection, chat, and battle history. Tapping a move queues it immediately; optional touch confirmation is available in the X-menu. Its menus are also navigable with Android gamepad events: D-pad or left stick navigates, A selects, B returns, L/R cycle panels, X opens the menu, Y opens the team, L2 opens chat, and R2 opens the log.
+The top display is a full battle scene with Showdown CDN Pokémon and trainer sprites, Showdown’s own battle-animation mapping in a transparent effects layer, randomized Showdown backdrops and music, a live battle feed, and tap-to-toggle Pokémon detail sheets. The lower display is a touch-first command deck for battle decisions, team selection, chat, and battle history. Tapping a move queues it immediately; optional touch confirmation is available in the X-menu. Its menus are also navigable with Android gamepad events: D-pad or left stick navigates, A selects, B returns, L/R cycle panels, X opens the menu, Y opens the team, L2 opens chat, and R2 opens the log.
 
-The app defaults to Showdown’s animated XY sprites and caches CDN resources in memory plus an internal 96 MB least-recently-used disk cache. It uses the Showdown Gen 6 battle backdrop, `sm-trainer.mp3` music loop, notification SFX, and species cries at runtime. When a battle sprite is still loading, the upper renderer uses Showdown’s animated Substitute placeholder instead of blocking battle input.
+The app defaults to Showdown’s animated XY sprites and caches CDN resources in memory plus an internal 96 MB least-recently-used disk cache. It resolves live move and Pokémon types from the official Showdown dex files, uses species cries, and starts each bundled Gen 7 move sound on the same official animation callback that begins its visual effect. When a battle sprite is still loading, the upper renderer uses Showdown’s animated Substitute placeholder instead of blocking battle input.
 
 ## Preview
 

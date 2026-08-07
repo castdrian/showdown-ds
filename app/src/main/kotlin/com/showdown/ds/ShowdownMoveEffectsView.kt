@@ -7,10 +7,15 @@ import android.view.View
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.JavascriptInterface
+import android.view.MotionEvent
 import org.json.JSONArray
 
 @SuppressLint("SetJavaScriptEnabled")
-class ShowdownMoveEffectsView(context: Context) : WebView(context) {
+class ShowdownMoveEffectsView(
+    context: Context,
+    private val moveStartListener: (String) -> Unit
+) : WebView(context) {
     private val pendingPackets = mutableListOf<List<String>>()
     private var pageLoaded = false
 
@@ -25,6 +30,7 @@ class ShowdownMoveEffectsView(context: Context) : WebView(context) {
         settings.loadsImagesAutomatically = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        addJavascriptInterface(MoveAudioBridge(), "ShowdownNativeAudio")
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 pageLoaded = true
@@ -54,6 +60,8 @@ class ShowdownMoveEffectsView(context: Context) : WebView(context) {
         destroy()
     }
 
+    override fun onTouchEvent(event: MotionEvent): Boolean = false
+
     private fun flushPendingPackets() {
         if (!pageLoaded || pendingPackets.isEmpty()) return
         val packets = pendingPackets.toList()
@@ -63,6 +71,13 @@ class ShowdownMoveEffectsView(context: Context) : WebView(context) {
             val receiver = if (packet.firstOrNull() == SEED_PREFIX) "seed" else "receive"
             val lines = if (receiver == "seed") JSONArray(packet.drop(1)) else payload
             evaluateJavascript("window.ShowdownNativeEffects.$receiver($lines);", null)
+        }
+    }
+
+    private inner class MoveAudioBridge {
+        @JavascriptInterface
+        fun play(move: String) {
+            post { moveStartListener(move) }
         }
     }
 
@@ -80,6 +95,7 @@ class ShowdownMoveEffectsView(context: Context) : WebView(context) {
                     #battle { position: absolute; top: 0; left: 0; width: 640px; height: 360px; transform-origin: top left; overflow: hidden; border: 0; background: transparent !important; }
                     #log { display: none; }
                     .battle, .innerbattle { border: 0 !important; background: transparent !important; }
+                    .native-effects-hidden { visibility: hidden !important; }
                 </style>
                 <script src="https://play.pokemonshowdown.com/config/config.js"></script>
                 <script src="https://play.pokemonshowdown.com/js/lib/jquery-2.2.4.min.js"></script>
@@ -97,6 +113,7 @@ class ShowdownMoveEffectsView(context: Context) : WebView(context) {
                 <script>
                     (function () {
                         var battle = null;
+                        var hideFrame = 0;
                         function layout() {
                             var width = window.innerWidth;
                             var height = window.innerHeight;
@@ -108,17 +125,32 @@ class ShowdownMoveEffectsView(context: Context) : WebView(context) {
                         function hideChrome() {
                             var scene = battle.scene;
                             [scene.${'$'}bg, scene.${'$'}terrain, scene.${'$'}weather, scene.${'$'}sprite, scene.${'$'}stat, scene.${'$'}leftbar, scene.${'$'}rightbar, scene.${'$'}turn, scene.${'$'}messagebar, scene.${'$'}delay, scene.${'$'}tooltips].forEach(function (element) {
-                                element.css('visibility', 'hidden');
+                                element.addClass('native-effects-hidden').css('visibility', 'hidden');
                             });
+                            scene.${'$'}sprites.concat(scene.${'$'}spritesFront).forEach(function (element) {
+                                element.addClass('native-effects-hidden').css('visibility', 'hidden');
+                            });
+                        }
+                        function keepChromeHidden() {
+                            if (!battle) return;
+                            hideChrome();
+                            hideFrame = window.requestAnimationFrame(keepChromeHidden);
                         }
                         function createBattle() {
                             if (battle) battle.destroy();
+                            if (hideFrame) window.cancelAnimationFrame(hideFrame);
                             document.getElementById('battle').innerHTML = '';
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
                             battle.setMute(true);
                             hideChrome();
+                            var runMoveAnim = battle.scene.runMoveAnim;
+                            battle.scene.runMoveAnim = function (moveid, participants) {
+                                if (this.animating && window.ShowdownNativeAudio) window.ShowdownNativeAudio.play(String(moveid));
+                                return runMoveAnim.call(this, moveid, participants);
+                            };
                             layout();
+                            keepChromeHidden();
                         }
                         function add(lines) {
                             lines.forEach(function (line) {

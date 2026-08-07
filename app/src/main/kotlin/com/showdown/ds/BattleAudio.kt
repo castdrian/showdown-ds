@@ -1,12 +1,19 @@
 package com.showdown.ds
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 class BattleAudio(
+    private val context: Context,
     private val resourceCache: ShowdownSpriteCache,
     session: BattleSession
 ) {
@@ -14,10 +21,18 @@ class BattleAudio(
     private var notificationFile: File? = null
     private var bgmFile: File? = null
     private var bgmPlayer: MediaPlayer? = null
+    private var activeMovePlayer: MediaPlayer? = null
     private var bgmPrepared = false
     private var soundEffectsEnabled = true
     private var musicEnabled = false
-    private val selectedMusic = MUSIC[session.showdownMusicIndex()]
+    private val moveSoundDirectory = File(context.cacheDir, "move-sfx").apply { mkdirs() }
+    private val moveSoundCache = ConcurrentHashMap<String, File>()
+    private val pendingMoveSounds = ConcurrentHashMap.newKeySet<String>()
+    private val moveSoundCallbacks = mutableMapOf<String, MutableList<(File?) -> Unit>>()
+    private val moveSoundLock = Any()
+    private val moveSoundExecutor = Executors.newFixedThreadPool(2)
+    private val moveSoundTimeline = MoveSoundTimeline()
+    private var selectedMusic = MUSIC[session.showdownMusicIndex()]
     private val loopCheck = object : Runnable {
         override fun run() {
             val player = bgmPlayer ?: return
@@ -30,13 +45,12 @@ class BattleAudio(
 
     init {
         resourceCache.requestAudio("audio/notification.wav") { notificationFile = it }
-        resourceCache.requestAudio(selectedMusic.path) {
-            bgmFile = it
-            startMusicIfReady()
-        }
+        requestMusic(selectedMusic)
     }
 
     fun updateOptions(session: BattleSession) {
+        val requestedMusic = MUSIC[session.showdownMusicIndex()]
+        if (requestedMusic != selectedMusic) selectMusic(requestedMusic)
         soundEffectsEnabled = session.soundEffectsEnabled
         musicEnabled = session.musicEnabled
         if (musicEnabled) {
@@ -58,6 +72,10 @@ class BattleAudio(
         mainHandler.removeCallbacks(loopCheck)
         bgmPlayer?.release()
         bgmPlayer = null
+        activeMovePlayer?.release()
+        activeMovePlayer = null
+        moveSoundTimeline.beginMove()
+        moveSoundExecutor.shutdownNow()
     }
 
     fun playNavigation() = playNotification(0.35f)
@@ -74,7 +92,28 @@ class BattleAudio(
             BattleSession.HitImpact.CRITICAL -> 0.70f
             BattleSession.HitImpact.SUPER_EFFECTIVE_CRITICAL -> 0.82f
         }
-        playNotification(volume)
+        val effect = when (impact) {
+            BattleSession.HitImpact.RESISTED -> "Hit Weak Not Very Effective"
+            BattleSession.HitImpact.NORMAL, BattleSession.HitImpact.CRITICAL -> "Hit Normal Damage"
+            BattleSession.HitImpact.SUPER_EFFECTIVE, BattleSession.HitImpact.SUPER_EFFECTIVE_CRITICAL -> "Hit Super Effective"
+        }
+        loadMoveSound(effect) { file -> file?.let { playFile(it, volume) } }
+    }
+
+    fun preloadMoves(moves: List<String>) {
+        moves.forEach { loadMoveSound(it) { } }
+    }
+
+    fun playMove(move: String) {
+        if (!soundEffectsEnabled) return
+        val moveToken = moveSoundTimeline.beginMove(SystemClock.elapsedRealtime())
+        activeMovePlayer?.let {
+            it.release()
+        }
+        activeMovePlayer = null
+        loadMoveSound(move) { file ->
+            if (moveSoundTimeline.isPlayable(moveToken, SystemClock.elapsedRealtime())) file?.let { playMoveFile(it, moveToken) }
+        }
     }
 
     fun playCry(species: String) {
@@ -108,8 +147,65 @@ class BattleAudio(
         }
     }
 
+    private fun selectMusic(music: Music) {
+        mainHandler.removeCallbacks(loopCheck)
+        bgmPlayer?.release()
+        bgmPlayer = null
+        bgmPrepared = false
+        bgmFile = null
+        selectedMusic = music
+        requestMusic(music)
+    }
+
+    private fun requestMusic(music: Music) {
+        resourceCache.requestAudio(music.path) { file ->
+            if (music == selectedMusic) {
+                bgmFile = file
+                startMusicIfReady()
+            }
+        }
+    }
+
     private fun playNotification(volume: Float) {
         if (soundEffectsEnabled) notificationFile?.let { playFile(it, volume) }
+    }
+
+    private fun loadMoveSound(move: String, receiver: (File?) -> Unit) {
+        val id = resourceId(move)
+        moveSoundCache[id]?.let {
+            receiver(it)
+            return
+        }
+        synchronized(moveSoundLock) {
+            moveSoundCache[id]?.let {
+                receiver(it)
+                return
+            }
+            moveSoundCallbacks.getOrPut(id) { mutableListOf() } += receiver
+            if (!pendingMoveSounds.add(id)) return
+        }
+        moveSoundExecutor.execute {
+            val file = copyMoveSound(id)
+            if (file != null) moveSoundCache[id] = file
+            val callbacks = synchronized(moveSoundLock) {
+                pendingMoveSounds.remove(id)
+                moveSoundCallbacks.remove(id).orEmpty()
+            }
+            mainHandler.post { callbacks.forEach { it(file) } }
+        }
+    }
+
+    private fun copyMoveSound(id: String): File? {
+        val target = File(moveSoundDirectory, "$id.mp3")
+        if (target.isFile && target.length() > 0L) return target
+        return runCatching {
+            context.assets.open("move-sfx/$id.mp3").use { input ->
+                val temporary = File(target.parentFile, "${target.name}.part")
+                FileOutputStream(temporary).use { output -> input.copyTo(output) }
+                if (!temporary.renameTo(target)) throw IOException("Unable to cache move sound")
+            }
+            target
+        }.getOrNull()
     }
 
     private fun playFile(file: File, volume: Float) {
@@ -121,6 +217,27 @@ class BattleAudio(
             setOnCompletionListener { release() }
             prepareAsync()
         }
+    }
+
+    private fun playMoveFile(file: File, moveToken: Long) {
+        val player = MediaPlayer().apply {
+            setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            setDataSource(file.path)
+            setVolume(0.72f, 0.72f)
+            setOnPreparedListener {
+                if (activeMovePlayer !== this || !moveSoundTimeline.isPlayable(moveToken, SystemClock.elapsedRealtime())) {
+                    release()
+                    return@setOnPreparedListener
+                }
+                start()
+            }
+            setOnCompletionListener {
+                if (activeMovePlayer === this) activeMovePlayer = null
+                release()
+            }
+            prepareAsync()
+        }
+        activeMovePlayer = player
     }
 
     private fun resourceId(value: String) = value.lowercase().replace(Regex("[^a-z0-9]"), "")

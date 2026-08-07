@@ -25,9 +25,13 @@ class ShowdownConnection(
     }
 
     private var socket: WebSocket? = null
+    private var transportReady = false
+    private var usesSockJs = false
 
     fun connect() {
         disconnect()
+        transportReady = false
+        usesSockJs = false
         listener.onConnectionStateChanged(State.CONNECTING)
         val request = Request.Builder().url(endpoint.webSocketUrl).build()
         socket = httpClient.newWebSocket(request, SocketListener())
@@ -36,16 +40,18 @@ class ShowdownConnection(
     fun disconnect() {
         socket?.close(1000, "Client closed")
         socket = null
+        transportReady = false
+        usesSockJs = false
     }
 
     fun sendGlobal(command: String): Boolean {
         val message = "|${command.removePrefix("|")}"
-        return socket?.send(message) == true
+        return sendFrame(message)
     }
 
     fun send(roomId: String?, command: String): Boolean {
         val message = roomId?.takeIf { it.isNotBlank() }?.let { "$it|$command" } ?: command
-        return socket?.send(message) == true
+        return sendFrame(message)
     }
 
     fun close() {
@@ -54,33 +60,67 @@ class ShowdownConnection(
         httpClient.connectionPool.evictAll()
     }
 
-    private inner class SocketListener : WebSocketListener() {
-        override fun onOpen(webSocket: WebSocket, response: Response) {
-            listener.onConnectionStateChanged(State.CONNECTED)
+    private fun sendFrame(message: String): Boolean {
+        if (!transportReady) return false
+        return socket?.send(ShowdownSocketFrames.encode(message, usesSockJs)) == true
+    }
+
+    private fun markTransportReady() {
+        if (transportReady) return
+        transportReady = true
+        listener.onConnectionStateChanged(State.CONNECTED)
+    }
+
+    private fun dispatchProtocol(message: String) {
+        val packets = mutableListOf<Pair<String?, MutableList<String>>>()
+        var roomId: String? = null
+        var lines = mutableListOf<String>()
+        message.lineSequence().forEach { line ->
+            if (line.startsWith(">")) {
+                if (lines.isNotEmpty()) packets += roomId to lines
+                roomId = line.drop(1).ifBlank { null }
+                lines = mutableListOf()
+            } else if (line.isNotEmpty()) {
+                lines += line
+            }
         }
+        if (lines.isNotEmpty()) packets += roomId to lines
+        packets.forEach { (packetRoomId, packetLines) -> listener.onProtocol(packetRoomId, packetLines) }
+    }
+
+    private inner class SocketListener : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) = Unit
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            val packets = mutableListOf<Pair<String?, MutableList<String>>>()
-            var roomId: String? = null
-            var lines = mutableListOf<String>()
-            text.lineSequence().forEach { line ->
-                if (line.startsWith(">")) {
-                    if (lines.isNotEmpty()) packets += roomId to lines
-                    roomId = line.drop(1).ifBlank { null }
-                    lines = mutableListOf()
-                } else if (line.isNotEmpty()) {
-                    lines += line
+            when (val frame = ShowdownSocketFrames.decode(text)) {
+                ShowdownSocketFrame.Open -> {
+                    usesSockJs = true
+                    markTransportReady()
+                }
+                is ShowdownSocketFrame.Messages -> {
+                    usesSockJs = true
+                    markTransportReady()
+                    frame.values.forEach(::dispatchProtocol)
+                }
+                is ShowdownSocketFrame.Closed -> {
+                    transportReady = false
+                    listener.onConnectionStateChanged(State.DISCONNECTED, frame.reason)
+                }
+                is ShowdownSocketFrame.Raw -> {
+                    usesSockJs = false
+                    markTransportReady()
+                    dispatchProtocol(frame.value)
                 }
             }
-            if (lines.isNotEmpty()) packets += roomId to lines
-            packets.forEach { (packetRoomId, packetLines) -> listener.onProtocol(packetRoomId, packetLines) }
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            transportReady = false
             listener.onConnectionStateChanged(State.DISCONNECTED, reason)
         }
 
         override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
+            transportReady = false
             listener.onConnectionStateChanged(State.FAILED, throwable.message.orEmpty())
         }
     }

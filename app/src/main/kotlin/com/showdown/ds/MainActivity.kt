@@ -29,10 +29,12 @@ class MainActivity : Activity() {
     private lateinit var session: BattleSession
     private lateinit var battleAudio: BattleAudio
     private lateinit var spriteCache: ShowdownSpriteCache
+    private lateinit var moveDex: ShowdownMoveDex
     private lateinit var serverEndpoint: ShowdownServerEndpoint
     private var showdownConnection: ShowdownConnection? = null
     private var activeBattleRoomId: String? = null
     private val demoHandler = Handler(Looper.getMainLooper())
+    private val battleAudioHandler = Handler(Looper.getMainLooper())
     private var demoTurnIndex = 0
     private var controllerHorizontal = 0
     private var controllerVertical = 0
@@ -96,8 +98,26 @@ class MainActivity : Activity() {
         session.addFeedbackListener(feedbackListener)
         session.addClientActionListener(clientActionListener)
         spriteCache = ShowdownSpriteCache(this)
-        battleAudio = BattleAudio(spriteCache, session)
+        moveDex = ShowdownMoveDex(spriteCache)
+        session.setMoveTypeResolver(moveDex::typeFor)
+        session.setPokemonTypeResolver(moveDex::typesFor)
+        moveDex.load {
+            session.setMoveTypeResolver(moveDex::typeFor)
+            session.setPokemonTypeResolver(moveDex::typesFor)
+        }
+        battleAudio = BattleAudio(this, spriteCache, session)
         battleAudio.updateOptions(session)
+        battleAudio.preloadMoves(session.moves().map { it.name })
+        session.presentBattleEvent(session.sendOutMessage(session.playerPokemon, true))
+        battleAudioHandler.postDelayed(
+            { session.presentBattleEvent(session.sendOutMessage(session.opponentPokemon, false)) },
+            BattleSceneTiming.summonDurationNanos / 1_000_000L
+        )
+        battleAudioHandler.postDelayed({ battleAudio.playCry(session.playerPokemon) }, 30)
+        battleAudioHandler.postDelayed(
+            { battleAudio.playCry(session.opponentPokemon) },
+            BattleSceneTiming.summonDurationNanos / 1_000_000L + 30L
+        )
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         setContentView(createPrimaryScreen())
         displayManager?.registerDisplayListener(displayListener, null)
@@ -114,9 +134,11 @@ class MainActivity : Activity() {
         if (::session.isInitialized) session.removeFeedbackListener(feedbackListener)
         if (::session.isInitialized) session.removeClientActionListener(clientActionListener)
         demoHandler.removeCallbacksAndMessages(null)
+        battleAudioHandler.removeCallbacksAndMessages(null)
         showdownConnection?.close()
         showdownConnection = null
         if (::battleAudio.isInitialized) battleAudio.release()
+        if (::moveDex.isInitialized) moveDex.close()
         if (::spriteCache.isInitialized) spriteCache.close()
         showdownMoveEffects?.release()
         showdownMoveEffects = null
@@ -172,7 +194,7 @@ class MainActivity : Activity() {
         frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
-        showdownMoveEffects = ShowdownMoveEffectsView(this).also { effects ->
+        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playMove).also { effects ->
             frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
             effects.seed(session.protocolHistory())
         }
@@ -239,7 +261,10 @@ class MainActivity : Activity() {
     }
 
     private fun refreshDisplays() {
-        if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
+        if (::battleAudio.isInitialized && ::session.isInitialized) {
+            battleAudio.updateOptions(session)
+            battleAudio.preloadMoves(session.moves().map { it.name })
+        }
         battleScene?.invalidate()
         commandDeck?.invalidate()
     }
@@ -348,6 +373,7 @@ class MainActivity : Activity() {
                         ?.getOrNull(2)
                         ?.takeIf { it.isNotBlank() }
                         ?.let(session::setLocalUsername)
+                    if (roomId == null) session.applyServerFormats(lines)
                     if (roomId?.startsWith("battle-") == true) {
                         activeBattleRoomId = roomId
                         session.applyProtocolPacket(lines)
@@ -398,7 +424,7 @@ class MainActivity : Activity() {
     }
 
     private fun showFormatPicker() {
-        val formats = BattleSession.MatchFormat.entries.toTypedArray()
+        val formats = session.availableMatchFormats()
         AlertDialog.Builder(this)
             .setTitle("Battle format")
             .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOf(session.matchFormat)) { dialog, selected ->
@@ -437,12 +463,25 @@ class MainActivity : Activity() {
 
     private fun loadMatchFormat(): BattleSession.MatchFormat {
         val saved = getSharedPreferences("showdown", MODE_PRIVATE).getString("match_format", null)
-        return BattleSession.MatchFormat.entries.firstOrNull { it.id == saved } ?: BattleSession.MatchFormat.GEN7_RANDOM
+        return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved } ?: BattleSession.MatchFormat.GEN7_RANDOM
     }
 
     private fun handleBattleFeedback(feedback: BattleSession.BattleFeedback) {
         when (feedback.type) {
-            BattleSession.FeedbackType.POKEMON_CRY -> battleAudio.playCry(feedback.actor)
+            BattleSession.FeedbackType.ENTRY -> {
+                if (feedback.delayMillis > 0L) {
+                    battleAudioHandler.postDelayed({ session.presentBattleEvent(feedback.message) }, feedback.delayMillis)
+                } else {
+                    session.presentBattleEvent(feedback.message)
+                }
+            }
+            BattleSession.FeedbackType.POKEMON_CRY -> {
+                if (feedback.delayMillis > 0L) {
+                    battleAudioHandler.postDelayed({ battleAudio.playCry(feedback.actor) }, feedback.delayMillis)
+                } else {
+                    battleAudio.playCry(feedback.actor)
+                }
+            }
             BattleSession.FeedbackType.MOVE -> Unit
             BattleSession.FeedbackType.HIT -> {
                 battleAudio.playImpact(feedback.impact)
