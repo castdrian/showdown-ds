@@ -10,12 +10,11 @@ import android.webkit.WebViewClient
 import android.webkit.JavascriptInterface
 import android.view.MotionEvent
 import org.json.JSONArray
-import org.json.JSONObject
 
 @SuppressLint("SetJavaScriptEnabled")
 class ShowdownMoveEffectsView(
     context: Context,
-    private val movePresentationPlanner: (String, Long) -> MovePresentationTiming.Plan,
+    private val movePresentationDuration: (Long) -> Long,
     private val moveStartListener: (String, Long) -> Unit
 ) : WebView(context) {
     private val pendingPackets = mutableListOf<List<String>>()
@@ -78,13 +77,7 @@ class ShowdownMoveEffectsView(
 
     private inner class MoveAudioBridge {
         @JavascriptInterface
-        fun plan(move: String, visualDurationMillis: Long): String {
-            val plan = movePresentationPlanner(move, visualDurationMillis)
-            return JSONObject()
-                .put("animationCycles", plan.animationCycles)
-                .put("presentationDurationMillis", plan.durationMillis)
-                .toString()
-        }
+        fun presentationDuration(visualDurationMillis: Long) = movePresentationDuration(visualDurationMillis)
 
         @JavascriptInterface
         fun play(move: String, presentationDurationMillis: Long) {
@@ -161,10 +154,7 @@ class ShowdownMoveEffectsView(
                                 var result = runMoveAnim.call(this, moveid, participants);
                                 if (!this.animating || !window.ShowdownNativeAudio) return result;
                                 var visualDuration = Math.max(0, (this.timeOffset || 0) - startOffset);
-                                var plan = JSON.parse(String(window.ShowdownNativeAudio.plan(String(moveid), Math.round(visualDuration))));
-                                var animationCycles = Math.max(1, Number(plan.animationCycles) || 1);
-                                var presentationDuration = Math.max(0, Number(plan.presentationDurationMillis) || visualDuration);
-                                for (var cycle = 1; cycle < animationCycles; cycle++) runMoveAnim.call(this, moveid, participants);
+                                var presentationDuration = Math.max(0, Number(window.ShowdownNativeAudio.presentationDuration(Math.round(visualDuration))) || visualDuration);
                                 window.ShowdownNativeAudio.play(String(moveid), presentationDuration);
                                 return result;
                             };

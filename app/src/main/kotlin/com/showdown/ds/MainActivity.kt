@@ -32,6 +32,7 @@ class MainActivity : Activity() {
     private lateinit var moveDex: ShowdownMoveDex
     private lateinit var serverEndpoint: ShowdownServerEndpoint
     private var showdownConnection: ShowdownConnection? = null
+    private val showdownSearchFlow = ShowdownSearchFlow()
     private var activeBattleRoomId: String? = null
     private val demoHandler = Handler(Looper.getMainLooper())
     private val battleAudioHandler = Handler(Looper.getMainLooper())
@@ -64,6 +65,7 @@ class MainActivity : Activity() {
             when (action) {
                 BattleSession.ClientAction.FIND_BATTLE -> findBattle()
                 BattleSession.ClientAction.CONFIGURE_SERVER -> showServerSettings()
+                BattleSession.ClientAction.CONFIGURE_ACCOUNT -> showAccountSettings()
                 BattleSession.ClientAction.CHOOSE_FORMAT -> showFormatPicker()
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
@@ -90,6 +92,7 @@ class MainActivity : Activity() {
         nativeInitializeVulkan()
         serverEndpoint = loadServerEndpoint()
         session = createDemoSession()
+        session.setPreferredUsername(loadPreferredUsername())
         session.setMatchFormat(loadMatchFormat())
         session.addListener(sessionListener)
         session.addProtocolListener(protocolListener)
@@ -294,12 +297,12 @@ class MainActivity : Activity() {
             else -> DemoOutcome(20, null)
         }
         val opponentOutcome = when (turnIndex % 3) {
-            0 -> DemoMove("Thunderbolt", 10, null)
-            1 -> DemoMove("Dazzling Gleam", 14, "-supereffective")
-            else -> DemoMove("Volt Switch", 9, null)
+            0 -> DemoMove("Thunderbolt", 18, null)
+            1 -> DemoMove("Dazzling Gleam", 32, "-supereffective")
+            else -> DemoMove("Volt Switch", 21, null)
         }
-        val opponentHp = reducedCondition(session.opponentHp, playerOutcome.damage)
-        val playerHp = reducedCondition(session.playerHp, opponentOutcome.damage)
+        val opponentHp = reducedCondition(session.opponentHp, playerOutcome.damagePercent)
+        val playerHp = reducedCondition(session.playerHp, opponentOutcome.damagePercent)
         val opponentFainted = opponentHp.startsWith("0 ")
         demoHandler.removeCallbacksAndMessages(null)
         demoHandler.postDelayed({
@@ -337,50 +340,71 @@ class MainActivity : Activity() {
         return "|request|{\"rqid\":${demoTurnIndex + 100},\"active\":[{\"canZMove\":[{}],\"moves\":[$moves]}]}"
     }
 
-    private fun reducedCondition(condition: String, damage: Int): String {
+    private fun reducedCondition(condition: String, damagePercent: Int): String {
         val hp = condition.substringBefore(' ').split('/', limit = 2)
         val current = hp.getOrNull(0)?.toIntOrNull() ?: 100
         val maximum = hp.getOrNull(1)?.toIntOrNull() ?: 100
+        val damage = ((maximum * damagePercent.coerceIn(0, 100)) + 99) / 100
         val remaining = (current - damage).coerceAtLeast(0)
         return if (remaining == 0) "0 fnt" else "$remaining/$maximum"
     }
 
-    private data class DemoOutcome(val damage: Int, val modifier: String?)
+    private data class DemoOutcome(val damagePercent: Int, val modifier: String?)
 
-    private data class DemoMove(val move: String, val damage: Int, val modifier: String?)
+    private data class DemoMove(val move: String, val damagePercent: Int, val modifier: String?)
 
     private fun findBattle() {
         activeBattleRoomId = null
         showdownConnection?.close()
-        showdownConnection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
+        showdownSearchFlow.cancel()
+        showdownSearchFlow.begin(session.matchFormat.id)
+        lateinit var connection: ShowdownConnection
+        connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
                 runOnUiThread {
+                    if (showdownConnection !== connection) return@runOnUiThread
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
-                        ShowdownConnection.State.CONNECTED -> "Searching ${session.matchFormat.label}…"
-                        ShowdownConnection.State.DISCONNECTED -> detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
-                        ShowdownConnection.State.FAILED -> detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
+                        ShowdownConnection.State.CONNECTED -> {
+                            showdownSearchFlow.onTransportConnected(session.preferredUsername).forEach(connection::sendGlobal)
+                            "Signing in as ${session.preferredUsername}…"
+                        }
+                        ShowdownConnection.State.DISCONNECTED -> {
+                            showdownSearchFlow.cancel()
+                            detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
+                        }
+                        ShowdownConnection.State.FAILED -> {
+                            showdownSearchFlow.cancel()
+                            detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
+                        }
                     }
                     session.setConnectionStatus(status)
-                    if (state == ShowdownConnection.State.CONNECTED) showdownConnection?.sendGlobal("/search ${session.matchFormat.id}")
                 }
             }
 
             override fun onProtocol(roomId: String?, lines: List<String>) {
                 runOnUiThread {
+                    if (showdownConnection !== connection) return@runOnUiThread
                     lines.firstOrNull { it.startsWith("|updateuser|") }
                         ?.split('|')
                         ?.getOrNull(2)
                         ?.takeIf { it.isNotBlank() }
                         ?.let(session::setLocalUsername)
-                    if (roomId == null) session.applyServerFormats(lines)
+                    if (roomId == null) {
+                        session.applyServerFormats(lines)
+                        showdownSearchFlow.onProtocol(lines).forEach { command ->
+                            if (connection.sendGlobal(command)) session.setConnectionStatus("Searching ${session.matchFormat.label}…")
+                        }
+                    }
                     if (roomId?.startsWith("battle-") == true) {
                         activeBattleRoomId = roomId
                         session.applyProtocolPacket(lines)
                     }
                 }
             }
-        }).also { it.connect() }
+        })
+        showdownConnection = connection
+        connection.connect()
     }
 
     private fun showServerSettings() {
@@ -402,6 +426,25 @@ class MainActivity : Activity() {
                     getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("server_endpoint", endpoint.webSocketUrl).apply()
                     session.setConnectionStatus("Server set to ${endpoint.displayName}.")
                 }
+            }
+            .show()
+    }
+
+    private fun showAccountSettings() {
+        val input = EditText(this).apply {
+            setSingleLine(true)
+            setText(session.preferredUsername)
+            selectAll()
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Battle display name")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Use") { _, _ ->
+                val username = ShowdownSearchFlow.normalizeUsername(input.text.toString())
+                session.setPreferredUsername(username)
+                getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("preferred_username", username).apply()
+                session.setConnectionStatus("Battle name set to $username. It will be used for your next search.")
             }
             .show()
     }
@@ -465,6 +508,11 @@ class MainActivity : Activity() {
         val saved = getSharedPreferences("showdown", MODE_PRIVATE).getString("match_format", null)
         return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved } ?: BattleSession.MatchFormat.GEN7_RANDOM
     }
+
+    private fun loadPreferredUsername() = getSharedPreferences("showdown", MODE_PRIVATE)
+        .getString("preferred_username", null)
+        ?.let(ShowdownSearchFlow::normalizeUsername)
+        ?: "ShowdownDS"
 
     private fun handleBattleFeedback(feedback: BattleSession.BattleFeedback) {
         when (feedback.type) {

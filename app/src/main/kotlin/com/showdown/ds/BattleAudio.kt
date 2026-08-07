@@ -106,8 +106,7 @@ class BattleAudio(
         moves.forEach { loadMoveSound(it) { } }
     }
 
-    fun planMovePresentation(move: String, visualDurationMillis: Long) =
-        MovePresentationTiming.plan(visualDurationMillis, moveDurationMillis(move))
+    fun planMovePresentation(visualDurationMillis: Long) = MovePresentationTiming.duration(visualDurationMillis)
 
     fun playMove(move: String, presentationDurationMillis: Long) {
         if (!soundEffectsEnabled) return
@@ -256,7 +255,8 @@ class BattleAudio(
                     release()
                     return@setOnPreparedListener
                 }
-                isLooping = audioDurationMillis < remainingPresentationMillis
+                val window = MoveAudioWindow.plan(audioDurationMillis, remainingPresentationMillis)
+                isLooping = window.loop
                 start()
                 val stop = Runnable {
                     if (activeMovePlayer === this) {
@@ -265,7 +265,7 @@ class BattleAudio(
                     }
                 }
                 activeMoveStop = stop
-                mainHandler.postDelayed(stop, remainingPresentationMillis)
+                mainHandler.postDelayed(stop, window.durationMillis)
             }
             setOnCompletionListener {
                 if (activeMovePlayer === this) {

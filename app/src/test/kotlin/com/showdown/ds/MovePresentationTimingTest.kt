@@ -5,22 +5,22 @@ import org.junit.Test
 
 class MovePresentationTimingTest {
     @Test
-    fun repeatsShorterVisualsUntilTheMoveSoundIsCovered() {
-        assertEquals(MovePresentationTiming.Plan(3, 1_200L), MovePresentationTiming.plan(400L, 1_100L))
+    fun preservesTheOfficialVisualLengthWhenTheSoundIsLonger() {
+        assertEquals(400L, MovePresentationTiming.duration(400L))
     }
 
     @Test
-    fun preservesLongerVisualsAndLetsAudioLoopToMatch() {
-        assertEquals(MovePresentationTiming.Plan(1, 1_200L), MovePresentationTiming.plan(1_200L, 300L))
+    fun preservesTheOfficialVisualLengthWhenTheSoundIsShorter() {
+        assertEquals(1_200L, MovePresentationTiming.duration(1_200L))
     }
 
     @Test
     fun skipsPresentationWhenShowdownDoesNotScheduleAnAnimation() {
-        assertEquals(MovePresentationTiming.Plan(1, 0L), MovePresentationTiming.plan(0L, 1_000L))
+        assertEquals(0L, MovePresentationTiming.duration(0L))
     }
 
     @Test
-    fun coversTheEntireMoveSoundWithOfficialAnimationCycles() {
-        assertEquals(MovePresentationTiming.Plan(10, 2_000L), MovePresentationTiming.plan(200L, 2_000L))
+    fun neverExtendsAnOfficialAnimationToMatchTheSound() {
+        assertEquals(200L, MovePresentationTiming.duration(200L))
     }
 }

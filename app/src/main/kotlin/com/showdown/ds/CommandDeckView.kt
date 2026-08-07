@@ -36,7 +36,7 @@ class CommandDeckView(
     private val destination = RectF()
     private val tabBounds = arrayOfNulls<RectF>(4)
     private val moveBounds = arrayOfNulls<RectF>(4)
-    private val menuBounds = arrayOfNulls<RectF>(10)
+    private val menuBounds = arrayOfNulls<RectF>(BattleSession.MENU_ITEM_COUNT)
     private val gimmickBounds = arrayOfNulls<RectF>(4)
     private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
     private val requestedTeamSprites = mutableSetOf<String>()
@@ -763,6 +763,7 @@ class CommandDeckView(
             "Haptics: ${if (session.hapticsEnabled) "On" else "Off"}",
             "Tap confirmation: ${if (session.touchConfirmationEnabled) "On" else "Off"}",
             "Sprites: ${if (session.spriteStyle == BattleSession.SpriteStyle.MODERN_3D) "3D" else "Classic"}",
+            "Battle name: ${session.preferredUsername}",
             "Server settings"
         )
         val left = 42f * scale
@@ -848,6 +849,10 @@ class CommandDeckView(
                 canvas.drawCircle(centerX, centerY, size * 0.48f, paint)
                 canvas.drawLine(centerX - size * 0.65f, centerY, centerX + size * 0.65f, centerY, paint)
                 canvas.drawLine(centerX, centerY - size * 0.65f, centerX, centerY + size * 0.65f, paint)
+            }
+            9 -> {
+                canvas.drawCircle(centerX, centerY - size * 0.32f, size * 0.26f, paint)
+                canvas.drawArc(RectF(centerX - size * 0.58f, centerY - size * 0.08f, centerX + size * 0.58f, centerY + size * 0.76f), 205f, 130f, false, paint)
             }
             else -> repeat(3) { row -> canvas.drawRoundRect(RectF(centerX - size * 0.58f, centerY - size * 0.6f + row * size * 0.48f, centerX + size * 0.58f, centerY - size * 0.28f + row * size * 0.48f), size * 0.08f, size * 0.08f, paint) }
         }
