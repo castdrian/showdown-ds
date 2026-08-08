@@ -105,6 +105,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val downloadExecutor = Executors.newFixedThreadPool(2)
     private val memoryCache = LruCache<String, SpriteAsset>(16)
     private val pendingPaths = ConcurrentHashMap.newKeySet<String>()
+    private val pendingSpriteReceivers = ConcurrentHashMap<String, MutableList<(SpriteAsset?) -> Unit>>()
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
 
     fun requestPokemon(species: String, back: Boolean, style: BattleSession.SpriteStyle, receiver: (SpriteAsset?) -> Unit) {
@@ -156,6 +157,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     override fun close() {
         downloadExecutor.shutdownNow()
         memoryCache.evictAll()
+        pendingSpriteReceivers.clear()
     }
 
     private fun requestSprite(path: String, receiver: (SpriteAsset?) -> Unit) {
@@ -163,12 +165,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             mainHandler.post { receiver(it) }
             return
         }
-        if (!pendingPaths.add(path)) return
+        val callbacks = pendingSpriteReceivers.compute(path) { _, existing ->
+            (existing ?: mutableListOf()).apply { add(receiver) }
+        } ?: return
+        if (callbacks.size > 1) return
         downloadExecutor.execute {
             val asset = loadBytes(path)?.let { decodeSprite(it, path) }
             if (asset != null) memoryCache.put(path, asset)
-            pendingPaths.remove(path)
-            mainHandler.post { receiver(asset) }
+            val receivers = pendingSpriteReceivers.remove(path).orEmpty()
+            mainHandler.post { receivers.forEach { it(asset) } }
         }
     }
 
