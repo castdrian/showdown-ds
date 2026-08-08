@@ -10,6 +10,7 @@ import android.webkit.WebViewClient
 import android.webkit.JavascriptInterface
 import android.view.MotionEvent
 import org.json.JSONArray
+import java.util.ArrayDeque
 
 @SuppressLint("SetJavaScriptEnabled")
 class ShowdownMoveEffectsView(
@@ -17,8 +18,13 @@ class ShowdownMoveEffectsView(
     private val movePresentationDuration: (Long) -> Long,
     private val moveStartListener: (String, Long) -> Unit
 ) : WebView(context) {
-    private val pendingPackets = mutableListOf<List<String>>()
+    private val pendingPackets = ArrayDeque<List<String>>()
+    private var flushScheduled = false
     private var pageLoaded = false
+    private val flushRunnable = Runnable {
+        flushScheduled = false
+        flushPendingPackets()
+    }
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
@@ -44,19 +50,26 @@ class ShowdownMoveEffectsView(
     fun seed(lines: List<String>) {
         val packet = lines.filter { it.startsWith('|') }
         if (packet.isEmpty()) return
-        pendingPackets += listOf(SEED_PREFIX) + packet
+        pendingPackets.addLast(listOf(SEED_PREFIX) + packet)
         flushPendingPackets()
     }
 
     fun applyProtocol(lines: List<String>) {
         val packet = lines.filter { it.startsWith('|') }
         if (packet.isEmpty()) return
-        pendingPackets += packet
+        if (packet.any { it.startsWith("|init|battle") }) {
+            pendingPackets.clear()
+            removeCallbacks(flushRunnable)
+            flushScheduled = false
+        }
+        BattlePlaybackTiming.chunks(packet).forEach(pendingPackets::addLast)
         flushPendingPackets()
     }
 
     fun release() {
         pendingPackets.clear()
+        removeCallbacks(flushRunnable)
+        flushScheduled = false
         stopLoading()
         destroy()
     }
@@ -64,14 +77,18 @@ class ShowdownMoveEffectsView(
     override fun onTouchEvent(event: MotionEvent): Boolean = false
 
     private fun flushPendingPackets() {
-        if (!pageLoaded || pendingPackets.isEmpty()) return
-        val packets = pendingPackets.toList()
-        pendingPackets.clear()
-        packets.forEach { packet ->
-            val payload = JSONArray(packet)
-            val receiver = if (packet.firstOrNull() == SEED_PREFIX) "seed" else "receive"
-            val lines = if (receiver == "seed") JSONArray(packet.drop(1)) else payload
-            evaluateJavascript("window.ShowdownNativeEffects.$receiver($lines);", null)
+        if (!pageLoaded || pendingPackets.isEmpty() || flushScheduled) return
+        val packet = pendingPackets.removeFirst()
+        val payload = JSONArray(packet)
+        val receiver = if (packet.firstOrNull() == SEED_PREFIX) "seed" else "receive"
+        val lines = if (receiver == "seed") JSONArray(packet.drop(1)) else payload
+        evaluateJavascript("window.ShowdownNativeEffects.$receiver($lines);", null)
+        val pauseMillis = if (receiver == "seed") 0L else BattlePlaybackTiming.pauseAfter(packet)
+        flushScheduled = true
+        if (pauseMillis == 0L) {
+            post(flushRunnable)
+        } else {
+            postDelayed(flushRunnable, pauseMillis)
         }
     }
 

@@ -18,7 +18,12 @@ class BattleSession {
         WAIT
     }
 
-    data class MatchFormat(val id: String, val label: String, val menuLabel: String = label) {
+    data class MatchFormat(
+        val id: String,
+        val label: String,
+        val menuLabel: String = label,
+        val usesRandomTeams: Boolean = id.contains("randombattle") || id.contains("battlefactory")
+    ) {
         companion object {
             val GEN6_RANDOM = MatchFormat("gen6randombattle", "[Gen 6] Random Battle", "Gen 6 Random")
             val GEN7_RANDOM = MatchFormat("gen7randombattle", "[Gen 7] Random Battle", "Gen 7 Random")
@@ -51,9 +56,12 @@ class BattleSession {
     enum class ClientAction {
         FIND_BATTLE,
         CONFIGURE_SERVER,
+        CONFIGURE_ACCOUNT,
+        CONFIGURE_TEAM,
         CHOOSE_FORMAT,
         OPEN_CHAT,
-        FORFEIT
+        FORFEIT,
+        CHALLENGE_PLAYER
     }
 
     enum class BattleGimmick(val choiceSuffix: String, val label: String) {
@@ -85,6 +93,10 @@ class BattleSession {
 
     fun interface ProtocolListener {
         fun onProtocol(lines: List<String>)
+    }
+
+    fun interface BattleEventListener {
+        fun onBattleEvents(events: List<String>)
     }
 
     data class MoveOption(
@@ -144,6 +156,8 @@ class BattleSession {
     private val clientActionListeners = mutableListOf<ClientActionListener>()
     private val chatListeners = mutableListOf<ChatListener>()
     private val protocolListeners = mutableListOf<ProtocolListener>()
+    private val battleEventListeners = mutableListOf<BattleEventListener>()
+    private var protocolEventCollector: MutableList<String>? = null
     private val protocolHistory = mutableListOf<String>()
     private var moveTypeResolver: ((String) -> String?)? = null
     private var pokemonTypeResolver: ((String) -> List<String>?)? = null
@@ -190,6 +204,7 @@ class BattleSession {
     private val sideNames = mutableMapOf<String, String>()
     private var playerSlot = "p1"
     private var localUsername: String? = null
+    private var liveBattleActive = false
     private var openingEntrances = 0
     private var latestOpeningEntranceAtNanos = 0L
     private var weather = ""
@@ -405,6 +420,14 @@ class BattleSession {
         protocolListeners -= listener
     }
 
+    fun addBattleEventListener(listener: BattleEventListener) {
+        battleEventListeners += listener
+    }
+
+    fun removeBattleEventListener(listener: BattleEventListener) {
+        battleEventListeners -= listener
+    }
+
     fun protocolHistory() = protocolHistory.toList()
 
     fun setLocalUsername(username: String) {
@@ -416,6 +439,12 @@ class BattleSession {
 
     fun setConnectionStatus(value: String) {
         status = value
+        notifyListeners()
+    }
+
+    fun setLiveBattleActive(value: Boolean) {
+        if (liveBattleActive == value) return
+        liveBattleActive = value
         notifyListeners()
     }
 
@@ -498,6 +527,8 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun menuItems() = (0 until MENU_ITEM_COUNT).map(::menuAction)
+
     fun cyclePanel(direction: Int) {
         val panels = listOf(Panel.MOVES, Panel.TEAM, Panel.ACTIVITY, Panel.MENU)
         val index = panels.indexOf(panel).takeIf { it >= 0 } ?: 0
@@ -568,56 +599,70 @@ class BattleSession {
         val packet = lines.filter { it.startsWith('|') }
         if (packet.any { it.startsWith("|init|battle") }) protocolHistory.clear()
         protocolHistory += packet
-        protocolListeners.toList().forEach { it.onProtocol(packet) }
-        packet.forEach { line ->
-            val fields = line.split('|')
-            if (fields.size < 2) return@forEach
-            when (fields[1]) {
-                "init" -> applyInit(fields)
-                "player" -> applyPlayer(fields)
-                "tier" -> if (fields.size > 2) format = fields[2]
-                "turn" -> applyTurn(fields)
-                "switch", "drag", "replace" -> applySwitch(fields)
-                "poke" -> applyPoke(fields)
-                "move" -> {
-                    publishPendingHit()
-                    applyMove(fields)
+        val events = mutableListOf<String>()
+        protocolEventCollector = events
+        try {
+            protocolListeners.toList().forEach { it.onProtocol(packet) }
+            packet.forEach { line ->
+                val fields = line.split('|')
+                if (fields.size < 2) return@forEach
+                when (fields[1]) {
+                    "init" -> applyInit(fields)
+                    "player" -> applyPlayer(fields)
+                    "tier" -> if (fields.size > 2) format = fields[2]
+                    "turn" -> applyTurn(fields)
+                    "switch", "drag", "replace" -> applySwitch(fields)
+                    "poke" -> applyPoke(fields)
+                    "move" -> {
+                        publishPendingHit()
+                        applyMove(fields)
+                    }
+                    "-damage" -> {
+                        publishPendingHit()
+                        applyHealth(fields)
+                        pendingHit = PendingHit(fields[2].substringAfter(':').trim(), fields[2].substringAfter(':').trim())
+                    }
+                    "-heal" -> applyHealth(fields)
+                    "-status" -> applyStatus(fields)
+                    "-curestatus" -> applyStatus(fields, cured = true)
+                    "-supereffective" -> applyHitModifier(fields, superEffective = true)
+                    "-resisted" -> applyHitModifier(fields, resisted = true)
+                    "-crit" -> applyHitModifier(fields, critical = true)
+                    "-ability" -> applyAbility(fields)
+                    "-item" -> applyItem(fields)
+                    "-enditem" -> applyItem(fields, "No item")
+                    "-weather" -> applyWeather(fields)
+                    "-fieldstart" -> applyFieldEffect(fields, true)
+                    "-fieldend" -> applyFieldEffect(fields, false)
+                    "-sidestart" -> applySideCondition(fields, true)
+                    "-sideend" -> applySideCondition(fields, false)
+                    "-boost" -> applyBoost(fields, 1)
+                    "-unboost" -> applyBoost(fields, -1)
+                    "-setboost" -> applySetBoost(fields)
+                    "-clearallboost" -> clearAllBoosts()
+                    "-clearboost" -> clearBoosts(fields)
+                    "-clearnegativeboost" -> clearNegativeBoosts(fields)
+                    "detailschange", "-formechange", "-mega", "-primal" -> applyFormChange(fields)
+                    "-terastallize" -> applyTerastallize(fields)
+                    "faint" -> applyFaint(fields)
+                    "request" -> applyRequest(fields)
+                    "win" -> applyWin(fields)
+                    "c", "c:" -> applyChat(fields)
+                    "message", "inactive", "inactiveoff" -> appendLog(fields.drop(2).joinToString("|"))
                 }
-                "-damage" -> {
-                    publishPendingHit()
-                    applyHealth(fields)
-                    pendingHit = PendingHit(fields[2].substringAfter(':').trim(), fields[2].substringAfter(':').trim())
-                }
-                "-heal" -> applyHealth(fields)
-                "-status" -> applyStatus(fields)
-                "-curestatus" -> applyStatus(fields, cured = true)
-                "-supereffective" -> applyHitModifier(fields, superEffective = true)
-                "-resisted" -> applyHitModifier(fields, resisted = true)
-                "-crit" -> applyHitModifier(fields, critical = true)
-                "-ability" -> applyAbility(fields)
-                "-item" -> applyItem(fields)
-                "-enditem" -> applyItem(fields, "No item")
-                "-weather" -> applyWeather(fields)
-                "-fieldstart" -> applyFieldEffect(fields, true)
-                "-fieldend" -> applyFieldEffect(fields, false)
-                "-sidestart" -> applySideCondition(fields, true)
-                "-sideend" -> applySideCondition(fields, false)
-                "-boost" -> applyBoost(fields, 1)
-                "-unboost" -> applyBoost(fields, -1)
-                "-setboost" -> applySetBoost(fields)
-                "-clearallboost" -> clearAllBoosts()
-                "-clearboost" -> clearBoosts(fields)
-                "-clearnegativeboost" -> clearNegativeBoosts(fields)
-                "detailschange", "-formechange", "-mega", "-primal" -> applyFormChange(fields)
-                "-terastallize" -> applyTerastallize(fields)
-                "faint" -> applyFaint(fields)
-                "request" -> applyRequest(fields)
-                "win" -> applyWin(fields)
-                "c", "c:" -> applyChat(fields)
-                "message", "inactive", "inactiveoff" -> appendLog(fields.drop(2).joinToString("|"))
+            }
+            publishPendingHit()
+        } finally {
+            protocolEventCollector = null
+        }
+        if (events.isNotEmpty()) {
+            if (battleEventListeners.isEmpty()) {
+                latestBattleEvent = events.last()
+                latestBattleEventAtNanos = System.nanoTime()
+            } else {
+                battleEventListeners.toList().forEach { it.onBattleEvents(events) }
             }
         }
-        publishPendingHit()
         notifyListeners()
     }
 
@@ -1035,8 +1080,10 @@ class BattleSession {
         battleLog += entry
         if (battleLog.size > 32) battleLog.removeAt(0)
         appendActivity(entry)
-        latestBattleEvent = entry
-        latestBattleEventAtNanos = System.nanoTime()
+        protocolEventCollector?.add(entry) ?: run {
+            latestBattleEvent = entry
+            latestBattleEventAtNanos = System.nanoTime()
+        }
     }
 
     private fun appendActivity(entry: String) {
@@ -1076,12 +1123,14 @@ class BattleSession {
         0 -> "Find a ${matchFormat.label}"
         1 -> "Battle format ${matchFormat.menuLabel}"
         2 -> "Open battle chat"
-        3 -> "Forfeit"
+        3 -> if (liveBattleActive) "Forfeit" else "Challenge player"
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
         5 -> "Background music ${if (musicEnabled) "on" else "off"}"
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
         7 -> "Touch confirmation ${if (touchConfirmationEnabled) "on" else "off"}"
         8 -> "Sprite style ${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "classic"}"
+        9 -> "Team library"
+        10 -> "Showdown account"
         else -> "Configure server"
     }
 
@@ -1100,8 +1149,13 @@ class BattleSession {
                 "Open battle chat."
             }
             3 -> {
-                publishClientAction(ClientAction.FORFEIT)
-                "Forfeit requires confirmation."
+                if (liveBattleActive) {
+                    publishClientAction(ClientAction.FORFEIT)
+                    "Forfeit requires confirmation."
+                } else {
+                    publishClientAction(ClientAction.CHALLENGE_PLAYER)
+                    "Challenge another player."
+                }
             }
             4 -> {
                 soundEffectsEnabled = !soundEffectsEnabled
@@ -1122,6 +1176,14 @@ class BattleSession {
             8 -> {
                 spriteStyle = if (spriteStyle == SpriteStyle.MODERN_3D) SpriteStyle.CLASSIC_2D else SpriteStyle.MODERN_3D
                 "${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "Classic"} sprite style enabled."
+            }
+            9 -> {
+                publishClientAction(ClientAction.CONFIGURE_TEAM)
+                "Manage your saved teams."
+            }
+            10 -> {
+                publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
+                "Configure your Showdown account."
             }
             else -> {
                 publishClientAction(ClientAction.CONFIGURE_SERVER)
@@ -1280,7 +1342,7 @@ class BattleSession {
     }
 
     companion object {
-        const val MENU_ITEM_COUNT = 10
+        const val MENU_ITEM_COUNT = 12
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun parseServerFormats(line: String): List<MatchFormat> {
@@ -1298,7 +1360,9 @@ class BattleSession {
                 val label = token.substringBefore(',').trim()
                 if (!label.startsWith('[')) return@mapNotNull null
                 val id = label.lowercase().filter(Char::isLetterOrDigit)
-                id.takeIf { it.isNotBlank() }?.let { MatchFormat(it, label) }
+                id.takeIf { it.isNotBlank() }?.let {
+                    MatchFormat(it, label, usesRandomTeams = token.substringAfter(',', "").contains('#') || it.contains("randombattle") || it.contains("battlefactory"))
+                }
             }.distinctBy(MatchFormat::id)
         }
 

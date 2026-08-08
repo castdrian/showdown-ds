@@ -4,7 +4,8 @@ import java.net.URI
 
 data class ShowdownServerEndpoint(
     val displayName: String,
-    val webSocketUrl: String
+    val webSocketUrl: String,
+    val loginUrl: String = "https://play.pokemonshowdown.com/api/login"
 ) {
     companion object {
         val playShowdown = ShowdownServerEndpoint("Pokémon Showdown", "wss://sim3.psim.us/showdown/websocket")
@@ -29,7 +30,10 @@ data class ShowdownServerEndpoint(
                 path.isBlank() || path == "/" -> "/showdown/websocket"
                 else -> "$path/showdown/websocket"
             }
-            return ShowdownServerEndpoint(host + port, "$scheme://$host$port$socketPath")
+            return ShowdownServerEndpoint(
+                host + port,
+                "$scheme://$host$port$socketPath"
+            )
         }
     }
 }

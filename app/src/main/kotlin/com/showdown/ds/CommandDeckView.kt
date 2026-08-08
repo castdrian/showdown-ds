@@ -753,18 +753,7 @@ class CommandDeckView(
     }
 
     private fun drawMenu(canvas: Canvas, width: Float, scale: Float) {
-        val entries = listOf(
-            "Find ${session.matchFormat.menuLabel}",
-            "Battle format",
-            "Battle chat",
-            "Forfeit",
-            "Sound effects: ${if (session.soundEffectsEnabled) "On" else "Off"}",
-            "Music: ${if (session.musicEnabled) "On" else "Off"}",
-            "Haptics: ${if (session.hapticsEnabled) "On" else "Off"}",
-            "Tap confirmation: ${if (session.touchConfirmationEnabled) "On" else "Off"}",
-            "Sprites: ${if (session.spriteStyle == BattleSession.SpriteStyle.MODERN_3D) "3D" else "Classic"}",
-            "Server settings"
-        )
+        val entries = session.menuItems()
         val left = 42f * scale
         val top = 224f * scale
         val gap = 16f * scale

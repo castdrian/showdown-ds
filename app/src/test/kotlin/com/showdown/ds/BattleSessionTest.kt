@@ -44,6 +44,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun liveProtocolEventsCanBePresentedSeparatelyFromAuthoritativeState() {
+        val session = BattleSession()
+        val initialEvent = session.latestBattleEvent
+        val events = mutableListOf<String>()
+        session.addBattleEventListener { events += it }
+
+        session.applyProtocolPacket(listOf("|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"))
+
+        assertEquals(initialEvent, session.latestBattleEvent)
+        assertEquals(listOf("Incineroar used Flare Blitz!"), events)
+        assertTrue(session.battleLog().last().contains("Flare Blitz"))
+    }
+
+    @Test
     fun openingCombatantsEnterInProtocolOrder() {
         val session = BattleSession()
 
@@ -434,13 +448,36 @@ class BattleSessionTest {
         session.confirmSelection()
         session.selectMenuItem(9)
         session.confirmSelection()
+        session.selectMenuItem(10)
+        session.confirmSelection()
+        session.selectMenuItem(11)
+        session.confirmSelection()
         assertEquals(
             listOf(
                 BattleSession.ClientAction.FIND_BATTLE,
+                BattleSession.ClientAction.CONFIGURE_TEAM,
+                BattleSession.ClientAction.CONFIGURE_ACCOUNT,
                 BattleSession.ClientAction.CONFIGURE_SERVER
             ),
             actions
         )
+    }
+
+    @Test
+    fun battleMenuUsesTheChallengeSlotWhenNoLiveBattleIsActive() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(3)
+        session.confirmSelection()
+
+        assertEquals(listOf(BattleSession.ClientAction.CHALLENGE_PLAYER), actions)
+        assertEquals("Challenge player", session.menuItems()[3])
+
+        session.setLiveBattleActive(true)
+        assertEquals("Forfeit", session.menuItems()[3])
     }
 
     @Test

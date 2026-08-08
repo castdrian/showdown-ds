@@ -11,6 +11,7 @@ class ShowdownServerEndpointTest {
 
         assertEquals("10.0.2.2:8000", endpoint?.displayName)
         assertEquals("ws://10.0.2.2:8000/showdown/websocket", endpoint?.webSocketUrl)
+        assertEquals("https://play.pokemonshowdown.com/api/login", endpoint?.loginUrl)
     }
 
     @Test
@@ -18,6 +19,14 @@ class ShowdownServerEndpointTest {
         val endpoint = ShowdownServerEndpoint.fromInput("wss://example.test/showdown/websocket")
 
         assertEquals("wss://example.test/showdown/websocket", endpoint?.webSocketUrl)
+        assertEquals("https://play.pokemonshowdown.com/api/login", endpoint?.loginUrl)
+    }
+
+    @Test
+    fun usesTheOfficialLoginServerForOfficialSimulatorHosts() {
+        val endpoint = ShowdownServerEndpoint.fromInput("wss://sim3.psim.us/showdown/websocket")
+
+        assertEquals("https://play.pokemonshowdown.com/api/login", endpoint?.loginUrl)
     }
 
     @Test

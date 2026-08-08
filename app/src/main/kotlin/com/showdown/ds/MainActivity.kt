@@ -19,6 +19,7 @@ import android.view.View
 import android.view.Window
 import android.widget.EditText
 import android.widget.FrameLayout
+import java.util.ArrayDeque
 
 class MainActivity : Activity() {
     private var displayManager: DisplayManager? = null
@@ -31,18 +32,39 @@ class MainActivity : Activity() {
     private lateinit var spriteCache: ShowdownSpriteCache
     private lateinit var moveDex: ShowdownMoveDex
     private lateinit var serverEndpoint: ShowdownServerEndpoint
+    private lateinit var credentialsStore: ShowdownCredentialsStore
+    private lateinit var teamLibrary: ShowdownTeamLibrary
     private var showdownConnection: ShowdownConnection? = null
+    private val lobbyState = ShowdownLobbyState()
+    private val loginClient = ShowdownLoginClient()
+    private var pendingSearch = false
+    private var pendingSearchTeamPacked: String? = null
+    private var pendingLobbyCommands: List<String>? = null
+    private var pendingLobbyStatus: String? = null
+    private var activeSearchFormat: String? = null
+    private var loginInFlight = false
+    private var authenticated = false
     private var activeBattleRoomId: String? = null
     private val demoHandler = Handler(Looper.getMainLooper())
     private val battleAudioHandler = Handler(Looper.getMainLooper())
+    private val battleEventHandler = Handler(Looper.getMainLooper())
+    private val pendingBattleEvents = ArrayDeque<String>()
+    private var battleEventPlaybackScheduled = false
     private var demoTurnIndex = 0
     private var controllerHorizontal = 0
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
+    private val battleEventListener = BattleSession.BattleEventListener { events ->
+        runOnUiThread {
+            pendingBattleEvents.addAll(events)
+            flushBattleEventPlayback()
+        }
+    }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread { showdownMoveEffects?.applyProtocol(lines) }
     }
     private val decisionListener = BattleSession.DecisionListener { command ->
+        clearBattleEventPlayback()
         val roomId = activeBattleRoomId
         if (roomId != null) {
             showdownConnection?.send(roomId, command)
@@ -64,9 +86,12 @@ class MainActivity : Activity() {
             when (action) {
                 BattleSession.ClientAction.FIND_BATTLE -> findBattle()
                 BattleSession.ClientAction.CONFIGURE_SERVER -> showServerSettings()
+                BattleSession.ClientAction.CONFIGURE_ACCOUNT -> showAccountSettings()
+                BattleSession.ClientAction.CONFIGURE_TEAM -> showTeamLibrary()
                 BattleSession.ClientAction.CHOOSE_FORMAT -> showFormatPicker()
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
+                BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
             }
         }
     }
@@ -89,9 +114,12 @@ class MainActivity : Activity() {
         configureWindow()
         nativeInitializeVulkan()
         serverEndpoint = loadServerEndpoint()
+        credentialsStore = ShowdownCredentialsStore(this)
+        teamLibrary = ShowdownTeamLibrary(this)
         session = createDemoSession()
         session.setMatchFormat(loadMatchFormat())
         session.addListener(sessionListener)
+        session.addBattleEventListener(battleEventListener)
         session.addProtocolListener(protocolListener)
         session.addDecisionListener(decisionListener)
         session.addChatListener(chatListener)
@@ -128,6 +156,7 @@ class MainActivity : Activity() {
         dismissSecondaryDisplay()
         displayManager?.unregisterDisplayListener(displayListener)
         if (::session.isInitialized) session.removeListener(sessionListener)
+        if (::session.isInitialized) session.removeBattleEventListener(battleEventListener)
         if (::session.isInitialized) session.removeProtocolListener(protocolListener)
         if (::session.isInitialized) session.removeDecisionListener(decisionListener)
         if (::session.isInitialized) session.removeChatListener(chatListener)
@@ -135,6 +164,7 @@ class MainActivity : Activity() {
         if (::session.isInitialized) session.removeClientActionListener(clientActionListener)
         demoHandler.removeCallbacksAndMessages(null)
         battleAudioHandler.removeCallbacksAndMessages(null)
+        clearBattleEventPlayback()
         showdownConnection?.close()
         showdownConnection = null
         if (::battleAudio.isInitialized) battleAudio.release()
@@ -269,6 +299,22 @@ class MainActivity : Activity() {
         commandDeck?.invalidate()
     }
 
+    private fun flushBattleEventPlayback() {
+        if (battleEventPlaybackScheduled || pendingBattleEvents.isEmpty()) return
+        session.presentBattleEvent(pendingBattleEvents.removeFirst())
+        battleEventPlaybackScheduled = true
+        battleEventHandler.postDelayed({
+            battleEventPlaybackScheduled = false
+            flushBattleEventPlayback()
+        }, BattlePlaybackTiming.EVENT_PAUSE_MILLIS)
+    }
+
+    private fun clearBattleEventPlayback() {
+        battleEventHandler.removeCallbacksAndMessages(null)
+        pendingBattleEvents.clear()
+        battleEventPlaybackScheduled = false
+    }
+
     private fun createDemoSession() = BattleSession().apply {
         applyProtocolLine("|init|battle")
         applyProtocolLine("|player|p1|ADRIAN")
@@ -351,8 +397,59 @@ class MainActivity : Activity() {
     private data class DemoMove(val move: String, val damagePercent: Int, val modifier: String?)
 
     private fun findBattle() {
+        if (activeSearchFormat != null || pendingSearch) {
+            cancelActiveSearch()
+            return
+        }
+        val teamOptions = teamLibrary.teams().filter { it.format.equals(session.matchFormat.id, true) }
+        if (!session.matchFormat.usesRandomTeams && teamOptions.isEmpty()) {
+            session.setConnectionStatus("Save a ${session.matchFormat.label} team before searching.")
+            showTeamLibrary()
+            return
+        }
+        if (!session.matchFormat.usesRandomTeams && teamOptions.size > 1) {
+            showTeamPicker(teamOptions) {
+                pendingSearchTeamPacked = it.packed
+                startLobbyConnection()
+            }
+            return
+        }
+        pendingSearchTeamPacked = teamOptions.firstOrNull()?.packed?.takeUnless { session.matchFormat.usesRandomTeams }
+        startLobbyConnection()
+    }
+
+    private fun showTeamPicker(teams: List<ShowdownTeam>, onSelected: (ShowdownTeam) -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle("Choose a team")
+            .setSingleChoiceItems(teams.map { "${it.name} · ${it.format}" }.toTypedArray(), -1) { dialog, selected ->
+                dialog.dismiss()
+                onSelected(teams[selected])
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun cancelActiveSearch() {
+        activeSearchFormat?.let { format ->
+            if (lobbyState.isSearching(format)) showdownConnection?.sendGlobal(ShowdownLobbyState.cancelSearchCommand())
+            lobbyState.clearSearch(format)
+        }
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingSearchTeamPacked = null
+        session.setConnectionStatus("Battle search cancelled.")
+    }
+
+    private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
         activeBattleRoomId = null
+        clearBattleEventPlayback()
+        session.setLiveBattleActive(false)
         showdownConnection?.close()
+        pendingSearch = lobbyCommands == null
+        pendingLobbyCommands = lobbyCommands
+        pendingLobbyStatus = lobbyStatus
+        loginInFlight = false
+        authenticated = false
         lateinit var connection: ShowdownConnection
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
@@ -361,10 +458,18 @@ class MainActivity : Activity() {
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
                         ShowdownConnection.State.CONNECTED -> {
-                            connection.sendGlobal("/search ${session.matchFormat.id}")
-                            "Searching ${session.matchFormat.label}…"
+                            if (credentialsStore.load() == null) "Joining ${serverEndpoint.displayName}…"
+                            else "Signing in to ${serverEndpoint.displayName}…"
                         }
-                        ShowdownConnection.State.DISCONNECTED -> detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
+                        ShowdownConnection.State.DISCONNECTED -> {
+                            pendingSearch = false
+                            pendingLobbyCommands = null
+                            pendingLobbyStatus = null
+                            activeSearchFormat = null
+                            loginInFlight = false
+                            authenticated = false
+                            detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
+                        }
                         ShowdownConnection.State.FAILED -> detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
                     }
                     session.setConnectionStatus(status)
@@ -374,23 +479,175 @@ class MainActivity : Activity() {
             override fun onProtocol(roomId: String?, lines: List<String>) {
                 runOnUiThread {
                     if (showdownConnection !== connection) return@runOnUiThread
-                    lines.firstOrNull { it.startsWith("|updateuser|") }
-                        ?.split('|')
-                        ?.getOrNull(2)
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let(session::setLocalUsername)
+                    lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
+                        session.setLocalUsername(update.username)
+                        if (credentialsStore.load() == null || update.named) {
+                            authenticated = true
+                            sendPendingLobbyCommands(connection)
+                        }
+                    }
+                    lines.mapNotNull(ShowdownAuthentication::challenge).firstOrNull()?.let { challenge ->
+                        credentialsStore.load()?.takeUnless { loginInFlight }?.let { credentials ->
+                            loginInFlight = true
+                            loginClient.login(serverEndpoint, credentials, challenge) { result ->
+                                runOnUiThread {
+                                    if (showdownConnection !== connection) return@runOnUiThread
+                                    loginInFlight = false
+                                    result.onSuccess {
+                                        if (connection.sendGlobal(ShowdownAuthentication.renameCommand(credentials.username, it))) {
+                                            session.setConnectionStatus("Finishing sign-in as ${credentials.username}…")
+                                        } else {
+                                            pendingSearch = false
+                                            session.setConnectionStatus("Showdown sign-in could not reach the server.")
+                                        }
+                                    }
+                                    result.onFailure { error ->
+                                        pendingSearch = false
+                                        session.setConnectionStatus(error.message ?: "Showdown sign-in failed.")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    lines.mapNotNull(ShowdownAuthentication::serverError).firstOrNull()?.let { error ->
+                        loginInFlight = false
+                        pendingSearch = false
+                        pendingLobbyCommands = null
+                        pendingLobbyStatus = null
+                        session.setConnectionStatus(error)
+                    }
                     if (roomId == null) {
                         session.applyServerFormats(lines)
+                        val previousChallenges = lobbyState.incomingChallenges
+                        lobbyState.applyProtocol(lines)
+                        lobbyState.incomingChallenges.keys.firstOrNull { it !in previousChallenges }?.let { username ->
+                            showIncomingChallenge(username, lobbyState.incomingChallenges[username].orEmpty())
+                        }
+                        if (lobbyState.isSearching(session.matchFormat.id)) {
+                            session.setConnectionStatus("Searching ${session.matchFormat.label}…")
+                        }
                     }
                     if (roomId?.startsWith("battle-") == true) {
+                        if (lines.any { it.startsWith("|init|battle") }) clearBattleEventPlayback()
                         activeBattleRoomId = roomId
+                        session.setLiveBattleActive(true)
+                        activeSearchFormat = null
                         session.applyProtocolPacket(lines)
+                        session.setLiveBattleActive(!session.isBattleFinished())
                     }
                 }
             }
         })
         showdownConnection = connection
         connection.connect()
+    }
+
+    private fun sendPendingLobbyCommands(connection: ShowdownConnection) {
+        if (!authenticated || showdownConnection !== connection) return
+        val commands = pendingLobbyCommands ?: if (pendingSearch) {
+            if (!session.matchFormat.usesRandomTeams && pendingSearchTeamPacked.isNullOrBlank()) {
+                pendingSearch = false
+                session.setConnectionStatus("Save a team for ${session.matchFormat.label} before searching.")
+                return
+            }
+            ShowdownLobbyState.searchCommands(session.matchFormat.id, pendingSearchTeamPacked)
+        } else {
+            return
+        }
+        val sent = commands.all(connection::sendGlobal)
+        if (!sent) {
+            session.setConnectionStatus("Could not send the Showdown lobby command.")
+            return
+        }
+        pendingLobbyCommands = null
+        val status = pendingLobbyStatus
+        pendingSearch = false
+        pendingLobbyStatus = null
+        if (status != null) {
+            session.setConnectionStatus(status)
+        } else {
+            activeSearchFormat = session.matchFormat.id
+            session.setConnectionStatus("Searching ${session.matchFormat.label}…")
+        }
+    }
+
+    private fun showChallengeComposer() {
+        val username = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Challenge player")
+            .setView(username)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Challenge") { _, _ -> beginChallenge(username.text.toString()) }
+            .show()
+    }
+
+    private fun beginChallenge(username: String) {
+        val target = username.trim()
+        if (target.isBlank()) {
+            session.setConnectionStatus("Enter a username to challenge.")
+            return
+        }
+        val teams = teamLibrary.teams().filter { it.format.equals(session.matchFormat.id, true) }
+        if (session.matchFormat.usesRandomTeams) {
+            startChallenge(target, null)
+        } else if (teams.isEmpty()) {
+            session.setConnectionStatus("Save a ${session.matchFormat.label} team before challenging.")
+            showTeamLibrary()
+        } else if (teams.size == 1) {
+            startChallenge(target, teams.single().packed)
+        } else {
+            showTeamPicker(teams) { startChallenge(target, it.packed) }
+        }
+    }
+
+    private fun startChallenge(username: String, packedTeam: String?) {
+        startLobbyConnection(
+            ShowdownLobbyState.challengeCommands(username, session.matchFormat.id, packedTeam),
+            "Challenge sent to $username."
+        )
+    }
+
+    private fun showIncomingChallenge(username: String, format: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Battle challenge")
+            .setMessage("$username challenged you to $format.")
+            .setNegativeButton("Reject") { _, _ -> sendLobbyCommand(ShowdownLobbyState.rejectChallengeCommand(username), "Challenge rejected.") }
+            .setNeutralButton("Ignore", null)
+            .setPositiveButton("Accept") { _, _ -> beginAcceptChallenge(username, format) }
+            .show()
+    }
+
+    private fun beginAcceptChallenge(username: String, format: String) {
+        val matchFormat = BattleSession.MatchFormat(format, format)
+        val teams = teamLibrary.teams().filter { it.format.equals(format, true) }
+        if (matchFormat.usesRandomTeams) {
+            sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, null), "Challenge accepted.")
+        } else if (teams.isEmpty()) {
+            session.setConnectionStatus("Save a $format team before accepting.")
+            showTeamLibrary()
+        } else if (teams.size == 1) {
+            sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, teams.single().packed), "Challenge accepted.")
+        } else {
+            showTeamPicker(teams) { team ->
+                sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, team.packed), "Challenge accepted.")
+            }
+        }
+    }
+
+    private fun sendLobbyCommand(command: String, status: String) {
+        sendLobbyCommands(listOf(command), status)
+    }
+
+    private fun sendLobbyCommands(commands: List<String>, status: String) {
+        val connection = showdownConnection
+        if (!authenticated || connection == null || !commands.all(connection::sendGlobal)) {
+            session.setConnectionStatus("Connect to Showdown before using lobby challenges.")
+            return
+        }
+        session.setConnectionStatus(status)
     }
 
     private fun showServerSettings() {
@@ -416,6 +673,114 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun showAccountSettings() {
+        val credentials = credentialsStore.load()
+        val username = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+            setText(credentials?.username.orEmpty())
+        }
+        val password = EditText(this).apply {
+            hint = "Password"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(credentials?.password.orEmpty())
+        }
+        val fields = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(56, 8, 56, 0)
+            addView(username)
+            addView(password)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Showdown account")
+            .setView(fields)
+            .setNeutralButton("Sign out") { _, _ -> signOut() }
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val value = ShowdownCredentials(username.text.toString().trim(), password.text.toString())
+                if (value.username.isBlank() || value.password.isBlank()) {
+                    session.setConnectionStatus("Enter both a username and password.")
+                } else {
+                    credentialsStore.save(value)
+                    session.setConnectionStatus("Showdown account saved. It will sign in when you connect.")
+                }
+            }
+            .show()
+    }
+
+    private fun signOut() {
+        credentialsStore.clear()
+        showdownConnection?.close()
+        showdownConnection = null
+        pendingSearch = false
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        activeSearchFormat = null
+        activeBattleRoomId = null
+        session.setLiveBattleActive(false)
+        session.setConnectionStatus("Signed out of Showdown.")
+    }
+
+    private fun showTeamLibrary() {
+        val teams = teamLibrary.teams()
+        val labels = teams.map { "${it.name} · ${it.format}" } + "Add team"
+        AlertDialog.Builder(this)
+            .setTitle("Team library")
+            .setItems(labels.toTypedArray()) { _, selected ->
+                if (selected == teams.size) showTeamEditor() else showTeamEditor(teams[selected])
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showTeamEditor(existing: ShowdownTeam? = null) {
+        val name = EditText(this).apply {
+            hint = "Team name"
+            setSingleLine(true)
+            setText(existing?.name.orEmpty())
+        }
+        val format = EditText(this).apply {
+            hint = "Format ID, for example gen9ou"
+            setSingleLine(true)
+            setText(existing?.format ?: session.matchFormat.id)
+        }
+        val packed = EditText(this).apply {
+            hint = "Packed team string"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setMinLines(4)
+            setText(existing?.packed.orEmpty())
+        }
+        val fields = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(56, 8, 56, 0)
+            addView(name)
+            addView(format)
+            addView(packed)
+        }
+        val builder = AlertDialog.Builder(this)
+            .setTitle(if (existing == null) "Add team" else "Edit team")
+            .setView(fields)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val teamFormat = format.text.toString().trim()
+                val teamPacked = packed.text.toString().trim()
+                if (teamFormat.isBlank() || teamPacked.isBlank()) {
+                    session.setConnectionStatus("Enter a format ID and packed team.")
+                } else {
+                    teamLibrary.save(name.text.toString(), teamFormat, teamPacked, existing?.id ?: java.util.UUID.randomUUID().toString())
+                    session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
+                }
+            }
+        if (existing != null) {
+            builder.setNeutralButton("Delete") { _, _ ->
+                teamLibrary.remove(existing.id)
+                session.setConnectionStatus("Deleted ${existing.name}.")
+            }
+        }
+        builder.show()
+    }
+
     private fun showChatComposer() {
         if (activeBattleRoomId == null) {
             session.setConnectionStatus("Start or join a battle before opening battle chat.")
@@ -439,6 +804,7 @@ class MainActivity : Activity() {
             .setTitle("Battle format")
             .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOf(session.matchFormat)) { dialog, selected ->
                 val format = formats[selected]
+                if (activeSearchFormat != null || pendingSearch) cancelActiveSearch()
                 session.setMatchFormat(format)
                 getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("match_format", format.id).apply()
                 dialog.dismiss()
