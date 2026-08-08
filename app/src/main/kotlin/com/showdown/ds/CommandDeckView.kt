@@ -180,6 +180,7 @@ class CommandDeckView(
         val titleBaseline = band.centerY() - (paint.ascent() + paint.descent()) / 2f
         canvas.drawText(
             when {
+                session.isReplayMode() -> "Replay"
                 session.isBattleFinished() -> "Battle complete"
                 session.isLiveBattleActive() -> "Battle"
                 else -> "Lobby"

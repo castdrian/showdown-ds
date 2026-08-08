@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var credentialsStore: ShowdownCredentialsStore
     private lateinit var teamLibrary: ShowdownTeamLibrary
     private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
+    private lateinit var replayFetcher: ShowdownReplayFetcher
     private var showdownConnection: ShowdownConnection? = null
     private val lobbyState = ShowdownLobbyState()
     private val chatRoomState = ShowdownChatRoomState()
@@ -103,6 +104,10 @@ class MainActivity : Activity() {
         runOnUiThread { showdownMoveEffects?.applyProtocol(lines) }
     }
     private val decisionListener = BattleSession.DecisionListener { command ->
+        if (session.isReplayMode()) {
+            session.setConnectionStatus("Replays are read-only.")
+            return@DecisionListener
+        }
         clearBattleEventPlayback()
         val roomId = activeBattleRoomId
         if (roomId != null) {
@@ -133,7 +138,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
-                BattleSession.ClientAction.EXPORT_REPLAY -> copyBattleTranscript()
+                BattleSession.ClientAction.EXPORT_REPLAY -> showReplayActions()
                 BattleSession.ClientAction.SETTINGS_CHANGED -> {
                     persistUserPreferences()
                     battleAudio.updateOptions(session)
@@ -163,6 +168,7 @@ class MainActivity : Activity() {
         credentialsStore = ShowdownCredentialsStore(this)
         teamLibrary = ShowdownTeamLibrary(this)
         teamUrlFetcher = ShowdownTeamUrlFetcher()
+        replayFetcher = ShowdownReplayFetcher()
         session = BattleSession().apply { prepareForLobby() }
         session.setMatchFormat(loadMatchFormat())
         loadUserPreferences()
@@ -233,6 +239,7 @@ class MainActivity : Activity() {
         if (::moveDex.isInitialized) moveDex.close()
         if (::spriteCache.isInitialized) spriteCache.close()
         if (::teamUrlFetcher.isInitialized) teamUrlFetcher.close()
+        if (::replayFetcher.isInitialized) replayFetcher.close()
         showdownMoveEffects?.release()
         showdownMoveEffects = null
         nativeReleaseVulkan()
@@ -622,6 +629,7 @@ class MainActivity : Activity() {
         chatRoomDialog?.dismiss()
         chatRoomState.clear()
         pendingChatRoomId = null
+        session.setReplayMode(false)
         session.prepareForLobby()
         activeBattleRoomId = null
         battleProtocolReady = false
@@ -1468,6 +1476,70 @@ class MainActivity : Activity() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown battle transcript", transcript))
         session.setConnectionStatus("Battle transcript copied to the clipboard.")
+    }
+
+    private fun showReplayActions() {
+        AlertDialog.Builder(this)
+            .setTitle("Battle replay")
+            .setItems(arrayOf("Copy transcript", "Load replay URL")) { _, selected ->
+                if (selected == 0) copyBattleTranscript() else showReplayUrlDialog()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showReplayUrlDialog() {
+        val input = EditText(this).apply {
+            hint = "https://replay.pokemonshowdown.com/..."
+            setSingleLine(true)
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clipboardValue = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString().orEmpty()
+            if (ShowdownReplayImporter.normalize(clipboardValue) != null) setText(clipboardValue)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Load Showdown replay")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Load") { _, _ ->
+                val source = input.text.toString().trim()
+                if (ShowdownReplayImporter.normalize(source) == null) {
+                    session.setConnectionStatus("Paste a replay.pokemonshowdown.com URL.")
+                } else {
+                    session.setConnectionStatus("Loading replay…")
+                    replayFetcher.fetch(source) { result ->
+                        result.onSuccess(::showReplay)
+                            .onFailure { session.setConnectionStatus("That replay could not be loaded.") }
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun showReplay(replay: ShowdownReplayPayload) {
+        if (isFinishing) return
+        activeBattleRoomId = null
+        battleProtocolReady = false
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        shouldMaintainConnection = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectScheduled = false
+        showdownConnection?.close()
+        showdownConnection = null
+        clearPersistedLobbyState()
+        chatRoomDialog?.dismiss()
+        chatRoomState.clear()
+        pendingChatRoomId = null
+        clearBattleEventPlayback()
+        session.prepareForLobby()
+        replay.players.firstOrNull()?.let(session::setLocalUsername)
+        session.setReplayMode(true)
+        session.setLiveBattleActive(true)
+        session.applyProtocolPacket(replay.log.lines())
+        session.setConnectionStatus("Replay: ${replay.title}")
     }
 
     private fun showFormatPicker() {

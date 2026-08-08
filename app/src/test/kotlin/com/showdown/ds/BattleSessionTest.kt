@@ -920,4 +920,16 @@ class BattleSessionTest {
         assertEquals(listOf("gl hf"), messages)
         assertTrue(session.activityMessages().last().contains("gl hf"))
     }
+
+    @Test
+    fun replayModeKeepsTheBattleReadOnly() {
+        val session = BattleSession()
+
+        session.setLiveBattleActive(true)
+        session.setReplayMode(true)
+
+        assertTrue(session.isReplayMode())
+        assertFalse(session.decisionAvailable)
+        assertFalse(session.menuItems()[3].contains("Forfeit"))
+    }
 }

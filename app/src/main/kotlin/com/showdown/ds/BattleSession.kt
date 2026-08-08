@@ -239,6 +239,7 @@ class BattleSession {
     private var playerSlot = "p1"
     private var localUsername: String? = null
     private var liveBattleActive = false
+    private var replayMode = false
     private var openingEntrances = 0
     private var latestOpeningEntranceAtNanos = 0L
     private var weather = ""
@@ -496,8 +497,24 @@ class BattleSession {
 
     fun isLiveBattleActive() = liveBattleActive
 
+    fun setReplayMode(value: Boolean) {
+        replayMode = value
+        if (value) {
+            decisionAvailable = false
+            decisionKind = DecisionKind.WAIT
+            activeRequests.clear()
+            activeChoices.clear()
+            forceSwitchChoices.clear()
+            targetOptions.clear()
+        }
+        notifyListeners()
+    }
+
+    fun isReplayMode() = replayMode
+
     fun prepareForLobby() {
         applyInit(listOf("", "init", "battle"))
+        replayMode = false
         protocolHistory.clear()
         battleLog.clear()
         battleLog += "No battle in progress."
@@ -884,6 +901,14 @@ class BattleSession {
                 }
             }
             publishPendingHit()
+            if (replayMode) {
+                decisionAvailable = false
+                decisionKind = DecisionKind.WAIT
+                activeRequests.clear()
+                activeChoices.clear()
+                forceSwitchChoices.clear()
+                targetOptions.clear()
+            }
         } finally {
             protocolEventCollector = null
         }
@@ -1745,7 +1770,7 @@ class BattleSession {
         0 -> "Find a ${matchFormat.label}"
         1 -> "Battle format ${matchFormat.menuLabel}"
         2 -> "Open battle chat"
-        3 -> if (liveBattleActive) "Forfeit" else "Challenge player"
+        3 -> if (liveBattleActive && !replayMode) "Forfeit" else "Challenge player"
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
         5 -> "Background music ${if (musicEnabled) "on" else "off"}"
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
@@ -1773,7 +1798,7 @@ class BattleSession {
                 "Open battle chat."
             }
             3 -> {
-                if (liveBattleActive) {
+                if (liveBattleActive && !replayMode) {
                     publishClientAction(ClientAction.FORFEIT)
                     "Forfeit requires confirmation."
                 } else {
