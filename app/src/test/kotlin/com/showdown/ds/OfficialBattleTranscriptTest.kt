@@ -62,4 +62,32 @@ class OfficialBattleTranscriptTest {
         assertTrue(session.battleLog().any { it.contains("couldn't move") })
         assertTrue(session.battleLog().any { it.contains("missed") })
     }
+
+    @Test
+    fun appliesTheOfficialMinorBattleActionVariants() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Mewtwo|Mewtwo, L50|83/100 brn",
+                "|switch|p2a: Magikarp|Magikarp, L1|11/11",
+                "|-sethp|p1a: Mewtwo|70/100 brn",
+                "|-endability|p1a: Mewtwo",
+                "|-transform|p1a: Mewtwo|Ditto",
+                "|-hitcount|p1a: Ditto|3",
+                "|-waiting|p1a: Ditto|p2a: Magikarp",
+                "|-zpower|p1a: Ditto",
+                "|-cureteam|p1a: Ditto"
+            )
+        )
+
+        assertEquals("Ditto", session.playerPokemon)
+        assertEquals("70/100", session.playerHp)
+        assertEquals("READY", session.playerCondition)
+        assertEquals("Suppressed", session.playerDetails().ability)
+        assertTrue(session.battleLog().any { it.contains("hit 3 times") })
+        assertTrue(session.battleLog().any { it.contains("Z-Power") })
+    }
 }

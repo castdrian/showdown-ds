@@ -731,9 +731,10 @@ class BattleSession {
                         applyHealth(fields)
                         pendingHit = PendingHit(fields[2].substringAfter(':').trim(), fields[2].substringAfter(':').trim())
                     }
-                    "-heal" -> applyHealth(fields)
+                    "-heal", "-sethp" -> applyHealth(fields)
                     "-status" -> applyStatus(fields)
                     "-curestatus" -> applyStatus(fields, cured = true)
+                    "-cureteam" -> cureTeam(fields)
                     "-supereffective" -> applyHitModifier(fields, superEffective = true)
                     "-resisted" -> applyHitModifier(fields, resisted = true)
                     "-crit" -> applyHitModifier(fields, critical = true)
@@ -743,13 +744,21 @@ class BattleSession {
                     "-weather" -> applyWeather(fields)
                     "-fieldstart" -> applyFieldEffect(fields, true)
                     "-fieldend" -> applyFieldEffect(fields, false)
+                    "-fieldactivate" -> appendLog(battleEffectName(fields.getOrNull(2)).ifBlank { "A field effect activated." })
                     "-sidestart" -> applySideCondition(fields, true)
                     "-sideend" -> applySideCondition(fields, false)
+                    "-swapsideconditions" -> swapSideConditions()
                     "-boost" -> applyBoost(fields, 1)
                     "-unboost" -> applyBoost(fields, -1)
                     "-setboost" -> applySetBoost(fields)
+                    "-swapboost" -> appendLog("${battleActor(fields.getOrNull(2))} swapped stat changes with ${battleActor(fields.getOrNull(3))}.")
+                    "-invertboost" -> appendLog("${battleActor(fields.getOrNull(2))}'s stat changes were inverted.")
+                    "-clearpositiveboost" -> appendLog("${battleActor(fields.getOrNull(2))}'s positive stat changes were cleared.")
+                    "-copyboost" -> appendLog("${battleActor(fields.getOrNull(2))} copied stat changes from ${battleActor(fields.getOrNull(3))}.")
                     "cant" -> applyCant(fields)
                     "-fail" -> appendLog("${battleActor(fields.getOrNull(2))} failed to use ${battleEffectName(fields.getOrNull(3))}.")
+                    "-block" -> appendLog("${battleActor(fields.getOrNull(2))} was blocked by ${battleEffectName(fields.getOrNull(3))}.")
+                    "-notarget" -> appendLog("${battleActor(fields.getOrNull(2))} had no target.")
                     "-miss" -> appendLog("${battleActor(fields.getOrNull(2))}'s attack missed ${battleActor(fields.getOrNull(3))}.")
                     "-immune" -> appendLog("${battleActor(fields.getOrNull(2))} is immune.")
                     "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
@@ -757,10 +766,21 @@ class BattleSession {
                     "-activate" -> appendLog("${battleActor(fields.getOrNull(2))} activated ${battleEffectName(fields.getOrNull(3))}.")
                     "-start" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} started.")
                     "-end" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} ended.")
+                    "-endability" -> applyEndAbility(fields)
+                    "-hint", "-message" -> appendLog(fields.drop(2).joinToString("|").trim())
+                    "-waiting" -> appendLog("${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}.")
+                    "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
+                    "-singlemove", "-singleturn" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))}.")
+                    "-nothing" -> appendLog("The move had no effect.")
+                    "-zpower" -> appendLog("${battleActor(fields.getOrNull(2))} used a Z-Power move.")
+                    "-zbroken" -> appendLog("${battleActor(fields.getOrNull(2))}'s protection was broken by Z-Power.")
                     "-clearallboost" -> clearAllBoosts()
                     "-clearboost" -> clearBoosts(fields)
                     "-clearnegativeboost" -> clearNegativeBoosts(fields)
-                    "detailschange", "-formechange", "-mega", "-primal" -> applyFormChange(fields)
+                    "detailschange", "-formechange", "-transform", "-burst" -> applyFormChange(fields)
+                    "-mega" -> appendLog("${battleActor(fields.getOrNull(2))} Mega Evolved.")
+                    "-primal" -> appendLog("${battleActor(fields.getOrNull(2))} reverted to its primal form.")
+                    "-center" -> appendLog("The remaining Pokémon moved to the center of the field.")
                     "-terastallize" -> applyTerastallize(fields)
                     "faint" -> applyFaint(fields)
                     "request" -> applyRequest(fields)
@@ -1030,6 +1050,33 @@ class BattleSession {
                 updateOpponentParty(opponentDetails)
             }
         }
+    }
+
+    private fun cureTeam(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        if (isPlayerSide(actor)) {
+            teamDetails.replaceAll(::curedDetails)
+            playerActiveCombatants.entries.toList().forEach { (slot, combatant) ->
+                playerActiveCombatants[slot] = combatant.copy(hp = combatant.hp.substringBefore(' '), condition = if (combatant.condition.contains("FNT", true)) "FNT" else "READY")
+            }
+            updatePlayerDetails(::curedDetails)
+            playerCondition = playerDetails.condition
+            playerHp = playerDetails.hp
+        } else {
+            opponentTeamDetails.replaceAll(::curedDetails)
+            opponentActiveCombatants.entries.toList().forEach { (slot, combatant) ->
+                opponentActiveCombatants[slot] = combatant.copy(hp = combatant.hp.substringBefore(' '), condition = if (combatant.condition.contains("FNT", true)) "FNT" else "READY")
+            }
+            opponentDetails = curedDetails(opponentDetails)
+            opponentCondition = opponentDetails.condition
+            opponentHp = opponentDetails.hp
+        }
+        appendLog("${battleActor(actor)} cured its side's status conditions.")
+    }
+
+    private fun curedDetails(details: PokemonDetails): PokemonDetails {
+        val hp = details.hp.substringBefore(' ')
+        return details.copy(hp = hp, condition = if (details.condition.contains("FNT", true) || hp.startsWith("0")) "FNT" else "READY")
     }
 
     private fun applyFormChange(fields: List<String>) {
@@ -1306,6 +1353,13 @@ class BattleSession {
         }
     }
 
+    private fun applyEndAbility(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        if (isPlayerSide(actor)) updatePlayerDetails { it.copy(ability = "Suppressed") }
+        else opponentDetails = opponentDetails.copy(ability = "Suppressed")
+        appendLog("${battleActor(actor)}'s ability was suppressed.")
+    }
+
     private fun applyItem(fields: List<String>, replacement: String? = null) {
         if (fields.size < 3) return
         val item = replacement ?: fields.getOrNull(3) ?: return
@@ -1373,6 +1427,15 @@ class BattleSession {
         val side = fields.getOrNull(2) ?: return
         val boosts = if (isPlayerSide(side)) playerBoosts else opponentBoosts
         boosts.filterValues { it < 0 }.keys.toList().forEach(boosts::remove)
+    }
+
+    private fun swapSideConditions() {
+        val player = playerSideConditions.toList()
+        playerSideConditions.clear()
+        playerSideConditions += opponentSideConditions
+        opponentSideConditions.clear()
+        opponentSideConditions += player
+        appendLog("The sides' conditions were swapped.")
     }
 
     private fun updateBoost(boosts: MutableMap<String, Int>, stat: String, value: Int) {
