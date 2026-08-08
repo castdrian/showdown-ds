@@ -168,6 +168,31 @@ class BattleSessionTest {
     }
 
     @Test
+    fun doublesKeepIndependentActiveCombatantState() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|switch|p1a: Incineroar|Incineroar, L50, M|316/316",
+                "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|250/250",
+                "|switch|p2b: Landorus|Landorus, L50, M|300/300",
+                "|-damage|p1b: Mimikyu|50/100",
+                "|faint|p2b: Landorus",
+                "|-terastallize|p2b: Landorus|Water"
+            )
+        )
+
+        assertEquals(listOf("Incineroar", "Mimikyu"), session.playerActiveCombatants().map { it.name })
+        assertEquals(listOf("Tapu Koko", "Landorus"), session.opponentActiveCombatants().map { it.name })
+        assertEquals("316/316", session.playerHp)
+        assertEquals("50/100", session.playerActiveCombatants()[1].hp)
+        assertEquals("FNT", session.opponentActiveCombatants()[1].condition)
+        assertEquals(listOf("WATER"), session.opponentActiveCombatants()[1].types)
+    }
+
+    @Test
     fun controllerNavigationUsesTheLowerScreenState() {
         val session = BattleSession()
 

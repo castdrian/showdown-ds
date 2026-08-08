@@ -30,6 +30,10 @@ class BattleSceneView(
     private var pokeballSheet: Bitmap? = null
     private var playerSprite: ShowdownSpriteCache.SpriteAsset? = null
     private var opponentSprite: ShowdownSpriteCache.SpriteAsset? = null
+    private val playerActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
+    private val opponentActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
+    private val requestedPlayerActiveSprites = mutableMapOf<String, String>()
+    private val requestedOpponentActiveSprites = mutableMapOf<String, String>()
     private var playerPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
     private var opponentPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
     private var playerTrainerSprite: ShowdownSpriteCache.SpriteAsset? = null
@@ -70,6 +74,8 @@ class BattleSceneView(
         val playerY = height * if (singles) 0.68f else 0.67f
         val opponentX = width * 0.73f
         val opponentY = height * if (singles) 0.45f else 0.42f
+        val playerCombatants = session.playerActiveCombatants()
+        val opponentCombatants = session.opponentActiveCombatants()
         val nowNanos = System.nanoTime()
         val playerStatusAlpha = statusCardAlpha(session.playerPokemon, session.playerCondition, nowNanos) *
             BattleSceneTiming.summonStatusCardAlpha(session.playerEntryAtNanos, nowNanos)
@@ -79,8 +85,42 @@ class BattleSceneView(
         opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
         requestResources()
         drawBackdrop(canvas, width, height)
-        drawCombatant(canvas, opponentX, opponentY, scale * if (singles) 1.30f else 1.05f, false, session.opponentCondition, session.opponentEntryAtNanos, nowNanos)
-        drawCombatant(canvas, playerX, playerY, scale * if (singles) 1.50f else 1.16f, true, session.playerCondition, session.playerEntryAtNanos, nowNanos)
+        if (!singles && opponentCombatants.size > 1) {
+            opponentCombatants.forEachIndexed { index, combatant ->
+                drawCombatant(
+                    canvas,
+                    multiCombatantX(width, false, index, opponentCombatants.size),
+                    opponentY,
+                    scale * 0.92f,
+                    false,
+                    combatant.condition,
+                    combatant.entryAtNanos,
+                    nowNanos,
+                    opponentActiveSprites[combatant.slot],
+                    combatant.name
+                )
+            }
+        } else {
+            drawCombatant(canvas, opponentX, opponentY, scale * if (singles) 1.30f else 1.05f, false, session.opponentCondition, session.opponentEntryAtNanos, nowNanos)
+        }
+        if (!singles && playerCombatants.size > 1) {
+            playerCombatants.forEachIndexed { index, combatant ->
+                drawCombatant(
+                    canvas,
+                    multiCombatantX(width, true, index, playerCombatants.size),
+                    playerY,
+                    scale * 1.02f,
+                    true,
+                    combatant.condition,
+                    combatant.entryAtNanos,
+                    nowNanos,
+                    playerActiveSprites[combatant.slot],
+                    combatant.name
+                )
+            }
+        } else {
+            drawCombatant(canvas, playerX, playerY, scale * if (singles) 1.50f else 1.16f, true, session.playerCondition, session.playerEntryAtNanos, nowNanos)
+        }
         drawHeader(canvas, width, scale)
         if ((inspectedPlayer == true && !session.hasActivePlayerCombatant()) ||
             (inspectedPlayer == false && !session.hasActiveOpponentCombatant())
@@ -129,12 +169,14 @@ class BattleSceneView(
         }
         drawInspectSheet(canvas, width, height, scale)
         if (
-            isFainting(session.playerPokemon, session.playerCondition) ||
-            isFainting(session.opponentPokemon, session.opponentCondition) ||
+            playerCombatants.any { isFainting(it.name, it.condition) } ||
+            opponentCombatants.any { isFainting(it.name, it.condition) } ||
             BattleSceneTiming.summonProgress(session.playerEntryAtNanos, nowNanos) < 1f ||
             BattleSceneTiming.summonProgress(session.opponentEntryAtNanos, nowNanos) < 1f ||
             (playerSprite ?: playerPlaceholder)?.isAnimated == true ||
-            (opponentSprite ?: opponentPlaceholder)?.isAnimated == true
+            (opponentSprite ?: opponentPlaceholder)?.isAnimated == true ||
+            playerCombatants.any { playerActiveSprites[it.slot]?.isAnimated == true } ||
+            opponentCombatants.any { opponentActiveSprites[it.slot]?.isAnimated == true }
         ) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         }
@@ -204,6 +246,8 @@ class BattleSceneView(
                 }
             }
         }
+        requestActiveSprites(session.playerActiveCombatants(), true, playerActiveSprites, requestedPlayerActiveSprites)
+        requestActiveSprites(session.opponentActiveCombatants(), false, opponentActiveSprites, requestedOpponentActiveSprites)
         if (!requestedPlayerTrainer) {
             requestedPlayerTrainer = true
             spriteCache.requestTrainer("red") { asset ->
@@ -235,6 +279,31 @@ class BattleSceneView(
         }
     }
 
+    private fun requestActiveSprites(
+        combatants: List<BattleSession.ActiveCombatant>,
+        back: Boolean,
+        assets: MutableMap<String, ShowdownSpriteCache.SpriteAsset?>,
+        requests: MutableMap<String, String>
+    ) {
+        val activeSlots = combatants.map { it.slot }.toSet()
+        requests.keys.filterNot(activeSlots::contains).toList().forEach {
+            requests.remove(it)
+            assets.remove(it)
+        }
+        combatants.forEach { combatant ->
+            val key = "${session.spriteStyle}:${combatant.name}"
+            if (requests[combatant.slot] == key) return@forEach
+            requests[combatant.slot] = key
+            assets[combatant.slot] = null
+            spriteCache.requestPokemon(combatant.name, back, session.spriteStyle) { asset ->
+                if (requests[combatant.slot] == key) {
+                    assets[combatant.slot] = asset
+                    invalidate()
+                }
+            }
+        }
+    }
+
     private fun drawBackdrop(canvas: Canvas, width: Float, height: Float) {
         paint.shader = LinearGradient(0f, 0f, width, height, Color.rgb(10, 21, 40), Color.rgb(34, 12, 58), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, width, height, paint)
@@ -248,6 +317,12 @@ class BattleSceneView(
         }
     }
 
+    private fun multiCombatantX(width: Float, player: Boolean, index: Int, count: Int): Float {
+        val step = if (count > 2) 0.12f else 0.16f
+        val base = if (player) 0.20f else 0.64f
+        return width * (base + index * step)
+    }
+
     private fun drawCombatant(
         canvas: Canvas,
         centerX: Float,
@@ -256,12 +331,14 @@ class BattleSceneView(
         player: Boolean,
         condition: String,
         summonAtNanos: Long,
-        nowNanos: Long
+        nowNanos: Long,
+        spriteOverride: ShowdownSpriteCache.SpriteAsset? = null,
+        pokemonOverride: String? = null
     ) {
-        val pokemon = if (player) session.playerPokemon else session.opponentPokemon
+        val pokemon = pokemonOverride ?: if (player) session.playerPokemon else session.opponentPokemon
         val faintProgress = faintProgress(pokemon, condition, nowNanos)
         if (faintProgress >= 1f) return
-        val sprite = if (player) playerSprite ?: playerPlaceholder else opponentSprite ?: opponentPlaceholder
+        val sprite = spriteOverride ?: if (player) playerSprite ?: playerPlaceholder else opponentSprite ?: opponentPlaceholder
         sprite ?: return
         drawSummonBall(canvas, centerX, centerY, scale, summonAtNanos, nowNanos)
         val summonAlpha = BattleSceneTiming.summonSpriteAlpha(summonAtNanos, nowNanos)
