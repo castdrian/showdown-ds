@@ -112,13 +112,11 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                 buildMap {
                     moves.keys().forEach { id ->
                         val move = moves.optJSONObject(id) ?: return@forEach
-                        val category = move.optString("category", "Status")
                         val power = move.optInt("basePower", 0).takeIf { it > 0 }?.toString()
-                            ?: if (category.equals("Status", true)) "Status" else "Varies"
+                            ?: "—"
                         val accuracy = when (val value = move.opt("accuracy")) {
                             is Number -> value.toString().removeSuffix(".0")
-                            is Boolean -> "100"
-                            else -> "100"
+                            else -> "—"
                         }
                         put(id, BattleSession.MoveInfo(power, accuracy))
                     }

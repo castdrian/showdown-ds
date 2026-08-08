@@ -27,14 +27,14 @@ class BattleSessionTest {
     }
 
     @Test
-    fun requestNormalizesAlwaysHitAccuracyForMovePreviews() {
+    fun requestUsesDashesForMovesWithoutNumericAccuracy() {
         val session = BattleSession()
 
         session.applyProtocolLine(
             "|request|{\"active\":[{\"moves\":[{\"move\":\"Swift\",\"pp\":20,\"accuracy\":true},{\"move\":\"Thunderbolt\",\"pp\":15,\"accuracy\":85}]}]}"
         )
 
-        assertEquals("100", session.moves()[0].accuracy)
+        assertEquals("—", session.moves()[0].accuracy)
         assertEquals("85", session.moves()[1].accuracy)
     }
 

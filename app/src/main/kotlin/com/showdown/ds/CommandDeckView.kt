@@ -413,7 +413,6 @@ class CommandDeckView(
         paint.textSize = readableTextSize(28f, scale, 24f)
         paint.color = PAPER
         canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.left + 20f * scale, bounds.top + 146f * scale, paint)
-        canvas.drawText("Power ${move.power}  ·  Acc ${move.accuracy}", bounds.left + 20f * scale, bounds.top + 190f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(23f, scale, 20f)
         paint.color = if (move.disabled) MAGENTA else Color.rgb(150, 231, 205)
@@ -487,15 +486,6 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(30f, scale, 26f)
         drawSoftText(canvas, "PP ${move.pp} / ${move.maxPp}", surface.left + 42f * scale, surface.bottom - 23f * scale, PAPER, 0.65f * scale)
-        paint.textSize = readableTextSize(25f, scale, 22f)
-        drawSoftText(
-            canvas,
-            "Power ${move.power}  ·  Acc ${move.accuracy}",
-            surface.left + 42f * scale,
-            surface.top + 98f * scale,
-            Color.rgb(205, 232, 235),
-            0.5f * scale
-        )
     }
 
     private fun moveRowPath(bounds: RectF, scale: Float): Path {

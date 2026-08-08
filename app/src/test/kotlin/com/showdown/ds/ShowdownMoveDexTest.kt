@@ -44,7 +44,7 @@ class ShowdownMoveDexTest {
             """{"splash":{"category":"Status","basePower":0,"accuracy":true},"thunder":{"category":"Special","basePower":110,"accuracy":70}}"""
         )
 
-        assertEquals(BattleSession.MoveInfo("Status", "100"), info["splash"])
+        assertEquals(BattleSession.MoveInfo("—", "—"), info["splash"])
         assertEquals(BattleSession.MoveInfo("110", "70"), info["thunder"])
     }
 }

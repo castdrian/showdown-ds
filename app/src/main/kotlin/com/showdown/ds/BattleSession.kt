@@ -200,7 +200,7 @@ class BattleSession {
         MoveOption("Fake Out", "NORMAL", 10, 10, "Physical", "40", "100"),
         MoveOption("Flare Blitz", "FIRE", 15, 15, "Physical", "120", "100"),
         MoveOption("Darkest Lariat", "DARK", 10, 10, "Physical", "85", "100"),
-        MoveOption("Parting Shot", "DARK", 20, 20, "Status", "Status", "100")
+        MoveOption("Parting Shot", "DARK", 20, 20, "Status", "—", "—")
     )
     private val team = mutableListOf("Incineroar", "Naganadel", "Mimikyu", "Landorus", "Rotom-Wash", "Ferrothorn")
     private val teamPreviewOrder = mutableListOf<Int>()
@@ -1422,15 +1422,17 @@ class BattleSession {
     private fun movePower(move: JSONObject, info: MoveInfo?): String {
         return move.optInt("basePower", 0).takeIf { it > 0 }?.toString()
             ?: info?.power
-            ?: if (move.optString("category", "Status").equals("Status", true)) "Status" else "Varies"
+            ?: "—"
     }
 
     private fun moveAccuracy(move: JSONObject, fallback: String?): String {
         return when (val value = move.opt("accuracy")) {
             is Number -> value.toString().removeSuffix(".0")
-            is Boolean -> "100"
-            null, JSONObject.NULL -> fallback ?: "100"
-            else -> value.toString().takeIf { it.isNotBlank() && !it.equals("null", true) } ?: fallback ?: "100"
+            null, JSONObject.NULL -> fallback ?: "—"
+            is Boolean -> fallback ?: "—"
+            else -> value.toString().takeIf { it.isNotBlank() && !it.equals("null", true) && !it.equals("true", true) && !it.equals("false", true) }
+                ?: fallback
+                ?: "—"
         }
     }
 
