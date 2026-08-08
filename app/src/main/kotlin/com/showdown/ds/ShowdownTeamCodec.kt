@@ -1,5 +1,8 @@
 package com.showdown.ds
 
+import org.json.JSONArray
+import org.json.JSONObject
+
 data class ShowdownTeamSet(
     val nickname: String = "",
     val species: String = "",
@@ -47,7 +50,11 @@ object ShowdownTeamCodec {
     fun parse(value: String): List<ShowdownTeamSet> {
         val input = value.trim()
         if (input.isBlank()) return emptyList()
-        return if ('|' in input || ']' in input) unpack(input) else parseText(input)
+        return when {
+            input.startsWith("[") || input.startsWith("{") -> parseJson(input)
+            '|' in input || ']' in input -> unpack(input)
+            else -> parseText(input)
+        }
     }
 
     fun pack(sets: List<ShowdownTeamSet>): String = sets
@@ -57,6 +64,10 @@ object ShowdownTeamCodec {
     fun toText(sets: List<ShowdownTeamSet>): String = sets
         .filter { it.hasContent() }
         .joinToString("\n\n", transform = ::textSet)
+
+    fun toJson(sets: List<ShowdownTeamSet>): String = JSONArray().apply {
+        sets.filter { it.hasContent() }.forEach { put(jsonSet(it)) }
+    }.toString()
 
     private fun unpackSet(packed: String): ShowdownTeamSet {
         val fields = packed.split('|', limit = 12)
@@ -117,6 +128,74 @@ object ShowdownTeamCodec {
     private fun parseText(input: String): List<ShowdownTeamSet> = input
         .split(Regex("\\r?\\n\\s*\\r?\\n"))
         .mapNotNull(::parseTextSet)
+
+    private fun parseJson(input: String): List<ShowdownTeamSet> = runCatching {
+        val values = if (input.startsWith("[")) JSONArray(input) else JSONArray().put(JSONObject(input))
+        buildList {
+            for (index in 0 until values.length()) {
+                values.optJSONObject(index)?.let(::parseJsonSet)?.let(::add)
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    private fun parseJsonSet(value: JSONObject): ShowdownTeamSet {
+        val nickname = value.optString("name")
+        val species = value.optString("species").ifBlank { nickname }
+        return ShowdownTeamSet(
+            nickname = nickname,
+            species = species,
+            item = value.optString("item"),
+            ability = value.optString("ability"),
+            moves = value.optJSONArray("moves")?.let { moves ->
+                buildList {
+                    for (index in 0 until moves.length()) moves.optString(index).takeIf(String::isNotBlank)?.let(::add)
+                }
+            }.orEmpty(),
+            nature = value.optString("nature"),
+            evs = jsonStatValues(value.optJSONObject("evs"), 0),
+            gender = value.optString("gender"),
+            ivs = jsonStatValues(value.optJSONObject("ivs"), 31),
+            shiny = value.optBoolean("shiny"),
+            level = value.optInt("level", 100),
+            happiness = value.optInt("happiness", 255),
+            pokeBall = value.optString("pokeball", value.optString("pokeBall")),
+            hiddenPowerType = value.optString("hiddenpower", value.optString("hiddenPower")),
+            gigantamax = value.optBoolean("gigantamax"),
+            dynamaxLevel = value.optInt("dynamaxLevel", 10),
+            teraType = value.optString("teraType")
+        )
+    }
+
+    private fun jsonStatValues(value: JSONObject?, default: Int): List<Int> {
+        val names = listOf("hp", "atk", "def", "spa", "spd", "spe")
+        return names.map { name -> value?.optInt(name, default) ?: default }
+    }
+
+    private fun jsonSet(set: ShowdownTeamSet) = JSONObject().apply {
+        if (set.nickname.isNotBlank()) put("name", set.nickname.trim())
+        if (set.species.isNotBlank()) put("species", set.species.trim())
+        if (set.item.isNotBlank()) put("item", set.item.trim())
+        if (set.ability.isNotBlank()) put("ability", set.ability.trim())
+        if (set.moves.isNotEmpty()) put("moves", JSONArray(set.moves.take(4)))
+        if (set.nature.isNotBlank()) put("nature", set.nature.trim())
+        put("evs", jsonStats(set.evs, 0))
+        if (set.gender.isNotBlank()) put("gender", set.gender.trim())
+        put("ivs", jsonStats(set.ivs, 31))
+        if (set.shiny) put("shiny", true)
+        if (set.level != 100) put("level", set.level.coerceIn(1, 100))
+        if (set.happiness != 255) put("happiness", set.happiness.coerceIn(0, 255))
+        if (set.pokeBall.isNotBlank()) put("pokeball", set.pokeBall.trim())
+        if (set.hiddenPowerType.isNotBlank()) put("hiddenpower", set.hiddenPowerType.trim())
+        if (set.gigantamax) put("gigantamax", true)
+        if (set.dynamaxLevel != 10) put("dynamaxLevel", set.dynamaxLevel.coerceIn(0, 10))
+        if (set.teraType.isNotBlank()) put("teraType", set.teraType.trim())
+    }
+
+    private fun jsonStats(values: List<Int>, default: Int) = JSONObject().apply {
+        listOf("hp", "atk", "def", "spa", "spd", "spe").forEachIndexed { index, name ->
+            values.getOrNull(index)?.takeUnless { it == default }?.let { put(name, it) }
+        }
+    }
 
     private fun parseTextSet(block: String): ShowdownTeamSet? {
         val lines = block.lines().map(String::trim).filter(String::isNotBlank)

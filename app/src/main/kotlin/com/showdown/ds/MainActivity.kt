@@ -977,6 +977,21 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val copyJsonButton = Button(this).apply {
+            text = "Copy JSON team"
+            setOnClickListener {
+                val editedJson = ShowdownTeamCodec.toJson(setEditors.map(::readTeamSetEditor))
+                val value = editedJson.takeUnless { it == "[]" }
+                    ?: ShowdownTeamCodec.toJson(ShowdownTeamCodec.parse(packed.text.toString()))
+                if (value == "[]") {
+                    session.setConnectionStatus("Add at least one Pokémon before copying the JSON team.")
+                } else {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown JSON team", value))
+                    session.setConnectionStatus("JSON team copied to the clipboard.")
+                }
+            }
+        }
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(name)
@@ -984,6 +999,7 @@ class MainActivity : Activity() {
             addView(importButton)
             addView(copyButton)
             addView(copyTextButton)
+            addView(copyJsonButton)
             addView(packed)
             addView(setFields)
         }
