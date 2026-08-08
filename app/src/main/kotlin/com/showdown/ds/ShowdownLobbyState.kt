@@ -6,17 +6,20 @@ class ShowdownLobbyState {
     data class OutgoingChallenge(val username: String, val format: String)
     data class RoomSummary(val id: String, val title: String, val description: String, val userCount: Int, val section: String)
     data class BattleRoomSummary(val id: String, val playerOne: String, val playerTwo: String, val minimumElo: String)
+    data class LadderEntry(val username: String, val elo: Double, val gxe: Double, val rpr: Double, val rprd: Double, val coil: Double?)
 
     private val activeSearches = mutableSetOf<String>()
     private val activeBattles = linkedMapOf<String, String>()
     private val pendingChallenges = linkedMapOf<String, String>()
     private val publicRooms = mutableListOf<RoomSummary>()
     private val activeBattleRooms = mutableListOf<BattleRoomSummary>()
+    private val activeLadder = mutableListOf<LadderEntry>()
 
     val battles get() = activeBattles.toMap()
     val incomingChallenges get() = pendingChallenges.toMap()
     val rooms get() = publicRooms.toList()
     val battleRooms get() = activeBattleRooms.toList()
+    val ladder get() = activeLadder.toList()
     var outgoingChallenge: OutgoingChallenge? = null
         private set
 
@@ -32,11 +35,16 @@ class ShowdownLobbyState {
         pendingChallenges.clear()
         publicRooms.clear()
         activeBattleRooms.clear()
+        activeLadder.clear()
         outgoingChallenge = null
     }
 
     fun clearBattle(roomId: String) {
         activeBattles.remove(roomId)
+    }
+
+    fun clearLadder() {
+        activeLadder.clear()
     }
 
     fun firstNewBattle(previousRoomIds: Set<String>): String? = activeBattles.keys.firstOrNull { it !in previousRoomIds }
@@ -50,6 +58,7 @@ class ShowdownLobbyState {
                 "queryresponse" -> when (fields.getOrNull(2)) {
                     "rooms" -> applyRooms(fields.getOrNull(3))
                     "roomlist" -> applyBattleRooms(fields.getOrNull(3))
+                    "laddertop" -> applyLadder(fields.getOrNull(3))
                 }
             }
         }
@@ -82,6 +91,27 @@ class ShowdownLobbyState {
         appendRooms(state.optJSONArray("chat"), "Chat rooms", parsed)
         publicRooms.clear()
         publicRooms += parsed.distinctBy(RoomSummary::id)
+    }
+
+    private fun applyLadder(payload: String?) {
+        val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return
+        val rows = state.optJSONArray("toplist") ?: return
+        val parsed = mutableListOf<LadderEntry>()
+        for (index in 0 until rows.length()) {
+            val row = rows.optJSONObject(index) ?: continue
+            val username = row.optString("username").trim().ifBlank { row.optString("userid").trim() }
+            if (username.isBlank()) continue
+            parsed += LadderEntry(
+                username = username,
+                elo = row.optDouble("elo", 0.0),
+                gxe = row.optDouble("gxe", 0.0),
+                rpr = row.optDouble("rpr", 0.0),
+                rprd = row.optDouble("rprd", 0.0),
+                coil = row.optDouble("coil", Double.NaN).takeUnless(Double::isNaN)
+            )
+        }
+        activeLadder.clear()
+        activeLadder += parsed
     }
 
     private fun appendRooms(values: org.json.JSONArray?, section: String, target: MutableList<RoomSummary>) {

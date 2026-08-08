@@ -66,6 +66,8 @@ class MainActivity : Activity() {
     private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
     private var chatRoomDialog: ShowdownDialog? = null
+    private var ladderDialog: ShowdownDialog? = null
+    private var ladderFormatId: String? = null
     private var chatRoomMessagesView: TextView? = null
     private var chatRoomInput: EditText? = null
     private var chatRoomScroll: ScrollView? = null
@@ -220,6 +222,8 @@ class MainActivity : Activity() {
         roomListPending = false
         chatRoomDialog?.dismiss()
         chatRoomDialog = null
+        ladderDialog?.dismiss()
+        ladderDialog = null
         chatRoomMessagesView = null
         chatRoomInput = null
         chatRoomScroll = null
@@ -504,6 +508,7 @@ class MainActivity : Activity() {
                 }
             }
             .setNegativeButton("Close") { _, _ -> roomListPending = false }
+            .setNeutralButton("Ladder") { _, _ -> showLadderDialog() }
             .create()
         dialog.setOnDismissListener {
             if (roomListDialog === dialog) {
@@ -513,6 +518,75 @@ class MainActivity : Activity() {
         }
         roomListDialog = dialog
         dialog.show()
+    }
+
+    private fun showLadderDialog(format: BattleSession.MatchFormat = session.matchFormat) {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to view the ladder.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before viewing the ladder.")
+            return
+        }
+        ladderFormatId = format.id
+        lobbyState.clearLadder()
+        renderLadderDialog()
+        requestLadder(format)
+    }
+
+    private fun renderLadderDialog() {
+        val format = session.availableMatchFormats().firstOrNull { it.id.equals(ladderFormatId, true) }
+            ?: ladderFormatId?.let { BattleSession.MatchFormat(it, it) }
+            ?: session.matchFormat
+        val entries = lobbyState.ladder
+        val labels = if (entries.isEmpty()) {
+            arrayOf("Loading ${format.menuLabel} ladder…")
+        } else {
+            entries.mapIndexed { index, entry ->
+                val glicko = "${entry.rpr.toInt()} ± ${entry.rprd.toInt()}"
+                "${index + 1}. ${entry.username}\nElo ${entry.elo.toInt()} · GXE ${entry.gxe.toInt()}% · Glicko $glicko"
+            }.toTypedArray()
+        }
+        val previous = ladderDialog
+        ladderDialog = null
+        previous?.dismiss()
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Ladder · ${format.menuLabel}")
+            .setItems(labels) { _, _ -> }
+            .setNegativeButton("Close") { _, _ -> ladderFormatId = null }
+            .setNeutralButton("Format") { _, _ -> showLadderFormatPicker() }
+            .setPositiveButton("Refresh") { _, _ -> requestLadder(format) }
+            .create()
+        dialog.setOnDismissListener {
+            if (ladderDialog === dialog) {
+                ladderDialog = null
+                ladderFormatId = null
+            }
+        }
+        ladderDialog = dialog
+        dialog.show()
+    }
+
+    private fun requestLadder(format: BattleSession.MatchFormat) {
+        ladderFormatId = format.id
+        if (showdownConnection?.sendGlobal("/cmd laddertop ${format.id}") == true) {
+            session.setConnectionStatus("Loading ${format.menuLabel} ladder…")
+        } else {
+            session.setConnectionStatus("Could not request the Showdown ladder.")
+        }
+    }
+
+    private fun showLadderFormatPicker() {
+        val formats = session.availableMatchFormats()
+        ShowdownDialogBuilder(this)
+            .setTitle("Ladder format")
+            .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOfFirst { it.id.equals(ladderFormatId, true) }) { _, selected ->
+                val format = formats[selected]
+                showLadderDialog(format)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showChatRoomDialog() {
@@ -808,6 +882,7 @@ class MainActivity : Activity() {
                         val previousBattleRoomIds = lobbyState.battles.keys
                         lobbyState.applyProtocol(lines)
                         if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") || it.startsWith("|queryresponse|roomlist|") }) renderRoomListDialog()
+                        if (ladderDialog != null && lines.any { it.startsWith("|queryresponse|laddertop|") }) renderLadderDialog()
                         if (activeSearchFormat != null) {
                             lobbyState.firstNewBattle(previousBattleRoomIds)?.let { matchedRoomId ->
                                 joinMatchedBattle(connection, matchedRoomId)

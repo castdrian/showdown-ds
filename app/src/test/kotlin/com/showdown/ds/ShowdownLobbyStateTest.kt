@@ -68,6 +68,27 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun tracksLadderRowsFromTheShowdownQuery() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(
+            listOf(
+                "|queryresponse|laddertop|{" +
+                    "\"formatid\":\"gen9ou\"," +
+                    "\"toplist\":[{" +
+                        "\"username\":\"Alice\",\"elo\":1675.4,\"gxe\":82.1,\"rpr\":1700,\"rprd\":55,\"coil\":1200" +
+                    "}]" +
+                    "}"
+            )
+        )
+
+        assertEquals(1, lobby.ladder.size)
+        assertEquals("Alice", lobby.ladder.single().username)
+        assertEquals(1675.4, lobby.ladder.single().elo, 0.01)
+        assertEquals(1200.0, lobby.ladder.single().coil ?: 0.0, 0.01)
+    }
+
+    @Test
     fun createsPackedTeamCommandsForBuiltTeamFormats() {
         assertEquals(listOf("/utm Pikachu||lightball", "/search gen7ou"), ShowdownLobbyState.searchCommands("gen7ou", "Pikachu||lightball"))
         assertEquals(listOf("/utm null", "/search gen7randombattle"), ShowdownLobbyState.searchCommands("gen7randombattle", null))
