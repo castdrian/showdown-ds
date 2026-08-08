@@ -60,9 +60,9 @@ class CommandDeckView(
         val height = height.toFloat()
         val scale = minOf(width / 1240f, height / 1080f)
         drawBackground(canvas, width, height)
-        drawTopBand(canvas, width, scale)
         drawTabs(canvas, width, scale)
         drawActivePanel(canvas, width, height, scale)
+        drawTopBand(canvas, width, scale)
         if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
     }
 
@@ -160,6 +160,10 @@ class CommandDeckView(
     }
 
     private fun drawTopBand(canvas: Canvas, width: Float, scale: Float) {
+        paint.alpha = 255
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.LEFT
         val band = RectF(20f * scale, 16f * scale, width - 20f * scale, 92f * scale)
         paint.shader = LinearGradient(band.left, band.top, band.right, band.bottom, Color.rgb(18, 41, 59), Color.rgb(7, 21, 35), Shader.TileMode.CLAMP)
         canvas.drawRoundRect(band, 24f * scale, 24f * scale, paint)
