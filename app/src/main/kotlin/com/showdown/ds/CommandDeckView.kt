@@ -908,103 +908,14 @@ class CommandDeckView(
                 canvas.drawRoundRect(RectF(bounds.left + 3f * scale, bounds.top + 3f * scale, bounds.right - 3f * scale, bounds.bottom - 3f * scale), 20f * scale, 20f * scale, paint)
                 paint.style = Paint.Style.FILL
             }
-            drawMenuIcon(canvas, index, bounds.left + 48f * scale, bounds.centerY(), 22f * scale, if (index == 3) MAGENTA else PAPER)
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
             paint.textSize = readableTextSize(32f, scale, 28f)
             paint.color = if (index == 3) MAGENTA else PAPER
-            val label = fitTextToWidth(entry, bounds.width() - 108f * scale)
-            canvas.drawText(label, bounds.left + 84f * scale, centeredTextBaseline(bounds.centerY()), paint)
+            val label = fitTextToWidth(entry, bounds.width() - 64f * scale)
+            canvas.drawText(label, bounds.left + 32f * scale, centeredTextBaseline(bounds.centerY()), paint)
         }
         paint.textAlign = Paint.Align.LEFT
-    }
-
-    private fun drawMenuIcon(canvas: Canvas, index: Int, centerX: Float, centerY: Float, size: Float, color: Int) {
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 3f
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.color = color
-        when (index) {
-            0 -> {
-                canvas.drawCircle(centerX - size * 0.18f, centerY - size * 0.18f, size * 0.47f, paint)
-                canvas.drawLine(centerX + size * 0.16f, centerY + size * 0.16f, centerX + size * 0.62f, centerY + size * 0.62f, paint)
-            }
-            1 -> repeat(3) { row ->
-                val y = centerY + (row - 1) * size * 0.46f
-                canvas.drawCircle(centerX - size * 0.58f, y, size * 0.08f, paint)
-                canvas.drawLine(centerX - size * 0.34f, y, centerX + size * 0.62f, y, paint)
-            }
-            2 -> {
-                val bubble = RectF(centerX - size * 0.68f, centerY - size * 0.5f, centerX + size * 0.68f, centerY + size * 0.34f)
-                canvas.drawRoundRect(bubble, size * 0.22f, size * 0.22f, paint)
-                canvas.drawLine(centerX - size * 0.28f, centerY + size * 0.34f, centerX - size * 0.5f, centerY + size * 0.62f, paint)
-                canvas.drawLine(centerX - size * 0.5f, centerY + size * 0.62f, centerX - size * 0.02f, centerY + size * 0.34f, paint)
-            }
-            3 -> {
-                canvas.drawLine(centerX - size * 0.55f, centerY + size * 0.62f, centerX - size * 0.55f, centerY - size * 0.65f, paint)
-                canvas.drawLine(centerX - size * 0.52f, centerY - size * 0.59f, centerX + size * 0.58f, centerY - size * 0.26f, paint)
-                canvas.drawLine(centerX + size * 0.58f, centerY - size * 0.26f, centerX - size * 0.52f, centerY + size * 0.06f, paint)
-            }
-            4 -> {
-                val speaker = RectF(centerX - size * 0.66f, centerY - size * 0.2f, centerX - size * 0.2f, centerY + size * 0.2f)
-                canvas.drawRoundRect(speaker, size * 0.06f, size * 0.06f, paint)
-                canvas.drawLine(centerX - size * 0.2f, centerY - size * 0.2f, centerX + size * 0.2f, centerY - size * 0.58f, paint)
-                canvas.drawLine(centerX - size * 0.2f, centerY + size * 0.2f, centerX + size * 0.2f, centerY + size * 0.58f, paint)
-                canvas.drawArc(RectF(centerX - size * 0.06f, centerY - size * 0.52f, centerX + size * 0.68f, centerY + size * 0.52f), -54f, 108f, false, paint)
-            }
-            5 -> {
-                canvas.drawLine(centerX + size * 0.15f, centerY - size * 0.64f, centerX + size * 0.15f, centerY + size * 0.45f, paint)
-                canvas.drawLine(centerX + size * 0.15f, centerY - size * 0.64f, centerX + size * 0.65f, centerY - size * 0.46f, paint)
-                canvas.drawCircle(centerX - size * 0.3f, centerY + size * 0.5f, size * 0.28f, paint)
-            }
-            6 -> {
-                canvas.drawRoundRect(RectF(centerX - size * 0.32f, centerY - size * 0.64f, centerX + size * 0.32f, centerY + size * 0.64f), size * 0.14f, size * 0.14f, paint)
-                canvas.drawLine(centerX - size * 0.09f, centerY + size * 0.46f, centerX + size * 0.09f, centerY + size * 0.46f, paint)
-                canvas.drawArc(RectF(centerX - size * 0.7f, centerY - size * 0.44f, centerX - size * 0.14f, centerY + size * 0.44f), -70f, 140f, false, paint)
-                canvas.drawArc(RectF(centerX + size * 0.14f, centerY - size * 0.44f, centerX + size * 0.7f, centerY + size * 0.44f), 110f, 140f, false, paint)
-            }
-            7 -> {
-                canvas.drawCircle(centerX, centerY, size * 0.58f, paint)
-                canvas.drawLine(centerX - size * 0.3f, centerY, centerX - size * 0.06f, centerY + size * 0.24f, paint)
-                canvas.drawLine(centerX - size * 0.06f, centerY + size * 0.24f, centerX + size * 0.38f, centerY - size * 0.28f, paint)
-            }
-            8 -> {
-                val frame = RectF(centerX - size * 0.68f, centerY - size * 0.58f, centerX + size * 0.68f, centerY + size * 0.58f)
-                canvas.drawRoundRect(frame, size * 0.12f, size * 0.12f, paint)
-                canvas.drawCircle(centerX + size * 0.32f, centerY - size * 0.28f, size * 0.1f, paint)
-                canvas.drawLine(centerX - size * 0.52f, centerY + size * 0.42f, centerX - size * 0.05f, centerY - size * 0.04f, paint)
-                canvas.drawLine(centerX - size * 0.05f, centerY - size * 0.04f, centerX + size * 0.16f, centerY + size * 0.16f, paint)
-                canvas.drawLine(centerX + size * 0.16f, centerY + size * 0.16f, centerX + size * 0.52f, centerY - size * 0.2f, paint)
-            }
-            9 -> {
-                canvas.drawCircle(centerX - size * 0.24f, centerY - size * 0.25f, size * 0.21f, paint)
-                canvas.drawCircle(centerX + size * 0.3f, centerY - size * 0.18f, size * 0.17f, paint)
-                canvas.drawArc(RectF(centerX - size * 0.7f, centerY - size * 0.02f, centerX + size * 0.22f, centerY + size * 0.72f), 205f, 130f, false, paint)
-                canvas.drawArc(RectF(centerX - size * 0.02f, centerY + size * 0.04f, centerX + size * 0.72f, centerY + size * 0.66f), 205f, 130f, false, paint)
-            }
-            10 -> {
-                canvas.drawCircle(centerX, centerY - size * 0.28f, size * 0.25f, paint)
-                canvas.drawArc(RectF(centerX - size * 0.58f, centerY - size * 0.02f, centerX + size * 0.58f, centerY + size * 0.72f), 205f, 130f, false, paint)
-            }
-            11 -> repeat(3) { row ->
-                val top = centerY - size * 0.6f + row * size * 0.48f
-                val rack = RectF(centerX - size * 0.58f, top, centerX + size * 0.58f, top + size * 0.32f)
-                canvas.drawRoundRect(rack, size * 0.08f, size * 0.08f, paint)
-                canvas.drawCircle(centerX - size * 0.36f, top + size * 0.16f, size * 0.04f, paint)
-            }
-            else -> {
-                val page = RectF(centerX - size * 0.52f, centerY - size * 0.64f, centerX + size * 0.52f, centerY + size * 0.64f)
-                canvas.drawRoundRect(page, size * 0.08f, size * 0.08f, paint)
-                canvas.drawLine(centerX + size * 0.12f, centerY - size * 0.64f, centerX + size * 0.52f, centerY - size * 0.24f, paint)
-                canvas.drawLine(centerX + size * 0.12f, centerY - size * 0.64f, centerX + size * 0.12f, centerY - size * 0.24f, paint)
-                repeat(3) { row ->
-                    val y = centerY + size * (row - 0.12f) * 0.3f
-                    canvas.drawLine(centerX - size * 0.3f, y, centerX + size * 0.28f, y, paint)
-                }
-            }
-        }
-        paint.strokeCap = Paint.Cap.BUTT
-        paint.style = Paint.Style.FILL
     }
 
     private fun tabName(panel: BattleSession.Panel) = when (panel) {
