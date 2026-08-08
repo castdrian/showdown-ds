@@ -330,9 +330,47 @@ class CommandDeckView(
         }
         if (gimmicks.isNotEmpty()) {
             drawGimmicks(canvas, RectF(content.left, contentTop, content.right, content.bottom), scale)
-        } else if (targets.isEmpty()) {
-            drawUtilityMessage(canvas, content, scale)
+        } else {
+            drawMoveDetails(canvas, RectF(content.left, contentTop, content.right, content.bottom), scale)
         }
+    }
+
+    private fun drawMoveDetails(canvas: Canvas, bounds: RectF, scale: Float) {
+        val move = session.moves().getOrNull(session.focusedMove)
+        if (move == null) {
+            drawUtilityMessage(canvas, bounds, scale)
+            return
+        }
+        val palette = movePalette(move.type)
+        paint.color = Color.argb(100, 3, 14, 24)
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.25f * scale
+        paint.color = Color.argb(150, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(30f, scale, 26f)
+        paint.color = PAPER
+        canvas.drawText(fitTextToWidth(move.name, bounds.width() - 86f * scale), bounds.left + 20f * scale, bounds.top + 48f * scale, paint)
+        val icon = typeIcon(move.type)
+        if (icon != null) {
+            source.set(0, 0, icon.width, icon.height)
+            destination.set(bounds.right - 66f * scale, bounds.top + 16f * scale, bounds.right - 22f * scale, bounds.top + 60f * scale)
+            canvas.drawBitmap(icon, source, destination, paint)
+        }
+        paint.textSize = readableTextSize(21f, scale, 18f)
+        paint.color = Color.rgb(153, 224, 220)
+        canvas.drawText("${move.type}  ·  ${move.category}", bounds.left + 20f * scale, bounds.top + 92f * scale, paint)
+        paint.textSize = readableTextSize(25f, scale, 21f)
+        paint.color = PAPER
+        canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.left + 20f * scale, bounds.top + 146f * scale, paint)
+        canvas.drawText("Power ${move.power}  ·  Acc ${move.accuracy}", bounds.left + 20f * scale, bounds.top + 190f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(20f, scale, 18f)
+        paint.color = if (move.disabled) MAGENTA else Color.rgb(150, 231, 205)
+        canvas.drawText(if (move.disabled) "DISABLED" else "TAP AGAIN TO CONFIRM", bounds.left + 20f * scale, bounds.bottom - 24f * scale, paint)
     }
 
     private fun drawUtilityMessage(canvas: Canvas, bounds: RectF, scale: Float) {
