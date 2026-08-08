@@ -37,8 +37,8 @@ class ShowdownTeamLibrary(context: Context) {
         return if (readable) ShowdownTeamBackupCodec.toText(storedTeams) else ShowdownTeamBackupCodec.pack(storedTeams)
     }
 
-    fun importBackup(backupText: String): List<ShowdownTeam> {
-        val imported = ShowdownTeamBackupCodec.parse(backupText)
+    fun importBackup(backupText: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9"): List<ShowdownTeam> {
+        val imported = ShowdownTeamBackupCodec.parse(backupText, fallbackName, fallbackFormat)
         if (imported.isEmpty()) return emptyList()
         write(teams() + imported)
         return imported

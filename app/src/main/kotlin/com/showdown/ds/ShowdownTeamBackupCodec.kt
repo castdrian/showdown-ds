@@ -13,7 +13,7 @@ object ShowdownTeamBackupCodec {
         "=== [${metadata.format}] ${metadata.name} ===\n\n${ShowdownTeamCodec.toText(ShowdownTeamCodec.unpack(team.packed))}"
     }
 
-    fun parse(value: String): List<ShowdownTeam> {
+    fun parse(value: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9"): List<ShowdownTeam> {
         val input = value.trim()
         if (input.isBlank()) return emptyList()
         val packedLines = input.lines().map(String::trim).filter(String::isNotBlank)
@@ -26,7 +26,7 @@ object ShowdownTeamBackupCodec {
 
         val sets = ShowdownTeamCodec.parse(input)
         if (sets.isEmpty()) return emptyList()
-        return listOf(ShowdownTeam(UUID.randomUUID().toString(), "Imported team", "gen9", ShowdownTeamCodec.pack(sets)))
+        return listOf(ShowdownTeam(UUID.randomUUID().toString(), fallbackName, fallbackFormat, ShowdownTeamCodec.pack(sets)))
     }
 
     private fun parsePackedLine(line: String): ShowdownTeam? {

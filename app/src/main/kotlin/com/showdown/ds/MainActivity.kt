@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var serverEndpoint: ShowdownServerEndpoint
     private lateinit var credentialsStore: ShowdownCredentialsStore
     private lateinit var teamLibrary: ShowdownTeamLibrary
+    private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
     private var showdownConnection: ShowdownConnection? = null
     private val lobbyState = ShowdownLobbyState()
     private val loginClient = ShowdownLoginClient()
@@ -149,6 +150,7 @@ class MainActivity : Activity() {
         serverEndpoint = loadServerEndpoint()
         credentialsStore = ShowdownCredentialsStore(this)
         teamLibrary = ShowdownTeamLibrary(this)
+        teamUrlFetcher = ShowdownTeamUrlFetcher()
         session = BattleSession().apply { prepareForLobby() }
         session.setMatchFormat(loadMatchFormat())
         loadUserPreferences()
@@ -208,6 +210,7 @@ class MainActivity : Activity() {
         if (::battleAudio.isInitialized) battleAudio.release()
         if (::moveDex.isInitialized) moveDex.close()
         if (::spriteCache.isInitialized) spriteCache.close()
+        if (::teamUrlFetcher.isInitialized) teamUrlFetcher.close()
         showdownMoveEffects?.release()
         showdownMoveEffects = null
         nativeReleaseVulkan()
@@ -929,7 +932,7 @@ class MainActivity : Activity() {
 
     private fun showTeamBackupImport() {
         val input = EditText(this).apply {
-            hint = "Paste a Showdown team backup"
+            hint = "Paste exported teams, a PokePaste URL, or a Gist URL"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             setMinLines(8)
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -943,16 +946,30 @@ class MainActivity : Activity() {
             .setView(input)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Import") { _, _ ->
-                val imported = teamLibrary.importBackup(input.text.toString())
-                session.setConnectionStatus(
-                    if (imported.isEmpty()) "No valid Showdown teams were found in that backup."
-                    else "Imported ${imported.size} team${if (imported.size == 1) "" else "s"}."
-                )
+                val source = input.text.toString().trim()
+                if (ShowdownTeamUrlImporter.normalize(source) != null) {
+                    session.setConnectionStatus("Fetching team from URL…")
+                    teamUrlFetcher.fetch(source) { result ->
+                        result.onSuccess { payload -> importTeamBackup(payload.text, payload.name, payload.format) }
+                            .onFailure { session.setConnectionStatus("Could not fetch that team URL. Paste the team export instead.") }
+                    }
+                } else {
+                    importTeamBackup(source)
+                }
             }
             .show()
     }
 
-    private fun String.isLikelyTeamBackup() = contains("===") || contains("]") && contains("|") ||
+    private fun importTeamBackup(value: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9") {
+        val payload = ShowdownTeamUrlImporter.payload(value, fallbackName, fallbackFormat)
+        val imported = teamLibrary.importBackup(payload.text, payload.name.ifBlank { fallbackName }, payload.format.ifBlank { fallbackFormat })
+        session.setConnectionStatus(
+            if (imported.isEmpty()) "No valid Showdown teams were found in that backup."
+            else "Imported ${imported.size} team${if (imported.size == 1) "" else "s"}."
+        )
+    }
+
+    private fun String.isLikelyTeamBackup() = ShowdownTeamUrlImporter.normalize(this) != null || contains("===") || contains("]") && contains("|") ||
         contains("\n-") || contains("Ability:", true) || contains(" @ ")
 
     private fun showTeamEditor(existing: ShowdownTeam? = null) {
