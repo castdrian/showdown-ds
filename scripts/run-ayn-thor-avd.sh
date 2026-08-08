@@ -10,7 +10,7 @@ emulator="$sdk_root/emulator/emulator"
 avd_name="AYN_Thor_API_34_Vulkan"
 overlay_emulator="$repo_root/.emulator-overlay/emulator"
 audio_args=()
-vsync_rate="${AYN_THOR_VSYNC_RATE:-60}"
+vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
 boot_animation_args=()
 
 case "$vsync_rate" in

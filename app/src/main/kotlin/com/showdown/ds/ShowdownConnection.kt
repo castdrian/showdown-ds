@@ -38,10 +38,11 @@ class ShowdownConnection(
     }
 
     fun disconnect() {
-        socket?.close(1000, "Client closed")
+        val previousSocket = socket
         socket = null
         transportReady = false
         usesSockJs = false
+        previousSocket?.close(1000, "Client closed")
     }
 
     fun sendGlobal(command: String): Boolean {
@@ -88,10 +89,13 @@ class ShowdownConnection(
         packets.forEach { (packetRoomId, packetLines) -> listener.onProtocol(packetRoomId, packetLines) }
     }
 
+    private fun isCurrent(webSocket: WebSocket): Boolean = socket === webSocket
+
     private inner class SocketListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) = Unit
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (!isCurrent(webSocket)) return
             when (val frame = ShowdownSocketFrames.decode(text)) {
                 ShowdownSocketFrame.Open -> {
                     usesSockJs = true
@@ -115,11 +119,13 @@ class ShowdownConnection(
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            if (!isCurrent(webSocket)) return
             transportReady = false
             listener.onConnectionStateChanged(State.DISCONNECTED, reason)
         }
 
         override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
+            if (!isCurrent(webSocket)) return
             transportReady = false
             listener.onConnectionStateChanged(State.FAILED, throwable.message.orEmpty())
         }

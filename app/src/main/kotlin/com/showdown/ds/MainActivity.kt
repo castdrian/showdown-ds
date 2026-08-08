@@ -1558,8 +1558,9 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     if (showdownConnection !== connection) return@runOnUiThread
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
+                        val preserveBattleSurface = activeBattleRoomId != null && session.isLiveBattleActive() && !session.isBattleFinished()
                         battleProtocolReady = false
-                        session.setLiveBattleActive(false)
+                        if (!preserveBattleSurface) session.setLiveBattleActive(false)
                         serverUserNamed = false
                         chatRoomDialog?.dismiss()
                         chatRoomState.clear()
