@@ -961,6 +961,10 @@ class MainActivity : Activity() {
             setSingleLine(true)
             setText(existing?.format ?: session.matchFormat.id)
         }
+        val formatPicker = Button(this).apply {
+            text = "Choose format from Showdown"
+            setOnClickListener { showTeamFormatPicker(format) }
+        }
         val packed = EditText(this).apply {
             hint = "Packed or Showdown export"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -1037,6 +1041,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             addView(name)
             addView(format)
+            addView(formatPicker)
             addView(importButton)
             addView(copyButton)
             addView(copyTextButton)
@@ -1083,6 +1088,21 @@ class MainActivity : Activity() {
             }
         }
         dialog.show()
+    }
+
+    private fun showTeamFormatPicker(target: EditText) {
+        val typedFormat = target.text.toString().trim()
+        val formats = (session.availableMatchFormats() + typedFormat.takeIf { it.isNotBlank() }?.let { BattleSession.MatchFormat(it, it) })
+            .filterNotNull()
+            .distinctBy { it.id }
+        AlertDialog.Builder(this)
+            .setTitle("Choose team format")
+            .setSingleChoiceItems(formats.map { "${it.label}\n${it.id}" }.toTypedArray(), formats.indexOfFirst { it.id.equals(typedFormat, true) }) { dialog, selected ->
+                target.setText(formats[selected].id)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private data class TeamSetEditor(
