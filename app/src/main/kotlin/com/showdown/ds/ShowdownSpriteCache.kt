@@ -108,7 +108,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
 
     fun requestPokemon(species: String, back: Boolean, style: BattleSession.SpriteStyle, receiver: (SpriteAsset?) -> Unit) {
-        requestSprite(ShowdownAssetPaths.battleSprite(species, back, style), receiver)
+        requestSpriteCandidates(ShowdownAssetPaths.battleSpriteCandidates(species, back, style), receiver)
     }
 
     fun requestDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
@@ -170,6 +170,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             pendingPaths.remove(path)
             mainHandler.post { receiver(asset) }
         }
+    }
+
+    private fun requestSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
+        fun request(index: Int) {
+            if (index >= paths.size) {
+                receiver(null)
+                return
+            }
+            requestSprite(paths[index]) { asset ->
+                if (asset != null) receiver(asset) else request(index + 1)
+            }
+        }
+        request(0)
     }
 
     private fun requestBytes(path: String, receiver: (File?) -> Unit) {

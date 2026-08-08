@@ -17,4 +17,12 @@ class ShowdownAssetPathsTest {
         assertEquals("sprites/dex/nidoran-m.png", ShowdownAssetPaths.dexSprite("Nidoran♂"))
         assertEquals("sprites/gen5ani/hooh.gif", ShowdownAssetPaths.battleSprite("Ho-Oh", false, BattleSession.SpriteStyle.CLASSIC_2D))
     }
+
+    @Test
+    fun fallsBackToTheBaseSpeciesForUnavailableFormSprites() {
+        assertEquals(
+            listOf("sprites/xyani/furfroulareine.gif", "sprites/xyani/furfrou.gif"),
+            ShowdownAssetPaths.battleSpriteCandidates("Furfrou-La Reine", false, BattleSession.SpriteStyle.MODERN_3D)
+        )
+    }
 }

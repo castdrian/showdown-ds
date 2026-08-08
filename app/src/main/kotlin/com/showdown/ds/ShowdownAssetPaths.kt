@@ -8,6 +8,15 @@ object ShowdownAssetPaths {
         return "sprites/${if (back) "$collection-back" else collection}/${animationId(species)}.gif"
     }
 
+    fun battleSpriteCandidates(species: String, back: Boolean, style: BattleSession.SpriteStyle): List<String> {
+        val candidates = linkedSetOf(battleSprite(species, back, style))
+        val baseSpecies = species.substringBefore('-').trim()
+        if (baseSpecies.isNotEmpty() && !baseSpecies.equals(species.trim(), ignoreCase = true)) {
+            candidates += battleSprite(baseSpecies, back, style)
+        }
+        return candidates.toList()
+    }
+
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
 
     fun placeholder(back: Boolean) = "sprites/${if (back) "ani-back" else "ani"}/substitute.gif"
