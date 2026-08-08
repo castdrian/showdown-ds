@@ -33,7 +33,18 @@ class ShowdownMoveDexTest {
     @Test
     fun ignoresMissingJsonAssets() {
         assertEquals(emptyMap<String, String>(), ShowdownMoveDex.parseMoveTypes(""))
+        assertEquals(emptyMap<String, BattleSession.MoveInfo>(), ShowdownMoveDex.parseMoveInfo(""))
         assertEquals(emptyMap<String, List<String>>(), ShowdownMoveDex.parsePokemonTypes(""))
         assertEquals(emptyList<String>(), ShowdownMoveDex.parseMoveNames(""))
+    }
+
+    @Test
+    fun parsesMovePowerAndAccuracyForPreviews() {
+        val info = ShowdownMoveDex.parseMoveInfo(
+            """{"splash":{"category":"Status","basePower":0,"accuracy":true},"thunder":{"category":"Special","basePower":110,"accuracy":70}}"""
+        )
+
+        assertEquals(BattleSession.MoveInfo("Status", "100"), info["splash"])
+        assertEquals(BattleSession.MoveInfo("110", "70"), info["thunder"])
     }
 }

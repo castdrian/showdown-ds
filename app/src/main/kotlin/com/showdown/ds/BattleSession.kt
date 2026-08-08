@@ -114,6 +114,11 @@ class BattleSession {
         val target: String = ""
     )
 
+    data class MoveInfo(
+        val power: String,
+        val accuracy: String
+    )
+
     data class TargetOption(
         val label: String,
         val choice: String
@@ -181,6 +186,7 @@ class BattleSession {
     private var protocolEventCollector: MutableList<String>? = null
     private val protocolHistory = mutableListOf<String>()
     private var moveTypeResolver: ((String) -> String?)? = null
+    private var moveInfoResolver: ((String) -> MoveInfo?)? = null
     private var pokemonTypeResolver: ((String) -> List<String>?)? = null
     private val availableMatchFormats = MatchFormat.defaults.toMutableList()
     private val battleLog = mutableListOf("Battle started.", "Incineroar entered the field.", "Tapu Koko's Electric Surge activated!")
@@ -194,7 +200,7 @@ class BattleSession {
         MoveOption("Fake Out", "NORMAL", 10, 10, "Physical", "40", "100"),
         MoveOption("Flare Blitz", "FIRE", 15, 15, "Physical", "120", "100"),
         MoveOption("Darkest Lariat", "DARK", 10, 10, "Physical", "85", "100"),
-        MoveOption("Parting Shot", "DARK", 20, 20, "Status", "—", "100")
+        MoveOption("Parting Shot", "DARK", 20, 20, "Status", "Status", "100")
     )
     private val team = mutableListOf("Incineroar", "Naganadel", "Mimikyu", "Landorus", "Rotom-Wash", "Ferrothorn")
     private val teamPreviewOrder = mutableListOf<Int>()
@@ -352,6 +358,22 @@ class BattleSession {
         moveTypeResolver = resolver
         val resolvedMoves = moves.map { move ->
             if (move.type != "UNKNOWN") move else move.copy(type = resolver(move.name) ?: move.type)
+        }
+        if (resolvedMoves == moves) return
+        moves.clear()
+        moves += resolvedMoves
+        playerDetails = playerDetails.copy(moves = moves.map { it.name })
+        notifyListeners()
+    }
+
+    fun setMoveInfoResolver(resolver: (String) -> MoveInfo?) {
+        moveInfoResolver = resolver
+        val resolvedMoves = moves.map { move ->
+            val info = resolver(move.name) ?: return@map move
+            move.copy(
+                power = info.power,
+                accuracy = info.accuracy
+            )
         }
         if (resolvedMoves == moves) return
         moves.clear()
@@ -1365,16 +1387,16 @@ class BattleSession {
         for (index in 0 until requestMoves.length()) {
             val move = requestMoves.getJSONObject(index)
             val pp = move.optInt("pp", 0)
-            val power = move.optInt("basePower", 0).takeIf { it > 0 }?.toString() ?: "—"
             val name = move.optString("move", "Move ${index + 1}")
+            val moveInfo = moveInfoResolver?.invoke(name)
             moves += MoveOption(
                 name,
                 move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: moveTypeResolver?.invoke(name) ?: "UNKNOWN",
                 pp,
                 move.optInt("maxpp", pp),
                 move.optString("category", "Status"),
-                power,
-                moveAccuracy(move),
+                movePower(move, moveInfo),
+                moveAccuracy(move, moveInfo?.accuracy),
                 move.optBoolean("disabled") || pp <= 0,
                 move.optString("target")
             )
@@ -1397,12 +1419,18 @@ class BattleSession {
         return moves.isNotEmpty()
     }
 
-    private fun moveAccuracy(move: JSONObject): String {
+    private fun movePower(move: JSONObject, info: MoveInfo?): String {
+        return move.optInt("basePower", 0).takeIf { it > 0 }?.toString()
+            ?: info?.power
+            ?: if (move.optString("category", "Status").equals("Status", true)) "Status" else "Varies"
+    }
+
+    private fun moveAccuracy(move: JSONObject, fallback: String?): String {
         return when (val value = move.opt("accuracy")) {
             is Number -> value.toString().removeSuffix(".0")
-            is Boolean -> "—"
-            null, JSONObject.NULL -> "—"
-            else -> value.toString().takeIf { it.isNotBlank() && !it.equals("null", true) } ?: "—"
+            is Boolean -> "100"
+            null, JSONObject.NULL -> fallback ?: "100"
+            else -> value.toString().takeIf { it.isNotBlank() && !it.equals("null", true) } ?: fallback ?: "100"
         }
     }
 

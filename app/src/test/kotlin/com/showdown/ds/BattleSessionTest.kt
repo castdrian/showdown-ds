@@ -11,6 +11,9 @@ class BattleSessionTest {
     fun requestPopulatesMovesAndResetsFocus() {
         val session = BattleSession()
         session.focusMove(3)
+        session.setMoveInfoResolver { name ->
+            if (name == "Moonblast") BattleSession.MoveInfo("95", "100") else null
+        }
 
         session.applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Moonblast\",\"type\":\"Fairy\",\"pp\":15},{\"move\":\"Thunderbolt\",\"type\":\"Electric\",\"pp\":24}]}]}")
 
@@ -19,6 +22,8 @@ class BattleSessionTest {
         assertEquals(2, session.moves().size)
         assertEquals("Moonblast", session.moves()[0].name)
         assertEquals("FAIRY", session.moves()[0].type)
+        assertEquals("95", session.moves()[0].power)
+        assertEquals("100", session.moves()[0].accuracy)
     }
 
     @Test
@@ -29,7 +34,7 @@ class BattleSessionTest {
             "|request|{\"active\":[{\"moves\":[{\"move\":\"Swift\",\"pp\":20,\"accuracy\":true},{\"move\":\"Thunderbolt\",\"pp\":15,\"accuracy\":85}]}]}"
         )
 
-        assertEquals("—", session.moves()[0].accuracy)
+        assertEquals("100", session.moves()[0].accuracy)
         assertEquals("85", session.moves()[1].accuracy)
     }
 

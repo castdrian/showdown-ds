@@ -10,6 +10,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
     private val moveTypes = mutableMapOf<String, String>()
+    private val moveInfo = mutableMapOf<String, BattleSession.MoveInfo>()
     private val pokemonTypes = mutableMapOf<String, List<String>>()
     private val moveNames = mutableListOf<String>()
     private val pokemonNames = mutableListOf<String>()
@@ -19,6 +20,8 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private var loading = false
 
     fun typeFor(move: String) = moveTypes[moveId(move)]
+
+    fun infoFor(move: String) = moveInfo[moveId(move)]
 
     fun typesFor(species: String) = pokemonTypes[speciesId(species)]
 
@@ -56,6 +59,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                             val itemContents = itemsFile?.readText().orEmpty()
                             val abilityContents = abilitiesFile?.readText().orEmpty()
                             val loadedMoveTypes = parseMoveTypes(moveContents)
+                            val loadedMoveInfo = parseMoveInfo(moveContents)
                             val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
                             val loadedMoveNames = parseMoveNames(moveContents)
                             val loadedPokemonNames = parsePokemonNames(pokemonContents)
@@ -64,6 +68,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                             mainHandler.post {
                                 loading = false
                                 moveTypes.putAll(loadedMoveTypes)
+                                moveInfo.putAll(loadedMoveInfo)
                                 pokemonTypes.putAll(loadedPokemonTypes)
                                 moveNames.clear()
                                 moveNames += loadedMoveNames
@@ -96,6 +101,26 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                 buildMap {
                     moves.keys().forEach { id ->
                         moves.optJSONObject(id)?.optString("type")?.uppercase()?.takeIf { it.isNotBlank() }?.let { put(id, it) }
+                    }
+                }
+            }.getOrDefault(emptyMap())
+        }
+
+        fun parseMoveInfo(contents: String): Map<String, BattleSession.MoveInfo> {
+            return runCatching {
+                val moves = JSONObject(contents)
+                buildMap {
+                    moves.keys().forEach { id ->
+                        val move = moves.optJSONObject(id) ?: return@forEach
+                        val category = move.optString("category", "Status")
+                        val power = move.optInt("basePower", 0).takeIf { it > 0 }?.toString()
+                            ?: if (category.equals("Status", true)) "Status" else "Varies"
+                        val accuracy = when (val value = move.opt("accuracy")) {
+                            is Number -> value.toString().removeSuffix(".0")
+                            is Boolean -> "100"
+                            else -> "100"
+                        }
+                        put(id, BattleSession.MoveInfo(power, accuracy))
                     }
                 }
             }.getOrDefault(emptyMap())

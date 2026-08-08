@@ -177,7 +177,6 @@ class BattleSceneView(
                 drawActiveStatusCards(canvas, width, height, scale, false, opponentCombatants)
             }
             drawBattleFeed(canvas, width, height, scale)
-            drawTurnBadge(canvas, width, height, scale)
         }
         drawInspectSheet(canvas, width, height, scale)
         if (
@@ -877,66 +876,43 @@ class BattleSceneView(
         )
     }
 
-    private fun drawTurnBadge(canvas: Canvas, width: Float, height: Float, scale: Float) {
-        val badgeWidth = 120f * scale
-        val badgeHeight = 42f * scale
-        val left = width * 0.5f - badgeWidth / 2f
-        val top = height - badgeHeight - 20f * scale
-        val badge = RectF(left, top, left + badgeWidth, top + badgeHeight)
-        paint.color = Color.argb(220, 8, 39, 62)
-        canvas.drawRoundRect(badge, 14f * scale, 14f * scale, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f * scale
-        paint.color = Color.argb(170, 74, 231, 255)
-        canvas.drawRoundRect(badge, 14f * scale, 14f * scale, paint)
-        paint.style = Paint.Style.FILL
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = 20f * scale
-        paint.color = INK
-        canvas.drawText("TURN ${session.turn}", width * 0.5f, top + badgeHeight * 0.64f, paint)
-        paint.textAlign = Paint.Align.LEFT
-    }
-
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
         val arrival = min(1f, age / 0.18f)
         val exit = ((age - 4.1f) / 0.5f).coerceIn(0f, 1f)
         val alpha = (1f - exit) * min(1f, 0.3f + arrival)
-        val left = width * 0.40f + (1f - arrival) * width * 0.06f
-        val right = width * 0.92f
-        val top = height * 0.77f
-        val bottom = height * 0.90f
+        val left = width * 0.33f + (1f - arrival) * width * 0.04f
+        val right = width * 0.96f
+        val top = height * 0.83f
+        val bottom = height * 0.96f
         val bounds = RectF(left, top, right, bottom)
         paint.shader = LinearGradient(
             bounds.left,
             bounds.top,
             bounds.right,
             bounds.bottom,
-            Color.argb((172f * alpha).toInt(), 25, 50, 68),
-            Color.argb((120f * alpha).toInt(), 56, 83, 98),
+            Color.argb((154f * alpha).toInt(), 25, 50, 68),
+            Color.argb((104f * alpha).toInt(), 56, 83, 98),
             Shader.TileMode.CLAMP
         )
         canvas.drawRoundRect(bounds, 22f * scale, 22f * scale, paint)
         paint.shader = null
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2f * scale
-        paint.color = Color.argb((210f * alpha).toInt(), 192, 239, 244)
+        paint.color = Color.argb((188f * alpha).toInt(), 192, 239, 244)
         canvas.drawRoundRect(bounds, 22f * scale, 22f * scale, paint)
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb((255f * alpha).toInt(), 74, 231, 255)
-        canvas.drawRoundRect(RectF(left, top, left + 7f * scale, bottom), 4f * scale, 4f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-        paint.textSize = 34f * scale
+        paint.textSize = 40f * scale
+        val message = ellipsizeToWidth(session.latestBattleEvent, bounds.width() - 48f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 5f * scale
+        paint.strokeJoin = Paint.Join.ROUND
+        paint.color = Color.argb((220f * alpha).toInt(), 3, 12, 18)
+        canvas.drawText(message, left + 24f * scale, top + 81f * scale, paint)
+        paint.style = Paint.Style.FILL
         paint.color = Color.argb((255f * alpha).toInt(), 255, 255, 255)
-        paint.setShadowLayer(5f * scale, 0f, 2f * scale, Color.argb((180f * alpha).toInt(), 0, 13, 24))
-        canvas.drawText(
-            ellipsizeToWidth(session.latestBattleEvent, bounds.width() - 44f * scale, paint),
-            left + 24f * scale,
-            top + 78f * scale,
-            paint
-        )
-        paint.clearShadowLayer()
+        canvas.drawText(message, left + 24f * scale, top + 81f * scale, paint)
     }
 
     private fun ellipsize(value: String, maximum: Int) = if (value.length <= maximum) value else "${value.take(maximum - 1)}…"

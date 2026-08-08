@@ -230,9 +230,11 @@ class MainActivity : Activity() {
         spriteCache = ShowdownSpriteCache(this)
         moveDex = ShowdownMoveDex(spriteCache)
         session.setMoveTypeResolver(moveDex::typeFor)
+        session.setMoveInfoResolver(moveDex::infoFor)
         session.setPokemonTypeResolver(moveDex::typesFor)
         moveDex.load {
             session.setMoveTypeResolver(moveDex::typeFor)
+            session.setMoveInfoResolver(moveDex::infoFor)
             session.setPokemonTypeResolver(moveDex::typesFor)
         }
         battleAudio = BattleAudio(this, spriteCache, session)
