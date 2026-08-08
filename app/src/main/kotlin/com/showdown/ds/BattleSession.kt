@@ -235,6 +235,7 @@ class BattleSession {
     private var activeSlotIndex = 0
     private var requiredSwitches = 0
     private var selectedTargetIndex = -1
+    private var touchMoveConfirmationIndex: Int? = null
     private val sideNames = mutableMapOf<String, String>()
     private var playerSlot = "p1"
     private var localUsername: String? = null
@@ -592,10 +593,12 @@ class BattleSession {
             notifyListeners()
             return
         }
-        if (touchConfirmationEnabled && focusedMove != index) {
+        if (touchConfirmationEnabled && touchMoveConfirmationIndex != index) {
+            touchMoveConfirmationIndex = index
             focusMove(index)
             return
         }
+        touchMoveConfirmationIndex = null
         focusedMove = index
         panel = Panel.MOVES
         updateTargetOptions()
@@ -666,6 +669,7 @@ class BattleSession {
     }
 
     fun confirmSelection() {
+        touchMoveConfirmationIndex = null
         when (panel) {
             Panel.MOVES -> {
                 if (!decisionAvailable || decisionKind != DecisionKind.MOVE || focusedMove !in moves.indices) return
@@ -1374,6 +1378,7 @@ class BattleSession {
             )
         }
         focusedMove = 0
+        touchMoveConfirmationIndex = null
         selectedTargetIndex = -1
         decisionKind = DecisionKind.MOVE
         decisionAvailable = moves.isNotEmpty()

@@ -420,6 +420,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun touchRequiresASecondTapEvenForTheInitiallyFocusedMove() {
+        val session = BattleSession()
+
+        session.selectMoveWithTouch(0)
+
+        assertFalse(session.chatMessages().last().contains("/choose move 1"))
+        assertEquals(0, session.focusedMove)
+
+        session.selectMoveWithTouch(0)
+
+        assertTrue(session.chatMessages().last().contains("/choose move 1"))
+    }
+
+    @Test
     fun backCancelsGimmickAndTargetSelectionBeforeLeavingThePanel() {
         val session = BattleSession()
         session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
