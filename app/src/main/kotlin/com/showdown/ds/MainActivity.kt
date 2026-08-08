@@ -890,7 +890,14 @@ class MainActivity : Activity() {
                 } else {
                     serverEndpoint = endpoint
                     getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("server_endpoint", endpoint.webSocketUrl).apply()
-                    session.setConnectionStatus("Server set to ${endpoint.displayName}.")
+                    if (shouldMaintainConnection && activeBattleRoomId == null) {
+                        session.setConnectionStatus("Server set to ${endpoint.displayName}. Reconnecting…")
+                        reconnectHandler.removeCallbacksAndMessages(null)
+                        reconnectScheduled = false
+                        connectLobbySocket()
+                    } else {
+                        session.setConnectionStatus("Server set to ${endpoint.displayName}. It will be used next time you connect.")
+                    }
                 }
             }
             .show()

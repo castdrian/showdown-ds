@@ -868,6 +868,7 @@ class BattleSession {
         latestMoveEventAtNanos = 0L
         latestFaintedPokemon = ""
         latestFaintAtNanos = 0L
+        pendingHit = null
         playerName = localUsername ?: "PLAYER"
         opponentName = "OPPONENT"
         turn = 1
