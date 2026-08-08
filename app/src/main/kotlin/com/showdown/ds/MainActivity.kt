@@ -495,6 +495,7 @@ class MainActivity : Activity() {
         shouldMaintainConnection = false
         reconnectHandler.removeCallbacksAndMessages(null)
         reconnectScheduled = false
+        clearPersistedLobbyState()
         session.setConnectionStatus("Battle search cancelled.")
     }
 
@@ -513,23 +514,54 @@ class MainActivity : Activity() {
         reconnectLobbyCommands = lobbyCommands
         loginInFlight = false
         authenticated = false
+        persistLobbyState()
         connectLobbySocket()
     }
 
     private fun restoreLobbyConnection(savedInstanceState: Bundle?) {
-        if (savedInstanceState?.getBoolean("maintain_connection") != true) return
+        val preferences = getSharedPreferences("showdown_live", MODE_PRIVATE)
+        val hasSavedInstance = savedInstanceState?.containsKey("maintain_connection") == true
+        val maintain = if (hasSavedInstance) {
+            savedInstanceState?.getBoolean("maintain_connection") == true
+        } else {
+            preferences.getBoolean("maintain_connection", false)
+        }
+        if (!maintain) return
         shouldMaintainConnection = true
         reconnectAttempt = 0
-        pendingSearch = savedInstanceState.getBoolean("pending_search")
-        pendingSearchTeamPacked = savedInstanceState.getString("pending_search_team")
-        pendingLobbyStatus = savedInstanceState.getString("pending_lobby_status")
-        pendingLobbyCommands = savedInstanceState.getStringArrayList("pending_lobby_commands")?.takeIf { it.isNotEmpty() }
-        reconnectLobbyCommands = savedInstanceState.getStringArrayList("reconnect_lobby_commands")?.takeIf { it.isNotEmpty() }
-        activeSearchFormat = savedInstanceState.getString("active_search_format")
-        activeBattleRoomId = savedInstanceState.getString("active_battle_room")
+        pendingSearch = savedInstanceState?.getBoolean("pending_search") ?: preferences.getBoolean("pending_search", false)
+        pendingSearchTeamPacked = savedInstanceState?.getString("pending_search_team") ?: preferences.getString("pending_search_team", null)
+        pendingLobbyStatus = savedInstanceState?.getString("pending_lobby_status") ?: preferences.getString("pending_lobby_status", null)
+        pendingLobbyCommands = savedInstanceState?.getStringArrayList("pending_lobby_commands")?.takeIf { it.isNotEmpty() }
+            ?: decodeLobbyCommands(preferences.getString("pending_lobby_commands", null))
+        reconnectLobbyCommands = savedInstanceState?.getStringArrayList("reconnect_lobby_commands")?.takeIf { it.isNotEmpty() }
+            ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
+        activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
+        activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
         session.setLiveBattleActive(activeBattleRoomId != null)
         connectLobbySocket()
     }
+
+    private fun persistLobbyState() {
+        getSharedPreferences("showdown_live", MODE_PRIVATE).edit()
+            .putBoolean("maintain_connection", shouldMaintainConnection)
+            .putBoolean("pending_search", pendingSearch)
+            .putString("pending_search_team", pendingSearchTeamPacked)
+            .putString("pending_lobby_status", pendingLobbyStatus)
+            .putString("pending_lobby_commands", encodeLobbyCommands(pendingLobbyCommands))
+            .putString("reconnect_lobby_commands", encodeLobbyCommands(reconnectLobbyCommands))
+            .putString("active_search_format", activeSearchFormat)
+            .putString("active_battle_room", activeBattleRoomId)
+            .apply()
+    }
+
+    private fun clearPersistedLobbyState() {
+        getSharedPreferences("showdown_live", MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun encodeLobbyCommands(commands: List<String>?) = commands?.joinToString("\u0000")
+
+    private fun decodeLobbyCommands(commands: String?) = commands?.split('\u0000')?.filter(String::isNotBlank)?.takeIf { it.isNotEmpty() }
 
     private fun connectLobbySocket() {
         val previousConnection = showdownConnection
@@ -642,10 +674,12 @@ class MainActivity : Activity() {
                         session.setLiveBattleActive(true)
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
+                        persistLobbyState()
                         session.applyProtocolPacket(lines)
                         if (session.isBattleFinished()) {
                             lobbyState.clearBattle(roomId)
                             activeBattleRoomId = null
+                            clearPersistedLobbyState()
                         }
                         session.setLiveBattleActive(activeBattleRoomId != null)
                     }
@@ -704,6 +738,7 @@ class MainActivity : Activity() {
         } else if (reconnectLobbyCommands != null) {
             session.setConnectionStatus("Restoring challenge…")
         }
+        persistLobbyState()
     }
 
     private fun showChallengeComposer() {
@@ -797,6 +832,7 @@ class MainActivity : Activity() {
             commands.any { it.startsWith("/accept ") || it.startsWith("/challenge ") } -> reconnectLobbyCommands = commands
             commands.any { it.startsWith("/cancelchallenge ") || it.startsWith("/reject ") } -> reconnectLobbyCommands = null
         }
+        persistLobbyState()
         session.setConnectionStatus(status)
     }
 
@@ -873,6 +909,7 @@ class MainActivity : Activity() {
         activeSearchFormat = null
         activeBattleRoomId = null
         displayedOutgoingChallenge = null
+        clearPersistedLobbyState()
         session.setLiveBattleActive(false)
         session.setConnectionStatus("Signed out of Showdown.")
     }
