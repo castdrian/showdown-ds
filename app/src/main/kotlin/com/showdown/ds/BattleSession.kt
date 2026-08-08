@@ -485,6 +485,8 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun localUsername() = localUsername.orEmpty()
+
     fun setConnectionStatus(value: String) {
         status = value
         notifyListeners()

@@ -72,6 +72,12 @@ class MainActivity : Activity() {
     private var chatRoomInput: EditText? = null
     private var chatRoomScroll: ScrollView? = null
     private var pendingChatRoomId: String? = null
+    private var privateMessageDialog: ShowdownDialog? = null
+    private var privateMessageTarget: String? = null
+    private var privateMessageMessagesView: TextView? = null
+    private var privateMessageInput: EditText? = null
+    private var privateMessageScroll: ScrollView? = null
+    private val privateMessageThreads = linkedMapOf<String, MutableList<String>>()
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
@@ -229,6 +235,13 @@ class MainActivity : Activity() {
         chatRoomScroll = null
         pendingChatRoomId = null
         chatRoomState.clear()
+        privateMessageDialog?.dismiss()
+        privateMessageDialog = null
+        privateMessageTarget = null
+        privateMessageMessagesView = null
+        privateMessageInput = null
+        privateMessageScroll = null
+        privateMessageThreads.clear()
         displayManager?.unregisterDisplayListener(displayListener)
         if (::session.isInitialized) session.removeListener(sessionListener)
         if (::session.isInitialized) session.removeBattleEventListener(battleEventListener)
@@ -509,6 +522,7 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Close") { _, _ -> roomListPending = false }
             .setNeutralButton("Ladder") { _, _ -> showLadderDialog() }
+            .setPositiveButton("Message") { _, _ -> showPrivateMessageComposer() }
             .create()
         dialog.setOnDismissListener {
             if (roomListDialog === dialog) {
@@ -587,6 +601,121 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun showPrivateMessageComposer() {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to message another player.")
+            return
+        }
+        val targetInput = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Message player")
+            .setView(targetInput)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Open") { dialog, _ ->
+                val target = targetInput.text.toString().trim()
+                if (target.isBlank()) {
+                    session.setConnectionStatus("Enter a username to message.")
+                } else {
+                    dialog.dismiss()
+                    showPrivateMessageDialog(target)
+                }
+            }
+            .show()
+    }
+
+    private fun showPrivateMessageDialog(target: String) {
+        privateMessageDialog?.dismiss()
+        privateMessageTarget = target
+        val density = resources.displayMetrics.density
+        val messages = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffe1f0f3.toInt())
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(messages, -1, -2)
+        }
+        val input = EditText(this).apply {
+            hint = "Message $target"
+            setSingleLine(true)
+            setTextSize(17f)
+        }
+        val send = Button(this).apply {
+            text = "Send"
+            setOnClickListener { sendPrivateMessage() }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(send, LinearLayout.LayoutParams(-2, -2))
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((12f * density).toInt(), (8f * density).toInt(), (12f * density).toInt(), 0)
+            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(controls, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Message · $target")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (privateMessageDialog === dialog) {
+                privateMessageDialog = null
+                privateMessageTarget = null
+                privateMessageMessagesView = null
+                privateMessageInput = null
+                privateMessageScroll = null
+            }
+        }
+        privateMessageDialog = dialog
+        privateMessageMessagesView = messages
+        privateMessageInput = input
+        privateMessageScroll = scroll
+        dialog.show()
+        updatePrivateMessageDialog()
+    }
+
+    private fun updatePrivateMessageDialog() {
+        val target = privateMessageTarget ?: return
+        val content = privateMessageThreads[target].orEmpty().joinToString("\n\n").ifBlank { "No messages yet." }
+        privateMessageMessagesView?.text = content
+        privateMessageScroll?.post { privateMessageScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun sendPrivateMessage() {
+        val target = privateMessageTarget ?: return
+        val text = privateMessageInput?.text?.toString()?.trim().orEmpty()
+        if (text.isBlank()) return
+        if (showdownConnection?.sendGlobal(ShowdownPrivateMessages.command(target, text)) == true) {
+            privateMessageThreads.getOrPut(target) { mutableListOf() } += "You: $text"
+            privateMessageInput?.setText("")
+            updatePrivateMessageDialog()
+        } else {
+            session.setConnectionStatus("Private message connection is not ready.")
+        }
+    }
+
+    private fun handlePrivateMessages(lines: List<String>) {
+        val local = session.localUsername()
+        if (local.isBlank()) return
+        lines.mapNotNull(ShowdownPrivateMessages::parse).forEach { message ->
+            if (message.sender.equals(local, true) || !message.recipient.equals(local, true)) return@forEach
+            val target = message.sender
+            privateMessageThreads.getOrPut(target) { mutableListOf() } += "${message.sender}: ${message.text}"
+            if (privateMessageDialog != null && privateMessageTarget.equals(target, true)) {
+                updatePrivateMessageDialog()
+            } else {
+                showPrivateMessageDialog(target)
+            }
+        }
     }
 
     private fun showChatRoomDialog() {
@@ -881,6 +1010,7 @@ class MainActivity : Activity() {
                         val previousChallenges = lobbyState.incomingChallenges
                         val previousBattleRoomIds = lobbyState.battles.keys
                         lobbyState.applyProtocol(lines)
+                        handlePrivateMessages(lines)
                         if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") || it.startsWith("|queryresponse|roomlist|") }) renderRoomListDialog()
                         if (ladderDialog != null && lines.any { it.startsWith("|queryresponse|laddertop|") }) renderLadderDialog()
                         if (activeSearchFormat != null) {
@@ -1182,6 +1312,10 @@ class MainActivity : Activity() {
         serverUserNamed = false
         activeBattleRoomId = null
         displayedOutgoingChallenge = null
+        privateMessageDialog?.dismiss()
+        privateMessageDialog = null
+        privateMessageTarget = null
+        privateMessageThreads.clear()
         clearPersistedLobbyState()
         session.prepareForLobby()
         session.setConnectionStatus("Signed out of Showdown.")
