@@ -176,13 +176,14 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(36f, scale, 30f)
         paint.color = Color.rgb(226, 238, 244)
+        paint.textAlign = Paint.Align.CENTER
         canvas.drawText(
             when {
                 session.isBattleFinished() -> "Battle complete"
                 session.isLiveBattleActive() -> "Battle"
                 else -> "Lobby"
             },
-            44f * scale,
+            band.centerX(),
             58f * scale,
             paint
         )

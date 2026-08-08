@@ -56,6 +56,23 @@ class MainActivity : Activity() {
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
+    private val battleRejoinTimeout = Runnable {
+        if (activeBattleRoomId != null && !battleProtocolReady && shouldMaintainConnection) {
+            activeBattleRoomId = null
+            pendingLobbyCommands = null
+            pendingLobbyStatus = null
+            reconnectLobbyCommands = null
+            activeSearchFormat = null
+            pendingSearch = false
+            pendingSearchTeamPacked = null
+            shouldMaintainConnection = false
+            showdownConnection?.close()
+            showdownConnection = null
+            clearPersistedLobbyState()
+            session.prepareForLobby()
+            session.setConnectionStatus("That battle room is no longer available. Find another battle.")
+        }
+    }
     private val pendingBattleEvents = ArrayDeque<String>()
     private var battleEventPlaybackScheduled = false
     private var shouldMaintainConnection = false
@@ -412,6 +429,7 @@ class MainActivity : Activity() {
         reconnectLobbyCommands = null
         shouldMaintainConnection = false
         reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectHandler.removeCallbacks(battleRejoinTimeout)
         reconnectScheduled = false
         clearPersistedLobbyState()
         session.setConnectionStatus("Battle search cancelled.")
@@ -606,6 +624,7 @@ class MainActivity : Activity() {
                     }
                     if (roomId?.startsWith("battle-") == true) {
                         if (lines.any { it.startsWith("|init|battle") }) clearBattleEventPlayback()
+                        if (lines.any { it.startsWith("|init|battle") }) reconnectHandler.removeCallbacks(battleRejoinTimeout)
                         activeBattleRoomId = roomId
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
@@ -689,6 +708,8 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Searching ${session.matchFormat.label}…")
         } else if (rejoiningBattle) {
             session.setConnectionStatus("Rejoining battle…")
+            reconnectHandler.removeCallbacks(battleRejoinTimeout)
+            reconnectHandler.postDelayed(battleRejoinTimeout, BATTLE_REJOIN_TIMEOUT_MILLIS)
         } else if (reconnectLobbyCommands != null) {
             session.setConnectionStatus("Restoring challenge…")
         }
@@ -973,7 +994,16 @@ class MainActivity : Activity() {
             .setTitle(if (existing == null) "Add team" else "Edit team")
             .setView(scroll)
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton("Save", null)
+        if (existing != null) {
+            builder.setNeutralButton("Delete") { _, _ ->
+                teamLibrary.remove(existing.id)
+                session.setConnectionStatus("Deleted ${existing.name}.")
+            }
+        }
+        val dialog = builder.create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val teamFormat = format.text.toString().trim()
                 val editedSets = setEditors.map(::readTeamSetEditor)
                 val editedPacked = ShowdownTeamCodec.pack(editedSets)
@@ -984,22 +1014,18 @@ class MainActivity : Activity() {
                 } else {
                     ShowdownTeamCodec.validate(importedSets)
                 }
-                if (teamFormat.isBlank() || teamPacked.isBlank()) {
-                    session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
-                } else if (validation.isNotEmpty()) {
-                    session.setConnectionStatus(validation.first())
-                } else {
-                    teamLibrary.save(name.text.toString(), teamFormat, teamPacked, existing?.id ?: java.util.UUID.randomUUID().toString())
-                    session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
+                when {
+                    teamFormat.isBlank() || teamPacked.isBlank() -> session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
+                    validation.isNotEmpty() -> session.setConnectionStatus(validation.first())
+                    else -> {
+                        teamLibrary.save(name.text.toString(), teamFormat, teamPacked, existing?.id ?: java.util.UUID.randomUUID().toString())
+                        session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
+                        dialog.dismiss()
+                    }
                 }
             }
-        if (existing != null) {
-            builder.setNeutralButton("Delete") { _, _ ->
-                teamLibrary.remove(existing.id)
-                session.setConnectionStatus("Deleted ${existing.name}.")
-            }
         }
-        builder.show()
+        dialog.show()
     }
 
     private data class TeamSetEditor(
@@ -1304,6 +1330,8 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
+
         init {
             System.loadLibrary("showdown_vulkan")
         }
