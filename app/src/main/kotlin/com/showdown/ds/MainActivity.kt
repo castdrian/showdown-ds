@@ -413,7 +413,10 @@ class MainActivity : Activity() {
         if (isFinishing || displayManager == null || secondaryPresentation != null) return
         findThorDisplay()?.let { display ->
             secondaryPresentation = ThorPresentation(this, display).also { presentation ->
-                presentation.setOnDismissListener { secondaryPresentation = null }
+                presentation.setOnDismissListener {
+                    secondaryPresentation = null
+                    if (!isFinishing) window.decorView.post { showSecondaryDisplay() }
+                }
                 presentation.show()
             }
         }
@@ -3040,6 +3043,7 @@ class MainActivity : Activity() {
     private inner class ThorPresentation(context: Context, display: Display) : Presentation(context, display) {
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
+            setCancelable(false)
             configurePresentationWindow(window)
             val frame = FrameLayout(context)
             val surfaceView = VulkanSurfaceView(context)
