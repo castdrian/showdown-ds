@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -189,6 +190,7 @@ class ShowdownDialog(context: Context) : Dialog(context) {
     private fun styleView(view: View) {
         when (view) {
             is EditText -> {
+                view.imeOptions = view.imeOptions or EditorInfo.IME_FLAG_NO_EXTRACT_UI
                 view.setTextColor(Color.rgb(234, 245, 247))
                 view.setHintTextColor(Color.rgb(139, 171, 183))
                 view.setTextSize(17f)
