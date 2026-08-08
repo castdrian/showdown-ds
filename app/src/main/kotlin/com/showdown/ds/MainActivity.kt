@@ -49,6 +49,7 @@ class MainActivity : Activity() {
     private lateinit var replayFetcher: ShowdownReplayFetcher
     private var showdownConnection: ShowdownConnection? = null
     private val lobbyState = ShowdownLobbyState()
+    private val friendsState = ShowdownFriendsState()
     private val chatRoomState = ShowdownChatRoomState()
     private val loginClient = ShowdownLoginClient()
     private var pendingSearch = false
@@ -87,6 +88,12 @@ class MainActivity : Activity() {
     private var privateMessageInput: EditText? = null
     private var privateMessageScroll: ScrollView? = null
     private val privateMessageThreads = linkedMapOf<String, MutableList<String>>()
+    private var accountDialog: ShowdownDialog? = null
+    private var userDetailsDialog: ShowdownDialog? = null
+    private var pendingUserDetailsId: String? = null
+    private var friendsDialog: ShowdownDialog? = null
+    private var friendsContentView: TextView? = null
+    private var friendsInput: EditText? = null
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
@@ -253,6 +260,16 @@ class MainActivity : Activity() {
         privateMessageInput = null
         privateMessageScroll = null
         privateMessageThreads.clear()
+        accountDialog?.dismiss()
+        accountDialog = null
+        userDetailsDialog?.dismiss()
+        userDetailsDialog = null
+        pendingUserDetailsId = null
+        friendsDialog?.dismiss()
+        friendsDialog = null
+        friendsContentView = null
+        friendsInput = null
+        friendsState.clear()
         displayManager?.unregisterDisplayListener(displayListener)
         if (::session.isInitialized) session.removeListener(sessionListener)
         if (::session.isInitialized) session.removeBattleEventListener(battleEventListener)
@@ -638,6 +655,126 @@ class MainActivity : Activity() {
             }
             .show()
     }
+
+    private fun showFindUserComposer() {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to look up another player.")
+            return
+        }
+        val targetInput = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Find a user")
+            .setView(targetInput)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Find") { dialog, _ ->
+                val target = targetInput.text.toString().trim()
+                if (target.isBlank()) {
+                    session.setConnectionStatus("Enter a username to find.")
+                } else {
+                    dialog.dismiss()
+                    requestUserDetails(target)
+                }
+            }
+            .show()
+    }
+
+    private fun requestUserDetails(target: String) {
+        pendingUserDetailsId = normalizeShowdownId(target)
+        userDetailsDialog?.dismiss()
+        val loading = TextView(this).apply {
+            text = "Loading ${target.trim()}…"
+            setTextSize(18f)
+            setTextColor(0xffd5e9ed.toInt())
+            setPadding(24, 22, 24, 22)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Player profile")
+            .setView(loading)
+            .setNegativeButton("Close") { _, _ -> pendingUserDetailsId = null }
+            .create()
+        dialog.setOnDismissListener {
+            if (userDetailsDialog === dialog) {
+                userDetailsDialog = null
+                pendingUserDetailsId = null
+            }
+        }
+        userDetailsDialog = dialog
+        dialog.show()
+        if (showdownConnection?.sendGlobal(ShowdownUserDetails.queryCommand(target)) != true) {
+            dialog.dismiss()
+            session.setConnectionStatus("Showdown connection is not ready yet.")
+        }
+    }
+
+    private fun renderUserDetails(profile: ShowdownUserDetails.Profile) {
+        userDetailsDialog?.dismiss()
+        val density = resources.displayMetrics.density
+        val summary = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+            text = buildUserDetailsSummary(profile)
+        }
+        val addFriend = Button(this).apply {
+            text = if (profile.friended) "Already friends" else "Add friend"
+            isEnabled = !profile.friended
+            setOnClickListener {
+                if (showdownConnection?.sendGlobal(ShowdownUserDetails.addFriendCommand(profile.name)) == true) {
+                    session.setConnectionStatus("Friend request sent to ${profile.name}.")
+                    isEnabled = false
+                    text = "Request sent"
+                } else {
+                    session.setConnectionStatus("Showdown connection is not ready yet.")
+                }
+            }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(ScrollView(this@MainActivity).apply {
+                addView(summary, -1, -2)
+            }, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(addFriend, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle(profile.name)
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Message") { _, _ -> showPrivateMessageDialog(profile.name) }
+            .setPositiveButton("Challenge") { _, _ -> showChallengeComposer(profile.name) }
+            .create()
+        dialog.setOnDismissListener {
+            if (userDetailsDialog === dialog) {
+                userDetailsDialog = null
+                pendingUserDetailsId = null
+            }
+        }
+        userDetailsDialog = dialog
+        dialog.show()
+    }
+
+    private fun buildUserDetailsSummary(profile: ShowdownUserDetails.Profile): String = buildList {
+        add(if (profile.online) "Online" else "Offline")
+        profile.status.takeIf { it.isNotBlank() }?.let { add("Status: $it") }
+        profile.group.takeIf { it.isNotBlank() }?.let { add("Role: $it") }
+        profile.customGroup.takeIf { it.isNotBlank() }?.let { add(it) }
+        if (profile.autoconfirmed) add("Autoconfirmed account")
+        profile.avatar?.let { add("Avatar: $it") }
+        if (profile.rooms.isNotEmpty()) {
+            add("")
+            add("Active rooms")
+            profile.rooms.take(16).forEach { room ->
+                val battle = listOf(room.playerOne, room.playerTwo).filter { it.isNotBlank() }.joinToString(" vs ")
+                add(if (battle.isBlank()) room.id else "${room.id}: $battle")
+            }
+            if (profile.rooms.size > 16) add("…and ${profile.rooms.size - 16} more")
+        }
+    }.joinToString("\n")
+
+    private fun normalizeShowdownId(value: String) = value.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
 
     private fun showPrivateMessageDialog(target: String) {
         privateMessageDialog?.dismiss()
@@ -1170,6 +1307,7 @@ class MainActivity : Activity() {
             override fun onProtocol(roomId: String?, lines: List<String>) {
                 runOnUiThread {
                     if (showdownConnection !== connection) return@runOnUiThread
+                    if (friendsState.applyProtocol(roomId, lines)) updateFriendsDialog()
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
                         serverUserNamed = update.named
@@ -1220,6 +1358,13 @@ class MainActivity : Activity() {
                         val previousBattleRoomIds = lobbyState.battles.keys
                         lobbyState.applyProtocol(lines)
                         handlePrivateMessages(lines)
+                        lines.mapNotNull(ShowdownUserDetails::parse).firstOrNull()?.let { profile ->
+                            val requested = pendingUserDetailsId
+                            if (requested != null && (normalizeShowdownId(profile.userid) == requested || normalizeShowdownId(profile.name) == requested)) {
+                                pendingUserDetailsId = null
+                                renderUserDetails(profile)
+                            }
+                        }
                         if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") || it.startsWith("|queryresponse|roomlist|") }) renderRoomListDialog()
                         if (ladderDialog != null && lines.any { it.startsWith("|queryresponse|laddertop|") }) renderLadderDialog()
                         if (activeSearchFormat != null) {
@@ -1259,7 +1404,7 @@ class MainActivity : Activity() {
                         }
                         session.setLiveBattleActive(activeBattleRoomId != null && battleProtocolReady)
                     }
-                    if (roomId != null && !roomId.startsWith("battle-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
+                    if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
                         val changed = chatRoomState.applyProtocol(roomId, lines)
                         if (changed && pendingChatRoomId == roomId) {
                             pendingChatRoomId = null
@@ -1345,10 +1490,11 @@ class MainActivity : Activity() {
         persistLobbyState()
     }
 
-    private fun showChallengeComposer() {
+    private fun showChallengeComposer(prefilledUsername: String? = null) {
         val username = EditText(this).apply {
             hint = "Username"
             setSingleLine(true)
+            setText(prefilledUsername.orEmpty())
         }
         ShowdownDialogBuilder(this)
             .setTitle("Challenge player")
@@ -1489,9 +1635,51 @@ class MainActivity : Activity() {
             addView(username)
             addView(password)
         }
-        ShowdownDialogBuilder(this)
+        val findUser = Button(this).apply {
+            text = "Find a user"
+            setOnClickListener {
+                if (!authenticated || !serverUserNamed) {
+                    session.setConnectionStatus("Sign in to look up another player.")
+                } else {
+                    accountDialog?.dismiss()
+                    showFindUserComposer()
+                }
+            }
+        }
+        val resources = Button(this).apply {
+            text = "Info & resources"
+            setOnClickListener { accountDialog?.dismiss(); showResourcesDialog() }
+        }
+        val friends = Button(this).apply {
+            text = "Friends"
+            setOnClickListener {
+                if (!authenticated || !serverUserNamed) {
+                    session.setConnectionStatus("Sign in to use Friends.")
+                } else {
+                    accountDialog?.dismiss()
+                    showFriendsDialog()
+                }
+            }
+        }
+        val accountTools = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(56, 12, 56, 0)
+            addView(findUser)
+            addView(resources)
+            addView(friends)
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(fields)
+            addView(accountTools)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, -1, -2)
+        }
+        val dialog = ShowdownDialogBuilder(this)
             .setTitle("Showdown account")
-            .setView(fields)
+            .setView(scroll)
             .setNeutralButton("Sign out") { _, _ -> signOut() }
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save") { _, _ ->
@@ -1503,7 +1691,181 @@ class MainActivity : Activity() {
                     session.setConnectionStatus("Showdown account saved. It will sign in when you connect.")
                 }
             }
+            .create()
+        accountDialog = dialog
+        dialog.setOnDismissListener {
+            if (accountDialog === dialog) accountDialog = null
+        }
+        dialog.show()
+    }
+
+    private fun showResourcesDialog() {
+        val resources = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            text = listOf(
+                "Pokémon Showdown is a competitive battle simulator.",
+                "",
+                "Battle help",
+                "Use Find battle to enter matchmaking, or Challenge to play a named player.",
+                "Team builder supports packed, readable, JSON, and backup imports.",
+                "",
+                "Useful commands",
+                "/help for server commands",
+                "/rules for room rules",
+                "/data for Pokémon, move, item, and ability data",
+                "/calc for damage calculations in supported rooms",
+                "",
+                "Community resources",
+                "smogon.com/forums · smogon.com/dex · pokemonshowdown.com"
+            ).joinToString("\n")
+            setPadding(12, 8, 12, 8)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Info & resources")
+            .setView(ScrollView(this).apply { addView(resources, -1, -2) })
+            .setNegativeButton("Close", null)
             .show()
+    }
+
+    private fun showFriendsDialog() {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to use Friends.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before opening Friends.")
+            return
+        }
+        friendsDialog?.dismiss()
+        friendsState.clear()
+        val density = resources.displayMetrics.density
+        val content = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+        }
+        val input = EditText(this).apply {
+            hint = "Username for friend actions"
+            setSingleLine(true)
+        }
+        val refresh = Button(this).apply {
+            text = "Refresh"
+            setOnClickListener { requestFriendsPage() }
+        }
+        fun pageButton(label: String, page: String) = Button(this).apply {
+            text = label
+            setOnClickListener { requestFriendsPage(page) }
+        }
+        val all = pageButton("All", "all")
+        val sent = pageButton("Sent", "sent")
+        val received = pageButton("Received", "received")
+        val settings = pageButton("Settings", "settings")
+        val spectate = pageButton("Spectate", "spectate")
+        val help = pageButton("Help", "help")
+        val add = Button(this).apply {
+            text = "Add"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.addCommand(input.text.toString())) }
+        }
+        val remove = Button(this).apply {
+            text = "Remove"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.removeCommand(input.text.toString())) }
+        }
+        val accept = Button(this).apply {
+            text = "Accept"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.acceptCommand(input.text.toString())) }
+        }
+        val reject = Button(this).apply {
+            text = "Reject"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.rejectCommand(input.text.toString())) }
+        }
+        val viewList = Button(this).apply {
+            text = "View public list"
+            setOnClickListener { requestPublicFriendsList() }
+        }
+        fun buttonRow(vararg buttons: Button) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            buttons.forEach { button ->
+                addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins((3f * density).toInt(), 0, (3f * density).toInt(), 0) })
+            }
+        }
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(refresh, LinearLayout.LayoutParams(-1, -2))
+            addView(buttonRow(all, sent, received), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(buttonRow(settings, spectate, help), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(input, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+            addView(buttonRow(add, remove), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(buttonRow(accept, reject), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(viewList, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+        }
+        val contentRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(content, LinearLayout.LayoutParams(-1, -2))
+            addView(actions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val root = ScrollView(this).apply {
+            isFillViewport = true
+            addView(contentRoot, -1, -2)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Friends")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (friendsDialog === dialog) {
+                friendsDialog = null
+                friendsContentView = null
+                friendsInput = null
+                friendsState.clear()
+            }
+        }
+        friendsDialog = dialog
+        friendsContentView = content
+        friendsInput = input
+        dialog.show()
+        updateFriendsDialog()
+        requestFriendsPage()
+    }
+
+    private fun updateFriendsDialog() {
+        val snapshot = friendsState.snapshot
+        friendsDialog?.setTitle(snapshot.title)
+        friendsContentView?.text = snapshot.error ?: snapshot.text
+    }
+
+    private fun requestFriendsPage(page: String = "all") {
+        if (showdownConnection?.sendGlobal(ShowdownFriendsState.pageCommand(page)) != true) {
+            session.setConnectionStatus("Friends connection is not ready yet.")
+        }
+    }
+
+    private fun requestPublicFriendsList() {
+        val username = friendsInput?.text?.toString()?.trim().orEmpty()
+        if (username.isBlank()) {
+            session.setConnectionStatus("Enter a username first.")
+            return
+        }
+        if (showdownConnection?.sendGlobal(ShowdownFriendsState.publicListCommand(username)) != true) {
+            session.setConnectionStatus("Friends connection is not ready yet.")
+        }
+    }
+
+    private fun sendFriendCommand(command: String) {
+        val username = friendsInput?.text?.toString()?.trim().orEmpty()
+        if (username.isBlank()) {
+            session.setConnectionStatus("Enter a username first.")
+            return
+        }
+        if (showdownConnection?.sendGlobal(command) == true) {
+            friendsInput?.setText("")
+            session.setConnectionStatus("Sent Friends action for $username.")
+        } else {
+            session.setConnectionStatus("Friends connection is not ready yet.")
+        }
     }
 
     private fun signOut() {
@@ -1526,6 +1888,14 @@ class MainActivity : Activity() {
         privateMessageDialog = null
         privateMessageTarget = null
         privateMessageThreads.clear()
+        userDetailsDialog?.dismiss()
+        userDetailsDialog = null
+        pendingUserDetailsId = null
+        friendsDialog?.dismiss()
+        friendsDialog = null
+        friendsContentView = null
+        friendsInput = null
+        friendsState.clear()
         clearPersistedLobbyState()
         session.prepareForLobby()
         session.setConnectionStatus("Signed out of Showdown.")
