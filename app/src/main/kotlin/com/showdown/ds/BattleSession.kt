@@ -850,14 +850,44 @@ class BattleSession {
 
     private fun applyInit(fields: List<String>) {
         if (fields.getOrNull(2) != "battle") return
+        battleLog.clear()
+        battleLog += "Battle started."
+        chatMessages.clear()
+        activityMessages.clear()
+        activityMessages += battleLog
+        latestBattleEvent = "Battle starting"
+        latestBattleEventAtNanos = System.nanoTime()
+        latestMoveEvent = ""
+        latestMoveEventAtNanos = 0L
+        latestFaintedPokemon = ""
+        latestFaintAtNanos = 0L
         teamPreviewOrder.clear()
         battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
         selectedGimmick = null
+        availableGimmicks.clear()
         battleFinished = false
         openingEntrances = 0
         latestOpeningEntranceAtNanos = 0L
         playerEntryAtNanos = 0L
         opponentEntryAtNanos = 0L
+        requestId = null
+        moves.clear()
+        playerDetails = teamDetails.firstOrNull() ?: playerDetails
+        playerPokemon = playerDetails.name
+        playerHp = playerDetails.hp
+        playerLevel = playerDetails.level
+        playerGender = playerDetails.gender
+        playerCondition = playerDetails.condition
+        opponentDetails = opponentDetails.copy(name = "Unknown", types = emptyList(), level = "50", gender = "", hp = "100/100", condition = "READY", ability = "Unknown ability", item = "Unknown item", moves = emptyList())
+        opponentPokemon = opponentDetails.name
+        opponentHp = opponentDetails.hp
+        opponentLevel = opponentDetails.level
+        opponentGender = opponentDetails.gender
+        opponentCondition = opponentDetails.condition
+        sideNames.clear()
+        activeTeamNames.clear()
+        activeSlotNames.clear()
+        playerSlot = "p1"
         activeRequests.clear()
         activeChoices.clear()
         forceSwitchChoices.clear()
@@ -874,6 +904,9 @@ class BattleSession {
         opponentSideConditions.clear()
         playerBoosts.clear()
         opponentBoosts.clear()
+        decisionAvailable = false
+        decisionKind = DecisionKind.WAIT
+        panel = Panel.MOVES
         status = "Battle starting"
     }
 

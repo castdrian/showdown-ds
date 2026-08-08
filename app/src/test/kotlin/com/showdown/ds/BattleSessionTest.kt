@@ -184,6 +184,26 @@ class BattleSessionTest {
     }
 
     @Test
+    fun newBattleInitializationClearsPreviousBattlePresentationState() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko",
+                "|-damage|p2a: Tapu Koko|25/100",
+                "|c|GLADION|Good luck!"
+            )
+        )
+
+        session.applyProtocolLine("|init|battle")
+
+        assertEquals(listOf("Battle started."), session.battleLog())
+        assertEquals(listOf("Battle started."), session.activityMessages())
+        assertTrue(session.moves().isEmpty())
+        assertFalse(session.decisionAvailable)
+        assertEquals("Battle starting", session.latestBattleEvent)
+    }
+
+    @Test
     fun doublesKeepIndependentActiveCombatantState() {
         val session = BattleSession()
 
