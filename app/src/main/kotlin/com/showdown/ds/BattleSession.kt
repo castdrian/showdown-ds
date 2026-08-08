@@ -729,6 +729,15 @@ class BattleSession {
                     "-boost" -> applyBoost(fields, 1)
                     "-unboost" -> applyBoost(fields, -1)
                     "-setboost" -> applySetBoost(fields)
+                    "cant" -> applyCant(fields)
+                    "-fail" -> appendLog("${battleActor(fields.getOrNull(2))} failed to use ${battleEffectName(fields.getOrNull(3))}.")
+                    "-miss" -> appendLog("${battleActor(fields.getOrNull(2))}'s attack missed ${battleActor(fields.getOrNull(3))}.")
+                    "-immune" -> appendLog("${battleActor(fields.getOrNull(2))} is immune.")
+                    "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
+                    "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge.")
+                    "-activate" -> appendLog("${battleActor(fields.getOrNull(2))} activated ${battleEffectName(fields.getOrNull(3))}.")
+                    "-start" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} started.")
+                    "-end" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} ended.")
                     "-clearallboost" -> clearAllBoosts()
                     "-clearboost" -> clearBoosts(fields)
                     "-clearnegativeboost" -> clearNegativeBoosts(fields)
@@ -1174,6 +1183,12 @@ class BattleSession {
         }
     }
 
+    private fun applyCant(fields: List<String>) {
+        val actor = battleActor(fields.getOrNull(2))
+        val reason = battleEffectName(fields.getOrNull(3)).ifBlank { "that status" }
+        appendLog("$actor couldn't move because of $reason.")
+    }
+
     private fun applyAbility(fields: List<String>) {
         if (fields.size < 4) return
         when {
@@ -1193,11 +1208,13 @@ class BattleSession {
 
     private fun applyWeather(fields: List<String>) {
         weather = fields.getOrNull(2)?.takeUnless { it.equals("none", true) }.orEmpty()
+        appendLog(if (weather.isBlank()) "The weather cleared." else "The weather changed to $weather.")
     }
 
     private fun applyFieldEffect(fields: List<String>, enabled: Boolean) {
         val effect = battleEffectName(fields.getOrNull(2)).takeIf { it.contains("Terrain", true) } ?: return
         if (enabled) terrain = effect else if (terrain.equals(effect, true)) terrain = ""
+        appendLog(if (enabled) "$effect began." else "$effect ended.")
     }
 
     private fun applySideCondition(fields: List<String>, enabled: Boolean) {
@@ -1211,6 +1228,7 @@ class BattleSession {
         } else {
             conditions.removeAll { it.equals(effect, true) }
         }
+        appendLog(if (enabled) "$effect started on ${if (isPlayerSide(side)) "your side" else "the opponent's side"}." else "$effect ended.")
     }
 
     private fun applyBoost(fields: List<String>, direction: Int) {
@@ -1219,6 +1237,7 @@ class BattleSession {
         val amount = fields.getOrNull(4)?.toIntOrNull() ?: return
         val boosts = if (isPlayerSide(side)) playerBoosts else opponentBoosts
         updateBoost(boosts, stat, (boosts[stat] ?: 0) + amount * direction)
+        appendLog("${battleActor(side)} ${if (direction > 0) "gained" else "lost"} $amount $stat.")
     }
 
     private fun applySetBoost(fields: List<String>) {
@@ -1226,16 +1245,19 @@ class BattleSession {
         val stat = fields.getOrNull(3)?.lowercase()?.takeIf { it in BOOST_STATS } ?: return
         val amount = fields.getOrNull(4)?.toIntOrNull() ?: return
         updateBoost(if (isPlayerSide(side)) playerBoosts else opponentBoosts, stat, amount)
+        appendLog("${battleActor(side)}'s $stat was set to $amount.")
     }
 
     private fun clearAllBoosts() {
         playerBoosts.clear()
         opponentBoosts.clear()
+        appendLog("All stat changes were reset.")
     }
 
     private fun clearBoosts(fields: List<String>) {
         val side = fields.getOrNull(2) ?: return
         if (isPlayerSide(side)) playerBoosts.clear() else opponentBoosts.clear()
+        appendLog("${if (isPlayerSide(side)) "Your" else "The opponent's"} stat changes were reset.")
     }
 
     private fun clearNegativeBoosts(fields: List<String>) {
@@ -1248,6 +1270,8 @@ class BattleSession {
         val bounded = value.coerceIn(-6, 6)
         if (bounded == 0) boosts.remove(stat) else boosts[stat] = bounded
     }
+
+    private fun battleActor(value: String?) = value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" }
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
 

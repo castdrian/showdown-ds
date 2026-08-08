@@ -41,4 +41,25 @@ class OfficialBattleTranscriptTest {
         assertFalse(session.decisionAvailable)
         assertTrue(session.battleLog().any { it.contains("Psystrike") })
     }
+
+    @Test
+    fun presentsCommonSimulatorFailureAndFieldEvents() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-weather|RainDance",
+                "|-fieldstart|move: Electric Terrain",
+                "|-sidestart|p1: Stealth Rock",
+                "|-boost|p1a: Mewtwo|spa|2",
+                "|cant|p1a: Mewtwo|slp",
+                "|-miss|p1a: Mewtwo|p2a: Magikarp"
+            )
+        )
+
+        assertEquals("RainDance", session.battleInfo().weather)
+        assertEquals("Electric Terrain", session.battleInfo().terrain)
+        assertTrue(session.battleLog().any { it.contains("couldn't move") })
+        assertTrue(session.battleLog().any { it.contains("missed") })
+    }
 }
