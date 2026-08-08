@@ -545,6 +545,15 @@ class BattleSessionTest {
     }
 
     @Test
+    fun serverFormatCatalogAcceptsIdFirstEntries() {
+        val formats = BattleSession.parseServerFormats("|formats|gen9ou,[Gen 9] OU|gen9randombattle,[Gen 9] Random Battle,4f")
+
+        assertEquals(listOf("gen9ou", "gen9randombattle"), formats.map { it.id })
+        assertEquals("[Gen 9] Random Battle", formats[1].label)
+        assertTrue(formats[1].usesRandomTeams)
+    }
+
+    @Test
     fun activityPanelRequestsChatComposer() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()

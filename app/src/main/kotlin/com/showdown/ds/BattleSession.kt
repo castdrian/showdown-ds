@@ -1432,11 +1432,21 @@ class BattleSession {
                     skipSectionTitle = false
                     return@mapNotNull null
                 }
-                val label = token.substringBefore(',').trim()
-                if (!label.startsWith('[')) return@mapNotNull null
-                val id = label.lowercase().filter(Char::isLetterOrDigit)
+                val parts = token.split(',', limit = 2)
+                val first = parts.firstOrNull()?.trim().orEmpty()
+                val second = parts.getOrNull(1)?.trim().orEmpty()
+                val label = when {
+                    first.startsWith('[') -> first
+                    second.startsWith('[') -> second.substringBefore(',').trim()
+                    else -> return@mapNotNull null
+                }
+                val id = if (first.startsWith('[')) {
+                    label.lowercase().filter(Char::isLetterOrDigit)
+                } else {
+                    first.lowercase().filter(Char::isLetterOrDigit)
+                }
                 id.takeIf { it.isNotBlank() }?.let {
-                    MatchFormat(it, label, usesRandomTeams = token.substringAfter(',', "").contains('#') || it.contains("randombattle") || it.contains("battlefactory"))
+                    MatchFormat(it, label, usesRandomTeams = second.contains('#') || it.contains("randombattle") || it.contains("battlefactory"))
                 }
             }.distinctBy(MatchFormat::id)
         }
