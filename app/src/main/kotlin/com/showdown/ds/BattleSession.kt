@@ -61,7 +61,8 @@ class BattleSession {
         CHOOSE_FORMAT,
         OPEN_CHAT,
         FORFEIT,
-        CHALLENGE_PLAYER
+        CHALLENGE_PLAYER,
+        EXPORT_REPLAY
     }
 
     enum class BattleGimmick(val choiceSuffix: String, val label: String) {
@@ -1341,7 +1342,8 @@ class BattleSession {
         8 -> "Sprite style ${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "classic"}"
         9 -> "Team library"
         10 -> "Showdown account"
-        else -> "Configure server"
+        11 -> "Configure server"
+        else -> "Copy battle transcript"
     }
 
     private fun applyMenuSelection() {
@@ -1395,9 +1397,13 @@ class BattleSession {
                 publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
                 "Configure your Showdown account."
             }
-            else -> {
+            11 -> {
                 publishClientAction(ClientAction.CONFIGURE_SERVER)
                 "Choose a Pokémon Showdown server."
+            }
+            else -> {
+                publishClientAction(ClientAction.EXPORT_REPLAY)
+                "Copy the battle transcript."
             }
         }
     }
@@ -1602,7 +1608,7 @@ class BattleSession {
     }
 
     companion object {
-        const val MENU_ITEM_COUNT = 12
+        const val MENU_ITEM_COUNT = 13
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun parseServerFormats(line: String): List<MatchFormat> {

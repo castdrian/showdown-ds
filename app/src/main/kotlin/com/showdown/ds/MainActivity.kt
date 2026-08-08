@@ -103,6 +103,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
+                BattleSession.ClientAction.EXPORT_REPLAY -> copyBattleTranscript()
             }
         }
     }
@@ -1138,6 +1139,17 @@ class MainActivity : Activity() {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Send") { _, _ -> session.sendChat(input.text.toString()) }
             .show()
+    }
+
+    private fun copyBattleTranscript() {
+        val transcript = session.protocolHistory().joinToString("\n")
+        if (transcript.isBlank()) {
+            session.setConnectionStatus("No battle transcript is available yet.")
+            return
+        }
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown battle transcript", transcript))
+        session.setConnectionStatus("Battle transcript copied to the clipboard.")
     }
 
     private fun showFormatPicker() {

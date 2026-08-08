@@ -577,6 +577,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun battleMenuCanExportTheProtocolTranscript() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+        session.applyProtocolLine("|init|battle")
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(12)
+        session.confirmSelection()
+
+        assertEquals(listOf(BattleSession.ClientAction.EXPORT_REPLAY), actions)
+        assertTrue(session.protocolHistory().contains("|init|battle"))
+    }
+
+    @Test
     fun battleMenuUsesTheChallengeSlotWhenNoLiveBattleIsActive() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()
