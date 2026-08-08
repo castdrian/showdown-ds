@@ -504,6 +504,9 @@ class MainActivity : Activity() {
     }
 
     private fun connectLobbySocket() {
+        val previousConnection = showdownConnection
+        showdownConnection = null
+        previousConnection?.close()
         lateinit var connection: ShowdownConnection
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {

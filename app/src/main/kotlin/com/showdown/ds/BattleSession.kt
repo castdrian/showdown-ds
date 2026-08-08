@@ -1060,8 +1060,9 @@ class BattleSession {
     }
 
     private fun applySideCondition(fields: List<String>, enabled: Boolean) {
-        val side = fields.getOrNull(2) ?: return
-        val effect = battleEffectName(fields.getOrNull(3)).ifBlank { return }
+        val source = fields.getOrNull(2) ?: return
+        val side = source.substringBefore(':').ifBlank { source }
+        val effect = (fields.getOrNull(3)?.takeIf { it.isNotBlank() } ?: source.substringAfter(':', "")).substringBefore(" [").trim().ifBlank { return }
         val conditions = if (isPlayerSide(side)) playerSideConditions else opponentSideConditions
         if (enabled) {
             if (effect !in conditions) conditions += effect
