@@ -905,16 +905,38 @@ class BattleSceneView(
         val alpha = (1f - exit) * min(1f, 0.3f + arrival)
         val left = width * 0.40f + (1f - arrival) * width * 0.06f
         val right = width * 0.92f
-        val top = height * 0.79f
-        val bottom = height * 0.885f
-        paint.color = Color.argb((185f * alpha).toInt(), 4, 24, 43)
-        canvas.drawRoundRect(RectF(left, top, right, bottom), 18f * scale, 18f * scale, paint)
+        val top = height * 0.77f
+        val bottom = height * 0.90f
+        val bounds = RectF(left, top, right, bottom)
+        paint.shader = LinearGradient(
+            bounds.left,
+            bounds.top,
+            bounds.right,
+            bounds.bottom,
+            Color.argb((172f * alpha).toInt(), 25, 50, 68),
+            Color.argb((120f * alpha).toInt(), 56, 83, 98),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(bounds, 22f * scale, 22f * scale, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb((210f * alpha).toInt(), 192, 239, 244)
+        canvas.drawRoundRect(bounds, 22f * scale, 22f * scale, paint)
+        paint.style = Paint.Style.FILL
         paint.color = Color.argb((255f * alpha).toInt(), 74, 231, 255)
-        canvas.drawRoundRect(RectF(left, top, left + 6f * scale, bottom), 3f * scale, 3f * scale, paint)
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = 25f * scale
-        paint.color = Color.argb((255f * alpha).toInt(), 240, 247, 255)
-        canvas.drawText(ellipsize(session.latestBattleEvent, 48), left + 22f * scale, top + 54f * scale, paint)
+        canvas.drawRoundRect(RectF(left, top, left + 7f * scale, bottom), 4f * scale, 4f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+        paint.textSize = 34f * scale
+        paint.color = Color.argb((255f * alpha).toInt(), 255, 255, 255)
+        paint.setShadowLayer(5f * scale, 0f, 2f * scale, Color.argb((180f * alpha).toInt(), 0, 13, 24))
+        canvas.drawText(
+            ellipsizeToWidth(session.latestBattleEvent, bounds.width() - 44f * scale, paint),
+            left + 24f * scale,
+            top + 78f * scale,
+            paint
+        )
+        paint.clearShadowLayer()
     }
 
     private fun ellipsize(value: String, maximum: Int) = if (value.length <= maximum) value else "${value.take(maximum - 1)}…"

@@ -11,6 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Display
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -29,6 +31,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.view.inputmethod.EditorInfo
 import java.util.ArrayDeque
+import java.util.Locale
 
 class MainActivity : Activity() {
     private data class RoomSelection(val id: String, val title: String, val subtitle: String, val chatRoom: Boolean)
@@ -48,6 +51,7 @@ class MainActivity : Activity() {
     private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
     private lateinit var replayFetcher: ShowdownReplayFetcher
     private var showdownConnection: ShowdownConnection? = null
+    private val pokedex = ShowdownPokedex()
     private val lobbyState = ShowdownLobbyState()
     private val friendsState = ShowdownFriendsState()
     private val chatRoomState = ShowdownChatRoomState()
@@ -91,6 +95,13 @@ class MainActivity : Activity() {
     private var tournamentReadyButton: Button? = null
     private var tournamentAcceptButton: Button? = null
     private var tournamentCancelButton: Button? = null
+    private var pokedexDialog: ShowdownDialog? = null
+    private var pokedexSearchInput: EditText? = null
+    private var pokedexResults: LinearLayout? = null
+    private var pokedexDetails: TextView? = null
+    private var pokedexSprite: ShowdownPokedexSpriteView? = null
+    private var selectedPokedexEntry: ShowdownPokedex.Entry? = null
+    private var pokedexLoading = false
     private var privateMessageDialog: ShowdownDialog? = null
     private var privateMessageTarget: String? = null
     private var privateMessageMessagesView: TextView? = null
@@ -290,6 +301,13 @@ class MainActivity : Activity() {
         friendsContentView = null
         friendsInput = null
         friendsState.clear()
+        pokedexDialog?.dismiss()
+        pokedexDialog = null
+        pokedexSearchInput = null
+        pokedexResults = null
+        pokedexDetails = null
+        pokedexSprite = null
+        selectedPokedexEntry = null
         displayManager?.unregisterDisplayListener(displayListener)
         if (::session.isInitialized) session.removeListener(sessionListener)
         if (::session.isInitialized) session.removeBattleEventListener(battleEventListener)
@@ -306,6 +324,7 @@ class MainActivity : Activity() {
         showdownConnection = null
         if (::battleAudio.isInitialized) battleAudio.release()
         if (::moveDex.isInitialized) moveDex.close()
+        pokedex.close()
         if (::spriteCache.isInitialized) spriteCache.close()
         if (::teamUrlFetcher.isInitialized) teamUrlFetcher.close()
         if (::replayFetcher.isInitialized) replayFetcher.close()
@@ -1981,6 +2000,7 @@ class MainActivity : Activity() {
     }
 
     private fun showResourcesDialog() {
+        val density = resources.displayMetrics.density
         val resources = TextView(this).apply {
             setTextSize(17f)
             setTextColor(0xffdceff2.toInt())
@@ -2001,13 +2021,192 @@ class MainActivity : Activity() {
                 "Community resources",
                 "smogon.com/forums · smogon.com/dex · pokemonshowdown.com"
             ).joinToString("\n")
-            setPadding(12, 8, 12, 8)
+            setPadding((12f * density).toInt(), (8f * density).toInt(), (12f * density).toInt(), (8f * density).toInt())
         }
-        ShowdownDialogBuilder(this)
+        val pokedexButton = Button(this).apply {
+            text = "Open Pokédex"
+            styleDynamicDialogButton(this)
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(ScrollView(this@MainActivity).apply { addView(resources, -1, -2) }, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(pokedexButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
             .setTitle("Info & resources")
-            .setView(ScrollView(this).apply { addView(resources, -1, -2) })
+            .setView(root)
             .setNegativeButton("Close", null)
-            .show()
+            .create()
+        pokedexButton.setOnClickListener {
+            dialog.dismiss()
+            showPokedexDialog()
+        }
+        dialog.show()
+    }
+
+    private fun showPokedexDialog() {
+        pokedexDialog?.let {
+            renderPokedexResults()
+            return
+        }
+        val density = resources.displayMetrics.density
+        val search = EditText(this).apply {
+            hint = "Search Pokémon by name"
+            setSingleLine(true)
+            setTextSize(18f)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                    renderPokedexResults()
+                }
+
+                override fun afterTextChanged(editable: Editable?) = Unit
+            })
+        }
+        val results = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val resultScroll = ScrollView(this).apply {
+            addView(results, -1, -2)
+        }
+        val sprite = ShowdownPokedexSpriteView(this)
+        val details = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffe1f0f3.toInt())
+            setLineSpacing(5f, 1f)
+            setPadding((12f * density).toInt(), (10f * density).toInt(), (12f * density).toInt(), (10f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val detailRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(sprite, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.13f).toInt()))
+            addView(details, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+        }
+        val detailScroll = ScrollView(this).apply {
+            addView(detailRoot, -1, -2)
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(search, LinearLayout.LayoutParams(-1, -2))
+            addView(resultScroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.22f).toInt()).apply { topMargin = (8f * density).toInt() })
+            addView(detailScroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.30f).toInt()).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Pokédex")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (pokedexDialog === dialog) {
+                pokedexDialog = null
+                pokedexSearchInput = null
+                pokedexResults = null
+                pokedexDetails = null
+                pokedexSprite = null
+                selectedPokedexEntry = null
+            }
+        }
+        pokedexDialog = dialog
+        pokedexSearchInput = search
+        pokedexResults = results
+        pokedexDetails = details
+        pokedexSprite = sprite
+        details.text = "Search the live Showdown Pokédex by name."
+        dialog.show()
+        renderPokedexResults()
+        loadPokedexData()
+    }
+
+    private fun loadPokedexData() {
+        if (pokedex.isLoaded || pokedexLoading) return
+        pokedexLoading = true
+        renderPokedexResults()
+        spriteCache.requestPokedex { file ->
+            pokedex.load(file?.readText().orEmpty()) {
+                pokedexLoading = false
+                renderPokedexResults()
+            }
+        }
+    }
+
+    private fun renderPokedexResults() {
+        val results = pokedexResults ?: return
+        results.removeAllViews()
+        val query = pokedexSearchInput?.text?.toString().orEmpty()
+        if (!pokedex.isLoaded) {
+            results.addView(TextView(this).apply {
+                text = if (pokedexLoading) "Loading the live Pokédex…" else "Pokédex data is unavailable."
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt(), (12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt())
+            })
+            return
+        }
+        if (query.isBlank()) {
+            results.addView(TextView(this).apply {
+                text = "Type a Pokémon name to search."
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt(), (12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt())
+            })
+            return
+        }
+        val density = resources.displayMetrics.density
+        val matches = pokedex.search(query)
+        if (matches.isEmpty()) {
+            results.addView(TextView(this).apply {
+                text = "No Pokémon matched “$query”."
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((12f * density).toInt(), (14f * density).toInt(), (12f * density).toInt(), (14f * density).toInt())
+            })
+            return
+        }
+        matches.forEach { entry ->
+            val button = Button(this).apply {
+                text = buildString {
+                    append(entry.name)
+                    if (entry.types.isNotEmpty()) append("\n${entry.types.joinToString(" · ")}")
+                }
+                isAllCaps = false
+                setOnClickListener { selectPokedexEntry(entry) }
+            }
+            styleDynamicDialogButton(button)
+            results.addView(button, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (6f * density).toInt()) })
+        }
+    }
+
+    private fun selectPokedexEntry(entry: ShowdownPokedex.Entry) {
+        selectedPokedexEntry = entry
+        pokedexDetails?.text = formatPokedexEntry(entry)
+        pokedexSprite?.setSprite(null)
+        spriteCache.requestDexSprite(entry.name) { asset ->
+            if (selectedPokedexEntry?.id == entry.id) pokedexSprite?.setSprite(asset)
+        }
+    }
+
+    private fun formatPokedexEntry(entry: ShowdownPokedex.Entry): String = buildString {
+        entry.number?.let { append(String.format(Locale.ROOT, "#%03d  ", it)) }
+        append(entry.name)
+        if (entry.types.isNotEmpty()) append("\n${entry.types.joinToString(" · ")}")
+        entry.tier.takeIf { it.isNotBlank() }?.let { append("\nTier: $it") }
+        entry.generation?.let { append("\nGeneration: $it") }
+        entry.abilities.takeIf { it.isNotEmpty() }?.let { append("\nAbilities: ${it.joinToString(", ")}") }
+        if (entry.baseStats.isNotEmpty()) {
+            val labels = linkedMapOf("hp" to "HP", "atk" to "Atk", "def" to "Def", "spa" to "SpA", "spd" to "SpD", "spe" to "Spe")
+            val stats = labels.mapNotNull { (id, label) -> entry.baseStats[id]?.let { "$label $it" } }
+            if (stats.isNotEmpty()) append("\nBase stats: ${stats.joinToString(" · ")}")
+        }
+        if (entry.heightMeters != null || entry.weightKg != null) {
+            append("\n")
+            entry.heightMeters?.let { append(String.format(Locale.ROOT, "Height %.1f m", it)) }
+            if (entry.heightMeters != null && entry.weightKg != null) append(" · ")
+            entry.weightKg?.let { append(String.format(Locale.ROOT, "Weight %.1f kg", it)) }
+        }
+        entry.eggGroups.takeIf { it.isNotEmpty() }?.let { append("\nEgg groups: ${it.joinToString(" · ")}") }
+        entry.preEvolution?.let { append("\nEvolves from: $it") }
+        entry.evolutions.takeIf { it.isNotEmpty() }?.let { append("\nEvolves into: ${it.joinToString(" · ")}") }
     }
 
     private fun showFriendsDialog() {

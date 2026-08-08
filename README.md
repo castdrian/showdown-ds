@@ -2,6 +2,8 @@
 
 Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
+<video src="media/showdown-promo.mp4" controls muted loop playsinline width="100%"></video>
+
 ## Hardware target
 
 - Upper display: 1920 × 1080 pixels, 6 inches, 120 Hz.
