@@ -90,4 +90,36 @@ class OfficialBattleTranscriptTest {
         assertTrue(session.battleLog().any { it.contains("hit 3 times") })
         assertTrue(session.battleLog().any { it.contains("Z-Power") })
     }
+
+    @Test
+    fun keepsMarkupBattleAnnouncementsReadableInActivity() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|raw|<div class=\"broadcast-red\">A <b>battle</b> announcement &amp; rule</div>",
+                "|html|<p>The winner is <strong>ADRIAN</strong>.</p>",
+                "|uhtml|notice|<span>Use /help for commands.</span>"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("A battle announcement & rule"))
+        assertTrue(session.battleLog().contains("The winner is ADRIAN."))
+        assertTrue(session.battleLog().contains("Use /help for commands."))
+    }
+
+    @Test
+    fun replacesUpdatedMarkupAnnouncementsInsteadOfLeavingStaleText() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|uhtml|notice|<b>Queue open</b>",
+                "|uhtmlchange|notice|<b>Queue closed</b>"
+            )
+        )
+
+        assertFalse(session.activityMessages().contains("Queue open"))
+        assertEquals(1, session.activityMessages().count { it == "Queue closed" })
+    }
 }

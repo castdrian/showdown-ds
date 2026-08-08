@@ -108,6 +108,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun multiActiveRequestsPassInactiveSlotsBeforeSubmittingMoves() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":16,\"active\":[{}, {\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}"
+        )
+
+        assertEquals("Choose a move for active Pokémon 2/2", session.status)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose pass, move 1|16"), decisions)
+    }
+
+    @Test
     fun multiActiveRequestsAllowExplicitTargets() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
@@ -124,6 +139,53 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertEquals(listOf("/choose move 1 2, move 1|13"), decisions)
+    }
+
+    @Test
+    fun multiActiveRequestsUseOfficialAllyTargetSlots() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Helping Hand\",\"pp\":10,\"target\":\"adjacentAllyOrSelf\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"target\":\"self\"}]}]}"
+        )
+
+        session.confirmSelection()
+
+        assertEquals(listOf("Ally 1 (self)", "Ally 2"), session.targetOptions().map { it.label })
+        assertEquals(listOf("-1", "-2"), session.targetOptions().map { it.choice })
+    }
+
+    @Test
+    fun multiActiveRequestsExcludeFaintedAllyTargetSlots() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",
+                "|faint|p1a: Incineroar",
+                "|request|{\"active\":[{}, {\"moves\":[{\"move\":\"Helping Hand\",\"pp\":10,\"target\":\"adjacentAllyOrSelf\"}]}]}"
+            )
+        )
+
+        assertEquals(listOf("Ally 2 (self)"), session.targetOptions().map { it.label })
+        assertEquals(listOf("-2"), session.targetOptions().map { it.choice })
+    }
+
+    @Test
+    fun multiActiveRequestsSkipFaintedFoeSlots() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|0 fnt",
+                "|switch|p2b: Landorus|Landorus, L50|100/100",
+                "|faint|p2a: Tapu Koko",
+                "|request|{\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"normal\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"target\":\"self\"}]}]}"
+            )
+        )
+
+        session.confirmSelection()
+
+        assertEquals(listOf("Foe 2"), session.targetOptions().map { it.label })
+        assertEquals(listOf("2"), session.targetOptions().map { it.choice })
     }
 
     @Test
@@ -258,7 +320,8 @@ class BattleSessionTest {
     fun controllerNavigationUsesTheLowerScreenState() {
         val session = BattleSession()
 
-        session.moveFocus(1, 0)
+        session.moveFocus(0, 1)
+        session.moveFocus(0, 1)
         session.moveFocus(0, 1)
         session.confirmSelection()
         session.cyclePanel(1)
@@ -266,6 +329,18 @@ class BattleSessionTest {
         assertEquals(3, session.focusedMove)
         assertEquals(BattleSession.Panel.TEAM, session.panel)
         assertTrue(session.chatMessages().last().contains("/choose move 4"))
+    }
+
+    @Test
+    fun controllerMovesThroughTheVerticalMoveStackWithoutSkipping() {
+        val session = BattleSession()
+
+        session.moveFocus(0, 1)
+        assertEquals(1, session.focusedMove)
+        session.moveFocus(0, 1)
+        assertEquals(2, session.focusedMove)
+        session.moveFocus(0, -1)
+        assertEquals(1, session.focusedMove)
     }
 
     @Test

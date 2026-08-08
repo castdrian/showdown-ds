@@ -182,6 +182,7 @@ class BattleSession {
     private var pokemonTypeResolver: ((String) -> List<String>?)? = null
     private val availableMatchFormats = MatchFormat.defaults.toMutableList()
     private val battleLog = mutableListOf("Battle started.", "Incineroar entered the field.", "Tapu Koko's Electric Surge activated!")
+    private val markupEntries = mutableMapOf<String, String>()
     private val chatMessages = mutableListOf("[Battle] Welcome to Showdown!", "[System] Controller and touch input are ready.")
     private val activityMessages = mutableListOf<String>().apply {
         addAll(battleLog)
@@ -624,15 +625,15 @@ class BattleSession {
                 val gimmick = selectedGimmick
                 val selectedChoice = "move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${target?.let { " $it" } ?: ""}"
                 if (activeRequests.size > 1) {
-                    while (activeChoices.size < activeRequests.size) activeChoices += ""
+                    ensureActiveChoiceSlots()
                     activeChoices[activeSlotIndex] = selectedChoice
                     selectedGimmick = null
                     if (activeSlotIndex < activeRequests.lastIndex) {
                         activeSlotIndex += 1
-                        applyActiveRequest(activeRequests[activeSlotIndex])
-                        status = "Choose a move for active Pokémon ${activeSlotIndex + 1}/${activeRequests.size}"
-                        notifyListeners()
-                        return
+                        if (prepareNextActiveRequest()) {
+                            notifyListeners()
+                            return
+                        }
                     }
                 }
                 val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else selectedChoice
@@ -661,7 +662,7 @@ class BattleSession {
         activeSlotIndex = 0
         when (decisionKind) {
             DecisionKind.MOVE -> {
-                activeRequests.firstOrNull()?.let(::applyActiveRequest)
+                prepareNextActiveRequest()
                 panel = Panel.MOVES
                 status = "Connection unavailable. Choose a move again."
             }
@@ -838,6 +839,8 @@ class BattleSession {
                     "error" -> applyBattleError(fields)
                     "c", "c:" -> applyChat(fields)
                     "message", "inactive", "inactiveoff" -> appendLog(fields.drop(2).joinToString("|"))
+                    "raw", "html" -> appendMarkup(fields.drop(2).joinToString("|"))
+                    "uhtml", "uhtmlchange" -> applyMarkup(fields.getOrNull(2), fields.drop(3).joinToString("|"))
                 }
             }
             publishPendingHit()
@@ -859,6 +862,7 @@ class BattleSession {
         if (fields.getOrNull(2) != "battle") return
         battleLog.clear()
         battleLog += "Battle started."
+        markupEntries.clear()
         chatMessages.clear()
         activityMessages.clear()
         activityMessages += battleLog
@@ -1267,14 +1271,14 @@ class BattleSession {
                 status = "Waiting for a battle decision…"
                 return@runCatching
             }
-            for (index in 0 until active.length()) active.optJSONObject(index)?.let(activeRequests::add)
+            for (index in 0 until active.length()) activeRequests += active.optJSONObject(index) ?: JSONObject()
             if (activeRequests.isEmpty()) {
                 decisionKind = DecisionKind.WAIT
                 decisionAvailable = false
                 status = "Waiting for a battle decision…"
                 return@runCatching
             }
-            if (!applyActiveRequest(activeRequests[0])) {
+            if (!prepareNextActiveRequest()) {
                 decisionKind = DecisionKind.WAIT
                 decisionAvailable = false
                 status = "Waiting for a battle decision…"
@@ -1319,6 +1323,23 @@ class BattleSession {
         updateAvailableGimmicks(active)
         updateTargetOptions()
         return moves.isNotEmpty()
+    }
+
+    private fun prepareNextActiveRequest(): Boolean {
+        while (activeSlotIndex < activeRequests.size) {
+            if (applyActiveRequest(activeRequests[activeSlotIndex])) return true
+            ensureActiveChoiceSlots()
+            activeChoices[activeSlotIndex] = "pass"
+            activeSlotIndex += 1
+        }
+        decisionKind = DecisionKind.WAIT
+        decisionAvailable = false
+        status = "Waiting for a battle decision…"
+        return false
+    }
+
+    private fun ensureActiveChoiceSlots() {
+        while (activeChoices.size < activeRequests.size) activeChoices += ""
     }
 
     private fun applyWin(fields: List<String>) {
@@ -1367,8 +1388,7 @@ class BattleSession {
         if (decisionKind == DecisionKind.MOVE && activeRequests.size > 1) {
             activeChoices.clear()
             activeSlotIndex = 0
-            applyActiveRequest(activeRequests[0])
-            status = "Choose a move for active Pokémon 1/${activeRequests.size}"
+            prepareNextActiveRequest()
             return
         }
         if (decisionKind == DecisionKind.SWITCH && requiredSwitches > 1) {
@@ -1540,6 +1560,11 @@ class BattleSession {
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
 
+    private fun activeSlotNumber(slot: String): Int? = slot.lastOrNull()
+        ?.lowercaseChar()
+        ?.takeIf { it in 'a'..'z' }
+        ?.let { it.code - 'a'.code + 1 }
+
     private fun updatePlayerDetails(transform: (PokemonDetails) -> PokemonDetails) {
         val previous = playerDetails
         playerDetails = transform(previous)
@@ -1565,12 +1590,29 @@ class BattleSession {
         val move = moves.getOrNull(focusedMove) ?: return
         if (activeRequests.size <= 1) return
         val target = move.target.lowercase()
+        val allySlots = activeSlots(playerActiveCombatants, activeRequests.size).map { -it }
+        val foeSlots = activeSlots(opponentActiveCombatants, activeRequests.size)
         val options = when (target) {
-            "adjacentally", "adjacentallyorself" -> (1..activeRequests.size).map { TargetOption("Ally $it", "-$it") }
-            "normal", "adjacentfoe", "any" -> (1..activeRequests.size).map { TargetOption("Foe $it", it.toString()) }
+            "adjacentally" -> allySlots
+                .filterNot { it == -(activeSlotIndex + 1) }
+                .map { TargetOption("Ally ${-it}", it.toString()) }
+            "adjacentallyorself" -> allySlots.map { slot ->
+                val label = "Ally ${-slot}" + if (slot == -(activeSlotIndex + 1)) " (self)" else ""
+                TargetOption(label, slot.toString())
+            }
+            "normal", "adjacentfoe", "any" -> foeSlots.map { TargetOption("Foe $it", it.toString()) }
             else -> emptyList()
         }
         targetOptions += options
+    }
+
+    private fun activeSlots(combatants: Map<String, ActiveCombatant>, fallbackCount: Int): List<Int> {
+        if (combatants.isEmpty()) return (1..fallbackCount).toList()
+        return combatants.values
+            .filterNot { it.condition.contains("FNT", true) }
+            .mapNotNull { activeSlotNumber(it.slot) }
+            .distinct()
+            .sorted()
     }
 
     private fun appendLog(entry: String) {
@@ -1590,10 +1632,41 @@ class BattleSession {
         if (activityMessages.size > 64) activityMessages.removeAt(0)
     }
 
+    private fun appendMarkup(value: String) {
+        sanitizeMarkup(value)?.let(::appendLog)
+    }
+
+    private fun applyMarkup(key: String?, value: String) {
+        val message = sanitizeMarkup(value) ?: return
+        val previous = key?.let { markupEntries.put(it, message) }
+        if (previous == message) return
+        previous?.let { oldMessage ->
+            battleLog.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(battleLog::removeAt)
+            activityMessages.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(activityMessages::removeAt)
+        }
+        appendLog(message)
+    }
+
+    private fun sanitizeMarkup(value: String): String? {
+        val message = value
+            .replace(Regex("(?is)<script.*?</script>"), " ")
+            .replace(Regex("<[^>]*>"), " ")
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace(Regex("\\s+"), " ")
+            .replace(Regex("\\s+([,.!?])"), "$1")
+            .trim()
+        return message.takeIf { it.isNotBlank() }
+    }
+
     private fun moveMoveFocus(horizontal: Int, vertical: Int) {
-        val row = (focusedMove / 2 + vertical).coerceIn(0, 1)
-        val column = (focusedMove % 2 + horizontal).coerceIn(0, 1)
-        focusMove(row * 2 + column)
+        if (moves.isEmpty()) return
+        val direction = if (vertical != 0) vertical else horizontal
+        focusMove((focusedMove + direction).coerceIn(0, moves.lastIndex))
     }
 
     private fun moveTeamFocus(horizontal: Int, vertical: Int) {
