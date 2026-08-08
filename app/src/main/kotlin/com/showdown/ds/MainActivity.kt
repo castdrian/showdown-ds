@@ -230,6 +230,15 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
+        if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
+    }
+
+    override fun onBackPressed() {
+        if (::session.isInitialized && (session.panel != BattleSession.Panel.MOVES || session.selectedGimmick != null || session.targetOptions().isNotEmpty())) {
+            cancelController()
+            return
+        }
+        super.onBackPressed()
     }
 
     private fun configureWindow() {
@@ -659,7 +668,13 @@ class MainActivity : Activity() {
                             .putString("match_format_label", session.matchFormat.label)
                             .apply()
                         val previousChallenges = lobbyState.incomingChallenges
+                        val previousBattleRoomIds = lobbyState.battles.keys
                         lobbyState.applyProtocol(lines)
+                        if (activeSearchFormat != null) {
+                            lobbyState.firstNewBattle(previousBattleRoomIds)?.let { matchedRoomId ->
+                                joinMatchedBattle(connection, matchedRoomId)
+                            }
+                        }
                         lobbyState.incomingChallenges.keys.firstOrNull { it !in previousChallenges }?.let { username ->
                             showIncomingChallenge(username, lobbyState.incomingChallenges[username].orEmpty())
                         }
@@ -694,6 +709,21 @@ class MainActivity : Activity() {
         })
         showdownConnection = connection
         connection.connect()
+    }
+
+    private fun joinMatchedBattle(connection: ShowdownConnection, roomId: String) {
+        if (activeBattleRoomId != null || !connection.sendGlobal(ShowdownLobbyState.joinBattleCommand(roomId))) return
+        activeSearchFormat?.let(lobbyState::clearSearch)
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingSearchTeamPacked = null
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        activeBattleRoomId = roomId
+        session.setLiveBattleActive(true)
+        session.setConnectionStatus("Joining battle…")
+        persistLobbyState()
     }
 
     private fun scheduleReconnect() {

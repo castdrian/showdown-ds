@@ -24,8 +24,6 @@ class CommandDeckView(
 ) : View(context) {
     private data class MovePalette(val highlight: Int, val base: Int, val shadow: Int, val edge: Int)
 
-    private data class Effectiveness(val label: String, val color: Int)
-
     interface InteractionListener {
         fun onNavigation()
         fun onConfirmation()
@@ -254,20 +252,16 @@ class CommandDeckView(
             val move = moves.getOrNull(index)
             if (move == null) drawUnavailableMove(canvas, bounds, scale) else drawMoveRow(canvas, bounds, move, index == session.focusedMove, movePressProgress(index), scale)
         }
-        drawTargets(canvas, width, panelBottom, scale)
     }
 
-    private fun drawTargets(canvas: Canvas, width: Float, panelBottom: Float, scale: Float) {
+    private fun drawTargets(canvas: Canvas, left: Float, right: Float, top: Float, scale: Float) {
         targetBounds.fill(null)
         val targets = session.targetOptions()
         if (targets.isEmpty()) return
-        val top = panelBottom + 18f * scale
-        val left = 470f * scale
-        val right = width - 38f * scale
-        val gap = 12f * scale
+        val gap = 16f * scale
         val targetWidth = (right - left - gap * (targets.size - 1)) / targets.size
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(17f, scale)
+        paint.textSize = readableTextSize(20f, scale, 18f)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText("TARGET", left, top + 18f * scale, paint)
         targets.forEachIndexed { index, target ->
@@ -323,58 +317,36 @@ class CommandDeckView(
         paint.color = Color.argb(174, 117, 187, 211)
         canvas.drawRoundRect(bounds, 25f * scale, 25f * scale, paint)
         paint.style = Paint.Style.FILL
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        val battleInfo = session.battleInfo()
-        paint.textSize = readableTextSize(30f, scale, 26f)
-        paint.color = PAPER
-        canvas.drawText(ellipsize(session.playerPokemon, 14), bounds.left + 28f * scale, bounds.top + 86f * scale, paint)
-        paint.textSize = readableTextSize(30f, scale, 26f)
-        canvas.drawText(ellipsize(session.opponentPokemon, 14), bounds.left + 28f * scale, bounds.top + 206f * scale, paint)
-        paint.textSize = readableTextSize(20f, scale, 18f)
-        paint.color = Color.rgb(153, 224, 220)
-        canvas.drawText("FIELD", bounds.left + 28f * scale, bounds.top + 292f * scale, paint)
-        val fieldTop = bounds.top + 310f * scale
-        val fieldGap = 8f * scale
-        val fieldWidth = (bounds.width() - 56f * scale - fieldGap) / 2f
-        drawBattleInfoPill(canvas, RectF(bounds.left + 28f * scale, fieldTop, bounds.left + 28f * scale + fieldWidth, fieldTop + 36f * scale), displayFieldEffect(battleInfo.weather, "Clear"), Color.rgb(54, 153, 184), scale)
-        drawBattleInfoPill(canvas, RectF(bounds.left + 28f * scale + fieldWidth + fieldGap, fieldTop, bounds.right - 28f * scale, fieldTop + 36f * scale), displayFieldEffect(battleInfo.terrain, "No terrain"), Color.rgb(86, 156, 127), scale)
+        targetBounds.fill(null)
+        gimmickBounds.fill(null)
+        val inset = 18f * scale
+        val content = RectF(bounds.left + inset, bounds.top + inset, bounds.right - inset, bounds.bottom - inset)
+        val targets = session.targetOptions()
         val gimmicks = session.availableGimmicks()
-        if (gimmicks.isNotEmpty()) drawGimmicks(canvas, RectF(bounds.left + 18f * scale, bounds.top + 390f * scale, bounds.right - 18f * scale, bounds.bottom - 18f * scale), scale)
+        var contentTop = content.top
+        if (targets.isNotEmpty()) {
+            drawTargets(canvas, content.left, content.right, contentTop, scale)
+            contentTop += 112f * scale
+        }
+        if (gimmicks.isNotEmpty()) {
+            drawGimmicks(canvas, RectF(content.left, contentTop, content.right, content.bottom), scale)
+        } else if (targets.isEmpty()) {
+            drawUtilityMessage(canvas, content, scale)
+        }
     }
 
-    private fun drawBattleInfoPill(canvas: Canvas, bounds: RectF, value: String, color: Int, scale: Float) {
-        paint.color = Color.argb(138, Color.red(color), Color.green(color), Color.blue(color))
-        canvas.drawRoundRect(bounds, 12f * scale, 12f * scale, paint)
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+    private fun drawUtilityMessage(canvas: Canvas, bounds: RectF, scale: Float) {
         paint.textAlign = Paint.Align.CENTER
-        paint.textSize = readableTextSize(20f, scale, 18f)
-        drawSoftText(canvas, ellipsize(value, 16), bounds.centerX(), bounds.centerY() + 5f * scale, PAPER, 0.3f * scale)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(22f, scale, 20f)
+        paint.color = Color.rgb(153, 224, 220)
+        canvas.drawText("LAST ACTION", bounds.centerX(), bounds.centerY() - 22f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = readableTextSize(27f, scale, 23f)
+        paint.color = PAPER
+        canvas.drawText(fitTextToWidth(session.latestBattleEvent, bounds.width() - 24f * scale), bounds.centerX(), bounds.centerY() + 34f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
     }
-
-    private fun drawBattleInfoLine(canvas: Canvas, label: String, value: String, left: Float, baseline: Float, color: Int, scale: Float) {
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(14f, scale)
-        paint.color = color
-        canvas.drawText(label, left, baseline, paint)
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(17f, scale)
-        paint.color = Color.rgb(205, 222, 231)
-        canvas.drawText(ellipsize(value, 33), left, baseline + 21f * scale, paint)
-    }
-
-    private fun displayFieldEffect(value: String, fallback: String) = when (value) {
-        "RainDance" -> "Rain"
-        "Sandstorm" -> "Sandstorm"
-        "SunnyDay" -> "Sun"
-        "Snow" -> "Snow"
-        "Hail" -> "Hail"
-        else -> value.ifBlank { fallback }
-    }
-
-    private fun displayBoosts(boosts: Map<String, Int>) = boosts.entries.joinToString(" · ") { (stat, value) ->
-        "${BOOST_NAMES[stat] ?: stat.uppercase()} ${if (value > 0) "+" else ""}$value"
-    }.ifBlank { "Neutral" }
 
     private fun drawMoveRow(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, focused: Boolean, pressProgress: Float, scale: Float) {
         val palette = movePalette(move.type)
@@ -567,38 +539,6 @@ class CommandDeckView(
         paint.color = Color.rgb(224, 191, 220)
         canvas.drawText("Unavailable", bounds.centerX(), bounds.centerY(), paint)
         paint.textAlign = Paint.Align.LEFT
-    }
-
-    private fun effectiveness(type: String): Effectiveness {
-        val multiplier = session.opponentDetails().types.fold(1f) { total, defender -> total * typeMultiplier(type, defender) }
-        return when {
-            multiplier == 0f -> Effectiveness("No effect", 0xFFC4D0DD.toInt())
-            multiplier > 1f -> Effectiveness("Super effective", 0xFF77E4A5.toInt())
-            multiplier < 1f -> Effectiveness("Not very effective", 0xFFFFA7C1.toInt())
-            else -> Effectiveness("Effective", 0xFFC8D9EA.toInt())
-        }
-    }
-
-    private fun typeMultiplier(attacking: String, defending: String): Float = when (attacking) {
-        "NORMAL" -> when (defending) { "ROCK", "STEEL" -> 0.5f; "GHOST" -> 0f; else -> 1f }
-        "FIGHTING" -> when (defending) { "NORMAL", "ROCK", "STEEL", "ICE", "DARK" -> 2f; "FLYING", "POISON", "BUG", "PSYCHIC", "FAIRY" -> 0.5f; "GHOST" -> 0f; else -> 1f }
-        "FLYING" -> when (defending) { "FIGHTING", "BUG", "GRASS" -> 2f; "ROCK", "STEEL", "ELECTRIC" -> 0.5f; else -> 1f }
-        "POISON" -> when (defending) { "GRASS", "FAIRY" -> 2f; "POISON", "GROUND", "ROCK", "GHOST" -> 0.5f; "STEEL" -> 0f; else -> 1f }
-        "GROUND" -> when (defending) { "POISON", "ROCK", "STEEL", "FIRE", "ELECTRIC" -> 2f; "BUG", "GRASS" -> 0.5f; "FLYING" -> 0f; else -> 1f }
-        "ROCK" -> when (defending) { "FLYING", "BUG", "FIRE", "ICE" -> 2f; "FIGHTING", "GROUND", "STEEL" -> 0.5f; else -> 1f }
-        "BUG" -> when (defending) { "GRASS", "PSYCHIC", "DARK" -> 2f; "FIGHTING", "FLYING", "POISON", "GHOST", "STEEL", "FIRE", "FAIRY" -> 0.5f; else -> 1f }
-        "GHOST" -> when (defending) { "GHOST", "PSYCHIC" -> 2f; "DARK" -> 0.5f; "NORMAL" -> 0f; else -> 1f }
-        "STEEL" -> when (defending) { "ROCK", "ICE", "FAIRY" -> 2f; "STEEL", "FIRE", "WATER", "ELECTRIC" -> 0.5f; else -> 1f }
-        "FIRE" -> when (defending) { "BUG", "STEEL", "GRASS", "ICE" -> 2f; "ROCK", "FIRE", "WATER", "DRAGON" -> 0.5f; else -> 1f }
-        "WATER" -> when (defending) { "GROUND", "ROCK", "FIRE" -> 2f; "WATER", "GRASS", "DRAGON" -> 0.5f; else -> 1f }
-        "GRASS" -> when (defending) { "GROUND", "ROCK", "WATER" -> 2f; "FLYING", "POISON", "BUG", "STEEL", "FIRE", "GRASS", "DRAGON" -> 0.5f; else -> 1f }
-        "ELECTRIC" -> when (defending) { "FLYING", "WATER" -> 2f; "GRASS", "ELECTRIC", "DRAGON" -> 0.5f; "GROUND" -> 0f; else -> 1f }
-        "PSYCHIC" -> when (defending) { "FIGHTING", "POISON" -> 2f; "STEEL", "PSYCHIC" -> 0.5f; "DARK" -> 0f; else -> 1f }
-        "ICE" -> when (defending) { "FLYING", "GROUND", "GRASS", "DRAGON" -> 2f; "STEEL", "FIRE", "WATER", "ICE" -> 0.5f; else -> 1f }
-        "DRAGON" -> when (defending) { "DRAGON" -> 2f; "STEEL" -> 0.5f; "FAIRY" -> 0f; else -> 1f }
-        "DARK" -> when (defending) { "GHOST", "PSYCHIC" -> 2f; "FIGHTING", "DARK", "FAIRY" -> 0.5f; else -> 1f }
-        "FAIRY" -> when (defending) { "FIGHTING", "DRAGON", "DARK" -> 2f; "POISON", "STEEL", "FIRE" -> 0.5f; else -> 1f }
-        else -> 1f
     }
 
     private fun moveNameSize(name: String, scale: Float) = when {

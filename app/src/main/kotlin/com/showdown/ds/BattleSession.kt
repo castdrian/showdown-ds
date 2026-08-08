@@ -307,7 +307,7 @@ class BattleSession {
         private set
     var matchFormat = MatchFormat.GEN7_RANDOM
         private set
-    var touchConfirmationEnabled = false
+    var touchConfirmationEnabled = true
         private set
     var soundEffectsEnabled = true
         private set
@@ -672,6 +672,19 @@ class BattleSession {
         if (panel == Panel.TEAM && decisionAvailable && decisionKind == DecisionKind.TEAM_PREVIEW && teamPreviewOrder.isNotEmpty()) {
             val removed = teamPreviewOrder.removeLast()
             status = "Removed ${team[removed]} from the order."
+            notifyListeners()
+            return
+        }
+        if (selectedGimmick != null) {
+            selectedGimmick = null
+            status = "Choose a move"
+            notifyListeners()
+            return
+        }
+        if (targetOptions.isNotEmpty()) {
+            targetOptions.clear()
+            selectedTargetIndex = -1
+            status = "Choose a move"
             notifyListeners()
             return
         }

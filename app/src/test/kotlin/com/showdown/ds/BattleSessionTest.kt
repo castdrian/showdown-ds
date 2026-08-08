@@ -224,8 +224,13 @@ class BattleSessionTest {
     }
 
     @Test
-    fun touchQueuesMovesOnOneTapUnlessConfirmationIsEnabled() {
+    fun touchRequiresASecondTapByDefaultAndCanBeDisabled() {
         val session = BattleSession()
+
+        session.selectMoveWithTouch(2)
+        assertTrue(session.touchConfirmationEnabled)
+        assertEquals(2, session.focusedMove)
+        assertFalse(session.chatMessages().last().contains("/choose move 3"))
 
         session.selectMoveWithTouch(2)
         assertTrue(session.chatMessages().last().contains("/choose move 3"))
@@ -235,11 +240,29 @@ class BattleSessionTest {
         session.selectPanel(BattleSession.Panel.MENU)
         session.selectMenuItem(7)
         session.confirmSelection()
+        session.applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35},{\"move\":\"Growl\",\"pp\":40}]}]}")
         session.selectMoveWithTouch(1)
 
-        assertTrue(session.touchConfirmationEnabled)
+        assertFalse(session.touchConfirmationEnabled)
         assertEquals(1, session.focusedMove)
-        assertFalse(session.chatMessages().last().contains("/choose move 2"))
+        assertTrue(session.chatMessages().last().contains("/choose move 2"))
+    }
+
+    @Test
+    fun backCancelsGimmickAndTargetSelectionBeforeLeavingThePanel() {
+        val session = BattleSession()
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        session.goBack()
+
+        assertEquals(null, session.selectedGimmick)
+        assertEquals(BattleSession.Panel.MOVES, session.panel)
+
+        session.applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"normal\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"target\":\"self\"}]}]}")
+        session.confirmSelection()
+        assertTrue(session.targetOptions().isNotEmpty())
+        session.goBack()
+
+        assertTrue(session.targetOptions().isEmpty())
     }
 
     @Test

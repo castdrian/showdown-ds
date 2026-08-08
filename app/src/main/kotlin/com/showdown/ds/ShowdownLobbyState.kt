@@ -24,6 +24,8 @@ class ShowdownLobbyState {
         activeBattles.remove(roomId)
     }
 
+    fun firstNewBattle(previousRoomIds: Set<String>): String? = activeBattles.keys.firstOrNull { it !in previousRoomIds }
+
     fun applyProtocol(lines: List<String>) {
         lines.forEach { line ->
             val fields = line.split('|')

@@ -70,4 +70,14 @@ class ShowdownLobbyStateTest {
 
         assertTrue(lobby.battles.isEmpty())
     }
+
+    @Test
+    fun findsOnlyBattleRoomsThatAppearedSinceTheLastLobbyUpdate() {
+        val lobby = ShowdownLobbyState()
+        lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-gen9ou-1\":\"Adrian vs. Gladion\"}}"))
+
+        lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-gen9ou-1\":\"Adrian vs. Gladion\",\"battle-gen9ou-2\":\"Misty vs. Gary\"}}"))
+
+        assertEquals("battle-gen9ou-2", lobby.firstNewBattle(setOf("battle-gen9ou-1")))
+    }
 }
