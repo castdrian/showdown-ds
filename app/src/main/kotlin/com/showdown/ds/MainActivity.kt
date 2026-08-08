@@ -22,8 +22,12 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
+import android.widget.MultiAutoCompleteTextView
 import android.widget.ScrollView
 import android.widget.TextView
+import android.view.inputmethod.EditorInfo
 import java.util.ArrayDeque
 
 class MainActivity : Activity() {
@@ -1205,6 +1209,14 @@ class MainActivity : Activity() {
                 setEditors += createTeamSetEditor(this, index, sets.getOrNull(index) ?: ShowdownTeamSet())
             }
         }
+        moveDex.load {
+            val pokemonNames = moveDex.pokemonNames()
+            val moveNames = moveDex.moveNames()
+            setEditors.forEach { editor ->
+                updateTeamSuggestions(editor.species, pokemonNames)
+                updateTeamSuggestions(editor.moves, moveNames)
+            }
+        }
         val importButton = Button(this).apply {
             text = "Load Showdown export into editor"
             setOnClickListener {
@@ -1358,10 +1370,10 @@ class MainActivity : Activity() {
         })
         val editor = TeamSetEditor(
             nickname = teamField("Nickname", set.nickname),
-            species = teamField("Species", set.species),
+            species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames()),
             item = teamField("Item", set.item),
             ability = teamField("Ability", set.ability),
-            moves = teamField("Moves, comma-separated", set.moves.joinToString(",")),
+            moves = teamMovesField(set.moves.joinToString(","), moveDex.moveNames()),
             nature = teamField("Nature", set.nature),
             evs = teamField("EVs HP,Atk,Def,SpA,SpD,Spe", set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty()),
             gender = teamField("Gender M or F", set.gender),
@@ -1401,6 +1413,31 @@ class MainActivity : Activity() {
         this.hint = hint
         setSingleLine(true)
         setText(value)
+    }
+
+    private fun teamAutocompleteField(hint: String, value: String, suggestions: List<String>): AutoCompleteTextView = AutoCompleteTextView(this).apply {
+        this.hint = hint
+        setSingleLine(true)
+        imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        threshold = 1
+        setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, suggestions))
+        setText(value)
+    }
+
+    private fun teamMovesField(value: String, suggestions: List<String>): MultiAutoCompleteTextView = MultiAutoCompleteTextView(this).apply {
+        hint = "Moves, comma-separated"
+        setSingleLine(true)
+        imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        threshold = 1
+        setTokenizer(MultiAutoCompleteTextView.CommaTokenizer())
+        setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, suggestions))
+        setText(value)
+    }
+
+    private fun updateTeamSuggestions(field: EditText, suggestions: List<String>) {
+        (field as? AutoCompleteTextView)?.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, suggestions)
+        )
     }
 
     private fun populateTeamSetEditor(editor: TeamSetEditor, set: ShowdownTeamSet) {

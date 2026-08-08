@@ -11,6 +11,8 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val executor = Executors.newSingleThreadExecutor()
     private val moveTypes = mutableMapOf<String, String>()
     private val pokemonTypes = mutableMapOf<String, List<String>>()
+    private val moveNames = mutableListOf<String>()
+    private val pokemonNames = mutableListOf<String>()
     private val listeners = mutableListOf<() -> Unit>()
     private var loading = false
 
@@ -18,8 +20,12 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     fun typesFor(species: String) = pokemonTypes[speciesId(species)]
 
+    fun moveNames() = moveNames.toList()
+
+    fun pokemonNames() = pokemonNames.toList()
+
     fun load(listener: () -> Unit) {
-        if (moveTypes.isNotEmpty() && pokemonTypes.isNotEmpty()) {
+        if (moveTypes.isNotEmpty() && pokemonTypes.isNotEmpty() && moveNames.isNotEmpty() && pokemonNames.isNotEmpty()) {
             listener()
             return
         }
@@ -31,12 +37,20 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
             resourceCache.requestPokedex { pokedexFile ->
                 if (executor.isShutdown) return@requestPokedex
                 executor.execute {
-                    val loadedMoveTypes = file?.readText()?.let(::parseMoveTypes).orEmpty()
-                    val loadedPokemonTypes = pokedexFile?.readText()?.let(::parsePokemonTypes).orEmpty()
+                    val moveContents = file?.readText().orEmpty()
+                    val pokemonContents = pokedexFile?.readText().orEmpty()
+                    val loadedMoveTypes = parseMoveTypes(moveContents)
+                    val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
+                    val loadedMoveNames = parseMoveNames(moveContents)
+                    val loadedPokemonNames = parsePokemonNames(pokemonContents)
                     mainHandler.post {
                         loading = false
                         moveTypes.putAll(loadedMoveTypes)
                         pokemonTypes.putAll(loadedPokemonTypes)
+                        moveNames.clear()
+                        moveNames += loadedMoveNames
+                        pokemonNames.clear()
+                        pokemonNames += loadedPokemonNames
                         val callbacks = listeners.toList()
                         listeners.clear()
                         callbacks.forEach { it() }
@@ -74,6 +88,19 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                     if (parsed.isNotEmpty()) put(id, parsed)
                 }
             }
+        }
+
+        fun parseMoveNames(contents: String): List<String> = parseNames(contents)
+
+        fun parsePokemonNames(contents: String): List<String> = parseNames(contents)
+
+        private fun parseNames(contents: String): List<String> {
+            val values = JSONObject(contents)
+            return buildList {
+                values.keys().forEach { id ->
+                    values.optJSONObject(id)?.optString("name")?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }.distinct().sorted()
         }
 
         fun moveId(move: String) = move.lowercase().filter(Char::isLetterOrDigit)

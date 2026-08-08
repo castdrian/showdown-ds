@@ -14,4 +14,12 @@ class ShowdownMoveDexTest {
         assertEquals(listOf("FIRE", "DRAGON"), types["charizardmegax"])
         assertEquals("nidoranf", ShowdownMoveDex.speciesId("Nidoran♀"))
     }
+
+    @Test
+    fun parsesSearchableNamesFromShowdownData() {
+        val contents = "{\"tackle\":{\"name\":\"Tackle\"},\"icebeam\":{\"name\":\"Ice Beam\"}}"
+
+        assertEquals(listOf("Ice Beam", "Tackle"), ShowdownMoveDex.parseMoveNames(contents))
+        assertEquals(listOf("Ice Beam", "Tackle"), ShowdownMoveDex.parsePokemonNames(contents))
+    }
 }
