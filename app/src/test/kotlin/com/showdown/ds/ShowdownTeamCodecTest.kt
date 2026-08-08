@@ -94,4 +94,33 @@ class ShowdownTeamCodecTest {
         assertTrue(errors.any { it.contains("at most four moves") })
         assertTrue(errors.any { it.contains("510 total EVs") })
     }
+
+    @Test
+    fun parsesAndExportsShowdownText() {
+        val set = ShowdownTeamCodec.parse(
+            """Lead (Gholdengo) (F) @ Leftovers
+Ability: Good as Gold
+Level: 50
+Shiny: Yes
+EVs: 4 HP / 252 SpA / 252 Spe
+Timid Nature
+IVs: 0 Atk
+Tera Type: Steel
+- Make It Rain
+- Shadow Ball
+- Recover
+- Nasty Plot"""
+        ).single()
+
+        assertEquals("Lead", set.nickname)
+        assertEquals("Gholdengo", set.species)
+        assertEquals("F", set.gender)
+        assertEquals("Leftovers", set.item)
+        assertEquals("Good as Gold", set.ability)
+        assertEquals(listOf(4, 0, 0, 252, 0, 252), set.evs)
+        assertEquals(listOf(31, 0, 31, 31, 31, 31), set.ivs)
+        assertTrue(set.shiny)
+        assertTrue(ShowdownTeamCodec.toText(listOf(set)).contains("Tera Type: Steel"))
+        assertEquals(1, ShowdownTeamCodec.parse(ShowdownTeamCodec.toText(listOf(set))).size)
+    }
 }

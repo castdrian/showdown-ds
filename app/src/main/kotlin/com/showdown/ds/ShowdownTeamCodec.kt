@@ -44,9 +44,19 @@ object ShowdownTeamCodec {
         .split(']')
         .mapNotNull { it.takeIf(String::isNotBlank)?.let(::unpackSet) }
 
+    fun parse(value: String): List<ShowdownTeamSet> {
+        val input = value.trim()
+        if (input.isBlank()) return emptyList()
+        return if ('|' in input || ']' in input) unpack(input) else parseText(input)
+    }
+
     fun pack(sets: List<ShowdownTeamSet>): String = sets
         .filter { it.hasContent() }
         .joinToString("]", transform = ::packSet)
+
+    fun toText(sets: List<ShowdownTeamSet>): String = sets
+        .filter { it.hasContent() }
+        .joinToString("\n\n", transform = ::textSet)
 
     private fun unpackSet(packed: String): ShowdownTeamSet {
         val fields = packed.split('|', limit = 12)
@@ -102,6 +112,118 @@ object ShowdownTeamCodec {
             set.teraType.trim()
         )
         return values.joinToString(",").trimEnd(',')
+    }
+
+    private fun parseText(input: String): List<ShowdownTeamSet> = input
+        .split(Regex("\\r?\\n\\s*\\r?\\n"))
+        .mapNotNull(::parseTextSet)
+
+    private fun parseTextSet(block: String): ShowdownTeamSet? {
+        val lines = block.lines().map(String::trim).filter(String::isNotBlank)
+        val header = lines.firstOrNull() ?: return null
+        val item = header.substringAfter(" @ ", "").trim()
+        val subject = header.substringBefore(" @ ").trim()
+        val gender = Regex("\\s\\(([MF])\\)$").find(subject)?.groupValues?.get(1).orEmpty()
+        val withoutGender = subject.replace(Regex("\\s\\([MF]\\)$"), "").trim()
+        val speciesMatch = Regex("^(.+) \\(([^()]*)\\)$").matchEntire(withoutGender)
+        val nickname = speciesMatch?.groupValues?.get(1).orEmpty()
+        val species = speciesMatch?.groupValues?.get(2).orEmpty().ifBlank { withoutGender }
+        val moves = mutableListOf<String>()
+        var ability = ""
+        var nature = ""
+        var level = 100
+        var happiness = 255
+        var shiny = false
+        var pokeBall = ""
+        var hiddenPowerType = ""
+        var gigantamax = false
+        var dynamaxLevel = 10
+        var teraType = ""
+        var evs = List(6) { 0 }
+        var ivs = List(6) { 31 }
+        lines.drop(1).forEach { line ->
+            when {
+                line.startsWith("Ability:", true) -> ability = line.substringAfter(':').trim()
+                line.endsWith(" Nature", true) -> nature = line.removeSuffix(" Nature").trim()
+                line.startsWith("Level:", true) -> level = line.substringAfter(':').trim().toIntOrNull() ?: 100
+                line.startsWith("Happiness:", true) -> happiness = line.substringAfter(':').trim().toIntOrNull() ?: 255
+                line.startsWith("Shiny:", true) -> shiny = line.substringAfter(':').trim().equals("yes", true)
+                line.startsWith("Hidden Power:", true) -> hiddenPowerType = line.substringAfter(':').trim()
+                line.startsWith("Gigantamax:", true) -> gigantamax = line.substringAfter(':').trim().equals("yes", true)
+                line.startsWith("Dynamax Level:", true) -> dynamaxLevel = line.substringAfter(':').trim().toIntOrNull() ?: 10
+                line.startsWith("Tera Type:", true) -> teraType = line.substringAfter(':').trim()
+                line.startsWith("Poké Ball:", true) || line.startsWith("Pokeball:", true) -> pokeBall = line.substringAfter(':').trim()
+                line.startsWith("EVs:", true) -> evs = parseStatValues(line.substringAfter(':')) { 0 }
+                line.startsWith("IVs:", true) -> ivs = parseStatValues(line.substringAfter(':')) { 31 }
+                line.startsWith("-") -> moves += line.removePrefix("-").trim()
+            }
+        }
+        return ShowdownTeamSet(
+            nickname = nickname,
+            species = species,
+            item = item,
+            ability = ability,
+            moves = moves,
+            nature = nature,
+            evs = evs,
+            gender = gender,
+            ivs = ivs,
+            shiny = shiny,
+            level = level,
+            happiness = happiness,
+            pokeBall = pokeBall,
+            hiddenPowerType = hiddenPowerType,
+            gigantamax = gigantamax,
+            dynamaxLevel = dynamaxLevel,
+            teraType = teraType
+        )
+    }
+
+    private fun parseStatValues(value: String, default: () -> Int): List<Int> {
+        val names = mapOf("HP" to 0, "Atk" to 1, "Def" to 2, "SpA" to 3, "SpD" to 4, "Spe" to 5)
+        val values = MutableList(6) { default() }
+        value.split('/').forEach { part ->
+            val match = Regex("(\\d+)\\s+(.+)").find(part.trim()) ?: return@forEach
+            val index = names[match.groupValues[2].trim()] ?: return@forEach
+            values[index] = match.groupValues[1].toIntOrNull() ?: values[index]
+        }
+        return values
+    }
+
+    private fun textSet(set: ShowdownTeamSet): String {
+        val subject = when {
+            set.nickname.isNotBlank() && set.species.isNotBlank() && !set.nickname.equals(set.species, true) -> "${set.nickname.trim()} (${set.species.trim()})"
+            set.species.isNotBlank() -> set.species.trim()
+            else -> set.nickname.trim()
+        }
+        val gender = set.gender.trim().uppercase().takeIf { it == "M" || it == "F" }?.let { " ($it)" }.orEmpty()
+        val header = buildString {
+            append(subject)
+            append(gender)
+            if (set.item.isNotBlank()) append(" @ ${set.item.trim()}")
+        }
+        val lines = mutableListOf(header)
+        if (set.ability.isNotBlank()) lines += "Ability: ${set.ability.trim()}"
+        if (set.level != 100) lines += "Level: ${set.level.coerceIn(1, 100)}"
+        if (set.shiny) lines += "Shiny: Yes"
+        if (set.happiness != 255) lines += "Happiness: ${set.happiness.coerceIn(0, 255)}"
+        val evText = formatStatValues(set.evs, 0)
+        if (evText.isNotBlank()) lines += "EVs: $evText"
+        if (set.nature.isNotBlank()) lines += "${set.nature.trim()} Nature"
+        if (set.pokeBall.isNotBlank()) lines += "Poké Ball: ${set.pokeBall.trim()}"
+        val ivText = formatStatValues(set.ivs, 31)
+        if (ivText.isNotBlank()) lines += "IVs: $ivText"
+        if (set.hiddenPowerType.isNotBlank()) lines += "Hidden Power: ${set.hiddenPowerType.trim()}"
+        if (set.gigantamax) lines += "Gigantamax: Yes"
+        if (set.dynamaxLevel != 10) lines += "Dynamax Level: ${set.dynamaxLevel.coerceIn(0, 10)}"
+        if (set.teraType.isNotBlank()) lines += "Tera Type: ${set.teraType.trim()}"
+        set.moves.take(4).mapTo(lines) { "- ${it.trim()}" }
+        return lines.joinToString("\n")
+    }
+
+    private fun formatStatValues(values: List<Int>, default: Int): String {
+        val names = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
+        return values.mapIndexedNotNull { index, value -> value.takeUnless { it == default }?.let { "$it ${names[index]}" } }.joinToString(" / ")
     }
 
     private fun packValues(values: List<Int>, default: Int, maximum: Int): String {

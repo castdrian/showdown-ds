@@ -128,41 +128,49 @@ class BattleSceneView(
             inspectedPlayer = null
         }
         if (inspectedPlayer == null) {
-            if (playerStatusAlpha > 0f) {
-                drawStatusCard(
-                    canvas,
-                    RectF(width * 0.015f, height * 0.80f, width * 0.315f, height * 0.98f),
-                    session.playerName,
-                    session.playerPokemon,
-                    session.playerLevel,
-                    session.playerGender,
-                    session.playerHp,
-                    session.playerCondition,
-                    session.playerHealthFraction(),
-                    scale,
-                    playerStatusAlpha,
-                    playerTrainerSprite,
-                    true,
-                    session.playerPartyDetails()
-                )
+            if (singles || playerCombatants.size <= 1) {
+                if (playerStatusAlpha > 0f) {
+                    drawStatusCard(
+                        canvas,
+                        RectF(width * 0.015f, height * 0.80f, width * 0.315f, height * 0.98f),
+                        session.playerName,
+                        session.playerPokemon,
+                        session.playerLevel,
+                        session.playerGender,
+                        session.playerHp,
+                        session.playerCondition,
+                        session.playerHealthFraction(),
+                        scale,
+                        playerStatusAlpha,
+                        playerTrainerSprite,
+                        true,
+                        session.playerPartyDetails()
+                    )
+                }
+            } else {
+                drawActiveStatusCards(canvas, width, height, scale, true, playerCombatants)
             }
-            if (opponentStatusAlpha > 0f) {
-                drawStatusCard(
-                    canvas,
-                    RectF(width * 0.685f, height * 0.02f, width * 0.985f, height * 0.20f),
-                    session.opponentName,
-                    session.opponentPokemon,
-                    session.opponentLevel,
-                    session.opponentGender,
-                    session.opponentHp,
-                    session.opponentCondition,
-                    session.opponentHealthFraction(),
-                    scale,
-                    opponentStatusAlpha,
-                    opponentTrainerSprite,
-                    true,
-                    session.opponentPartyDetails()
-                )
+            if (singles || opponentCombatants.size <= 1) {
+                if (opponentStatusAlpha > 0f) {
+                    drawStatusCard(
+                        canvas,
+                        RectF(width * 0.685f, height * 0.02f, width * 0.985f, height * 0.20f),
+                        session.opponentName,
+                        session.opponentPokemon,
+                        session.opponentLevel,
+                        session.opponentGender,
+                        session.opponentHp,
+                        session.opponentCondition,
+                        session.opponentHealthFraction(),
+                        scale,
+                        opponentStatusAlpha,
+                        opponentTrainerSprite,
+                        true,
+                        session.opponentPartyDetails()
+                    )
+                }
+            } else {
+                drawActiveStatusCards(canvas, width, height, scale, false, opponentCombatants)
             }
             drawBattleFeed(canvas, width, height, scale)
             drawTurnBadge(canvas, width, height, scale)
@@ -646,6 +654,102 @@ class BattleSceneView(
         drawPartyIndicators(canvas, party, ballStart, ballTop, ballSize, ballGap)
         canvas.restoreToCount(layer)
     }
+
+    private fun drawActiveStatusCards(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        player: Boolean,
+        combatants: List<BattleSession.ActiveCombatant>
+    ) {
+        val cardLeft = if (player) width * 0.015f else width * 0.685f
+        val cardRight = if (player) width * 0.315f else width * 0.985f
+        val cardHeight = height * if (combatants.size > 2) 0.06f else 0.085f
+        val cardGap = height * if (combatants.size > 2) 0.008f else 0.012f
+        val totalHeight = cardHeight * combatants.size + cardGap * (combatants.size - 1)
+        val firstTop = if (player) height - totalHeight - height * 0.015f else height * 0.02f
+        combatants.forEachIndexed { index, combatant ->
+            val alpha = statusCardAlpha(combatant.name, combatant.condition, System.nanoTime()) *
+                BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, System.nanoTime())
+            if (alpha > 0f) {
+                drawCompactStatusCard(
+                    canvas,
+                    RectF(cardLeft, firstTop + index * (cardHeight + cardGap), cardRight, firstTop + index * (cardHeight + cardGap) + cardHeight),
+                    combatant,
+                    index,
+                    player,
+                    scale,
+                    alpha
+                )
+            }
+        }
+    }
+
+    private fun drawCompactStatusCard(
+        canvas: Canvas,
+        bounds: RectF,
+        combatant: BattleSession.ActiveCombatant,
+        index: Int,
+        player: Boolean,
+        scale: Float,
+        alpha: Float
+    ) {
+        val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
+        val accent = if (player) CYAN else MAGENTA
+        val height = bounds.height()
+        paint.color = Color.argb(238, 16, 20, 26)
+        canvas.drawRoundRect(bounds, height * 0.16f, height * 0.16f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb(220, Color.red(accent), Color.green(accent), Color.blue(accent))
+        canvas.drawRoundRect(RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale), height * 0.16f, height * 0.16f, paint)
+        paint.style = Paint.Style.FILL
+        val left = bounds.left + 14f * scale
+        val right = bounds.right - 14f * scale
+        val label = "${index + 1}  ${combatant.name}"
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(height * 0.25f, scale, 10.5f)
+        paint.color = INK
+        canvas.drawText(ellipsizeToWidth(label, right - left - 92f * scale, paint), left, bounds.top + height * 0.34f, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
+        paint.color = accent
+        canvas.drawText("Lv.${combatant.level}${combatant.gender}", right, bounds.top + height * 0.34f, paint)
+        paint.textAlign = Paint.Align.LEFT
+        val track = RectF(left, bounds.top + height * 0.56f, right - 66f * scale, bounds.top + height * 0.70f)
+        paint.color = Color.rgb(47, 55, 65)
+        canvas.drawRoundRect(track, height * 0.08f, height * 0.08f, paint)
+        val fraction = healthFraction(combatant.hp)
+        val colors = healthColors(fraction)
+        val fill = RectF(track.left, track.top, track.left + track.width() * fraction, track.bottom)
+        if (fill.right > fill.left) {
+            paint.shader = LinearGradient(fill.left, fill.top, fill.left, fill.bottom, colors.highlight, colors.shadow, Shader.TileMode.CLAMP)
+            canvas.drawRoundRect(fill, height * 0.08f, height * 0.08f, paint)
+            paint.shader = null
+        }
+        paint.textSize = readableTextSize(height * 0.18f, scale, 9.5f)
+        paint.color = if (combatant.condition == "READY") MUTED else Color.rgb(255, 192, 103)
+        canvas.drawText(combatant.condition, left, bounds.top + height * 0.89f, paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.textSize = readableTextSize(height * 0.18f, scale, 9.5f)
+        paint.color = INK
+        canvas.drawText(combatant.hp.substringBefore(' '), right, bounds.top + height * 0.89f, paint)
+        paint.textAlign = Paint.Align.LEFT
+        canvas.restoreToCount(layer)
+    }
+
+    private fun healthFraction(condition: String): Float {
+        val values = condition.substringBefore(' ').split('/', limit = 2)
+        val current = values.getOrNull(0)?.toFloatOrNull() ?: return if (condition.contains("FNT", true)) 0f else 1f
+        val maximum = values.getOrNull(1)?.toFloatOrNull() ?: return 1f
+        return if (maximum > 0f) (current / maximum).coerceIn(0f, 1f) else 0f
+    }
+
+    private fun readableTextSize(designPixels: Float, scale: Float, minimumSp: Float = 12f): Float = maxOf(
+        designPixels * scale,
+        minimumSp * resources.displayMetrics.density * resources.configuration.fontScale
+    )
 
     private fun drawPartyIndicators(canvas: Canvas, party: List<BattleSession.PokemonDetails>, start: Float, top: Float, size: Float, gap: Float) {
         val sheet = pokeballSheet ?: return

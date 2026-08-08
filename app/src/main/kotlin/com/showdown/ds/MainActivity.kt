@@ -944,7 +944,7 @@ class MainActivity : Activity() {
             setText(existing?.format ?: session.matchFormat.id)
         }
         val packed = EditText(this).apply {
-            hint = "Packed import/export"
+            hint = "Packed or Showdown export"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             setMinLines(2)
             setText(existing?.packed.orEmpty())
@@ -959,11 +959,11 @@ class MainActivity : Activity() {
             }
         }
         val importButton = Button(this).apply {
-            text = "Load packed team into editor"
+            text = "Load Showdown export into editor"
             setOnClickListener {
-                val imported = ShowdownTeamCodec.unpack(packed.text.toString())
+                val imported = ShowdownTeamCodec.parse(packed.text.toString())
                 if (imported.isEmpty()) {
-                    session.setConnectionStatus("Enter a valid packed team before loading it.")
+                    session.setConnectionStatus("Enter a valid packed team or Showdown export before loading it.")
                 } else {
                     setEditors.forEachIndexed { index, editor -> populateTeamSetEditor(editor, imported.getOrNull(index) ?: ShowdownTeamSet()) }
                     session.setConnectionStatus("Loaded ${imported.size} Pokémon into the editor.")
@@ -973,7 +973,9 @@ class MainActivity : Activity() {
         val copyButton = Button(this).apply {
             text = "Copy packed team"
             setOnClickListener {
-                val value = ShowdownTeamCodec.pack(setEditors.map(::readTeamSetEditor)).ifBlank { packed.text.toString().trim() }
+                val value = ShowdownTeamCodec.pack(setEditors.map(::readTeamSetEditor)).ifBlank {
+                    ShowdownTeamCodec.pack(ShowdownTeamCodec.parse(packed.text.toString()))
+                }
                 if (value.isBlank()) {
                     session.setConnectionStatus("Add at least one Pokémon before copying the team.")
                 } else {
@@ -983,12 +985,28 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val copyTextButton = Button(this).apply {
+            text = "Copy Showdown export"
+            setOnClickListener {
+                val value = ShowdownTeamCodec.toText(setEditors.map(::readTeamSetEditor)).ifBlank {
+                    ShowdownTeamCodec.toText(ShowdownTeamCodec.parse(packed.text.toString()))
+                }
+                if (value.isBlank()) {
+                    session.setConnectionStatus("Add at least one Pokémon before copying the export.")
+                } else {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team export", value))
+                    session.setConnectionStatus("Showdown export copied to the clipboard.")
+                }
+            }
+        }
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(name)
             addView(format)
             addView(importButton)
             addView(copyButton)
+            addView(copyTextButton)
             addView(packed)
             addView(setFields)
         }
@@ -1003,11 +1021,12 @@ class MainActivity : Activity() {
                 val teamFormat = format.text.toString().trim()
                 val editedSets = setEditors.map(::readTeamSetEditor)
                 val editedPacked = ShowdownTeamCodec.pack(editedSets)
-                val teamPacked = editedPacked.ifBlank { packed.text.toString().trim() }
+                val importedSets = ShowdownTeamCodec.parse(packed.text.toString())
+                val teamPacked = editedPacked.ifBlank { ShowdownTeamCodec.pack(importedSets) }
                 val validation = if (editedPacked.isNotBlank()) {
                     ShowdownTeamCodec.validate(editedSets)
                 } else {
-                    ShowdownTeamCodec.validate(ShowdownTeamCodec.unpack(teamPacked))
+                    ShowdownTeamCodec.validate(importedSets)
                 }
                 if (teamFormat.isBlank() || teamPacked.isBlank()) {
                     session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
