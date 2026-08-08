@@ -71,5 +71,7 @@ class ShowdownLobbyState {
         fun cancelChallengeCommand(username: String) = "/cancelchallenge ${username.trim()}"
 
         fun cancelSearchCommand() = "/cancelsearch"
+
+        fun joinBattleCommand(roomId: String) = "/join ${roomId.trim()}"
     }
 }

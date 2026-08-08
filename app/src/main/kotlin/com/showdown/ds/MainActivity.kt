@@ -41,6 +41,7 @@ class MainActivity : Activity() {
     private var pendingSearchTeamPacked: String? = null
     private var pendingLobbyCommands: List<String>? = null
     private var pendingLobbyStatus: String? = null
+    private var reconnectLobbyCommands: List<String>? = null
     private var activeSearchFormat: String? = null
     private var loginInFlight = false
     private var authenticated = false
@@ -48,8 +49,12 @@ class MainActivity : Activity() {
     private val demoHandler = Handler(Looper.getMainLooper())
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
+    private val reconnectHandler = Handler(Looper.getMainLooper())
     private val pendingBattleEvents = ArrayDeque<String>()
     private var battleEventPlaybackScheduled = false
+    private var shouldMaintainConnection = false
+    private var reconnectAttempt = 0
+    private var reconnectScheduled = false
     private var demoTurnIndex = 0
     private var controllerHorizontal = 0
     private var controllerVertical = 0
@@ -164,6 +169,8 @@ class MainActivity : Activity() {
         if (::session.isInitialized) session.removeClientActionListener(clientActionListener)
         demoHandler.removeCallbacksAndMessages(null)
         battleAudioHandler.removeCallbacksAndMessages(null)
+        reconnectHandler.removeCallbacksAndMessages(null)
+        shouldMaintainConnection = false
         clearBattleEventPlayback()
         showdownConnection?.close()
         showdownConnection = null
@@ -437,19 +444,32 @@ class MainActivity : Activity() {
         activeSearchFormat = null
         pendingSearch = false
         pendingSearchTeamPacked = null
+        reconnectLobbyCommands = null
+        shouldMaintainConnection = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectScheduled = false
         session.setConnectionStatus("Battle search cancelled.")
     }
 
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
         activeBattleRoomId = null
         clearBattleEventPlayback()
+        shouldMaintainConnection = true
+        reconnectAttempt = 0
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectScheduled = false
         session.setLiveBattleActive(false)
         showdownConnection?.close()
         pendingSearch = lobbyCommands == null
         pendingLobbyCommands = lobbyCommands
         pendingLobbyStatus = lobbyStatus
+        reconnectLobbyCommands = lobbyCommands
         loginInFlight = false
         authenticated = false
+        connectLobbySocket()
+    }
+
+    private fun connectLobbySocket() {
         lateinit var connection: ShowdownConnection
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
@@ -458,19 +478,35 @@ class MainActivity : Activity() {
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
                         ShowdownConnection.State.CONNECTED -> {
+                            reconnectAttempt = 0
+                            reconnectScheduled = false
                             if (credentialsStore.load() == null) "Joining ${serverEndpoint.displayName}…"
                             else "Signing in to ${serverEndpoint.displayName}…"
                         }
                         ShowdownConnection.State.DISCONNECTED -> {
-                            pendingSearch = false
-                            pendingLobbyCommands = null
-                            pendingLobbyStatus = null
-                            activeSearchFormat = null
                             loginInFlight = false
                             authenticated = false
-                            detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
+                            if (shouldMaintainConnection) {
+                                scheduleReconnect()
+                                "Connection lost. Reconnecting to ${serverEndpoint.displayName}…"
+                            } else {
+                                pendingSearch = false
+                                pendingLobbyCommands = null
+                                pendingLobbyStatus = null
+                                activeSearchFormat = null
+                                detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
+                            }
                         }
-                        ShowdownConnection.State.FAILED -> detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
+                        ShowdownConnection.State.FAILED -> {
+                            loginInFlight = false
+                            authenticated = false
+                            if (shouldMaintainConnection) {
+                                scheduleReconnect()
+                                "Could not reach ${serverEndpoint.displayName}. Retrying…"
+                            } else {
+                                detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
+                            }
+                        }
                     }
                     session.setConnectionStatus(status)
                 }
@@ -514,6 +550,7 @@ class MainActivity : Activity() {
                         pendingSearch = false
                         pendingLobbyCommands = null
                         pendingLobbyStatus = null
+                        reconnectLobbyCommands = null
                         session.setConnectionStatus(error)
                     }
                     if (roomId == null) {
@@ -532,6 +569,7 @@ class MainActivity : Activity() {
                         activeBattleRoomId = roomId
                         session.setLiveBattleActive(true)
                         activeSearchFormat = null
+                        reconnectLobbyCommands = null
                         session.applyProtocolPacket(lines)
                         session.setLiveBattleActive(!session.isBattleFinished())
                     }
@@ -542,18 +580,35 @@ class MainActivity : Activity() {
         connection.connect()
     }
 
+    private fun scheduleReconnect() {
+        if (!shouldMaintainConnection || reconnectScheduled) return
+        reconnectScheduled = true
+        val delayMillis = (1_000L shl reconnectAttempt.coerceAtMost(4)).coerceAtMost(16_000L)
+        reconnectAttempt += 1
+        reconnectHandler.postDelayed({
+            reconnectScheduled = false
+            if (shouldMaintainConnection) connectLobbySocket()
+        }, delayMillis)
+    }
+
     private fun sendPendingLobbyCommands(connection: ShowdownConnection) {
         if (!authenticated || showdownConnection !== connection) return
-        val commands = pendingLobbyCommands ?: if (pendingSearch) {
-            if (!session.matchFormat.usesRandomTeams && pendingSearchTeamPacked.isNullOrBlank()) {
-                pendingSearch = false
-                session.setConnectionStatus("Save a team for ${session.matchFormat.label} before searching.")
-                return
+        val commands = pendingLobbyCommands ?: when {
+            pendingSearch -> {
+                if (!session.matchFormat.usesRandomTeams && pendingSearchTeamPacked.isNullOrBlank()) {
+                    pendingSearch = false
+                    session.setConnectionStatus("Save a team for ${session.matchFormat.label} before searching.")
+                    return
+                }
+                ShowdownLobbyState.searchCommands(session.matchFormat.id, pendingSearchTeamPacked)
             }
-            ShowdownLobbyState.searchCommands(session.matchFormat.id, pendingSearchTeamPacked)
-        } else {
-            return
+            activeSearchFormat != null -> ShowdownLobbyState.searchCommands(activeSearchFormat!!, pendingSearchTeamPacked)
+            activeBattleRoomId != null -> listOf(ShowdownLobbyState.joinBattleCommand(activeBattleRoomId!!))
+            reconnectLobbyCommands != null -> reconnectLobbyCommands!!
+            else -> return
         }
+        val rejoiningBattle = activeBattleRoomId != null && commands == listOf(ShowdownLobbyState.joinBattleCommand(activeBattleRoomId!!))
+        val searching = commands.any { it.startsWith("/search ") }
         val sent = commands.all(connection::sendGlobal)
         if (!sent) {
             session.setConnectionStatus("Could not send the Showdown lobby command.")
@@ -565,9 +620,13 @@ class MainActivity : Activity() {
         pendingLobbyStatus = null
         if (status != null) {
             session.setConnectionStatus(status)
-        } else {
-            activeSearchFormat = session.matchFormat.id
+        } else if (searching) {
+            activeSearchFormat = commands.first { it.startsWith("/search ") }.removePrefix("/search ")
             session.setConnectionStatus("Searching ${session.matchFormat.label}…")
+        } else if (rejoiningBattle) {
+            session.setConnectionStatus("Rejoining battle…")
+        } else if (reconnectLobbyCommands != null) {
+            session.setConnectionStatus("Restoring challenge…")
         }
     }
 
@@ -647,6 +706,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Connect to Showdown before using lobby challenges.")
             return
         }
+        if (commands.any { it.startsWith("/accept ") || it.startsWith("/challenge ") }) reconnectLobbyCommands = commands
         session.setConnectionStatus(status)
     }
 
@@ -711,11 +771,15 @@ class MainActivity : Activity() {
 
     private fun signOut() {
         credentialsStore.clear()
+        shouldMaintainConnection = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectScheduled = false
         showdownConnection?.close()
         showdownConnection = null
         pendingSearch = false
         pendingLobbyCommands = null
         pendingLobbyStatus = null
+        reconnectLobbyCommands = null
         activeSearchFormat = null
         activeBattleRoomId = null
         session.setLiveBattleActive(false)

@@ -38,6 +38,7 @@ class ShowdownLobbyStateTest {
         assertEquals("/reject Gladion", ShowdownLobbyState.rejectChallengeCommand("Gladion"))
         assertEquals("/cancelchallenge Gladion", ShowdownLobbyState.cancelChallengeCommand("Gladion"))
         assertEquals("/cancelsearch", ShowdownLobbyState.cancelSearchCommand())
+        assertEquals("/join battle-gen7ou-1", ShowdownLobbyState.joinBattleCommand(" battle-gen7ou-1 "))
     }
 
     @Test
