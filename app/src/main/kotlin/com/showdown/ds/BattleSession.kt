@@ -492,6 +492,29 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun isLiveBattleActive() = liveBattleActive
+
+    fun prepareForLobby() {
+        applyInit(listOf("", "init", "battle"))
+        protocolHistory.clear()
+        battleLog.clear()
+        battleLog += "No battle in progress."
+        chatMessages.clear()
+        chatMessages += "[System] Ready for a battle."
+        activityMessages.clear()
+        activityMessages += battleLog
+        activityMessages += chatMessages
+        liveBattleActive = false
+        battleFinished = false
+        decisionAvailable = false
+        decisionKind = DecisionKind.WAIT
+        panel = Panel.MENU
+        status = "Find a battle or challenge a player."
+        latestBattleEvent = status
+        latestBattleEventAtNanos = System.nanoTime()
+        notifyListeners()
+    }
+
     fun presentBattleEvent(message: String) {
         if (message.isBlank()) return
         latestBattleEvent = message

@@ -77,6 +77,10 @@ class BattleSceneView(
         val playerCombatants = session.playerActiveCombatants()
         val opponentCombatants = session.opponentActiveCombatants()
         val nowNanos = System.nanoTime()
+        if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
+            drawLobby(canvas, width, height, scale)
+            return
+        }
         val playerStatusAlpha = statusCardAlpha(session.playerPokemon, session.playerCondition, nowNanos) *
             BattleSceneTiming.summonStatusCardAlpha(session.playerEntryAtNanos, nowNanos)
         val opponentStatusAlpha = statusCardAlpha(session.opponentPokemon, session.opponentCondition, nowNanos) *
@@ -323,6 +327,83 @@ class BattleSceneView(
             canvas.drawBitmap(it, source, destination, paint)
             paint.alpha = 255
         }
+    }
+
+    private fun drawLobby(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        paint.alpha = 255
+        paint.shader = LinearGradient(0f, 0f, width, height, Color.rgb(7, 17, 34), Color.rgb(20, 46, 58), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width, height, paint)
+        paint.shader = null
+        logo?.let {
+            source.set(0, 0, it.width, it.height)
+            destination.set(72f * scale, 62f * scale, 150f * scale, 140f * scale)
+            canvas.drawBitmap(it, source, destination, paint)
+        }
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textAlign = Paint.Align.LEFT
+        paint.textSize = 46f * scale
+        paint.color = INK
+        canvas.drawText("SHOWDOWN!", 178f * scale, 111f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 22f * scale
+        paint.color = CYAN
+        canvas.drawText(session.matchFormat.label, 180f * scale, 143f * scale, paint)
+        val card = RectF(width * 0.12f, height * 0.25f, width * 0.88f, height * 0.77f)
+        paint.shader = LinearGradient(card.left, card.top, card.right, card.bottom, Color.rgb(25, 61, 79), Color.rgb(8, 26, 43), Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(card, 34f * scale, 34f * scale, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb(180, 102, 211, 231)
+        canvas.drawRoundRect(card, 34f * scale, 34f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 54f * scale
+        paint.color = INK
+        canvas.drawText("Ready for a battle", card.left + 68f * scale, card.top + 108f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = 28f * scale
+        paint.color = MUTED
+        canvas.drawText("Use the lower screen to connect, search, or challenge.", card.left + 68f * scale, card.top + 165f * scale, paint)
+        val statusWidth = card.width() - 136f * scale
+        paint.textSize = 34f * scale
+        val statusLines = mutableListOf<String>()
+        var remainingWords = session.status.split(' ').filter(String::isNotBlank)
+        while (remainingWords.isNotEmpty() && statusLines.size < 2) {
+            var line = ""
+            var consumed = 0
+            while (consumed < remainingWords.size) {
+                val word = remainingWords[consumed]
+                val candidate = if (line.isBlank()) word else "$line $word"
+                if (paint.measureText(candidate) > statusWidth) break
+                line = candidate
+                consumed += 1
+            }
+            if (consumed == remainingWords.size) {
+                statusLines += line
+                remainingWords = emptyList()
+            } else if (line.isBlank()) {
+                statusLines += ellipsizeToWidth(remainingWords.joinToString(" "), statusWidth, paint)
+                remainingWords = emptyList()
+            } else if (statusLines.isEmpty()) {
+                statusLines += line
+                remainingWords = remainingWords.drop(consumed)
+            } else {
+                statusLines += ellipsizeToWidth(
+                    (listOf(line) + remainingWords.drop(consumed)).joinToString(" "),
+                    statusWidth,
+                    paint
+                )
+                remainingWords = emptyList()
+            }
+        }
+        paint.color = Color.rgb(190, 246, 240)
+        statusLines.take(2).forEachIndexed { index, text ->
+            canvas.drawText(text, card.left + 68f * scale, card.top + (250f + index * 48f) * scale, paint)
+        }
+        paint.textSize = 24f * scale
+        paint.color = CYAN
+        canvas.drawText("Menu: Find battle  ·  Challenge player  ·  Team library", card.left + 68f * scale, card.bottom - 70f * scale, paint)
     }
 
     private fun multiCombatantX(width: Float, player: Boolean, index: Int, count: Int): Float {

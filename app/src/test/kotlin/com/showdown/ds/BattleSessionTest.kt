@@ -292,6 +292,29 @@ class BattleSessionTest {
     }
 
     @Test
+    fun lobbyPreparationRemovesBattleControlsAndSelectsTheMenu() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|request|{\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}"
+            )
+        )
+        session.setLiveBattleActive(true)
+
+        session.prepareForLobby()
+
+        assertFalse(session.isLiveBattleActive())
+        assertFalse(session.isBattleFinished())
+        assertFalse(session.decisionAvailable)
+        assertEquals(BattleSession.Panel.MENU, session.panel)
+        assertTrue(session.moves().isEmpty())
+        assertEquals(listOf("No battle in progress."), session.battleLog())
+        assertTrue(session.status.contains("Find a battle"))
+    }
+
+    @Test
     fun doublesKeepIndependentActiveCombatantState() {
         val session = BattleSession()
 

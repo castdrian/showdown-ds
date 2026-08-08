@@ -176,7 +176,16 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(36f, scale, 30f)
         paint.color = Color.rgb(226, 238, 244)
-        canvas.drawText(if (session.isBattleFinished()) "Battle complete" else session.playerPokemon, 44f * scale, 58f * scale, paint)
+        canvas.drawText(
+            when {
+                session.isBattleFinished() -> "Battle complete"
+                session.isLiveBattleActive() -> "Battle"
+                else -> "Lobby"
+            },
+            44f * scale,
+            58f * scale,
+            paint
+        )
         val turnWidth = 122f * scale
         val turn = RectF(width - 44f * scale - turnWidth, 29f * scale, width - 44f * scale, 78f * scale)
         paint.shader = LinearGradient(turn.left, turn.top, turn.right, turn.bottom, Color.rgb(31, 134, 145), Color.rgb(11, 74, 103), Shader.TileMode.CLAMP)
@@ -186,7 +195,12 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.color = Color.rgb(228, 241, 242)
         paint.textSize = readableTextSize(22f, scale, 20f)
-        canvas.drawText("Turn ${session.turn}", turn.centerX(), turn.centerY() + 8f * scale, paint)
+        canvas.drawText(
+            if (session.isLiveBattleActive() || session.isBattleFinished()) "Turn ${session.turn}" else "Ready",
+            turn.centerX(),
+            turn.centerY() + 8f * scale,
+            paint
+        )
         paint.textAlign = Paint.Align.LEFT
     }
 
@@ -333,7 +347,14 @@ class CommandDeckView(
             contentTop += 112f * scale
         }
         if (gimmicks.isNotEmpty()) {
-            drawGimmicks(canvas, RectF(content.left, contentTop, content.right, content.bottom), scale)
+            val gimmickHeight = minOf(214f * scale, content.bottom - contentTop - 244f * scale)
+            val gimmickBounds = RectF(content.left, contentTop, content.right, contentTop + gimmickHeight)
+            drawGimmicks(canvas, gimmickBounds, scale)
+            drawMoveDetails(
+                canvas,
+                RectF(content.left, gimmickBounds.bottom + 14f * scale, content.right, content.bottom),
+                scale
+            )
         } else {
             drawMoveDetails(canvas, RectF(content.left, contentTop, content.right, content.bottom), scale)
         }
@@ -448,6 +469,15 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(28f, scale, 24f)
         drawSoftText(canvas, "PP ${move.pp} / ${move.maxPp}", surface.left + 42f * scale, surface.bottom - 23f * scale, PAPER, 0.65f * scale)
+        paint.textSize = readableTextSize(23f, scale, 20f)
+        drawSoftText(
+            canvas,
+            "Power ${move.power}  ·  Acc ${move.accuracy}",
+            surface.left + 42f * scale,
+            surface.top + 98f * scale,
+            Color.rgb(205, 232, 235),
+            0.5f * scale
+        )
     }
 
     private fun moveRowPath(bounds: RectF, scale: Float): Path {

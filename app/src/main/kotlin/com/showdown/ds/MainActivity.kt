@@ -51,8 +51,8 @@ class MainActivity : Activity() {
     private var loginInFlight = false
     private var authenticated = false
     private var activeBattleRoomId: String? = null
+    private var battleProtocolReady = false
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
-    private val demoHandler = Handler(Looper.getMainLooper())
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
@@ -61,7 +61,6 @@ class MainActivity : Activity() {
     private var shouldMaintainConnection = false
     private var reconnectAttempt = 0
     private var reconnectScheduled = false
-    private var demoTurnIndex = 0
     private var controllerHorizontal = 0
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
@@ -80,7 +79,7 @@ class MainActivity : Activity() {
         if (roomId != null) {
             if (showdownConnection?.send(roomId, command) != true) session.handleDecisionSendFailure()
         } else {
-            runOnUiThread { resolveDemoTurn(command) }
+            session.handleDecisionSendFailure()
         }
     }
     private val chatListener = BattleSession.ChatListener { message ->
@@ -129,7 +128,7 @@ class MainActivity : Activity() {
         serverEndpoint = loadServerEndpoint()
         credentialsStore = ShowdownCredentialsStore(this)
         teamLibrary = ShowdownTeamLibrary(this)
-        session = createDemoSession()
+        session = BattleSession().apply { prepareForLobby() }
         session.setMatchFormat(loadMatchFormat())
         session.addListener(sessionListener)
         session.addBattleEventListener(battleEventListener)
@@ -149,16 +148,6 @@ class MainActivity : Activity() {
         battleAudio = BattleAudio(this, spriteCache, session)
         battleAudio.updateOptions(session)
         battleAudio.preloadMoves(session.moves().map { it.name })
-        session.presentBattleEvent(session.sendOutMessage(session.playerPokemon, true))
-        battleAudioHandler.postDelayed(
-            { session.presentBattleEvent(session.sendOutMessage(session.opponentPokemon, false)) },
-            BattleSceneTiming.summonDurationNanos / 1_000_000L
-        )
-        battleAudioHandler.postDelayed({ battleAudio.playCry(session.playerPokemon) }, 30)
-        battleAudioHandler.postDelayed(
-            { battleAudio.playCry(session.opponentPokemon) },
-            BattleSceneTiming.summonDurationNanos / 1_000_000L + 30L
-        )
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         setContentView(createPrimaryScreen())
         displayManager?.registerDisplayListener(displayListener, null)
@@ -188,7 +177,6 @@ class MainActivity : Activity() {
         if (::session.isInitialized) session.removeChatListener(chatListener)
         if (::session.isInitialized) session.removeFeedbackListener(feedbackListener)
         if (::session.isInitialized) session.removeClientActionListener(clientActionListener)
-        demoHandler.removeCallbacksAndMessages(null)
         battleAudioHandler.removeCallbacksAndMessages(null)
         reconnectHandler.removeCallbacksAndMessages(null)
         shouldMaintainConnection = false
@@ -352,87 +340,6 @@ class MainActivity : Activity() {
         battleEventPlaybackScheduled = false
     }
 
-    private fun createDemoSession() = BattleSession().apply {
-        applyProtocolLine("|init|battle")
-        applyProtocolLine("|player|p1|ADRIAN")
-        applyProtocolLine("|player|p2|GLADION")
-        applyProtocolLine("|tier|[Gen 7] OU")
-        applyProtocolLine("|switch|p1a: Decidueye|Decidueye, L50, M|293/293")
-        applyProtocolLine("|switch|p2a: Blissey|Blissey, L50, F|100/100")
-        applyProtocolLine("|turn|1")
-        applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Spirit Shackle\",\"type\":\"Ghost\",\"pp\":10},{\"move\":\"Leaf Blade\",\"type\":\"Grass\",\"pp\":15},{\"move\":\"Brave Bird\",\"type\":\"Flying\",\"pp\":15},{\"move\":\"Sucker Punch\",\"type\":\"Dark\",\"pp\":5}]}]}")
-    }
-
-    private fun resolveDemoTurn(command: String) {
-        val moveIndex = command.removePrefix("/choose move ").substringBefore(' ').substringBefore('|').toIntOrNull()?.minus(1) ?: return
-        val move = session.moves().getOrNull(moveIndex)?.name ?: return
-        val turnIndex = demoTurnIndex++
-        val playerTarget = session.opponentPokemon
-        val opponentTarget = session.playerPokemon
-        val playerOutcome = when (move) {
-            "Spirit Shackle" -> DemoOutcome(24, null)
-            "Leaf Blade" -> DemoOutcome(34, "-crit")
-            "Brave Bird" -> DemoOutcome(18, "-resisted")
-            "Sucker Punch" -> DemoOutcome(24, null)
-            else -> DemoOutcome(20, null)
-        }
-        val opponentOutcome = when (turnIndex % 3) {
-            0 -> DemoMove("Ice Beam", 18, null)
-            1 -> DemoMove("Shadow Ball", 32, "-supereffective")
-            else -> DemoMove("Psychic", 21, null)
-        }
-        val opponentHp = reducedCondition(session.opponentHp, playerOutcome.damagePercent)
-        val playerHp = reducedCondition(session.playerHp, opponentOutcome.damagePercent)
-        val opponentFainted = opponentHp.startsWith("0 ")
-        demoHandler.removeCallbacksAndMessages(null)
-        demoHandler.postDelayed({
-            session.applyProtocolPacket(
-                buildList {
-                    add("|move|p1a: $opponentTarget|$move|p2a: $playerTarget")
-                    add("|-damage|p2a: $playerTarget|$opponentHp")
-                    playerOutcome.modifier?.let { add("|$it|p2a: $playerTarget") }
-                    if (opponentFainted) {
-                        add("|faint|p2a: $playerTarget")
-                        add("|win|${session.playerName}")
-                    }
-                }
-            )
-        }, 450)
-        if (opponentFainted) return
-        demoHandler.postDelayed({
-            session.applyProtocolPacket(
-                buildList {
-                    add("|move|p2a: $playerTarget|${opponentOutcome.move}|p1a: $opponentTarget")
-                    add("|-damage|p1a: $opponentTarget|$playerHp")
-                    opponentOutcome.modifier?.let { add("|$it|p1a: $opponentTarget") }
-                }
-            )
-        }, 3_350)
-        demoHandler.postDelayed({ session.applyProtocolLine("|turn|${session.turn + 1}") }, 6_950)
-        demoHandler.postDelayed({ session.applyProtocolLine(demoRequest(moveIndex)) }, 7_500)
-    }
-
-    private fun demoRequest(selectedMoveIndex: Int): String {
-        val moves = session.moves().mapIndexed { index, move ->
-            val pp = (move.pp - if (index == selectedMoveIndex) 1 else 0).coerceAtLeast(0)
-            "{\"move\":\"${move.name}\",\"type\":\"${move.type}\",\"pp\":$pp,\"maxpp\":${move.maxPp},\"category\":\"${move.category}\",\"basePower\":${move.power.toIntOrNull() ?: 0},\"accuracy\":\"${move.accuracy}\"}"
-        }.joinToString(",")
-        return "|request|{\"rqid\":${demoTurnIndex + 100},\"active\":[{\"canZMove\":[{}],\"moves\":[$moves]}]}"
-    }
-
-    private fun reducedCondition(condition: String, damagePercent: Int): String {
-        val hp = condition.substringBefore(' ').split('/', limit = 2)
-        val current = hp.getOrNull(0)?.toIntOrNull() ?: 100
-        val maximum = hp.getOrNull(1)?.toIntOrNull() ?: 100
-        val damage = ((maximum * damagePercent.coerceIn(0, 100)) + 99) / 100
-        val remaining = (current - damage).coerceAtLeast(0)
-        return if (remaining == 0) "0 fnt" else "$remaining/$maximum"
-    }
-
-    private data class DemoOutcome(val damagePercent: Int, val modifier: String?)
-
-    private data class DemoMove(val move: String, val damagePercent: Int, val modifier: String?)
-
     private fun findBattle() {
         if (activeSearchFormat != null || pendingSearch) {
             cancelActiveSearch()
@@ -511,7 +418,9 @@ class MainActivity : Activity() {
     }
 
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
+        session.prepareForLobby()
         activeBattleRoomId = null
+        battleProtocolReady = false
         clearBattleEventPlayback()
         shouldMaintainConnection = true
         reconnectAttempt = 0
@@ -549,7 +458,8 @@ class MainActivity : Activity() {
             ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
         activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
         activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
-        session.setLiveBattleActive(activeBattleRoomId != null)
+        battleProtocolReady = false
+        session.setLiveBattleActive(false)
         connectLobbySocket()
     }
 
@@ -583,6 +493,10 @@ class MainActivity : Activity() {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
                 runOnUiThread {
                     if (showdownConnection !== connection) return@runOnUiThread
+                    if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
+                        battleProtocolReady = false
+                        session.setLiveBattleActive(false)
+                    }
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
                         ShowdownConnection.State.CONNECTED -> {
@@ -693,17 +607,19 @@ class MainActivity : Activity() {
                     if (roomId?.startsWith("battle-") == true) {
                         if (lines.any { it.startsWith("|init|battle") }) clearBattleEventPlayback()
                         activeBattleRoomId = roomId
-                        session.setLiveBattleActive(true)
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
                         persistLobbyState()
                         session.applyProtocolPacket(lines)
+                        if (lines.any { it.startsWith("|init|battle") }) battleProtocolReady = true
+                        session.setLiveBattleActive(battleProtocolReady)
                         if (session.isBattleFinished()) {
                             lobbyState.clearBattle(roomId)
                             activeBattleRoomId = null
+                            battleProtocolReady = false
                             clearPersistedLobbyState()
                         }
-                        session.setLiveBattleActive(activeBattleRoomId != null)
+                        session.setLiveBattleActive(activeBattleRoomId != null && battleProtocolReady)
                     }
                 }
             }
@@ -722,7 +638,8 @@ class MainActivity : Activity() {
         pendingLobbyStatus = null
         reconnectLobbyCommands = null
         activeBattleRoomId = roomId
-        session.setLiveBattleActive(true)
+        battleProtocolReady = false
+        session.setLiveBattleActive(false)
         session.setConnectionStatus("Joining battle…")
         persistLobbyState()
     }
@@ -955,7 +872,7 @@ class MainActivity : Activity() {
         activeBattleRoomId = null
         displayedOutgoingChallenge = null
         clearPersistedLobbyState()
-        session.setLiveBattleActive(false)
+        session.prepareForLobby()
         session.setConnectionStatus("Signed out of Showdown.")
     }
 
