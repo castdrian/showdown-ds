@@ -427,6 +427,14 @@ class MainActivity : Activity() {
             cancelActiveSearch()
             return
         }
+        if (authenticated && lobbyState.battles.isNotEmpty()) {
+            showBattleRoomPicker()
+            return
+        }
+        beginBattleSearch()
+    }
+
+    private fun beginBattleSearch() {
         val teamOptions = teamLibrary.teams().filter { it.format.equals(session.matchFormat.id, true) }
         if (!session.matchFormat.usesRandomTeams && teamOptions.isEmpty()) {
             session.setConnectionStatus("Save a ${session.matchFormat.label} team before searching.")
@@ -442,6 +450,26 @@ class MainActivity : Activity() {
         }
         pendingSearchTeamPacked = teamOptions.firstOrNull()?.packed?.takeUnless { session.matchFormat.usesRandomTeams }
         startLobbyConnection()
+    }
+
+    private fun showBattleRoomPicker() {
+        val battles = lobbyState.battles.entries.toList()
+        val labels = listOf("Find a new battle") + battles.map { (roomId, description) -> "$description\n$roomId" }
+        AlertDialog.Builder(this)
+            .setTitle("Showdown rooms")
+            .setItems(labels.toTypedArray()) { _, selected ->
+                if (selected == 0) {
+                    beginBattleSearch()
+                } else {
+                    val roomId = battles[selected - 1].key
+                    startLobbyConnection(
+                        listOf(ShowdownLobbyState.joinBattleCommand(roomId)),
+                        "Joining battle room…"
+                    )
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun showTeamPicker(teams: List<ShowdownTeam>, onSelected: (ShowdownTeam) -> Unit) {
@@ -615,7 +643,11 @@ class MainActivity : Activity() {
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
                         session.applyProtocolPacket(lines)
-                        session.setLiveBattleActive(!session.isBattleFinished())
+                        if (session.isBattleFinished()) {
+                            lobbyState.clearBattle(roomId)
+                            activeBattleRoomId = null
+                        }
+                        session.setLiveBattleActive(activeBattleRoomId != null)
                     }
                 }
             }

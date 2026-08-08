@@ -22,6 +22,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun disabledMovesCannotBeSubmitted() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine("|request|{\"rqid\":9,\"active\":[{\"moves\":[{\"move\":\"Splash\",\"pp\":0,\"disabled\":true}]}]}")
+
+        session.confirmSelection()
+
+        assertTrue(decisions.isEmpty())
+        assertTrue(session.decisionAvailable)
+        assertEquals("Splash is disabled.", session.status)
+    }
+
+    @Test
     fun teamPreviewBuildsTheSubmittedOrderFromIndividualSelections() {
         val session = BattleSession()
         val decisions = mutableListOf<String>()

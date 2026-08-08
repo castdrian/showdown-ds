@@ -106,7 +106,8 @@ class BattleSession {
         val maxPp: Int = pp,
         val category: String = "Status",
         val power: String = "—",
-        val accuracy: String = "—"
+        val accuracy: String = "—",
+        val disabled: Boolean = false
     )
 
     data class BattleFeedback(
@@ -488,6 +489,11 @@ class BattleSession {
 
     fun selectMoveWithTouch(index: Int) {
         if (index !in moves.indices) return
+        if (moves[index].disabled) {
+            status = "${moves[index].name} is disabled."
+            notifyListeners()
+            return
+        }
         if (touchConfirmationEnabled && focusedMove != index) {
             focusMove(index)
             return
@@ -550,6 +556,10 @@ class BattleSession {
             Panel.MOVES -> {
                 if (!decisionAvailable || decisionKind != DecisionKind.MOVE || focusedMove !in moves.indices) return
                 val move = moves[focusedMove]
+                if (move.disabled) {
+                    status = "${move.name} is disabled."
+                    return
+                }
                 val gimmick = selectedGimmick
                 val choice = "/choose move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${requestId?.let { "|$it" } ?: ""}"
                 status = "Move sent: ${gimmick?.label?.plus(" ") ?: ""}${move.name}"
@@ -938,7 +948,8 @@ class BattleSession {
                     move.optInt("maxpp", pp),
                     move.optString("category", "Status"),
                     power,
-                    move.optString("accuracy", "—")
+                    move.optString("accuracy", "—"),
+                    move.optBoolean("disabled") || pp <= 0
                 )
             }
             focusedMove = 0

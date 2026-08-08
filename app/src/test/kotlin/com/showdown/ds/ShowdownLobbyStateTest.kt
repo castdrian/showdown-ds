@@ -60,4 +60,14 @@ class ShowdownLobbyStateTest {
         assertFalse(lobby.isSearching("gen7ou"))
         assertTrue(lobby.isSearching("gen7randombattle"))
     }
+
+    @Test
+    fun removesACompletedBattleRoomFromTheLobby() {
+        val lobby = ShowdownLobbyState()
+        lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-gen9ou-1\":\"Adrian vs. Gladion\"}}"))
+
+        lobby.clearBattle("battle-gen9ou-1")
+
+        assertTrue(lobby.battles.isEmpty())
+    }
 }

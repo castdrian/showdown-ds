@@ -383,6 +383,10 @@ class CommandDeckView(
         )
         canvas.drawPath(moveRowPath(surface, scale), paint)
         paint.shader = null
+        if (move.disabled) {
+            paint.color = Color.argb(132, 3, 12, 20)
+            canvas.drawPath(moveRowPath(surface, scale), paint)
+        }
         paint.color = Color.argb(194, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
         canvas.drawRoundRect(RectF(surface.left + 13f * scale, surface.top + 12f * scale, surface.left + 19f * scale, surface.bottom - 12f * scale), 3f * scale, 3f * scale, paint)
         paint.style = Paint.Style.STROKE

@@ -20,6 +20,10 @@ class ShowdownLobbyState {
         activeSearches.remove(format)
     }
 
+    fun clearBattle(roomId: String) {
+        activeBattles.remove(roomId)
+    }
+
     fun applyProtocol(lines: List<String>) {
         lines.forEach { line ->
             val fields = line.split('|')
