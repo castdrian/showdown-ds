@@ -936,8 +936,9 @@ class CommandDeckView(
         7 -> "Confirm: ${entry.substringAfterLast(' ')}"
         8 -> "Sprites: ${entry.substringAfterLast(' ')}"
         9 -> "Team library"
-        10 -> "Account"
-        11 -> "Server"
+        10 -> "Rooms"
+        11 -> "Account"
+        12 -> "Server"
         else -> "Copy transcript"
     }
 

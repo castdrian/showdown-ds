@@ -58,6 +58,7 @@ class BattleSession {
         CONFIGURE_SERVER,
         CONFIGURE_ACCOUNT,
         CONFIGURE_TEAM,
+        OPEN_ROOMS,
         CHOOSE_FORMAT,
         OPEN_CHAT,
         FORFEIT,
@@ -1751,8 +1752,9 @@ class BattleSession {
         7 -> "Touch confirmation ${if (touchConfirmationEnabled) "on" else "off"}"
         8 -> "Sprite style ${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "classic"}"
         9 -> "Team library"
-        10 -> "Showdown account"
-        11 -> "Configure server"
+        10 -> "Rooms"
+        11 -> "Showdown account"
+        12 -> "Configure server"
         else -> "Copy battle transcript"
     }
 
@@ -1804,10 +1806,14 @@ class BattleSession {
                 "Manage your saved teams."
             }
             10 -> {
+                publishClientAction(ClientAction.OPEN_ROOMS)
+                "Browse Showdown rooms."
+            }
+            11 -> {
                 publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
                 "Configure your Showdown account."
             }
-            11 -> {
+            12 -> {
                 publishClientAction(ClientAction.CONFIGURE_SERVER)
                 "Choose a Pokémon Showdown server."
             }
@@ -2036,7 +2042,7 @@ class BattleSession {
     }
 
     companion object {
-        const val MENU_ITEM_COUNT = 13
+        const val MENU_ITEM_COUNT = 14
         const val MENU_COLUMNS = 3
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 

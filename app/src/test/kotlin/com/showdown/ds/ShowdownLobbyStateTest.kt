@@ -27,6 +27,25 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun tracksPublicRoomsFromTheShowdownRoomQuery() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(
+            listOf(
+                "|queryresponse|rooms|{" +
+                    "\"userCount\":123," +
+                    "\"official\":[{\"title\":\"Lobby\",\"userCount\":42}]," +
+                    "\"chat\":[{\"title\":\"OverUsed\",\"desc\":\"Smogon discussion\",\"userCount\":18}]" +
+                    "}"
+            )
+        )
+
+        assertEquals(listOf("lobby", "overused"), lobby.rooms.map(ShowdownLobbyState.RoomSummary::id))
+        assertEquals("Official", lobby.rooms.first().section)
+        assertEquals(18, lobby.rooms[1].userCount)
+    }
+
+    @Test
     fun createsPackedTeamCommandsForBuiltTeamFormats() {
         assertEquals(listOf("/utm Pikachu||lightball", "/search gen7ou"), ShowdownLobbyState.searchCommands("gen7ou", "Pikachu||lightball"))
         assertEquals(listOf("/utm null", "/search gen7randombattle"), ShowdownLobbyState.searchCommands("gen7randombattle", null))
@@ -86,6 +105,7 @@ class ShowdownLobbyStateTest {
         assertTrue(lobby.battles.isEmpty())
         assertTrue(lobby.incomingChallenges.isEmpty())
         assertEquals(null, lobby.outgoingChallenge)
+        assertTrue(lobby.rooms.isEmpty())
         assertFalse(lobby.isSearching("gen9ou"))
     }
 

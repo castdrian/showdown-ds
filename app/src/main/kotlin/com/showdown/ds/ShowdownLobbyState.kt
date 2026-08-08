@@ -4,13 +4,16 @@ import org.json.JSONObject
 
 class ShowdownLobbyState {
     data class OutgoingChallenge(val username: String, val format: String)
+    data class RoomSummary(val id: String, val title: String, val description: String, val userCount: Int, val section: String)
 
     private val activeSearches = mutableSetOf<String>()
     private val activeBattles = linkedMapOf<String, String>()
     private val pendingChallenges = linkedMapOf<String, String>()
+    private val publicRooms = mutableListOf<RoomSummary>()
 
     val battles get() = activeBattles.toMap()
     val incomingChallenges get() = pendingChallenges.toMap()
+    val rooms get() = publicRooms.toList()
     var outgoingChallenge: OutgoingChallenge? = null
         private set
 
@@ -24,6 +27,7 @@ class ShowdownLobbyState {
         activeSearches.clear()
         activeBattles.clear()
         pendingChallenges.clear()
+        publicRooms.clear()
         outgoingChallenge = null
     }
 
@@ -39,9 +43,40 @@ class ShowdownLobbyState {
             when (fields.getOrNull(1)) {
                 "updatesearch" -> applySearch(fields.getOrNull(2))
                 "updatechallenges" -> applyChallenges(fields.getOrNull(2))
+                "queryresponse" -> if (fields.getOrNull(2) == "rooms") applyRooms(fields.getOrNull(3))
             }
         }
     }
+
+    private fun applyRooms(payload: String?) {
+        val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return
+        val parsed = mutableListOf<RoomSummary>()
+        appendRooms(state.optJSONArray("official"), "Official", parsed)
+        appendRooms(state.optJSONArray("pspl"), "Spotlight", parsed)
+        appendRooms(state.optJSONArray("chat"), "Chat rooms", parsed)
+        publicRooms.clear()
+        publicRooms += parsed.distinctBy(RoomSummary::id)
+    }
+
+    private fun appendRooms(values: org.json.JSONArray?, section: String, target: MutableList<RoomSummary>) {
+        if (values == null) return
+        for (index in 0 until values.length()) {
+            val room = values.optJSONObject(index) ?: continue
+            val title = room.optString("title").trim().ifBlank { room.optString("id").trim() }
+            val id = room.optString("id").trim().ifBlank { roomIdFromTitle(title) }
+            if (id.isBlank() || title.isBlank()) continue
+            target += RoomSummary(
+                id = id,
+                title = title,
+                description = room.optString("desc").trim(),
+                userCount = room.optInt("userCount", -1),
+                section = room.optString("section").trim().ifBlank { section }
+            )
+        }
+    }
+
+    private fun roomIdFromTitle(title: String) = title.lowercase()
+        .replace("[^a-z0-9]".toRegex(), "")
 
     private fun applySearch(payload: String?) {
         val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return

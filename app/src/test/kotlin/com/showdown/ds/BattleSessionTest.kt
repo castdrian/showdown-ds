@@ -785,10 +785,13 @@ class BattleSessionTest {
         session.confirmSelection()
         session.selectMenuItem(11)
         session.confirmSelection()
+        session.selectMenuItem(12)
+        session.confirmSelection()
         assertEquals(
             listOf(
                 BattleSession.ClientAction.FIND_BATTLE,
                 BattleSession.ClientAction.CONFIGURE_TEAM,
+                BattleSession.ClientAction.OPEN_ROOMS,
                 BattleSession.ClientAction.CONFIGURE_ACCOUNT,
                 BattleSession.ClientAction.CONFIGURE_SERVER
             ),
@@ -804,7 +807,7 @@ class BattleSessionTest {
         session.applyProtocolLine("|init|battle")
 
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(12)
+        session.selectMenuItem(13)
         session.confirmSelection()
 
         assertEquals(listOf(BattleSession.ClientAction.EXPORT_REPLAY), actions)

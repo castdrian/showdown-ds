@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
     private var showdownConnection: ShowdownConnection? = null
     private val lobbyState = ShowdownLobbyState()
+    private val chatRoomState = ShowdownChatRoomState()
     private val loginClient = ShowdownLoginClient()
     private var pendingSearch = false
     private var pendingSearchTeamPacked: String? = null
@@ -54,6 +55,13 @@ class MainActivity : Activity() {
     private var activeBattleRoomId: String? = null
     private var battleProtocolReady = false
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
+    private var roomListDialog: AlertDialog? = null
+    private var roomListPending = false
+    private var chatRoomDialog: AlertDialog? = null
+    private var chatRoomMessagesView: TextView? = null
+    private var chatRoomInput: EditText? = null
+    private var chatRoomScroll: ScrollView? = null
+    private var pendingChatRoomId: String? = null
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
@@ -117,6 +125,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.CONFIGURE_SERVER -> showServerSettings()
                 BattleSession.ClientAction.CONFIGURE_ACCOUNT -> showAccountSettings()
                 BattleSession.ClientAction.CONFIGURE_TEAM -> showTeamLibrary()
+                BattleSession.ClientAction.OPEN_ROOMS -> showRoomList()
                 BattleSession.ClientAction.CHOOSE_FORMAT -> showFormatPicker()
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
@@ -193,6 +202,16 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         dismissSecondaryDisplay()
+        roomListDialog?.dismiss()
+        roomListDialog = null
+        roomListPending = false
+        chatRoomDialog?.dismiss()
+        chatRoomDialog = null
+        chatRoomMessagesView = null
+        chatRoomInput = null
+        chatRoomScroll = null
+        pendingChatRoomId = null
+        chatRoomState.clear()
         displayManager?.unregisterDisplayListener(displayListener)
         if (::session.isInitialized) session.removeListener(sessionListener)
         if (::session.isInitialized) session.removeBattleEventListener(battleEventListener)
@@ -415,6 +434,146 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun showRoomList() {
+        if (!authenticated) {
+            session.setConnectionStatus("Sign in to browse public rooms.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before browsing rooms.")
+            return
+        }
+        roomListPending = true
+        renderRoomListDialog()
+        if (showdownConnection?.sendGlobal("/cmd rooms") != true) {
+            roomListPending = false
+            roomListDialog?.dismiss()
+            roomListDialog = null
+            session.setConnectionStatus("Showdown connection is not ready yet.")
+        }
+    }
+
+    private fun renderRoomListDialog() {
+        val rooms = lobbyState.rooms
+        val labels = if (rooms.isEmpty()) {
+            arrayOf("Loading public rooms…")
+        } else {
+            rooms.map { room ->
+                val users = room.userCount.takeIf { it >= 0 }?.let { " · $it online" }.orEmpty()
+                "${room.title}$users\n${room.description.ifBlank { room.section }}"
+            }.toTypedArray()
+        }
+        val previous = roomListDialog
+        roomListDialog = null
+        previous?.dismiss()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Showdown rooms")
+            .setItems(labels) { _, selected ->
+                val room = rooms.getOrNull(selected) ?: return@setItems
+                roomListPending = false
+                roomListDialog = null
+                pendingChatRoomId = room.id
+                if (showdownConnection?.sendGlobal("/join ${room.id}") == true) {
+                    session.setConnectionStatus("Joining ${room.title}…")
+                } else {
+                    pendingChatRoomId = null
+                    session.setConnectionStatus("Could not join ${room.title}.")
+                }
+            }
+            .setNegativeButton("Close") { _, _ -> roomListPending = false }
+            .create()
+        dialog.setOnDismissListener {
+            if (roomListDialog === dialog) {
+                roomListDialog = null
+                roomListPending = false
+            }
+        }
+        roomListDialog = dialog
+        dialog.show()
+    }
+
+    private fun showChatRoomDialog() {
+        val existing = chatRoomDialog
+        if (existing != null) {
+            updateChatRoomDialog()
+            return
+        }
+        val density = resources.displayMetrics.density
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24f * density).toInt(), (8f * density).toInt(), (24f * density).toInt(), 0)
+        }
+        val messages = TextView(this).apply {
+            setTextSize(18f)
+            setTextColor(0xfff2f6ff.toInt())
+            setPadding(0, (8f * density).toInt(), 0, (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(messages, -1, -2)
+        }
+        val input = EditText(this).apply {
+            hint = "Message room"
+            setSingleLine(true)
+            setTextSize(18f)
+        }
+        val send = Button(this).apply {
+            text = "Send"
+            setOnClickListener { sendChatRoomMessage() }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(send, LinearLayout.LayoutParams(-2, -2))
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(controls, LinearLayout.LayoutParams(-1, -2))
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(chatRoomState.title)
+            .setView(root)
+            .setNegativeButton("Leave", null)
+            .create()
+        dialog.setOnDismissListener {
+            val roomId = chatRoomState.roomId
+            if (roomId != null && !isFinishing) showdownConnection?.send(roomId, "/leave")
+            if (chatRoomDialog === dialog) {
+                chatRoomDialog = null
+                chatRoomMessagesView = null
+                chatRoomInput = null
+                chatRoomScroll = null
+                pendingChatRoomId = null
+                chatRoomState.clear()
+            }
+        }
+        chatRoomDialog = dialog
+        chatRoomMessagesView = messages
+        chatRoomInput = input
+        chatRoomScroll = scroll
+        dialog.show()
+        updateChatRoomDialog()
+    }
+
+    private fun updateChatRoomDialog() {
+        val dialog = chatRoomDialog ?: return
+        dialog.setTitle("${chatRoomState.title} · ${chatRoomState.users.size} online")
+        val content = chatRoomState.messages.joinToString("\n") { message ->
+            if (message.system) message.text else "${message.speaker}: ${message.text}"
+        }.ifBlank { "No messages yet." }
+        chatRoomMessagesView?.text = content
+        chatRoomScroll?.post { chatRoomScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun sendChatRoomMessage() {
+        val roomId = chatRoomState.roomId ?: return
+        val message = chatRoomInput?.text?.toString()?.trim().orEmpty()
+        if (message.isBlank()) return
+        if (showdownConnection?.send(roomId, message) == true) {
+            chatRoomInput?.setText("")
+        } else {
+            session.setConnectionStatus("Chat room connection is not ready.")
+        }
+    }
+
     private fun showTeamPicker(teams: List<ShowdownTeam>, onSelected: (ShowdownTeam) -> Unit) {
         AlertDialog.Builder(this)
             .setTitle("Choose a team")
@@ -444,6 +603,9 @@ class MainActivity : Activity() {
     }
 
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
+        chatRoomDialog?.dismiss()
+        chatRoomState.clear()
+        pendingChatRoomId = null
         session.prepareForLobby()
         activeBattleRoomId = null
         battleProtocolReady = false
@@ -522,6 +684,9 @@ class MainActivity : Activity() {
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
                         battleProtocolReady = false
                         session.setLiveBattleActive(false)
+                        chatRoomDialog?.dismiss()
+                        chatRoomState.clear()
+                        pendingChatRoomId = null
                     }
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
@@ -611,6 +776,7 @@ class MainActivity : Activity() {
                         val previousChallenges = lobbyState.incomingChallenges
                         val previousBattleRoomIds = lobbyState.battles.keys
                         lobbyState.applyProtocol(lines)
+                        if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") }) renderRoomListDialog()
                         if (activeSearchFormat != null) {
                             lobbyState.firstNewBattle(previousBattleRoomIds)?.let { matchedRoomId ->
                                 joinMatchedBattle(connection, matchedRoomId)
@@ -647,6 +813,15 @@ class MainActivity : Activity() {
                             clearPersistedLobbyState()
                         }
                         session.setLiveBattleActive(activeBattleRoomId != null && battleProtocolReady)
+                    }
+                    if (roomId != null && !roomId.startsWith("battle-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
+                        val changed = chatRoomState.applyProtocol(roomId, lines)
+                        if (changed && pendingChatRoomId == roomId) {
+                            pendingChatRoomId = null
+                            showChatRoomDialog()
+                        } else if (changed && chatRoomDialog != null && chatRoomState.roomId == roomId) {
+                            updateChatRoomDialog()
+                        }
                     }
                 }
             }
