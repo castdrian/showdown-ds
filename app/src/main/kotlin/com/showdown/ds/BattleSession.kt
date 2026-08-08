@@ -175,6 +175,7 @@ class BattleSession {
         MoveOption("Parting Shot", "DARK", 20, 20, "Status", "—", "100")
     )
     private val team = mutableListOf("Incineroar", "Naganadel", "Mimikyu", "Landorus", "Rotom-Wash", "Ferrothorn")
+    private val teamPreviewOrder = mutableListOf<Int>()
     private val availableGimmicks = mutableListOf(BattleGimmick.Z_POWER)
     private val teamDetails = mutableListOf(
         PokemonDetails("Incineroar", listOf("FIRE", "DARK"), "50", "♂", "100/100", "READY", "Intimidate", "Firium Z", moves.map { it.name }, "HP 100 · Atk 135 · Def 90 · Spe 60"),
@@ -342,6 +343,8 @@ class BattleSession {
 
     fun team() = team.toList()
 
+    fun teamPreviewOrder() = teamPreviewOrder.toList()
+
     fun battleLog() = battleLog.toList()
 
     fun chatMessages() = chatMessages.toList()
@@ -494,6 +497,13 @@ class BattleSession {
         confirmSelection()
     }
 
+    fun selectTeamWithTouch(index: Int) {
+        if (index !in team.indices) return
+        focusedTeam = index
+        panel = Panel.TEAM
+        confirmSelection()
+    }
+
     fun moveFocus(horizontal: Int, vertical: Int) {
         when (panel) {
             Panel.MOVES -> moveMoveFocus(horizontal, vertical)
@@ -573,6 +583,12 @@ class BattleSession {
     }
 
     fun goBack() {
+        if (panel == Panel.TEAM && decisionAvailable && decisionKind == DecisionKind.TEAM_PREVIEW && teamPreviewOrder.isNotEmpty()) {
+            val removed = teamPreviewOrder.removeLast()
+            status = "Removed ${team[removed]} from the order."
+            notifyListeners()
+            return
+        }
         if (panel != Panel.MOVES) selectPanel(Panel.MOVES)
     }
 
@@ -668,6 +684,7 @@ class BattleSession {
 
     private fun applyInit(fields: List<String>) {
         if (fields.getOrNull(2) != "battle") return
+        teamPreviewOrder.clear()
         battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
         selectedGimmick = null
         battleFinished = false
@@ -869,6 +886,7 @@ class BattleSession {
 
     private fun applyRequest(fields: List<String>) {
         val requestText = fields.getOrNull(2) ?: return
+        teamPreviewOrder.clear()
         runCatching {
             val request = JSONObject(requestText)
             requestId = request.optInt("rqid", -1).takeIf { it >= 0 }
@@ -942,6 +960,7 @@ class BattleSession {
             decisionKind = DecisionKind.WAIT
             requestId = null
             selectedGimmick = null
+            teamPreviewOrder.clear()
             battleFinished = true
         }
     }
@@ -1099,9 +1118,11 @@ class BattleSession {
     }
 
     private fun moveTeamFocus(horizontal: Int, vertical: Int) {
-        val row = (focusedTeam / 3 + vertical).coerceIn(0, 1)
+        if (team.isEmpty()) return
+        val rowCount = (team.size + 2) / 3
+        val row = (focusedTeam / 3 + vertical).coerceIn(0, rowCount - 1)
         val column = (focusedTeam % 3 + horizontal).coerceIn(0, 2)
-        focusedTeam = row * 3 + column
+        focusedTeam = (row * 3 + column).coerceIn(0, team.lastIndex)
         status = "Ready: ${team[focusedTeam]}"
         notifyListeners()
     }
@@ -1197,6 +1218,26 @@ class BattleSession {
             status = "No Pokémon can be selected."
             return
         }
+        if (decisionKind == DecisionKind.TEAM_PREVIEW) {
+            if (teamCondition(focusedTeam).contains("FNT", true)) {
+                status = "That Pokémon has fainted."
+                return
+            }
+            if (focusedTeam in teamPreviewOrder) {
+                status = "${team[focusedTeam]} is already in the order."
+                return
+            }
+            teamPreviewOrder += focusedTeam
+            val availableTeam = team.indices.filterNot { teamCondition(it).contains("FNT", true) }
+            if (teamPreviewOrder.size < availableTeam.size) {
+                status = "Team order ${teamPreviewOrder.size}/${availableTeam.size}: choose the next Pokémon."
+                return
+            }
+            completeTeamSelection(
+                "/choose team ${teamPreviewOrder.joinToString("") { (it + 1).toString() }}${requestId?.let { "|$it" } ?: ""}"
+            )
+            return
+        }
         val choice = when (decisionKind) {
             DecisionKind.SWITCH -> {
                 if (teamCondition(focusedTeam).contains("FNT", true)) {
@@ -1205,18 +1246,18 @@ class BattleSession {
                 }
                 "/choose switch ${focusedTeam + 1}${requestId?.let { "|$it" } ?: ""}"
             }
-            DecisionKind.TEAM_PREVIEW -> {
-                val order = team.indices.filter { !teamCondition(it).contains("FNT", true) }.joinToString("") { (it + 1).toString() }
-                "/choose team $order${requestId?.let { "|$it" } ?: ""}"
-            }
             else -> {
                 status = "Selected ${team[focusedTeam]}."
                 return
             }
         }
+        completeTeamSelection(choice)
+    }
+
+    private fun completeTeamSelection(choice: String) {
         decisionAvailable = false
         status = "Queued: ${team[focusedTeam]}"
-        appendLog("${team[focusedTeam]} was selected.")
+        appendLog(if (choice.startsWith("/choose team")) "Team order submitted." else "${team[focusedTeam]} was selected.")
         chatMessages += "[You] $choice"
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionListeners.toList().forEach { it.onDecision(choice) }

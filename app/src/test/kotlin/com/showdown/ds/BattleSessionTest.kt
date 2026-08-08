@@ -22,6 +22,36 @@ class BattleSessionTest {
     }
 
     @Test
+    fun teamPreviewBuildsTheSubmittedOrderFromIndividualSelections() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine("|request|{\"rqid\":14,\"teamPreview\":true}")
+
+        val desiredOrder = listOf(2, 0, 1, 3, 4, 5)
+        desiredOrder.forEach { index ->
+            session.moveFocus(index % 3 - session.focusedTeam % 3, index / 3 - session.focusedTeam / 3)
+            session.confirmSelection()
+        }
+
+        assertEquals(desiredOrder, session.teamPreviewOrder())
+        assertEquals(listOf("/choose team 312456|14"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
+    fun teamPreviewBackRemovesTheLastSelectionBeforeSubmission() {
+        val session = BattleSession()
+        session.applyProtocolLine("|request|{\"rqid\":15,\"teamPreview\":true}")
+
+        session.confirmSelection()
+        session.goBack()
+
+        assertTrue(session.decisionAvailable)
+        assertTrue(session.teamPreviewOrder().isEmpty())
+    }
+
+    @Test
     fun protocolLinesUpdateBattleState() {
         val session = BattleSession()
 
@@ -390,6 +420,9 @@ class BattleSessionTest {
         session.applyProtocolLine("|request|{\"rqid\":32,\"teamPreview\":true,\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50, M\",\"condition\":\"100/100\"},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\"}]}}")
 
         assertEquals(BattleSession.DecisionKind.TEAM_PREVIEW, session.decisionKind)
+        session.moveFocus(-1, 0)
+        session.confirmSelection()
+        session.moveFocus(1, 0)
         session.confirmSelection()
 
         assertEquals("/choose team 12|32", decisions.last())

@@ -36,6 +36,7 @@ class CommandDeckView(
     private val destination = RectF()
     private val tabBounds = arrayOfNulls<RectF>(4)
     private val moveBounds = arrayOfNulls<RectF>(4)
+    private val teamBounds = arrayOfNulls<RectF>(6)
     private val menuBounds = arrayOfNulls<RectF>(BattleSession.MENU_ITEM_COUNT)
     private val gimmickBounds = arrayOfNulls<RectF>(4)
     private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
@@ -112,6 +113,15 @@ class CommandDeckView(
             gimmickBounds.forEachIndexed { index, bounds ->
                 if (bounds?.contains(x, y) == true) {
                     session.availableGimmicks().getOrNull(index)?.let(session::selectGimmick)
+                    interactionListener.onConfirmation()
+                    return true
+                }
+            }
+        }
+        if (session.panel == BattleSession.Panel.TEAM) {
+            teamBounds.forEachIndexed { index, bounds ->
+                if (bounds?.contains(x, y) == true) {
+                    session.selectTeamWithTouch(index)
                     interactionListener.onConfirmation()
                     return true
                 }
@@ -607,13 +617,17 @@ class CommandDeckView(
         val gap = 14f * scale
         val cardWidth = (width - left * 2f - gap * 2f) / 3f
         val cardHeight = 378f * scale
+        teamBounds.fill(null)
+        val previewOrder = session.teamPreviewOrder()
         session.team().forEachIndexed { index, pokemon ->
             val row = index / 3
             val column = index % 3
             val x = left + column * (cardWidth + gap)
             val y = top + row * (cardHeight + gap)
             val bounds = RectF(x, y, x + cardWidth, y + cardHeight)
+            teamBounds[index] = bounds
             val focused = index == session.focusedTeam
+            val previewPosition = previewOrder.indexOf(index)
             val details = session.teamMemberDetails(index)
             requestTeamSprite(pokemon)
             paint.style = Paint.Style.FILL
@@ -634,6 +648,17 @@ class CommandDeckView(
                 paint.color = Color.rgb(224, 231, 237)
                 canvas.drawRoundRect(RectF(bounds.left + 3f * scale, bounds.top + 3f * scale, bounds.right - 3f * scale, bounds.bottom - 3f * scale), 21f * scale, 21f * scale, paint)
                 paint.style = Paint.Style.FILL
+            }
+            if (session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW) {
+                val marker = RectF(bounds.right - 90f * scale, bounds.top + 18f * scale, bounds.right - 18f * scale, bounds.top + 70f * scale)
+                paint.color = if (previewPosition >= 0) Color.rgb(45, 162, 157) else Color.argb(112, 8, 24, 39)
+                canvas.drawRoundRect(marker, 16f * scale, 16f * scale, paint)
+                paint.textAlign = Paint.Align.CENTER
+                paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+                paint.textSize = 24f * scale
+                paint.color = PAPER
+                canvas.drawText(if (previewPosition >= 0) "${previewPosition + 1}" else "—", marker.centerX(), marker.centerY() + 8f * scale, paint)
+                paint.textAlign = Paint.Align.LEFT
             }
             val spriteBounds = RectF(bounds.left + 16f * scale, bounds.top + 22f * scale, bounds.left + 150f * scale, bounds.top + 156f * scale)
             teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
@@ -667,7 +692,7 @@ class CommandDeckView(
             val state = when {
                 details.condition.contains("FNT", true) -> "Fainted"
                 session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Choose to switch in"
-                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> "Team preview"
+                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> if (previewPosition >= 0) "Order ${previewPosition + 1}" else "Tap to order"
                 pokemon.equals(session.playerPokemon, true) -> "In battle"
                 else -> "Available"
             }
