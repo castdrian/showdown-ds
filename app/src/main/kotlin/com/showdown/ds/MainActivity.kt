@@ -1,9 +1,10 @@
 package com.showdown.ds
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.app.Presentation
 import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.os.Handler
@@ -22,7 +23,6 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.MultiAutoCompleteTextView
 import android.widget.ScrollView
@@ -63,9 +63,9 @@ class MainActivity : Activity() {
     private var activeBattleRoomId: String? = null
     private var battleProtocolReady = false
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
-    private var roomListDialog: AlertDialog? = null
+    private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
-    private var chatRoomDialog: AlertDialog? = null
+    private var chatRoomDialog: ShowdownDialog? = null
     private var chatRoomMessagesView: TextView? = null
     private var chatRoomInput: EditText? = null
     private var chatRoomScroll: ScrollView? = null
@@ -431,7 +431,7 @@ class MainActivity : Activity() {
     private fun showBattleRoomPicker() {
         val battles = lobbyState.battles.entries.toList()
         val labels = listOf("Find a new battle") + battles.map { (roomId, description) -> "$description\n$roomId" }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Showdown rooms")
             .setItems(labels.toTypedArray()) { _, selected ->
                 if (selected == 0) {
@@ -489,7 +489,7 @@ class MainActivity : Activity() {
         val previous = roomListDialog
         roomListDialog = null
         previous?.dismiss()
-        val dialog = AlertDialog.Builder(this)
+        val dialog = ShowdownDialogBuilder(this)
             .setTitle("Showdown rooms")
             .setItems(labels) { _, selected ->
                 val room = selections.getOrNull(selected) ?: return@setItems
@@ -551,7 +551,7 @@ class MainActivity : Activity() {
         }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(controls, LinearLayout.LayoutParams(-1, -2))
-        val dialog = AlertDialog.Builder(this)
+        val dialog = ShowdownDialogBuilder(this)
             .setTitle(chatRoomState.title)
             .setView(root)
             .setNegativeButton("Leave", null)
@@ -598,7 +598,7 @@ class MainActivity : Activity() {
     }
 
     private fun showTeamPicker(teams: List<ShowdownTeam>, onSelected: (ShowdownTeam) -> Unit) {
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Choose a team")
             .setSingleChoiceItems(teams.map { "${it.name} · ${it.format}" }.toTypedArray(), -1) { dialog, selected ->
                 dialog.dismiss()
@@ -935,7 +935,7 @@ class MainActivity : Activity() {
             hint = "Username"
             setSingleLine(true)
         }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Challenge player")
             .setView(username)
             .setNegativeButton("Cancel", null)
@@ -970,7 +970,7 @@ class MainActivity : Activity() {
     }
 
     private fun showIncomingChallenge(username: String, format: String) {
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Battle challenge")
             .setMessage("$username challenged you to $format.")
             .setNegativeButton("Reject") { _, _ -> sendLobbyCommand(ShowdownLobbyState.rejectChallengeCommand(username), "Challenge rejected.") }
@@ -980,7 +980,7 @@ class MainActivity : Activity() {
     }
 
     private fun showOutgoingChallenge(challenge: ShowdownLobbyState.OutgoingChallenge) {
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Challenge pending")
             .setMessage("Waiting for ${challenge.username} to accept your ${challenge.format} challenge.")
             .setNegativeButton("Close", null)
@@ -1031,7 +1031,7 @@ class MainActivity : Activity() {
             setText(serverEndpoint.webSocketUrl)
             selectAll()
         }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Pokémon Showdown server")
             .setView(input)
             .setNegativeButton("Cancel", null)
@@ -1074,7 +1074,7 @@ class MainActivity : Activity() {
             addView(username)
             addView(password)
         }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Showdown account")
             .setView(fields)
             .setNeutralButton("Sign out") { _, _ -> signOut() }
@@ -1115,7 +1115,7 @@ class MainActivity : Activity() {
     private fun showTeamLibrary() {
         val teams = teamLibrary.teams()
         val labels = teams.map { "${it.name} · ${it.format}" } + "Add team"
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Team library")
             .setItems(labels.toTypedArray()) { _, selected ->
                 if (selected == teams.size) showTeamEditor() else showTeamEditor(teams[selected])
@@ -1148,7 +1148,7 @@ class MainActivity : Activity() {
                 setText(clipboardValue)
             }
         }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Import team backup")
             .setView(input)
             .setNegativeButton("Cancel", null)
@@ -1298,7 +1298,7 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this).apply {
             addView(fields)
         }
-        val builder = AlertDialog.Builder(this)
+        val builder = ShowdownDialogBuilder(this)
             .setTitle(if (existing == null) "Add team" else "Edit team")
             .setView(scroll)
             .setNegativeButton("Cancel", null)
@@ -1311,7 +1311,7 @@ class MainActivity : Activity() {
         }
         val dialog = builder.create()
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            dialog.getButton(ShowdownDialog.BUTTON_POSITIVE)?.setOnClickListener {
                 val teamFormat = format.text.toString().trim()
                 val editedSets = setEditors.map(::readTeamSetEditor)
                 val editedPacked = ShowdownTeamCodec.pack(editedSets)
@@ -1341,7 +1341,7 @@ class MainActivity : Activity() {
         val formats = (session.availableMatchFormats() + typedFormat.takeIf { it.isNotBlank() }?.let { BattleSession.MatchFormat(it, it) })
             .filterNotNull()
             .distinctBy { it.id }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Choose team format")
             .setSingleChoiceItems(formats.map { "${it.label}\n${it.id}" }.toTypedArray(), formats.indexOfFirst { it.id.equals(typedFormat, true) }) { dialog, selected ->
                 target.setText(formats[selected].id)
@@ -1429,7 +1429,7 @@ class MainActivity : Activity() {
         setSingleLine(true)
         imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
         threshold = 1
-        setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, suggestions))
+        styleTeamSuggestions(this, suggestions)
         setText(value)
     }
 
@@ -1439,14 +1439,22 @@ class MainActivity : Activity() {
         imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
         threshold = 1
         setTokenizer(MultiAutoCompleteTextView.CommaTokenizer())
-        setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, suggestions))
+        styleTeamSuggestions(this, suggestions)
         setText(value)
     }
 
     private fun updateTeamSuggestions(field: EditText, suggestions: List<String>) {
-        (field as? AutoCompleteTextView)?.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, suggestions)
-        )
+        (field as? AutoCompleteTextView)?.let { styleTeamSuggestions(it, suggestions) }
+    }
+
+    private fun styleTeamSuggestions(field: AutoCompleteTextView, suggestions: List<String>) {
+        field.setAdapter(ShowdownSuggestionAdapter(this, suggestions))
+        field.setDropDownBackgroundDrawable(GradientDrawable().apply {
+            setColor(Color.rgb(9, 29, 44))
+            setStroke((resources.displayMetrics.density).toInt(), Color.rgb(54, 130, 143))
+            cornerRadius = 18f * resources.displayMetrics.density
+        })
+        field.dropDownVerticalOffset = (6f * resources.displayMetrics.density).toInt()
     }
 
     private fun populateTeamSetEditor(editor: TeamSetEditor, set: ShowdownTeamSet) {
@@ -1505,7 +1513,7 @@ class MainActivity : Activity() {
             hint = "Send a message"
             setSingleLine(true)
         }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle(if (activeBattleRoomId == null) "Lobby chat" else "Battle chat")
             .setView(input)
             .setNegativeButton("Cancel", null)
@@ -1525,7 +1533,7 @@ class MainActivity : Activity() {
     }
 
     private fun showReplayActions() {
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Battle replay")
             .setItems(arrayOf("Copy transcript", "Load replay URL")) { _, selected ->
                 if (selected == 0) copyBattleTranscript() else showReplayUrlDialog()
@@ -1542,7 +1550,7 @@ class MainActivity : Activity() {
             val clipboardValue = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString().orEmpty()
             if (ShowdownReplayImporter.normalize(clipboardValue) != null) setText(clipboardValue)
         }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Load Showdown replay")
             .setView(input)
             .setNegativeButton("Cancel", null)
@@ -1590,7 +1598,7 @@ class MainActivity : Activity() {
 
     private fun showFormatPicker() {
         val formats = session.availableMatchFormats()
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Battle format")
             .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOf(session.matchFormat)) { dialog, selected ->
                 val format = formats[selected]
@@ -1611,7 +1619,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus("There is no live battle to forfeit.")
             return
         }
-        AlertDialog.Builder(this)
+        ShowdownDialogBuilder(this)
             .setTitle("Forfeit battle?")
             .setMessage("This will immediately concede the current battle.")
             .setNegativeButton("Cancel", null)
