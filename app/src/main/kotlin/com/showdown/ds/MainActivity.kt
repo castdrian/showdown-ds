@@ -610,6 +610,10 @@ class MainActivity : Activity() {
         reconnectHandler.removeCallbacksAndMessages(null)
         reconnectHandler.removeCallbacks(battleRejoinTimeout)
         reconnectScheduled = false
+        showdownConnection?.close()
+        showdownConnection = null
+        authenticated = false
+        serverUserNamed = false
         clearPersistedLobbyState()
         session.setConnectionStatus("Battle search cancelled.")
     }
