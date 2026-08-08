@@ -66,12 +66,21 @@ class MainActivity : Activity() {
     private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
     private var chatRoomDialog: ShowdownDialog? = null
+    private var tournamentDialog: ShowdownDialog? = null
     private var ladderDialog: ShowdownDialog? = null
     private var ladderFormatId: String? = null
     private var chatRoomMessagesView: TextView? = null
     private var chatRoomInput: EditText? = null
     private var chatRoomScroll: ScrollView? = null
     private var pendingChatRoomId: String? = null
+    private var tournamentStatusView: TextView? = null
+    private var tournamentDetailsView: TextView? = null
+    private var tournamentJoinButton: Button? = null
+    private var tournamentLeaveButton: Button? = null
+    private var tournamentValidateButton: Button? = null
+    private var tournamentReadyButton: Button? = null
+    private var tournamentAcceptButton: Button? = null
+    private var tournamentCancelButton: Button? = null
     private var privateMessageDialog: ShowdownDialog? = null
     private var privateMessageTarget: String? = null
     private var privateMessageMessagesView: TextView? = null
@@ -228,6 +237,8 @@ class MainActivity : Activity() {
         roomListPending = false
         chatRoomDialog?.dismiss()
         chatRoomDialog = null
+        tournamentDialog?.dismiss()
+        tournamentDialog = null
         ladderDialog?.dismiss()
         ladderDialog = null
         chatRoomMessagesView = null
@@ -752,14 +763,21 @@ class MainActivity : Activity() {
             addView(input, LinearLayout.LayoutParams(0, -2, 1f))
             addView(send, LinearLayout.LayoutParams(-2, -2))
         }
+        val tournament = Button(this).apply {
+            text = "Tournament"
+            setOnClickListener { showTournamentDialog() }
+        }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(controls, LinearLayout.LayoutParams(-1, -2))
+        root.addView(tournament, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
         val dialog = ShowdownDialogBuilder(this)
             .setTitle(chatRoomState.title)
             .setView(root)
             .setNegativeButton("Leave", null)
             .create()
         dialog.setOnDismissListener {
+            tournamentDialog?.dismiss()
+            tournamentDialog = null
             val roomId = chatRoomState.roomId
             if (roomId != null && !isFinishing) showdownConnection?.send(roomId, "/leave")
             if (chatRoomDialog === dialog) {
@@ -787,6 +805,195 @@ class MainActivity : Activity() {
         }.ifBlank { "No messages yet." }
         chatRoomMessagesView?.text = content
         chatRoomScroll?.post { chatRoomScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun showTournamentDialog() {
+        tournamentDialog?.let {
+            updateTournamentDialog()
+            return
+        }
+        val density = resources.displayMetrics.density
+        val status = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffc7e8e8.toInt())
+            setPadding((8f * density).toInt(), (6f * density).toInt(), (8f * density).toInt(), (10f * density).toInt())
+        }
+        val details = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffe1f0f3.toInt())
+            setPadding((8f * density).toInt(), (8f * density).toInt(), (8f * density).toInt(), (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(details, -1, -2)
+        }
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((8f * density).toInt(), (8f * density).toInt(), (8f * density).toInt(), 0)
+        }
+        val join = Button(this).apply {
+            text = "Join tournament"
+            setOnClickListener { sendTournamentCommand(ShowdownTournamentState.joinCommand()) }
+        }
+        val leave = Button(this).apply {
+            text = "Leave tournament"
+            setOnClickListener { sendTournamentCommand(ShowdownTournamentState.leaveCommand()) }
+        }
+        val validate = Button(this).apply {
+            text = "Validate team"
+            setOnClickListener { validateTournamentTeam() }
+        }
+        val ready = Button(this).apply {
+            text = "Ready for opponent"
+            setOnClickListener { challengeTournamentOpponent() }
+        }
+        val accept = Button(this).apply {
+            text = "Accept challenge"
+            setOnClickListener { acceptTournamentChallenge() }
+        }
+        val cancel = Button(this).apply {
+            text = "Cancel challenge"
+            setOnClickListener { sendTournamentCommand(ShowdownTournamentState.cancelChallengeCommand()) }
+        }
+        listOf(join, leave, validate, ready, accept, cancel).forEach { button ->
+            actions.addView(button, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (6f * density).toInt() })
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((12f * density).toInt(), (4f * density).toInt(), (12f * density).toInt(), 0)
+            addView(status, LinearLayout.LayoutParams(-1, -2))
+            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(actions, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle(chatRoomState.tournament.title())
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (tournamentDialog === dialog) {
+                tournamentDialog = null
+                tournamentStatusView = null
+                tournamentDetailsView = null
+                tournamentJoinButton = null
+                tournamentLeaveButton = null
+                tournamentValidateButton = null
+                tournamentReadyButton = null
+                tournamentAcceptButton = null
+                tournamentCancelButton = null
+            }
+        }
+        tournamentDialog = dialog
+        tournamentStatusView = status
+        tournamentDetailsView = details
+        tournamentJoinButton = join
+        tournamentLeaveButton = leave
+        tournamentValidateButton = validate
+        tournamentReadyButton = ready
+        tournamentAcceptButton = accept
+        tournamentCancelButton = cancel
+        dialog.show()
+        updateTournamentDialog()
+    }
+
+    private fun updateTournamentDialog() {
+        if (tournamentDialog == null) return
+        val state = chatRoomState.tournament.snapshot
+        val format = state.format.ifBlank { "Showdown" }
+        val cap = state.playerCap.takeIf { it > 0 }?.let { " · cap $it" }.orEmpty()
+        val generator = state.generator.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+        tournamentDialog?.setTitle(chatRoomState.tournament.title())
+        tournamentStatusView?.text = "${chatRoomState.tournament.status()} · $format$generator$cap"
+        val lines = buildList {
+            if (state.isJoined) add("You are in this tournament.")
+            if (state.challenges.isNotEmpty()) add("Available opponents: ${state.challenges.joinToString(", ")}")
+            if (state.challengeBys.isNotEmpty()) add("Waiting for: ${state.challengeBys.joinToString(", ")}")
+            state.challenged?.let { add("Challenge received from $it.") }
+            state.challenging?.let { add("Challenge sent to $it.") }
+            val bracket = chatRoomState.tournament.bracketLines()
+            if (bracket.isNotEmpty()) {
+                add("Bracket")
+                addAll(bracket)
+            }
+            if (state.events.isNotEmpty()) {
+                add("Updates")
+                addAll(state.events.asReversed())
+            }
+        }
+        tournamentDetailsView?.text = lines.joinToString("\n").ifBlank { "No tournament details yet." }
+        tournamentJoinButton?.visibility = if (state.isActive && !state.isStarted && !state.isJoined) View.VISIBLE else View.GONE
+        tournamentLeaveButton?.visibility = if (state.isActive && !state.isStarted && state.isJoined) View.VISIBLE else View.GONE
+        tournamentValidateButton?.visibility = if (state.isActive && state.isStarted && state.isJoined) View.VISIBLE else View.GONE
+        tournamentReadyButton?.visibility = if (state.isActive && state.isStarted && state.isJoined && state.challenges.isNotEmpty() && state.challenged == null) View.VISIBLE else View.GONE
+        tournamentAcceptButton?.visibility = if (state.isActive && state.isStarted && state.isJoined && state.challenged != null) View.VISIBLE else View.GONE
+        tournamentCancelButton?.visibility = if (state.isActive && state.isStarted && state.isJoined && state.challenging != null) View.VISIBLE else View.GONE
+        tournamentReadyButton?.text = state.challenges.firstOrNull()?.let { "Ready vs $it" } ?: "Ready for opponent"
+    }
+
+    private fun sendTournamentCommand(command: String) {
+        val roomId = chatRoomState.roomId
+        if (roomId == null || showdownConnection?.send(roomId, command) != true) {
+            session.setConnectionStatus("Tournament connection is not ready.")
+            return
+        }
+        session.setConnectionStatus("Sent tournament action.")
+    }
+
+    private fun challengeTournamentOpponent() {
+        val opponents = chatRoomState.tournament.snapshot.challenges
+        if (opponents.isEmpty()) return
+        if (opponents.size == 1) {
+            sendTournamentTeam(ShowdownTournamentState.challengeCommand(opponents.single()))
+            return
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Choose tournament opponent")
+            .setItems(opponents.toTypedArray()) { _, selected ->
+                sendTournamentTeam(ShowdownTournamentState.challengeCommand(opponents[selected]))
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun acceptTournamentChallenge() {
+        if (chatRoomState.tournament.snapshot.challenged.isNullOrBlank()) return
+        sendTournamentTeam(ShowdownTournamentState.acceptChallengeCommand())
+    }
+
+    private fun validateTournamentTeam() {
+        sendTournamentTeam(ShowdownTournamentState.validateTeamCommand())
+    }
+
+    private fun sendTournamentTeam(command: String) {
+        val tournament = chatRoomState.tournament.snapshot
+        val formatId = tournament.teambuilderFormat.ifBlank { tournament.format }
+        val format = session.availableMatchFormats().firstOrNull { it.id.equals(formatId, true) }
+        if (format?.usesRandomTeams == true || formatId.contains("randombattle", true) || formatId.contains("battlefactory", true)) {
+            sendTournamentTeamCommand(null, command)
+            return
+        }
+        val teams = teamLibrary.teams().filter { it.format.equals(formatId, true) }
+        if (teams.isEmpty()) {
+            session.setConnectionStatus("Save a $formatId team before entering this tournament.")
+            showTeamLibrary()
+            return
+        }
+        if (teams.size == 1) {
+            sendTournamentTeamCommand(teams.single().packed, command)
+        } else {
+            showTeamPicker(teams) { team -> sendTournamentTeamCommand(team.packed, command) }
+        }
+    }
+
+    private fun sendTournamentTeamCommand(packedTeam: String?, command: String) {
+        val roomId = chatRoomState.roomId
+        val teamSent = showdownConnection?.sendGlobal("/utm ${packedTeam?.takeIf { it.isNotBlank() } ?: "null"}") == true
+        if (roomId == null || !teamSent || showdownConnection?.send(roomId, command) != true) {
+            session.setConnectionStatus("Could not send the tournament team.")
+            return
+        }
+        session.setConnectionStatus("Tournament action sent.")
     }
 
     private fun sendChatRoomMessage() {
@@ -834,6 +1041,8 @@ class MainActivity : Activity() {
 
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
         chatRoomDialog?.dismiss()
+        tournamentDialog?.dismiss()
+        tournamentDialog = null
         chatRoomState.clear()
         pendingChatRoomId = null
         session.setReplayMode(false)
@@ -1058,6 +1267,7 @@ class MainActivity : Activity() {
                         } else if (changed && chatRoomDialog != null && chatRoomState.roomId == roomId) {
                             updateChatRoomDialog()
                         }
+                        if (changed && tournamentDialog != null && chatRoomState.roomId == roomId) updateTournamentDialog()
                     }
                 }
             }
@@ -1794,6 +2004,8 @@ class MainActivity : Activity() {
         showdownConnection = null
         clearPersistedLobbyState()
         chatRoomDialog?.dismiss()
+        tournamentDialog?.dismiss()
+        tournamentDialog = null
         chatRoomState.clear()
         pendingChatRoomId = null
         clearBattleEventPlayback()

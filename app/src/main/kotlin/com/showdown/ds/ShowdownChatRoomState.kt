@@ -5,6 +5,7 @@ class ShowdownChatRoomState {
 
     private val roomUsers = mutableListOf<String>()
     private val roomMessages = mutableListOf<Message>()
+    val tournament = ShowdownTournamentState()
 
     var roomId: String? = null
         private set
@@ -19,6 +20,7 @@ class ShowdownChatRoomState {
         title = "Showdown room"
         roomUsers.clear()
         roomMessages.clear()
+        tournament.clear()
     }
 
     fun applyProtocol(packetRoomId: String, lines: List<String>): Boolean {
@@ -26,6 +28,10 @@ class ShowdownChatRoomState {
         if (roomId != packetRoomId || lines.any { it == "|init|chat" }) reset(packetRoomId)
         var changed = false
         lines.forEach { line ->
+            if (tournament.applyProtocol(line)) {
+                changed = true
+                return@forEach
+            }
             val fields = line.split('|', limit = 6)
             when (fields.getOrNull(1)) {
                 "init" -> changed = changed || fields.getOrNull(2) == "chat"
