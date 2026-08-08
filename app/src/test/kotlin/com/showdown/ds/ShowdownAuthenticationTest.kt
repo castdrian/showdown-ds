@@ -9,6 +9,7 @@ class ShowdownAuthenticationTest {
     fun extractsTheFullChallengeAndBuildsTheRenameCommand() {
         assertEquals("1|abc|def", ShowdownAuthentication.challenge("|challstr|1|abc|def"))
         assertEquals("/trn Adrian,0,token", ShowdownAuthentication.renameCommand("Adrian", "token"))
+        assertEquals("/nick Misty", ShowdownAuthentication.guestRenameCommand(" Misty "))
     }
 
     @Test

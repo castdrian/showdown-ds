@@ -26,4 +26,6 @@ object ShowdownAuthentication {
     }.getOrNull()
 
     fun renameCommand(username: String, assertion: String) = "/trn $username,0,$assertion"
+
+    fun guestRenameCommand(username: String) = "/nick ${username.trim()}"
 }
