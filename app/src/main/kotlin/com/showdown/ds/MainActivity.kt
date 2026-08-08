@@ -17,8 +17,13 @@ import android.view.MotionEvent
 import android.view.Surface
 import android.view.View
 import android.view.Window
+import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import java.util.ArrayDeque
 
 class MainActivity : Activity() {
@@ -810,27 +815,52 @@ class MainActivity : Activity() {
             setText(existing?.format ?: session.matchFormat.id)
         }
         val packed = EditText(this).apply {
-            hint = "Packed team string"
+            hint = "Packed import/export"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            setMinLines(4)
+            setMinLines(2)
             setText(existing?.packed.orEmpty())
         }
-        val fields = android.widget.LinearLayout(this).apply {
+        val sets = existing?.let { ShowdownTeamCodec.unpack(it.packed) }.orEmpty().ifEmpty { listOf(ShowdownTeamSet()) }
+        val setEditors = mutableListOf<TeamSetEditor>()
+        val setFields = LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(56, 8, 56, 0)
+            setPadding(24, 8, 24, 0)
+            for (index in 0 until 6) {
+                setEditors += createTeamSetEditor(this, index, sets.getOrNull(index) ?: ShowdownTeamSet())
+            }
+        }
+        val importButton = Button(this).apply {
+            text = "Load packed team into editor"
+            setOnClickListener {
+                val imported = ShowdownTeamCodec.unpack(packed.text.toString())
+                if (imported.isEmpty()) {
+                    session.setConnectionStatus("Enter a valid packed team before loading it.")
+                } else {
+                    setEditors.forEachIndexed { index, editor -> populateTeamSetEditor(editor, imported.getOrNull(index) ?: ShowdownTeamSet()) }
+                    session.setConnectionStatus("Loaded ${imported.size} Pokémon into the editor.")
+                }
+            }
+        }
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             addView(name)
             addView(format)
+            addView(importButton)
             addView(packed)
+            addView(setFields)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(fields)
         }
         val builder = AlertDialog.Builder(this)
             .setTitle(if (existing == null) "Add team" else "Edit team")
-            .setView(fields)
+            .setView(scroll)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save") { _, _ ->
                 val teamFormat = format.text.toString().trim()
-                val teamPacked = packed.text.toString().trim()
+                val teamPacked = ShowdownTeamCodec.pack(setEditors.map(::readTeamSetEditor)).ifBlank { packed.text.toString().trim() }
                 if (teamFormat.isBlank() || teamPacked.isBlank()) {
-                    session.setConnectionStatus("Enter a format ID and packed team.")
+                    session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
                 } else {
                     teamLibrary.save(name.text.toString(), teamFormat, teamPacked, existing?.id ?: java.util.UUID.randomUUID().toString())
                     session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
@@ -843,6 +873,126 @@ class MainActivity : Activity() {
             }
         }
         builder.show()
+    }
+
+    private data class TeamSetEditor(
+        val nickname: EditText,
+        val species: EditText,
+        val item: EditText,
+        val ability: EditText,
+        val moves: EditText,
+        val nature: EditText,
+        val evs: EditText,
+        val gender: EditText,
+        val ivs: EditText,
+        val shiny: CheckBox,
+        val level: EditText,
+        val happiness: EditText,
+        val pokeBall: EditText,
+        val hiddenPowerType: EditText,
+        val gigantamax: CheckBox,
+        val dynamaxLevel: EditText,
+        val teraType: EditText
+    )
+
+    private fun createTeamSetEditor(parent: LinearLayout, index: Int, set: ShowdownTeamSet): TeamSetEditor {
+        parent.addView(TextView(this).apply {
+            text = "Pokémon ${index + 1}"
+            textSize = 18f
+            setPadding(0, 20, 0, 4)
+        })
+        val editor = TeamSetEditor(
+            nickname = teamField("Nickname", set.nickname),
+            species = teamField("Species", set.species),
+            item = teamField("Item", set.item),
+            ability = teamField("Ability", set.ability),
+            moves = teamField("Moves, comma-separated", set.moves.joinToString(",")),
+            nature = teamField("Nature", set.nature),
+            evs = teamField("EVs HP,Atk,Def,SpA,SpD,Spe", set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty()),
+            gender = teamField("Gender M or F", set.gender),
+            ivs = teamField("IVs HP,Atk,Def,SpA,SpD,Spe", set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty()),
+            shiny = CheckBox(this).apply { text = "Shiny"; isChecked = set.shiny },
+            level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty()),
+            happiness = teamField("Happiness", set.happiness.takeUnless { it == 255 }?.toString().orEmpty()),
+            pokeBall = teamField("Poké Ball", set.pokeBall),
+            hiddenPowerType = teamField("Hidden Power type", set.hiddenPowerType),
+            gigantamax = CheckBox(this).apply { text = "Gigantamax"; isChecked = set.gigantamax },
+            dynamaxLevel = teamField("Dynamax level", set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty()),
+            teraType = teamField("Tera type", set.teraType)
+        )
+        listOf(
+            editor.nickname,
+            editor.species,
+            editor.item,
+            editor.ability,
+            editor.moves,
+            editor.nature,
+            editor.evs,
+            editor.gender,
+            editor.ivs,
+            editor.shiny,
+            editor.level,
+            editor.happiness,
+            editor.pokeBall,
+            editor.hiddenPowerType,
+            editor.gigantamax,
+            editor.dynamaxLevel,
+            editor.teraType
+        ).forEach(parent::addView)
+        return editor
+    }
+
+    private fun teamField(hint: String, value: String): EditText = EditText(this).apply {
+        this.hint = hint
+        setSingleLine(true)
+        setText(value)
+    }
+
+    private fun populateTeamSetEditor(editor: TeamSetEditor, set: ShowdownTeamSet) {
+        editor.nickname.setText(set.nickname)
+        editor.species.setText(set.species)
+        editor.item.setText(set.item)
+        editor.ability.setText(set.ability)
+        editor.moves.setText(set.moves.joinToString(","))
+        editor.nature.setText(set.nature)
+        editor.evs.setText(set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty())
+        editor.gender.setText(set.gender)
+        editor.ivs.setText(set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty())
+        editor.shiny.isChecked = set.shiny
+        editor.level.setText(set.level.takeUnless { it == 100 }?.toString().orEmpty())
+        editor.happiness.setText(set.happiness.takeUnless { it == 255 }?.toString().orEmpty())
+        editor.pokeBall.setText(set.pokeBall)
+        editor.hiddenPowerType.setText(set.hiddenPowerType)
+        editor.gigantamax.isChecked = set.gigantamax
+        editor.dynamaxLevel.setText(set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty())
+        editor.teraType.setText(set.teraType)
+    }
+
+    private fun readTeamSetEditor(editor: TeamSetEditor): ShowdownTeamSet = ShowdownTeamSet(
+        nickname = editor.nickname.text.toString(),
+        species = editor.species.text.toString(),
+        item = editor.item.text.toString(),
+        ability = editor.ability.text.toString(),
+        moves = editor.moves.text.toString().split(',').map(String::trim).filter(String::isNotBlank),
+        nature = editor.nature.text.toString(),
+        evs = editorValues(editor.evs.text.toString(), 0),
+        gender = editor.gender.text.toString(),
+        ivs = editorValues(editor.ivs.text.toString(), 31),
+        shiny = editor.shiny.isChecked,
+        level = editor.level.text.toString().toIntOrNull() ?: 100,
+        happiness = editor.happiness.text.toString().toIntOrNull() ?: 255,
+        pokeBall = editor.pokeBall.text.toString(),
+        hiddenPowerType = editor.hiddenPowerType.text.toString(),
+        gigantamax = editor.gigantamax.isChecked,
+        dynamaxLevel = editor.dynamaxLevel.text.toString().toIntOrNull() ?: 10,
+        teraType = editor.teraType.text.toString()
+    )
+
+    private fun editorValues(value: String, default: Int): List<Int> {
+        if (value.isBlank()) return List(6) { default }
+        return value.split(',').map { it.trim().toIntOrNull() ?: default }.take(6).let { values ->
+            values + List(6 - values.size) { default }
+        }
     }
 
     private fun showChatComposer() {
