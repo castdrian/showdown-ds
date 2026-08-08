@@ -62,7 +62,8 @@ class BattleSession {
         OPEN_CHAT,
         FORFEIT,
         CHALLENGE_PLAYER,
-        EXPORT_REPLAY
+        EXPORT_REPLAY,
+        SETTINGS_CHANGED
     }
 
     enum class BattleGimmick(val choiceSuffix: String, val label: String) {
@@ -528,6 +529,21 @@ class BattleSession {
     fun setMatchFormat(format: MatchFormat) {
         matchFormat = format
         status = "Battle format: ${format.label}"
+        notifyListeners()
+    }
+
+    fun applyUserPreferences(
+        touchConfirmation: Boolean,
+        soundEffects: Boolean,
+        music: Boolean,
+        haptics: Boolean,
+        spriteStyle: SpriteStyle
+    ) {
+        touchConfirmationEnabled = touchConfirmation
+        soundEffectsEnabled = soundEffects
+        musicEnabled = music
+        hapticsEnabled = haptics
+        this.spriteStyle = spriteStyle
         notifyListeners()
     }
 
@@ -1800,6 +1816,7 @@ class BattleSession {
                 "Copy the battle transcript."
             }
         }
+        if (focusedMenuItem in 4..8) publishClientAction(ClientAction.SETTINGS_CHANGED)
     }
 
     private fun confirmTeamSelection() {

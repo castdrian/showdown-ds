@@ -121,6 +121,10 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
                 BattleSession.ClientAction.EXPORT_REPLAY -> copyBattleTranscript()
+                BattleSession.ClientAction.SETTINGS_CHANGED -> {
+                    persistUserPreferences()
+                    battleAudio.updateOptions(session)
+                }
             }
         }
     }
@@ -147,6 +151,7 @@ class MainActivity : Activity() {
         teamLibrary = ShowdownTeamLibrary(this)
         session = BattleSession().apply { prepareForLobby() }
         session.setMatchFormat(loadMatchFormat())
+        loadUserPreferences()
         session.addListener(sessionListener)
         session.addBattleEventListener(battleEventListener)
         session.addProtocolListener(protocolListener)
@@ -1301,6 +1306,29 @@ class MainActivity : Activity() {
         return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved }
             ?: saved?.let { BattleSession.MatchFormat(it, preferences.getString("match_format_label", it) ?: it) }
             ?: BattleSession.MatchFormat.GEN7_RANDOM
+    }
+
+    private fun loadUserPreferences() {
+        val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
+        session.applyUserPreferences(
+            touchConfirmation = preferences.getBoolean("touch_confirmation", true),
+            soundEffects = preferences.getBoolean("sound_effects", true),
+            music = preferences.getBoolean("music", true),
+            haptics = preferences.getBoolean("haptics", true),
+            spriteStyle = preferences.getString("sprite_style", BattleSession.SpriteStyle.MODERN_3D.name)
+                ?.let { runCatching { BattleSession.SpriteStyle.valueOf(it) }.getOrDefault(BattleSession.SpriteStyle.MODERN_3D) }
+                ?: BattleSession.SpriteStyle.MODERN_3D
+        )
+    }
+
+    private fun persistUserPreferences() {
+        getSharedPreferences("showdown", MODE_PRIVATE).edit()
+            .putBoolean("touch_confirmation", session.touchConfirmationEnabled)
+            .putBoolean("sound_effects", session.soundEffectsEnabled)
+            .putBoolean("music", session.musicEnabled)
+            .putBoolean("haptics", session.hapticsEnabled)
+            .putString("sprite_style", session.spriteStyle.name)
+            .apply()
     }
 
     private fun handleBattleFeedback(feedback: BattleSession.BattleFeedback) {

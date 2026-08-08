@@ -842,6 +842,39 @@ class BattleSessionTest {
     }
 
     @Test
+    fun userPreferencesRestoreIntoTheBattleSession() {
+        val session = BattleSession()
+
+        session.applyUserPreferences(
+            touchConfirmation = false,
+            soundEffects = false,
+            music = true,
+            haptics = false,
+            spriteStyle = BattleSession.SpriteStyle.CLASSIC_2D
+        )
+
+        assertFalse(session.touchConfirmationEnabled)
+        assertFalse(session.soundEffectsEnabled)
+        assertTrue(session.musicEnabled)
+        assertFalse(session.hapticsEnabled)
+        assertEquals(BattleSession.SpriteStyle.CLASSIC_2D, session.spriteStyle)
+    }
+
+    @Test
+    fun changingClientSettingsEmitsASettingsChangedAction() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(4)
+        session.confirmSelection()
+
+        assertEquals(listOf(BattleSession.ClientAction.SETTINGS_CHANGED), actions)
+        assertFalse(session.soundEffectsEnabled)
+    }
+
+    @Test
     fun serverFormatCatalogDrivesTheAvailableBattleFormats() {
         val session = BattleSession()
 
