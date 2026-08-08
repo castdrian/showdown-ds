@@ -1331,12 +1331,15 @@ class BattleSession {
     }
 
     private fun applyChat(fields: List<String>) {
-        if (fields.size > 3) {
-            val message = "[${fields[2]}] ${fields[3]}"
-            chatMessages += message
-            if (chatMessages.size > 32) chatMessages.removeAt(0)
-            appendActivity(message)
-        }
+        val parsed = when (fields.getOrNull(1)) {
+            "c:" -> fields.getOrNull(3)?.let { fields.getOrNull(4)?.let { message -> fields[3] to message } }
+            "pm" -> fields.getOrNull(2)?.let { fields.getOrNull(4)?.let { message -> "PM $it" to message } }
+            else -> fields.getOrNull(2)?.let { fields.getOrNull(3)?.let { message -> it to message } }
+        } ?: return
+        val message = "[${parsed.first}] ${parsed.second}"
+        chatMessages += message
+        if (chatMessages.size > 32) chatMessages.removeAt(0)
+        appendActivity(message)
     }
 
     private fun applyCant(fields: List<String>) {
@@ -1521,9 +1524,9 @@ class BattleSession {
     }
 
     private fun moveMenuFocus(horizontal: Int, vertical: Int) {
-        val row = (focusedMenuItem / 2 + vertical).coerceIn(0, (MENU_ITEM_COUNT - 1) / 2)
-        val column = (focusedMenuItem % 2 + horizontal).coerceIn(0, 1)
-        selectMenuItem((row * 2 + column).coerceAtMost(MENU_ITEM_COUNT - 1))
+        val row = (focusedMenuItem / MENU_COLUMNS + vertical).coerceIn(0, (MENU_ITEM_COUNT - 1) / MENU_COLUMNS)
+        val column = (focusedMenuItem % MENU_COLUMNS + horizontal).coerceIn(0, MENU_COLUMNS - 1)
+        selectMenuItem((row * MENU_COLUMNS + column).coerceAtMost(MENU_ITEM_COUNT - 1))
     }
 
     private fun menuAction(index: Int) = when (index) {
@@ -1822,6 +1825,7 @@ class BattleSession {
 
     companion object {
         const val MENU_ITEM_COUNT = 13
+        const val MENU_COLUMNS = 3
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun parseServerFormats(line: String): List<MatchFormat> {

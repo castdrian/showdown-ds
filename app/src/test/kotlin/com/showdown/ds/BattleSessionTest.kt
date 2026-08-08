@@ -39,10 +39,11 @@ class BattleSessionTest {
     fun lobbyChatAndPrivateMessagesEnterActivity() {
         val session = BattleSession()
 
-        session.applyLobbyChat(listOf("|c|MISTY|Hello", "|pm|GARY|Want to battle?"))
+        session.applyLobbyChat(listOf("|c|MISTY|Hello", "|c:|123|MISTY|Timestamped hello", "|pm|GARY|ADRIAN|Want to battle?"))
 
         assertTrue(session.chatMessages().contains("[MISTY] Hello"))
-        assertTrue(session.chatMessages().contains("[GARY] Want to battle?"))
+        assertTrue(session.chatMessages().contains("[MISTY] Timestamped hello"))
+        assertTrue(session.chatMessages().contains("[PM GARY] Want to battle?"))
         assertTrue(session.activityMessages().last().contains("Want to battle?"))
     }
 
@@ -219,7 +220,7 @@ class BattleSessionTest {
         session.selectPanel(BattleSession.Panel.MENU)
         session.moveFocus(0, 1)
 
-        assertEquals(2, session.focusedMenuItem)
+        assertEquals(3, session.focusedMenuItem)
     }
 
     @Test

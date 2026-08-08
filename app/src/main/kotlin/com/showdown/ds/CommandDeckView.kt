@@ -229,7 +229,7 @@ class CommandDeckView(
             BattleSession.Panel.MOVES -> drawMoves(canvas, width, height, scale)
             BattleSession.Panel.TEAM -> drawTeam(canvas, width, scale)
             BattleSession.Panel.ACTIVITY -> drawActivity(canvas, width, height, scale)
-            BattleSession.Panel.MENU -> drawMenu(canvas, width, scale)
+            BattleSession.Panel.MENU -> drawMenu(canvas, width, height, scale)
         }
     }
 
@@ -823,16 +823,20 @@ class CommandDeckView(
         paint.textAlign = Paint.Align.LEFT
     }
 
-    private fun drawMenu(canvas: Canvas, width: Float, scale: Float) {
+    private fun drawMenu(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val entries = session.menuItems()
-        val left = 42f * scale
-        val top = 224f * scale
-        val gap = 16f * scale
-        val cardWidth = (width - left * 2f - gap) / 2f
-        val cardHeight = 122f * scale
+        val columns = BattleSession.MENU_COLUMNS
+        val rows = (entries.size + columns - 1) / columns
+        val left = 36f * scale
+        val top = 202f * scale
+        val bottomMargin = 28f * scale
+        val gap = 14f * scale
+        val cardWidth = (width - left * 2f - gap * (columns - 1)) / columns
+        val cardHeight = (height - top - bottomMargin - gap * (rows - 1)) / rows
+        menuBounds.fill(null)
         entries.forEachIndexed { index, entry ->
-            val row = index / 2
-            val column = index % 2
+            val row = index / columns
+            val column = index % columns
             val x = left + column * (cardWidth + gap)
             val y = top + row * (cardHeight + gap)
             val bounds = RectF(x, y, x + cardWidth, y + cardHeight)
@@ -860,9 +864,10 @@ class CommandDeckView(
             drawMenuIcon(canvas, index, bounds.left + 48f * scale, bounds.centerY(), 22f * scale, if (index == 3) MAGENTA else PAPER)
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
-            paint.textSize = readableTextSize(if (entry.length > 24) 23f else 29f, scale)
+            paint.textSize = readableTextSize(if (entry.length > 24) 21f else 26f, scale, 18f)
             paint.color = if (index == 3) MAGENTA else PAPER
-            canvas.drawText(entry, bounds.left + 84f * scale, bounds.centerY() + 9f * scale, paint)
+            val label = fitTextToWidth(entry, bounds.width() - 108f * scale)
+            canvas.drawText(label, bounds.left + 84f * scale, centeredTextBaseline(bounds.centerY()), paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }
@@ -976,9 +981,17 @@ class CommandDeckView(
 
     private fun ellipsize(text: String, maximum: Int) = if (text.length <= maximum) text else "${text.take(maximum - 1)}…"
 
-    private fun readableTextSize(designPixels: Float, scale: Float, minimumSp: Float = 12f): Float = maxOf(
+    private fun fitTextToWidth(text: String, maximumWidth: Float): String {
+        var value = text
+        while (value.length > 1 && paint.measureText(value) > maximumWidth) value = "${value.dropLast(1).trimEnd()}…"
+        return value
+    }
+
+    private fun centeredTextBaseline(centerY: Float): Float = centerY - (paint.ascent() + paint.descent()) / 2f
+
+    private fun readableTextSize(designPixels: Float, scale: Float, minimumPixels: Float = 12f): Float = maxOf(
         designPixels * scale,
-        minimumSp * resources.displayMetrics.density * resources.configuration.fontScale
+        minimumPixels * scale
     )
 
     private companion object {
