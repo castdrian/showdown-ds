@@ -22,6 +22,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun waitingRequestsRemoveStaleMoveControls() {
+        val session = BattleSession()
+        session.applyProtocolLine("|request|{\"active\":[{\"canZMove\":[{}],\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15}]}]}")
+        assertTrue(session.availableGimmicks().isNotEmpty())
+
+        session.applyProtocolLine("|request|{\"wait\":true}")
+
+        assertTrue(session.moves().isEmpty())
+        assertTrue(session.availableGimmicks().isEmpty())
+        assertFalse(session.decisionAvailable)
+        assertEquals("Waiting for the other player…", session.status)
+    }
+
+    @Test
     fun disabledMovesCannotBeSubmitted() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()

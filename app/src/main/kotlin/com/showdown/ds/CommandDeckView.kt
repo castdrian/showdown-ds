@@ -336,6 +336,10 @@ class CommandDeckView(
     }
 
     private fun drawMoveDetails(canvas: Canvas, bounds: RectF, scale: Float) {
+        if (!session.decisionAvailable) {
+            drawUtilityMessage(canvas, bounds, scale)
+            return
+        }
         val move = session.moves().getOrNull(session.focusedMove)
         if (move == null) {
             drawUtilityMessage(canvas, bounds, scale)
@@ -378,11 +382,12 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(22f, scale, 20f)
         paint.color = Color.rgb(153, 224, 220)
-        canvas.drawText("LAST ACTION", bounds.centerX(), bounds.centerY() - 22f * scale, paint)
+        canvas.drawText(if (session.decisionAvailable) "LAST ACTION" else "WAITING", bounds.centerX(), bounds.centerY() - 22f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = readableTextSize(27f, scale, 23f)
         paint.color = PAPER
-        canvas.drawText(fitTextToWidth(session.latestBattleEvent, bounds.width() - 24f * scale), bounds.centerX(), bounds.centerY() + 34f * scale, paint)
+        val message = if (session.decisionAvailable) session.latestBattleEvent else session.status
+        canvas.drawText(fitTextToWidth(message, bounds.width() - 24f * scale), bounds.centerX(), bounds.centerY() + 34f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
     }
 

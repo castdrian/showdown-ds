@@ -1213,6 +1213,9 @@ class BattleSession {
     private fun applyRequest(fields: List<String>) {
         val requestText = fields.getOrNull(2) ?: return
         teamPreviewOrder.clear()
+        moves.clear()
+        availableGimmicks.clear()
+        playerDetails = playerDetails.copy(moves = emptyList())
         activeRequests.clear()
         activeChoices.clear()
         forceSwitchChoices.clear()
