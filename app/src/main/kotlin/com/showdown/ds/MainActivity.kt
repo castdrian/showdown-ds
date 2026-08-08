@@ -32,7 +32,6 @@ class MainActivity : Activity() {
     private lateinit var moveDex: ShowdownMoveDex
     private lateinit var serverEndpoint: ShowdownServerEndpoint
     private var showdownConnection: ShowdownConnection? = null
-    private val showdownSearchFlow = ShowdownSearchFlow()
     private var activeBattleRoomId: String? = null
     private val demoHandler = Handler(Looper.getMainLooper())
     private val battleAudioHandler = Handler(Looper.getMainLooper())
@@ -65,7 +64,6 @@ class MainActivity : Activity() {
             when (action) {
                 BattleSession.ClientAction.FIND_BATTLE -> findBattle()
                 BattleSession.ClientAction.CONFIGURE_SERVER -> showServerSettings()
-                BattleSession.ClientAction.CONFIGURE_ACCOUNT -> showAccountSettings()
                 BattleSession.ClientAction.CHOOSE_FORMAT -> showFormatPicker()
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
@@ -92,7 +90,6 @@ class MainActivity : Activity() {
         nativeInitializeVulkan()
         serverEndpoint = loadServerEndpoint()
         session = createDemoSession()
-        session.setPreferredUsername(loadPreferredUsername())
         session.setMatchFormat(loadMatchFormat())
         session.addListener(sessionListener)
         session.addProtocolListener(protocolListener)
@@ -277,10 +274,10 @@ class MainActivity : Activity() {
         applyProtocolLine("|player|p1|ADRIAN")
         applyProtocolLine("|player|p2|GLADION")
         applyProtocolLine("|tier|[Gen 7] OU")
-        applyProtocolLine("|switch|p1a: Incineroar|Incineroar, L50, M|316/316")
-        applyProtocolLine("|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100")
+        applyProtocolLine("|switch|p1a: Decidueye|Decidueye, L50, M|293/293")
+        applyProtocolLine("|switch|p2a: Blissey|Blissey, L50, F|100/100")
         applyProtocolLine("|turn|1")
-        applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Fake Out\",\"type\":\"Normal\",\"pp\":10},{\"move\":\"Flare Blitz\",\"type\":\"Fire\",\"pp\":15},{\"move\":\"Darkest Lariat\",\"type\":\"Dark\",\"pp\":10},{\"move\":\"Parting Shot\",\"type\":\"Dark\",\"pp\":20}]}]}")
+        applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Spirit Shackle\",\"type\":\"Ghost\",\"pp\":10},{\"move\":\"Leaf Blade\",\"type\":\"Grass\",\"pp\":15},{\"move\":\"Brave Bird\",\"type\":\"Flying\",\"pp\":15},{\"move\":\"Sucker Punch\",\"type\":\"Dark\",\"pp\":5}]}]}")
     }
 
     private fun resolveDemoTurn(command: String) {
@@ -290,16 +287,16 @@ class MainActivity : Activity() {
         val playerTarget = session.opponentPokemon
         val opponentTarget = session.playerPokemon
         val playerOutcome = when (move) {
-            "Fake Out" -> DemoOutcome(24, null)
-            "Flare Blitz" -> DemoOutcome(34, "-crit")
-            "Darkest Lariat" -> DemoOutcome(18, "-resisted")
-            "Parting Shot" -> DemoOutcome(24, null)
+            "Spirit Shackle" -> DemoOutcome(24, null)
+            "Leaf Blade" -> DemoOutcome(34, "-crit")
+            "Brave Bird" -> DemoOutcome(18, "-resisted")
+            "Sucker Punch" -> DemoOutcome(24, null)
             else -> DemoOutcome(20, null)
         }
         val opponentOutcome = when (turnIndex % 3) {
-            0 -> DemoMove("Thunderbolt", 18, null)
-            1 -> DemoMove("Dazzling Gleam", 32, "-supereffective")
-            else -> DemoMove("Volt Switch", 21, null)
+            0 -> DemoMove("Ice Beam", 18, null)
+            1 -> DemoMove("Shadow Ball", 32, "-supereffective")
+            else -> DemoMove("Psychic", 21, null)
         }
         val opponentHp = reducedCondition(session.opponentHp, playerOutcome.damagePercent)
         val playerHp = reducedCondition(session.playerHp, opponentOutcome.damagePercent)
@@ -356,8 +353,6 @@ class MainActivity : Activity() {
     private fun findBattle() {
         activeBattleRoomId = null
         showdownConnection?.close()
-        showdownSearchFlow.cancel()
-        showdownSearchFlow.begin(session.matchFormat.id)
         lateinit var connection: ShowdownConnection
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
@@ -366,17 +361,11 @@ class MainActivity : Activity() {
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
                         ShowdownConnection.State.CONNECTED -> {
-                            showdownSearchFlow.onTransportConnected(session.preferredUsername).forEach(connection::sendGlobal)
-                            "Signing in as ${session.preferredUsername}…"
+                            connection.sendGlobal("/search ${session.matchFormat.id}")
+                            "Searching ${session.matchFormat.label}…"
                         }
-                        ShowdownConnection.State.DISCONNECTED -> {
-                            showdownSearchFlow.cancel()
-                            detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
-                        }
-                        ShowdownConnection.State.FAILED -> {
-                            showdownSearchFlow.cancel()
-                            detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
-                        }
+                        ShowdownConnection.State.DISCONNECTED -> detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
+                        ShowdownConnection.State.FAILED -> detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
                     }
                     session.setConnectionStatus(status)
                 }
@@ -392,9 +381,6 @@ class MainActivity : Activity() {
                         ?.let(session::setLocalUsername)
                     if (roomId == null) {
                         session.applyServerFormats(lines)
-                        showdownSearchFlow.onProtocol(lines).forEach { command ->
-                            if (connection.sendGlobal(command)) session.setConnectionStatus("Searching ${session.matchFormat.label}…")
-                        }
                     }
                     if (roomId?.startsWith("battle-") == true) {
                         activeBattleRoomId = roomId
@@ -426,25 +412,6 @@ class MainActivity : Activity() {
                     getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("server_endpoint", endpoint.webSocketUrl).apply()
                     session.setConnectionStatus("Server set to ${endpoint.displayName}.")
                 }
-            }
-            .show()
-    }
-
-    private fun showAccountSettings() {
-        val input = EditText(this).apply {
-            setSingleLine(true)
-            setText(session.preferredUsername)
-            selectAll()
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Battle display name")
-            .setView(input)
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Use") { _, _ ->
-                val username = ShowdownSearchFlow.normalizeUsername(input.text.toString())
-                session.setPreferredUsername(username)
-                getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("preferred_username", username).apply()
-                session.setConnectionStatus("Battle name set to $username. It will be used for your next search.")
             }
             .show()
     }
@@ -508,11 +475,6 @@ class MainActivity : Activity() {
         val saved = getSharedPreferences("showdown", MODE_PRIVATE).getString("match_format", null)
         return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved } ?: BattleSession.MatchFormat.GEN7_RANDOM
     }
-
-    private fun loadPreferredUsername() = getSharedPreferences("showdown", MODE_PRIVATE)
-        .getString("preferred_username", null)
-        ?.let(ShowdownSearchFlow::normalizeUsername)
-        ?: "ShowdownDS"
 
     private fun handleBattleFeedback(feedback: BattleSession.BattleFeedback) {
         when (feedback.type) {

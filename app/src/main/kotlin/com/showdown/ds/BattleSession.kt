@@ -51,7 +51,6 @@ class BattleSession {
     enum class ClientAction {
         FIND_BATTLE,
         CONFIGURE_SERVER,
-        CONFIGURE_ACCOUNT,
         CHOOSE_FORMAT,
         OPEN_CHAT,
         FORFEIT
@@ -213,8 +212,6 @@ class BattleSession {
     var turn = 1
         private set
     var playerName = "ADRIAN"
-        private set
-    var preferredUsername = "ShowdownDS"
         private set
     var opponentName = "GLADION"
         private set
@@ -414,11 +411,6 @@ class BattleSession {
         localUsername = username
         sideNames.entries.firstOrNull { it.value.equals(username, true) }?.key?.let { playerSlot = it }
         updatePerspective()
-        notifyListeners()
-    }
-
-    fun setPreferredUsername(username: String) {
-        preferredUsername = ShowdownSearchFlow.normalizeUsername(username)
         notifyListeners()
     }
 
@@ -1090,7 +1082,6 @@ class BattleSession {
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
         7 -> "Touch confirmation ${if (touchConfirmationEnabled) "on" else "off"}"
         8 -> "Sprite style ${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "classic"}"
-        9 -> "Battle name $preferredUsername"
         else -> "Configure server"
     }
 
@@ -1131,10 +1122,6 @@ class BattleSession {
             8 -> {
                 spriteStyle = if (spriteStyle == SpriteStyle.MODERN_3D) SpriteStyle.CLASSIC_2D else SpriteStyle.MODERN_3D
                 "${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "Classic"} sprite style enabled."
-            }
-            9 -> {
-                publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
-                "Choose a battle display name."
             }
             else -> {
                 publishClientAction(ClientAction.CONFIGURE_SERVER)
@@ -1293,7 +1280,7 @@ class BattleSession {
     }
 
     companion object {
-        const val MENU_ITEM_COUNT = 11
+        const val MENU_ITEM_COUNT = 10
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun parseServerFormats(line: String): List<MatchFormat> {

@@ -763,7 +763,6 @@ class CommandDeckView(
             "Haptics: ${if (session.hapticsEnabled) "On" else "Off"}",
             "Tap confirmation: ${if (session.touchConfirmationEnabled) "On" else "Off"}",
             "Sprites: ${if (session.spriteStyle == BattleSession.SpriteStyle.MODERN_3D) "3D" else "Classic"}",
-            "Battle name: ${session.preferredUsername}",
             "Server settings"
         )
         val left = 42f * scale

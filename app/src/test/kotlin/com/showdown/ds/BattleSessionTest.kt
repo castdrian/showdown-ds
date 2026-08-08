@@ -434,13 +434,9 @@ class BattleSessionTest {
         session.confirmSelection()
         session.selectMenuItem(9)
         session.confirmSelection()
-        session.selectMenuItem(10)
-        session.confirmSelection()
-
         assertEquals(
             listOf(
                 BattleSession.ClientAction.FIND_BATTLE,
-                BattleSession.ClientAction.CONFIGURE_ACCOUNT,
                 BattleSession.ClientAction.CONFIGURE_SERVER
             ),
             actions

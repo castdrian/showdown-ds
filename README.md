@@ -1,6 +1,6 @@
 # Showdown!
 
-https://github.com/user-attachments/assets/0d29643e-316e-4d86-995d-80017ca79539
+https://github.com/user-attachments/assets/f99aa366-a1d2-4abf-b098-6518847faf44
 
 Native dual-screen Pokémon Showdown! client for Android, built in Kotlin with a Vulkan foundation and tailored for the AYN Thor. It uses Showdown’s battle assets, animated XY sprites, move effects, audio, live protocol, custom-server support, touch, and controller input.
 
