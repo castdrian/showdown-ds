@@ -77,6 +77,18 @@ class BattleSessionTest {
     }
 
     @Test
+    fun failedLocalChatCanBeRemovedWithoutTouchingEarlierMessages() {
+        val session = BattleSession()
+        session.sendChat("gl hf")
+
+        session.removeLocalChat("gl hf")
+
+        assertFalse(session.chatMessages().contains("[You] gl hf"))
+        assertFalse(session.activityMessages().contains("[You] gl hf"))
+        assertTrue(session.chatMessages().isNotEmpty())
+    }
+
+    @Test
     fun multiActiveRequestsCollectAllMovesBeforeSubmitting() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
@@ -194,7 +206,7 @@ class BattleSessionTest {
 
         assertTrue(session.playerEntryAtNanos - session.opponentEntryAtNanos >= BattleSceneTiming.summonDurationNanos)
         assertEquals("Go! Incineroar!", session.sendOutMessage("Incineroar", true))
-        assertEquals("GLADION sent out Tapu Koko!", session.sendOutMessage("Tapu Koko", false))
+        assertEquals("OPPONENT sent out Tapu Koko!", session.sendOutMessage("Tapu Koko", false))
     }
 
     @Test

@@ -86,6 +86,7 @@ class MainActivity : Activity() {
     private val chatListener = BattleSession.ChatListener { message ->
         val roomId = activeBattleRoomId ?: "lobby"
         if (showdownConnection?.send(roomId, message) != true) {
+            session.removeLocalChat(message)
             session.setConnectionStatus("Connect to Showdown before sending chat.")
         }
     }

@@ -697,6 +697,13 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun removeLocalChat(message: String) {
+        val displayMessage = "[You] ${message.trim()}"
+        chatMessages.indexOfLast { it == displayMessage }.takeIf { it >= 0 }?.let(chatMessages::removeAt)
+        activityMessages.indexOfLast { it == displayMessage }.takeIf { it >= 0 }?.let(activityMessages::removeAt)
+        notifyListeners()
+    }
+
     fun goBack() {
         if (panel == Panel.TEAM && decisionAvailable && decisionKind == DecisionKind.TEAM_PREVIEW && teamPreviewOrder.isNotEmpty()) {
             val removed = teamPreviewOrder.removeLast()
@@ -861,6 +868,10 @@ class BattleSession {
         latestMoveEventAtNanos = 0L
         latestFaintedPokemon = ""
         latestFaintAtNanos = 0L
+        playerName = localUsername ?: "PLAYER"
+        opponentName = "OPPONENT"
+        turn = 1
+        format = ""
         teamPreviewOrder.clear()
         battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
         selectedGimmick = null
