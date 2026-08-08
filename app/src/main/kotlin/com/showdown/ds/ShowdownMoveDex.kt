@@ -91,27 +91,31 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     companion object {
         fun parseMoveTypes(contents: String): Map<String, String> {
-            val moves = JSONObject(contents)
-            return buildMap {
-                moves.keys().forEach { id ->
-                    moves.optJSONObject(id)?.optString("type")?.uppercase()?.takeIf { it.isNotBlank() }?.let { put(id, it) }
+            return runCatching {
+                val moves = JSONObject(contents)
+                buildMap {
+                    moves.keys().forEach { id ->
+                        moves.optJSONObject(id)?.optString("type")?.uppercase()?.takeIf { it.isNotBlank() }?.let { put(id, it) }
+                    }
                 }
-            }
+            }.getOrDefault(emptyMap())
         }
 
         fun parsePokemonTypes(contents: String): Map<String, List<String>> {
-            val pokemon = JSONObject(contents)
-            return buildMap {
-                pokemon.keys().forEach { id ->
-                    val types = pokemon.optJSONObject(id)?.optJSONArray("types") ?: return@forEach
-                    val parsed = buildList {
-                        for (index in 0 until types.length()) {
-                            types.optString(index).uppercase(Locale.ROOT).takeIf { it.isNotBlank() }?.let(::add)
+            return runCatching {
+                val pokemon = JSONObject(contents)
+                buildMap {
+                    pokemon.keys().forEach { id ->
+                        val types = pokemon.optJSONObject(id)?.optJSONArray("types") ?: return@forEach
+                        val parsed = buildList {
+                            for (index in 0 until types.length()) {
+                                types.optString(index).uppercase(Locale.ROOT).takeIf { it.isNotBlank() }?.let(::add)
+                            }
                         }
+                        if (parsed.isNotEmpty()) put(id, parsed)
                     }
-                    if (parsed.isNotEmpty()) put(id, parsed)
                 }
-            }
+            }.getOrDefault(emptyMap())
         }
 
         fun parseMoveNames(contents: String): List<String> = parseNames(contents)
@@ -127,12 +131,14 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
             .toList()
 
         private fun parseNames(contents: String): List<String> {
-            val values = JSONObject(contents)
-            return buildList {
-                values.keys().forEach { id ->
-                    values.optJSONObject(id)?.optString("name")?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
-                }
-            }.distinct().sorted()
+            return runCatching {
+                val values = JSONObject(contents)
+                buildList {
+                    values.keys().forEach { id ->
+                        values.optJSONObject(id)?.optString("name")?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }.distinct().sorted()
+            }.getOrDefault(emptyList())
         }
 
         fun moveId(move: String) = move.lowercase().filter(Char::isLetterOrDigit)

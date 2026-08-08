@@ -66,6 +66,10 @@ class MainActivity : Activity() {
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
     private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
+    private val tournamentDirectoryState = ShowdownTournamentDirectoryState()
+    private var tournamentDirectoryDialog: ShowdownDialog? = null
+    private var tournamentDirectoryContentView: TextView? = null
+    private var tournamentDirectoryLinks: LinearLayout? = null
     private var chatRoomDialog: ShowdownDialog? = null
     private var tournamentDialog: ShowdownDialog? = null
     private var ladderDialog: ShowdownDialog? = null
@@ -242,6 +246,11 @@ class MainActivity : Activity() {
         roomListDialog?.dismiss()
         roomListDialog = null
         roomListPending = false
+        tournamentDirectoryDialog?.dismiss()
+        tournamentDirectoryDialog = null
+        tournamentDirectoryContentView = null
+        tournamentDirectoryLinks = null
+        tournamentDirectoryState.clear()
         chatRoomDialog?.dismiss()
         chatRoomDialog = null
         tournamentDialog?.dismiss()
@@ -494,8 +503,8 @@ class MainActivity : Activity() {
     }
 
     private fun showRoomList() {
-        if (!authenticated || !serverUserNamed) {
-            session.setConnectionStatus("Sign in to browse public rooms.")
+        if (!authenticated) {
+            session.setConnectionStatus("Connect to Showdown to browse public rooms.")
             return
         }
         if (showdownConnection == null) {
@@ -526,31 +535,84 @@ class MainActivity : Activity() {
             val users = room.userCount.takeIf { it >= 0 }?.let { " · $it online" }.orEmpty()
             RoomSelection(room.id, "${room.title}$users", room.description.ifBlank { room.section }, true)
         }
-        val labels = if (selections.isEmpty()) {
-            arrayOf("Loading public rooms…")
-        } else {
-            selections.map { "${it.title}\n${it.subtitle}" }.toTypedArray()
-        }
         val previous = roomListDialog
         roomListDialog = null
         previous?.dismiss()
-        val dialog = ShowdownDialogBuilder(this)
-            .setTitle("Showdown rooms")
-            .setItems(labels) { _, selected ->
-                val room = selections.getOrNull(selected) ?: return@setItems
-                roomListPending = false
-                roomListDialog = null
-                pendingChatRoomId = room.id.takeIf { room.chatRoom }
-                if (showdownConnection?.sendGlobal("/join ${room.id}") == true) {
-                    session.setConnectionStatus("Joining ${room.title}…")
-                } else {
-                    pendingChatRoomId = null
-                    session.setConnectionStatus("Could not join ${room.title}.")
+        val density = resources.displayMetrics.density
+        val roomRows = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        if (selections.isEmpty()) {
+            roomRows.addView(TextView(this).apply {
+                text = "Loading public rooms…"
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((16f * density).toInt(), (18f * density).toInt(), (16f * density).toInt(), (18f * density).toInt())
+            }, LinearLayout.LayoutParams(-1, -2))
+        } else {
+            selections.forEach { room ->
+                roomRows.addView(Button(this).apply {
+                    text = "${room.title}\n${room.subtitle}"
+                    isAllCaps = false
+                    setOnClickListener {
+                        roomListPending = false
+                        roomListDialog?.dismiss()
+                        roomListDialog = null
+                        pendingChatRoomId = room.id.takeIf { room.chatRoom }
+                        if (showdownConnection?.sendGlobal(ShowdownLobbyState.joinBattleCommand(room.id)) == true) {
+                            session.setConnectionStatus("Joining ${room.title}…")
+                        } else {
+                            pendingChatRoomId = null
+                            session.setConnectionStatus("Could not join ${room.title}.")
+                        }
+                    }
+                }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (8f * density).toInt()) })
+            }
+        }
+        val roomScroll = ScrollView(this).apply {
+            addView(roomRows, -1, -2)
+        }
+        val dialogViewport = minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+        val roomScrollHeight = (dialogViewport * 0.42f).toInt()
+        val tools = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val tournaments = Button(this@MainActivity).apply {
+                text = "Tournaments"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showTournamentDirectory()
                 }
             }
+            val ladder = Button(this@MainActivity).apply {
+                text = "Ladder"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showLadderDialog()
+                }
+            }
+            val message = Button(this@MainActivity).apply {
+                text = "Message"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showPrivateMessageComposer()
+                }
+            }
+            listOf(tournaments, ladder, message).forEach { button ->
+                addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins((3f * density).toInt(), 0, (3f * density).toInt(), 0) })
+            }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(roomScroll, LinearLayout.LayoutParams(-1, roomScrollHeight))
+            addView(tools, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Showdown rooms")
+            .setView(root)
             .setNegativeButton("Close") { _, _ -> roomListPending = false }
-            .setNeutralButton("Ladder") { _, _ -> showLadderDialog() }
-            .setPositiveButton("Message") { _, _ -> showPrivateMessageComposer() }
             .create()
         dialog.setOnDismissListener {
             if (roomListDialog === dialog) {
@@ -560,6 +622,113 @@ class MainActivity : Activity() {
         }
         roomListDialog = dialog
         dialog.show()
+    }
+
+    private fun showTournamentDirectory() {
+        if (!authenticated) {
+            session.setConnectionStatus("Connect to Showdown to browse tournaments.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before browsing tournaments.")
+            return
+        }
+        tournamentDirectoryState.clear()
+        val density = resources.displayMetrics.density
+        val content = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+        }
+        val links = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val refresh = Button(this).apply {
+            text = "Refresh"
+            setOnClickListener { requestTournamentDirectory() }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(refresh, LinearLayout.LayoutParams(-1, -2))
+            addView(content, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+        }
+        tournamentDirectoryDialog?.dismiss()
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Tournaments")
+            .setView(ScrollView(this).apply { addView(root, -1, -2) })
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (tournamentDirectoryDialog === dialog) {
+                tournamentDirectoryDialog = null
+                tournamentDirectoryContentView = null
+                tournamentDirectoryLinks = null
+                tournamentDirectoryState.clear()
+            }
+        }
+        tournamentDirectoryDialog = dialog
+        tournamentDirectoryContentView = content
+        tournamentDirectoryLinks = links
+        dialog.show()
+        requestTournamentDirectory()
+    }
+
+    private fun requestTournamentDirectory() {
+        if (showdownConnection?.sendGlobal(ShowdownTournamentDirectoryState.pageCommand()) != true) {
+            session.setConnectionStatus("Tournament connection is not ready yet.")
+        }
+    }
+
+    private fun updateTournamentDirectoryDialog() {
+        val snapshot = tournamentDirectoryState.snapshot
+        tournamentDirectoryDialog?.setTitle(snapshot.title)
+        tournamentDirectoryContentView?.text = snapshot.error ?: snapshot.text
+        val links = tournamentDirectoryLinks ?: return
+        links.removeAllViews()
+        val density = resources.displayMetrics.density
+        snapshot.tournaments.forEach { tournament ->
+            val button = Button(this).apply {
+                text = buildString {
+                    append(tournament.roomName)
+                    append("\n")
+                    append(tournament.format)
+                    if (tournament.generator.isNotBlank()) append(" · ${tournament.generator}")
+                    if (tournament.started) append(" · Started")
+                    tournament.playerCount?.let { append(" · $it players") }
+                }
+                isAllCaps = false
+                setOnClickListener {
+                    tournamentDirectoryDialog?.dismiss()
+                    pendingChatRoomId = tournament.roomId
+                    if (showdownConnection?.sendGlobal(ShowdownTournamentDirectoryState.joinCommand(tournament.roomId)) == true) {
+                        session.setConnectionStatus("Joining ${tournament.roomName}…")
+                    } else {
+                        pendingChatRoomId = null
+                        session.setConnectionStatus("Could not join ${tournament.roomName}.")
+                    }
+                }
+            }
+            styleDynamicDialogButton(button)
+            links.addView(button, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, (6f * density).toInt(), 0, 0) })
+        }
+    }
+
+    private fun styleDynamicDialogButton(button: Button) {
+        val density = resources.displayMetrics.density
+        button.isAllCaps = false
+        button.setTextColor(0xffe5fcf8.toInt())
+        button.setTextSize(15f)
+        button.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        button.minHeight = (50f * density).toInt()
+        button.minimumHeight = (50f * density).toInt()
+        button.setPadding((14f * density).toInt(), 0, (14f * density).toInt(), 0)
+        button.background = GradientDrawable().apply {
+            setColor(0xff187c81.toInt())
+            setStroke((1f * density).toInt(), 0xff79dad3.toInt())
+            cornerRadius = 14f * density
+        }
     }
 
     private fun showLadderDialog(format: BattleSession.MatchFormat = session.matchFormat) {
@@ -1307,6 +1476,7 @@ class MainActivity : Activity() {
             override fun onProtocol(roomId: String?, lines: List<String>) {
                 runOnUiThread {
                     if (showdownConnection !== connection) return@runOnUiThread
+                    if (tournamentDirectoryState.applyProtocol(roomId, lines)) updateTournamentDirectoryDialog()
                     if (friendsState.applyProtocol(roomId, lines)) updateFriendsDialog()
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
@@ -1404,7 +1574,7 @@ class MainActivity : Activity() {
                         }
                         session.setLiveBattleActive(activeBattleRoomId != null && battleProtocolReady)
                     }
-                    if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
+                    if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && !roomId.startsWith("view-tournaments") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
                         val changed = chatRoomState.applyProtocol(roomId, lines)
                         if (changed && pendingChatRoomId == roomId) {
                             pendingChatRoomId = null

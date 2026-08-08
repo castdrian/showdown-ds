@@ -29,4 +29,11 @@ class ShowdownMoveDexTest {
 
         assertEquals(listOf("Choice Band", "Leftovers"), ShowdownMoveDex.parseScriptNames(contents))
     }
+
+    @Test
+    fun ignoresMissingJsonAssets() {
+        assertEquals(emptyMap<String, String>(), ShowdownMoveDex.parseMoveTypes(""))
+        assertEquals(emptyMap<String, List<String>>(), ShowdownMoveDex.parsePokemonTypes(""))
+        assertEquals(emptyList<String>(), ShowdownMoveDex.parseMoveNames(""))
+    }
 }
