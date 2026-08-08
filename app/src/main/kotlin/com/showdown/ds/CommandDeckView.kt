@@ -234,7 +234,7 @@ class CommandDeckView(
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(32f, scale, 28f)
             paint.color = if (selected) Color.rgb(225, 240, 242) else Color.rgb(198, 215, 226)
-            canvas.drawText(tabName(panel), tabLeft + tabWidth / 2f, top + tabHeight * 0.60f, paint)
+            canvas.drawText(tabName(panel), tabLeft + tabWidth / 2f, centeredTextBaseline(bounds.centerY()), paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }

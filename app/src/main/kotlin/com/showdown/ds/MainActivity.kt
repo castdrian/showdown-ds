@@ -77,6 +77,11 @@ class MainActivity : Activity() {
     private var chatRoomMessagesView: TextView? = null
     private var chatRoomInput: EditText? = null
     private var chatRoomScroll: ScrollView? = null
+    private val lobbyChatState = ShowdownChatRoomState()
+    private var lobbyChatDialog: ShowdownDialog? = null
+    private var lobbyChatMessagesView: TextView? = null
+    private var lobbyChatInput: EditText? = null
+    private var lobbyChatScroll: ScrollView? = null
     private var pendingChatRoomId: String? = null
     private var tournamentStatusView: TextView? = null
     private var tournamentDetailsView: TextView? = null
@@ -262,6 +267,12 @@ class MainActivity : Activity() {
         chatRoomScroll = null
         pendingChatRoomId = null
         chatRoomState.clear()
+        lobbyChatDialog?.dismiss()
+        lobbyChatDialog = null
+        lobbyChatMessagesView = null
+        lobbyChatInput = null
+        lobbyChatScroll = null
+        lobbyChatState.clear()
         privateMessageDialog?.dismiss()
         privateMessageDialog = null
         privateMessageTarget = null
@@ -600,7 +611,15 @@ class MainActivity : Activity() {
                     showPrivateMessageComposer()
                 }
             }
-            listOf(tournaments, ladder, message).forEach { button ->
+            val lobby = Button(this@MainActivity).apply {
+                text = "Lobby"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showLobbyChatDialog()
+                }
+            }
+            listOf(tournaments, ladder, message, lobby).forEach { button ->
                 addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins((3f * density).toInt(), 0, (3f * density).toInt(), 0) })
             }
         }
@@ -1113,6 +1132,95 @@ class MainActivity : Activity() {
         chatRoomScroll?.post { chatRoomScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
+    private fun showLobbyChatDialog() {
+        val existing = lobbyChatDialog
+        if (existing != null) {
+            updateLobbyChatDialog()
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before opening lobby chat.")
+            return
+        }
+        val density = resources.displayMetrics.density
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24f * density).toInt(), (8f * density).toInt(), (24f * density).toInt(), 0)
+        }
+        val messages = TextView(this).apply {
+            setTextSize(18f)
+            setTextColor(0xfff2f6ff.toInt())
+            setPadding(0, (8f * density).toInt(), 0, (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(messages, -1, -2)
+        }
+        val input = EditText(this).apply {
+            hint = "Message lobby"
+            setSingleLine(true)
+            setTextSize(18f)
+            imeOptions = EditorInfo.IME_ACTION_SEND
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_SEND) {
+                    sendLobbyChatMessage()
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        val send = Button(this).apply {
+            text = "Send"
+            setOnClickListener { sendLobbyChatMessage() }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(send, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = (8f * density).toInt() })
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(controls, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Lobby chat")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (lobbyChatDialog === dialog) {
+                lobbyChatDialog = null
+                lobbyChatMessagesView = null
+                lobbyChatInput = null
+                lobbyChatScroll = null
+            }
+        }
+        lobbyChatDialog = dialog
+        lobbyChatMessagesView = messages
+        lobbyChatInput = input
+        lobbyChatScroll = scroll
+        dialog.show()
+        showdownConnection?.sendGlobal("/join lobby")
+        updateLobbyChatDialog()
+    }
+
+    private fun updateLobbyChatDialog() {
+        lobbyChatMessagesView?.text = lobbyChatState.messages.joinToString("\n") { message ->
+            if (message.system) message.text else "${message.speaker}: ${message.text}"
+        }.ifBlank { "No lobby messages yet." }
+        lobbyChatScroll?.post { lobbyChatScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun sendLobbyChatMessage() {
+        val text = lobbyChatInput?.text?.toString()?.trim().orEmpty()
+        if (text.isBlank()) return
+        if (showdownConnection?.send("lobby", text) == true) {
+            lobbyChatInput?.setText("")
+        } else {
+            session.setConnectionStatus("Lobby chat connection is not ready.")
+        }
+    }
+
     private fun showTournamentDialog() {
         tournamentDialog?.let {
             updateTournamentDialog()
@@ -1435,6 +1543,8 @@ class MainActivity : Activity() {
                         chatRoomDialog?.dismiss()
                         chatRoomState.clear()
                         pendingChatRoomId = null
+                        lobbyChatDialog?.dismiss()
+                        lobbyChatState.clear()
                     }
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
@@ -1518,6 +1628,7 @@ class MainActivity : Activity() {
                         session.setConnectionStatus(error)
                     }
                     if (roomId == null || roomId == "lobby") {
+                        if (lobbyChatState.applyProtocol("lobby", lines) && lobbyChatDialog != null) updateLobbyChatDialog()
                         session.applyLobbyChat(lines)
                         session.applyServerFormats(lines)
                         getSharedPreferences("showdown", MODE_PRIVATE).edit()
@@ -2466,6 +2577,10 @@ class MainActivity : Activity() {
     private fun showChatComposer() {
         if (showdownConnection == null) {
             session.setConnectionStatus("Connect to Showdown before opening chat.")
+            return
+        }
+        if (activeBattleRoomId == null) {
+            showLobbyChatDialog()
             return
         }
         val input = EditText(this).apply {
