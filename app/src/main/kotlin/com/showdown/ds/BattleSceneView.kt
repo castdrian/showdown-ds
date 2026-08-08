@@ -695,10 +695,18 @@ class BattleSceneView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = height * 0.17f
         paint.color = MUTED
-        canvas.drawText(trainer.uppercase(Locale.ROOT), textLeft, bounds.top + height * 0.51f, paint)
+        val hpLabel = hp.substringBefore(' ')
+        val hpWidth = paint.measureText(hpLabel)
+        val trainerAvailableWidth = (textRight - textLeft - hpWidth - 12f * scale).coerceAtLeast(0f)
+        canvas.drawText(
+            ellipsizeToWidth(trainer.uppercase(Locale.ROOT), trainerAvailableWidth, paint),
+            textLeft,
+            bounds.top + height * 0.51f,
+            paint
+        )
         paint.textAlign = Paint.Align.RIGHT
         paint.color = Color.rgb(238, 238, 238)
-        canvas.drawText(hp.substringBefore(' '), textRight, bounds.top + height * 0.51f, paint)
+        canvas.drawText(hpLabel, textRight, bounds.top + height * 0.51f, paint)
         paint.textAlign = Paint.Align.LEFT
         val barTop = bounds.top + height * 0.55f
         val barBottom = barTop + height * 0.15f
