@@ -5,15 +5,18 @@ import org.json.JSONObject
 class ShowdownLobbyState {
     data class OutgoingChallenge(val username: String, val format: String)
     data class RoomSummary(val id: String, val title: String, val description: String, val userCount: Int, val section: String)
+    data class BattleRoomSummary(val id: String, val playerOne: String, val playerTwo: String, val minimumElo: String)
 
     private val activeSearches = mutableSetOf<String>()
     private val activeBattles = linkedMapOf<String, String>()
     private val pendingChallenges = linkedMapOf<String, String>()
     private val publicRooms = mutableListOf<RoomSummary>()
+    private val activeBattleRooms = mutableListOf<BattleRoomSummary>()
 
     val battles get() = activeBattles.toMap()
     val incomingChallenges get() = pendingChallenges.toMap()
     val rooms get() = publicRooms.toList()
+    val battleRooms get() = activeBattleRooms.toList()
     var outgoingChallenge: OutgoingChallenge? = null
         private set
 
@@ -28,6 +31,7 @@ class ShowdownLobbyState {
         activeBattles.clear()
         pendingChallenges.clear()
         publicRooms.clear()
+        activeBattleRooms.clear()
         outgoingChallenge = null
     }
 
@@ -43,9 +47,31 @@ class ShowdownLobbyState {
             when (fields.getOrNull(1)) {
                 "updatesearch" -> applySearch(fields.getOrNull(2))
                 "updatechallenges" -> applyChallenges(fields.getOrNull(2))
-                "queryresponse" -> if (fields.getOrNull(2) == "rooms") applyRooms(fields.getOrNull(3))
+                "queryresponse" -> when (fields.getOrNull(2)) {
+                    "rooms" -> applyRooms(fields.getOrNull(3))
+                    "roomlist" -> applyBattleRooms(fields.getOrNull(3))
+                }
             }
         }
+    }
+
+    private fun applyBattleRooms(payload: String?) {
+        val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return
+        val rooms = state.optJSONObject("rooms") ?: JSONObject()
+        val parsed = mutableListOf<BattleRoomSummary>()
+        rooms.keys().forEach { id ->
+            val room = rooms.optJSONObject(id) ?: return@forEach
+            val playerOne = room.optString("p1").trim()
+            val playerTwo = room.optString("p2").trim()
+            if (playerOne.isBlank() || playerTwo.isBlank()) return@forEach
+            val minimumElo = when (val value = room.opt("minElo")) {
+                is Number -> value.toInt().toString()
+                else -> value?.toString()?.trim().orEmpty()
+            }
+            parsed += BattleRoomSummary(id, playerOne, playerTwo, minimumElo)
+        }
+        activeBattleRooms.clear()
+        activeBattleRooms += parsed
     }
 
     private fun applyRooms(payload: String?) {

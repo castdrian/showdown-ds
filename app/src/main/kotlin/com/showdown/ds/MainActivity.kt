@@ -27,6 +27,8 @@ import android.widget.TextView
 import java.util.ArrayDeque
 
 class MainActivity : Activity() {
+    private data class RoomSelection(val id: String, val title: String, val subtitle: String, val chatRoom: Boolean)
+
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
     private var battleScene: BattleSceneView? = null
@@ -446,7 +448,8 @@ class MainActivity : Activity() {
         }
         roomListPending = true
         renderRoomListDialog()
-        if (showdownConnection?.sendGlobal("/cmd rooms") != true) {
+        val sent = showdownConnection?.sendGlobal("/cmd rooms") == true && showdownConnection?.sendGlobal("/cmd roomlist") == true
+        if (!sent) {
             roomListPending = false
             roomListDialog?.dismiss()
             roomListDialog = null
@@ -456,13 +459,21 @@ class MainActivity : Activity() {
 
     private fun renderRoomListDialog() {
         val rooms = lobbyState.rooms
-        val labels = if (rooms.isEmpty()) {
+        val selections = lobbyState.battleRooms.take(32).map { battle ->
+            RoomSelection(
+                battle.id,
+                "Watch ${battle.playerOne} vs ${battle.playerTwo}",
+                battle.minimumElo.takeIf { it.isNotBlank() }?.let { "Rated · $it+ Elo" } ?: "Live battle",
+                false
+            )
+        } + rooms.map { room ->
+            val users = room.userCount.takeIf { it >= 0 }?.let { " · $it online" }.orEmpty()
+            RoomSelection(room.id, "${room.title}$users", room.description.ifBlank { room.section }, true)
+        }
+        val labels = if (selections.isEmpty()) {
             arrayOf("Loading public rooms…")
         } else {
-            rooms.map { room ->
-                val users = room.userCount.takeIf { it >= 0 }?.let { " · $it online" }.orEmpty()
-                "${room.title}$users\n${room.description.ifBlank { room.section }}"
-            }.toTypedArray()
+            selections.map { "${it.title}\n${it.subtitle}" }.toTypedArray()
         }
         val previous = roomListDialog
         roomListDialog = null
@@ -470,10 +481,10 @@ class MainActivity : Activity() {
         val dialog = AlertDialog.Builder(this)
             .setTitle("Showdown rooms")
             .setItems(labels) { _, selected ->
-                val room = rooms.getOrNull(selected) ?: return@setItems
+                val room = selections.getOrNull(selected) ?: return@setItems
                 roomListPending = false
                 roomListDialog = null
-                pendingChatRoomId = room.id
+                pendingChatRoomId = room.id.takeIf { room.chatRoom }
                 if (showdownConnection?.sendGlobal("/join ${room.id}") == true) {
                     session.setConnectionStatus("Joining ${room.title}…")
                 } else {
@@ -780,7 +791,7 @@ class MainActivity : Activity() {
                         val previousChallenges = lobbyState.incomingChallenges
                         val previousBattleRoomIds = lobbyState.battles.keys
                         lobbyState.applyProtocol(lines)
-                        if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") }) renderRoomListDialog()
+                        if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") || it.startsWith("|queryresponse|roomlist|") }) renderRoomListDialog()
                         if (activeSearchFormat != null) {
                             lobbyState.firstNewBattle(previousBattleRoomIds)?.let { matchedRoomId ->
                                 joinMatchedBattle(connection, matchedRoomId)
