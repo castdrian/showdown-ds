@@ -174,7 +174,7 @@ class CommandDeckView(
         canvas.drawRoundRect(band, 24f * scale, 24f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(36f, scale, 30f)
+        paint.textSize = readableTextSize(40f, scale, 34f)
         paint.color = Color.rgb(226, 238, 244)
         paint.textAlign = Paint.Align.CENTER
         val titleBaseline = band.centerY() - (paint.ascent() + paint.descent()) / 2f
@@ -197,7 +197,7 @@ class CommandDeckView(
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.color = Color.rgb(228, 241, 242)
-        paint.textSize = readableTextSize(22f, scale, 20f)
+        paint.textSize = readableTextSize(28f, scale, 24f)
         canvas.drawText(
             if (session.isLiveBattleActive() || session.isBattleFinished()) "Turn ${session.turn}" else "Ready",
             turn.centerX(),
@@ -232,7 +232,7 @@ class CommandDeckView(
             paint.style = Paint.Style.FILL
             paint.textAlign = Paint.Align.CENTER
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = readableTextSize(27f, scale, 24f)
+            paint.textSize = readableTextSize(32f, scale, 28f)
             paint.color = if (selected) Color.rgb(225, 240, 242) else Color.rgb(198, 215, 226)
             canvas.drawText(tabName(panel), tabLeft + tabWidth / 2f, top + tabHeight * 0.60f, paint)
         }
@@ -297,7 +297,7 @@ class CommandDeckView(
         val gap = 16f * scale
         val targetWidth = (right - left - gap * (targets.size - 1)) / targets.size
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(20f, scale, 18f)
+        paint.textSize = readableTextSize(24f, scale, 21f)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText("TARGET", left, top + 18f * scale, paint)
         targets.forEachIndexed { index, target ->
@@ -312,7 +312,7 @@ class CommandDeckView(
             canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
             paint.style = Paint.Style.FILL
             paint.textAlign = Paint.Align.CENTER
-            paint.textSize = readableTextSize(20f, scale)
+            paint.textSize = readableTextSize(24f, scale, 21f)
             paint.color = PAPER
             canvas.drawText(target.label, bounds.centerX(), bounds.centerY() + 7f * scale, paint)
             paint.textAlign = Paint.Align.LEFT
@@ -398,7 +398,7 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.LEFT
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(30f, scale, 26f)
+        paint.textSize = readableTextSize(34f, scale, 29f)
         paint.color = PAPER
         canvas.drawText(fitTextToWidth(move.name, bounds.width() - 86f * scale), bounds.left + 20f * scale, bounds.top + 48f * scale, paint)
         val icon = typeIcon(move.type)
@@ -407,15 +407,15 @@ class CommandDeckView(
             destination.set(bounds.right - 66f * scale, bounds.top + 16f * scale, bounds.right - 22f * scale, bounds.top + 60f * scale)
             canvas.drawBitmap(icon, source, destination, paint)
         }
-        paint.textSize = readableTextSize(21f, scale, 18f)
+        paint.textSize = readableTextSize(24f, scale, 21f)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText("${move.type}  ·  ${move.category}", bounds.left + 20f * scale, bounds.top + 92f * scale, paint)
-        paint.textSize = readableTextSize(25f, scale, 21f)
+        paint.textSize = readableTextSize(28f, scale, 24f)
         paint.color = PAPER
         canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.left + 20f * scale, bounds.top + 146f * scale, paint)
         canvas.drawText("Power ${move.power}  ·  Acc ${move.accuracy}", bounds.left + 20f * scale, bounds.top + 190f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(20f, scale, 18f)
+        paint.textSize = readableTextSize(23f, scale, 20f)
         paint.color = if (move.disabled) MAGENTA else Color.rgb(150, 231, 205)
         canvas.drawText(if (move.disabled) "DISABLED" else "TAP AGAIN TO CONFIRM", bounds.left + 20f * scale, bounds.bottom - 24f * scale, paint)
     }
@@ -423,11 +423,11 @@ class CommandDeckView(
     private fun drawUtilityMessage(canvas: Canvas, bounds: RectF, scale: Float) {
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(22f, scale, 20f)
+        paint.textSize = readableTextSize(24f, scale, 21f)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText(if (session.decisionAvailable) "LAST ACTION" else "WAITING", bounds.centerX(), bounds.centerY() - 22f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(27f, scale, 23f)
+        paint.textSize = readableTextSize(30f, scale, 26f)
         paint.color = PAPER
         val message = if (session.decisionAvailable) session.latestBattleEvent else session.status
         canvas.drawText(fitTextToWidth(message, bounds.width() - 24f * scale), bounds.centerX(), bounds.centerY() + 34f * scale, paint)
@@ -485,9 +485,9 @@ class CommandDeckView(
         paint.textSize = moveNameSize(move.name, scale)
         drawSoftText(canvas, move.name, surface.left + 42f * scale, surface.top + 54f * scale, PAPER, 0.85f * scale)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(28f, scale, 24f)
+        paint.textSize = readableTextSize(30f, scale, 26f)
         drawSoftText(canvas, "PP ${move.pp} / ${move.maxPp}", surface.left + 42f * scale, surface.bottom - 23f * scale, PAPER, 0.65f * scale)
-        paint.textSize = readableTextSize(23f, scale, 20f)
+        paint.textSize = readableTextSize(25f, scale, 22f)
         drawSoftText(
             canvas,
             "Power ${move.power}  ·  Acc ${move.accuracy}",
@@ -577,7 +577,7 @@ class CommandDeckView(
             canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
             paint.textAlign = Paint.Align.CENTER
-            paint.textSize = readableTextSize(16f, scale)
+            paint.textSize = readableTextSize(20f, scale, 18f)
             paint.color = Color.rgb(123, 158, 178)
             canvas.drawText("No special action this turn", bounds.centerX(), bounds.centerY() + 6f * scale, paint)
             paint.textAlign = Paint.Align.LEFT
@@ -617,7 +617,7 @@ class CommandDeckView(
             drawGimmickAsset(canvas, gimmick, card.centerX(), emblemY, emblemSize)
             paint.textAlign = Paint.Align.CENTER
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = readableTextSize(if (gimmicks.size > 2) 18f else 34f, scale)
+            paint.textSize = readableTextSize(if (gimmicks.size > 2) 22f else 36f, scale, 20f)
             paint.color = if (selected) Color.rgb(22, 22, 22) else PAPER
             if (gimmick != BattleSession.BattleGimmick.Z_POWER) canvas.drawText(gimmick.label.first().toString(), card.centerX(), card.top + card.height() * 0.48f, paint)
             canvas.drawText(gimmick.label, card.centerX(), card.top + card.height() * 0.79f, paint)
@@ -630,7 +630,7 @@ class CommandDeckView(
         paint.color = Color.argb(160, 30, 43, 58)
         canvas.drawPath(moveRowPath(bounds, scale), paint)
         paint.textAlign = Paint.Align.CENTER
-        paint.textSize = readableTextSize(27f, scale)
+        paint.textSize = readableTextSize(30f, scale, 26f)
         paint.color = Color.rgb(224, 191, 220)
         canvas.drawText("Unavailable", bounds.centerX(), bounds.centerY(), paint)
         paint.textAlign = Paint.Align.LEFT
@@ -721,10 +721,11 @@ class CommandDeckView(
             val spriteBounds = RectF(bounds.left + 16f * scale, bounds.top + 22f * scale, bounds.left + 150f * scale, bounds.top + 156f * scale)
             teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = readableTextSize(if (pokemon.length > 11) 34f else 40f, scale, 30f)
+            paint.textSize = readableTextSize(if (pokemon.length > 11) 32f else 38f, scale, 28f)
             paint.color = PAPER
-            canvas.drawText(pokemon, bounds.left + 164f * scale, bounds.top + 55f * scale, paint)
-            paint.textSize = readableTextSize(28f, scale, 24f)
+            val teamName = fitTextToWidth(pokemon, bounds.right - 20f * scale - (bounds.left + 164f * scale))
+            canvas.drawText(teamName, bounds.left + 164f * scale, bounds.top + 55f * scale, paint)
+            paint.textSize = readableTextSize(30f, scale, 26f)
             paint.color = MUTED
             canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", bounds.left + 164f * scale, bounds.top + 92f * scale, paint)
             drawTeamHp(canvas, RectF(bounds.left + 164f * scale, bounds.top + 112f * scale, bounds.right - 20f * scale, bounds.top + 140f * scale), details.hp, scale)
@@ -736,12 +737,12 @@ class CommandDeckView(
                 canvas.drawRoundRect(typeBounds, 13f * scale, 13f * scale, paint)
                 paint.textAlign = Paint.Align.CENTER
                 paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-                paint.textSize = readableTextSize(20f, scale)
+                paint.textSize = readableTextSize(24f, scale, 21f)
                 drawOutlinedText(canvas, type, typeBounds.centerX(), typeBounds.centerY() + 7f * scale, Color.rgb(7, 18, 26), PAPER, 1.5f * scale)
                 paint.textAlign = Paint.Align.LEFT
                 typeX = typeBounds.right + 8f * scale
             }
-            paint.textSize = readableTextSize(28f, scale, 24f)
+            paint.textSize = readableTextSize(30f, scale, 26f)
             val state = when {
                 details.condition.contains("FNT", true) -> "Fainted"
                 session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Choose to switch in"
@@ -777,7 +778,7 @@ class CommandDeckView(
         canvas.drawRoundRect(RectF(bounds.left + 3f * scale, bounds.top + 3f * scale, bounds.left + maxOf(7f * scale, (bounds.width() - 6f * scale) * ratio), bounds.bottom - 3f * scale), 9f * scale, 9f * scale, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(28f, scale, 24f)
+        paint.textSize = readableTextSize(30f, scale, 26f)
         drawOutlinedText(canvas, "HP ${hp.substringBefore(' ')}", bounds.centerX(), bounds.centerY() + 8f * scale, Color.rgb(5, 14, 22), PAPER, 1.8f * scale)
         paint.textAlign = Paint.Align.LEFT
     }
@@ -814,10 +815,10 @@ class CommandDeckView(
         paint.color = PAPER
         canvas.drawText(title, bounds.centerX(), bounds.top + 150f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(28f, scale, 24f)
+        paint.textSize = readableTextSize(30f, scale, 26f)
         paint.color = Color.rgb(190, 218, 235)
         canvas.drawText(fitTextToWidth(message, bounds.width() - 100f * scale), bounds.centerX(), bounds.top + 220f * scale, paint)
-        paint.textSize = readableTextSize(24f, scale, 21f)
+        paint.textSize = readableTextSize(28f, scale, 24f)
         paint.color = CYAN
         canvas.drawText(action, bounds.centerX(), bounds.top + 292f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
@@ -833,13 +834,13 @@ class CommandDeckView(
         paint.color = Color.argb(222, 7, 39, 54)
         canvas.drawRoundRect(RectF(left, top, width - left, bottom), 24f * scale, 24f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(32f, scale)
+        paint.textSize = readableTextSize(36f, scale, 31f)
         paint.color = CYAN
         canvas.drawText("Activity", left + 28f * scale, top + 45f * scale, paint)
         var rowY = top + 94f * scale
         val start = maxOf(0, minOf(messages.size - 4, session.focusedMessage - 3))
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(30f, scale, 26f)
+        paint.textSize = readableTextSize(34f, scale, 29f)
         for (index in start until messages.size) {
             if (rowY >= bottom - 24f * scale) break
             val focused = index == session.focusedMessage
@@ -848,7 +849,7 @@ class CommandDeckView(
                 canvas.drawRoundRect(RectF(left + 14f * scale, rowY - 29f * scale, width - left - 14f * scale, rowY + 14f * scale), 10f * scale, 10f * scale, paint)
             }
             paint.color = if (focused || index % 2 == 0) PAPER else MUTED
-            canvas.drawText(ellipsize(messages[index], 58), left + 28f * scale, rowY, paint)
+            canvas.drawText(fitTextToWidth(messages[index], width - left * 2f - 56f * scale), left + 28f * scale, rowY, paint)
             rowY += 72f * scale
         }
         activityChatBounds = RectF(left, height - buttonHeight - 28f * scale, width - left, height - 28f * scale)
@@ -865,7 +866,7 @@ class CommandDeckView(
         paint.shader = null
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(34f, scale, 30f)
+        paint.textSize = readableTextSize(38f, scale, 33f)
         paint.color = PAPER
         canvas.drawText("Send a message", activityChatBounds!!.centerX(), activityChatBounds!!.centerY() + 10f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
@@ -911,7 +912,7 @@ class CommandDeckView(
             }
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
-            paint.textSize = readableTextSize(32f, scale, 28f)
+            paint.textSize = readableTextSize(38f, scale, 33f)
             paint.color = if (index == 3) MAGENTA else PAPER
             val label = fitTextToWidth(entry, bounds.width() - 64f * scale)
             canvas.drawText(label, bounds.left + 32f * scale, centeredTextBaseline(bounds.centerY()), paint)
