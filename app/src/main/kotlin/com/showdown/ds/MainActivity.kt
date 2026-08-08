@@ -934,6 +934,7 @@ class MainActivity : Activity() {
 
     private fun signOut() {
         credentialsStore.clear()
+        lobbyState.clear()
         shouldMaintainConnection = false
         reconnectHandler.removeCallbacksAndMessages(null)
         reconnectScheduled = false

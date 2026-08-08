@@ -20,6 +20,13 @@ class ShowdownLobbyState {
         activeSearches.remove(format)
     }
 
+    fun clear() {
+        activeSearches.clear()
+        activeBattles.clear()
+        pendingChallenges.clear()
+        outgoingChallenge = null
+    }
+
     fun clearBattle(roomId: String) {
         activeBattles.remove(roomId)
     }

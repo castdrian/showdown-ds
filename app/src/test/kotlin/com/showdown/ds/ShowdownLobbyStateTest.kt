@@ -72,6 +72,24 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun clearsCachedRoomsAndChallengesWhenTheSessionEnds() {
+        val lobby = ShowdownLobbyState()
+        lobby.applyProtocol(
+            listOf(
+                "|updatesearch|{\"searching\":[\"gen9ou\"],\"games\":{\"battle-gen9ou-1\":\"Adrian vs. Gladion\"}}",
+                "|updatechallenges|{\"challengesFrom\":{\"gladion\":\"gen9ou\"},\"challengeTo\":{\"to\":\"misty\",\"format\":\"gen9ou\"}}"
+            )
+        )
+
+        lobby.clear()
+
+        assertTrue(lobby.battles.isEmpty())
+        assertTrue(lobby.incomingChallenges.isEmpty())
+        assertEquals(null, lobby.outgoingChallenge)
+        assertFalse(lobby.isSearching("gen9ou"))
+    }
+
+    @Test
     fun findsOnlyBattleRoomsThatAppearedSinceTheLastLobbyUpdate() {
         val lobby = ShowdownLobbyState()
         lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-gen9ou-1\":\"Adrian vs. Gladion\"}}"))
