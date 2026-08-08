@@ -1,7 +1,7 @@
 package com.showdown.ds
 
 object BattlePlaybackTiming {
-    const val EVENT_PAUSE_MILLIS = 700L
+    const val EVENT_PAUSE_MILLIS = 1_000L
 
     fun chunks(lines: List<String>): List<List<String>> {
         val chunks = mutableListOf<List<String>>()
@@ -37,8 +37,8 @@ object BattlePlaybackTiming {
             line.startsWith("|tie|")
 
     private const val MOVE_PAUSE_MILLIS = EVENT_PAUSE_MILLIS
-    private const val FAINT_PAUSE_MILLIS = 950L
-    private const val SWITCH_PAUSE_MILLIS = 850L
-    private const val TURN_PAUSE_MILLIS = 500L
-    private const val END_OF_BATTLE_PAUSE_MILLIS = 1_400L
+    private const val FAINT_PAUSE_MILLIS = 1_300L
+    private const val SWITCH_PAUSE_MILLIS = 1_100L
+    private const val TURN_PAUSE_MILLIS = 750L
+    private const val END_OF_BATTLE_PAUSE_MILLIS = 1_800L
 }
