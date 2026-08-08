@@ -39,6 +39,7 @@ class CommandDeckView(
     private val teamBounds = arrayOfNulls<RectF>(6)
     private val menuBounds = arrayOfNulls<RectF>(BattleSession.MENU_ITEM_COUNT)
     private val gimmickBounds = arrayOfNulls<RectF>(4)
+    private val targetBounds = arrayOfNulls<RectF>(4)
     private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
     private val requestedTeamSprites = mutableSetOf<String>()
     private val typeIcons = mutableMapOf<String, Bitmap?>()
@@ -113,6 +114,13 @@ class CommandDeckView(
             gimmickBounds.forEachIndexed { index, bounds ->
                 if (bounds?.contains(x, y) == true) {
                     session.availableGimmicks().getOrNull(index)?.let(session::selectGimmick)
+                    interactionListener.onConfirmation()
+                    return true
+                }
+            }
+            targetBounds.forEachIndexed { index, bounds ->
+                if (bounds?.contains(x, y) == true) {
+                    session.selectTargetWithTouch(index)
                     interactionListener.onConfirmation()
                     return true
                 }
@@ -229,6 +237,7 @@ class CommandDeckView(
         if (session.isBattleFinished()) {
             moveBounds.fill(null)
             gimmickBounds.fill(null)
+            targetBounds.fill(null)
             drawCompletedBattle(canvas, width, height, scale)
             return
         }
@@ -248,6 +257,39 @@ class CommandDeckView(
             moveBounds[index] = bounds
             val move = moves.getOrNull(index)
             if (move == null) drawUnavailableMove(canvas, bounds, scale) else drawMoveRow(canvas, bounds, move, index == session.focusedMove, movePressProgress(index), scale)
+        }
+        drawTargets(canvas, width, panelBottom, scale)
+    }
+
+    private fun drawTargets(canvas: Canvas, width: Float, panelBottom: Float, scale: Float) {
+        targetBounds.fill(null)
+        val targets = session.targetOptions()
+        if (targets.isEmpty()) return
+        val top = panelBottom + 18f * scale
+        val left = 470f * scale
+        val right = width - 38f * scale
+        val gap = 12f * scale
+        val targetWidth = (right - left - gap * (targets.size - 1)) / targets.size
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = 17f * scale
+        paint.color = Color.rgb(153, 224, 220)
+        canvas.drawText("TARGET", left, top + 18f * scale, paint)
+        targets.forEachIndexed { index, target ->
+            val bounds = RectF(left + index * (targetWidth + gap), top + 28f * scale, left + index * (targetWidth + gap) + targetWidth, top + 82f * scale)
+            targetBounds[index] = bounds
+            val selected = session.status == "Target: ${target.label}"
+            paint.color = if (selected) Color.rgb(31, 122, 133) else Color.rgb(20, 53, 70)
+            canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = if (selected) 2.5f * scale else 1.25f * scale
+            paint.color = if (selected) Color.rgb(190, 255, 226) else Color.rgb(112, 176, 196)
+            canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
+            paint.style = Paint.Style.FILL
+            paint.textAlign = Paint.Align.CENTER
+            paint.textSize = 20f * scale
+            paint.color = PAPER
+            canvas.drawText(target.label, bounds.centerX(), bounds.centerY() + 7f * scale, paint)
+            paint.textAlign = Paint.Align.LEFT
         }
     }
 

@@ -36,6 +36,55 @@ class BattleSessionTest {
     }
 
     @Test
+    fun lobbyChatAndPrivateMessagesEnterActivity() {
+        val session = BattleSession()
+
+        session.applyLobbyChat(listOf("|c|MISTY|Hello", "|pm|GARY|Want to battle?"))
+
+        assertTrue(session.chatMessages().contains("[MISTY] Hello"))
+        assertTrue(session.chatMessages().contains("[GARY] Want to battle?"))
+        assertTrue(session.activityMessages().last().contains("Want to battle?"))
+    }
+
+    @Test
+    fun multiActiveRequestsCollectAllMovesBeforeSubmitting() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":12,\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]},{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}"
+        )
+
+        session.confirmSelection()
+
+        assertTrue(decisions.isEmpty())
+        assertEquals("Choose a move for active Pokémon 2/2", session.status)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose move 1, move 1|12"), decisions)
+        assertEquals(false, session.decisionAvailable)
+    }
+
+    @Test
+    fun multiActiveRequestsAllowExplicitTargets() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":13,\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"normal\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"target\":\"self\"}]}]}"
+        )
+
+        session.confirmSelection()
+
+        assertTrue(decisions.isEmpty())
+        assertEquals(listOf("Foe 1", "Foe 2"), session.targetOptions().map { it.label })
+        session.selectTargetWithTouch(1)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose move 1 2, move 1|13"), decisions)
+    }
+
+    @Test
     fun teamPreviewBuildsTheSubmittedOrderFromIndividualSelections() {
         val session = BattleSession()
         val decisions = mutableListOf<String>()
@@ -440,6 +489,23 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertEquals("/choose team 12|32", decisions.last())
+    }
+
+    @Test
+    fun multiForceSwitchCollectsAllReplacementChoices() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":33,\"forceSwitch\":[true,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50, M\",\"condition\":\"0 fnt\"},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\"},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"100/100\"}]}}"
+        )
+
+        session.moveFocus(1, 0)
+        session.confirmSelection()
+        session.moveFocus(1, 0)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose switch 2, switch 3|33"), decisions)
     }
 
     @Test

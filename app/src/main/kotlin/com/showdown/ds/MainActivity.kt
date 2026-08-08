@@ -84,9 +84,9 @@ class MainActivity : Activity() {
         }
     }
     private val chatListener = BattleSession.ChatListener { message ->
-        val roomId = activeBattleRoomId
-        if (roomId == null || showdownConnection?.send(roomId, message) != true) {
-            session.setConnectionStatus("Chat is available once you join a live battle.")
+        val roomId = activeBattleRoomId ?: "lobby"
+        if (showdownConnection?.send(roomId, message) != true) {
+            session.setConnectionStatus("Connect to Showdown before sending chat.")
         }
     }
     private val feedbackListener = BattleSession.FeedbackListener { feedback ->
@@ -650,7 +650,8 @@ class MainActivity : Activity() {
                         reconnectLobbyCommands = null
                         session.setConnectionStatus(error)
                     }
-                    if (roomId == null) {
+                    if (roomId == null || roomId == "lobby") {
+                        session.applyLobbyChat(lines)
                         session.applyServerFormats(lines)
                         getSharedPreferences("showdown", MODE_PRIVATE).edit()
                             .putString("match_format", session.matchFormat.id)
@@ -1123,8 +1124,8 @@ class MainActivity : Activity() {
     }
 
     private fun showChatComposer() {
-        if (activeBattleRoomId == null) {
-            session.setConnectionStatus("Start or join a battle before opening battle chat.")
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before opening chat.")
             return
         }
         val input = EditText(this).apply {
@@ -1132,7 +1133,7 @@ class MainActivity : Activity() {
             setSingleLine(true)
         }
         AlertDialog.Builder(this)
-            .setTitle("Battle chat")
+            .setTitle(if (activeBattleRoomId == null) "Lobby chat" else "Battle chat")
             .setView(input)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Send") { _, _ -> session.sendChat(input.text.toString()) }
@@ -1242,7 +1243,7 @@ class MainActivity : Activity() {
     }
 
     private fun cycleController(direction: Int) {
-        session.cyclePanel(direction)
+        if (session.targetOptions().isNotEmpty()) session.cycleTarget(direction) else session.cyclePanel(direction)
         battleAudio.playNavigation()
     }
 

@@ -107,7 +107,13 @@ class BattleSession {
         val category: String = "Status",
         val power: String = "—",
         val accuracy: String = "—",
-        val disabled: Boolean = false
+        val disabled: Boolean = false,
+        val target: String = ""
+    )
+
+    data class TargetOption(
+        val label: String,
+        val choice: String
     )
 
     data class BattleFeedback(
@@ -200,9 +206,18 @@ class BattleSession {
         "HP 70 · SpA 95 · Spe 130"
     )
     private val opponentTeamDetails = mutableListOf(opponentDetails)
+    private val activeTeamNames = mutableSetOf<String>()
+    private val activeSlotNames = mutableMapOf<String, String>()
     private var battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
     private var pendingHit: PendingHit? = null
     private var requestId: Int? = null
+    private val activeRequests = mutableListOf<JSONObject>()
+    private val activeChoices = mutableListOf<String>()
+    private val forceSwitchChoices = mutableListOf<String>()
+    private val targetOptions = mutableListOf<TargetOption>()
+    private var activeSlotIndex = 0
+    private var requiredSwitches = 0
+    private var selectedTargetIndex = -1
     private val sideNames = mutableMapOf<String, String>()
     private var playerSlot = "p1"
     private var localUsername: String? = null
@@ -336,6 +351,8 @@ class BattleSession {
         playerDetails = updatedPlayer
         opponentDetails = updatedOpponent
         opponentTeamDetails.clear()
+        activeTeamNames.clear()
+        activeSlotNames.clear()
         opponentTeamDetails += updatedOpponentTeam
         notifyListeners()
     }
@@ -367,6 +384,8 @@ class BattleSession {
     fun teamCondition(index: Int) = teamDetails.getOrNull(index)?.condition.orEmpty()
 
     fun availableGimmicks() = availableGimmicks.toList()
+
+    fun targetOptions() = targetOptions.toList()
 
     fun availableMatchFormats() = availableMatchFormats.toList()
 
@@ -483,6 +502,7 @@ class BattleSession {
         if (index !in moves.indices) return
         panel = Panel.MOVES
         focusedMove = index
+        updateTargetOptions()
         status = "Ready: ${moves[index].name}"
         notifyListeners()
     }
@@ -500,7 +520,23 @@ class BattleSession {
         }
         focusedMove = index
         panel = Panel.MOVES
+        updateTargetOptions()
         confirmSelection()
+    }
+
+    fun selectTargetWithTouch(index: Int) {
+        if (index !in targetOptions.indices) return
+        selectedTargetIndex = index
+        status = "Target: ${targetOptions[index].label}"
+        confirmSelection()
+    }
+
+    fun cycleTarget(direction: Int) {
+        if (targetOptions.isEmpty()) return
+        val current = if (selectedTargetIndex < 0) 0 else selectedTargetIndex
+        selectedTargetIndex = Math.floorMod(current + direction, targetOptions.size)
+        status = "Target: ${targetOptions[selectedTargetIndex].label}"
+        notifyListeners()
     }
 
     fun selectTeamWithTouch(index: Int) {
@@ -560,13 +596,33 @@ class BattleSession {
                     status = "${move.name} is disabled."
                     return
                 }
+                val target = targetOptions.getOrNull(selectedTargetIndex)?.choice
+                if (targetOptions.isNotEmpty() && target == null) {
+                    status = "Choose a target for ${move.name}."
+                    return
+                }
                 val gimmick = selectedGimmick
-                val choice = "/choose move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${requestId?.let { "|$it" } ?: ""}"
+                val selectedChoice = "move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${target?.let { " $it" } ?: ""}"
+                if (activeRequests.size > 1) {
+                    while (activeChoices.size < activeRequests.size) activeChoices += ""
+                    activeChoices[activeSlotIndex] = selectedChoice
+                    selectedGimmick = null
+                    if (activeSlotIndex < activeRequests.lastIndex) {
+                        activeSlotIndex += 1
+                        applyActiveRequest(activeRequests[activeSlotIndex])
+                        status = "Choose a move for active Pokémon ${activeSlotIndex + 1}/${activeRequests.size}"
+                        notifyListeners()
+                        return
+                    }
+                }
+                val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else selectedChoice
+                val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
                 status = "Move sent: ${gimmick?.label?.plus(" ") ?: ""}${move.name}"
                 appendLog("$playerPokemon chose ${gimmick?.label?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
                 selectedGimmick = null
+                selectedTargetIndex = -1
                 decisionListeners.toList().forEach { it.onDecision(choice) }
             }
             Panel.TEAM -> confirmTeamSelection()
@@ -619,6 +675,13 @@ class BattleSession {
 
     fun applyProtocolLine(line: String?) {
         applyProtocolPacket(listOfNotNull(line))
+    }
+
+    fun applyLobbyChat(lines: List<String>) {
+        lines.map { it.split('|') }
+            .filter { it.getOrNull(1) == "c" || it.getOrNull(1) == "c:" || it.getOrNull(1) == "pm" }
+            .forEach(::applyChat)
+        notifyListeners()
     }
 
     fun applyProtocolPacket(lines: List<String>) {
@@ -704,6 +767,13 @@ class BattleSession {
         latestOpeningEntranceAtNanos = 0L
         playerEntryAtNanos = 0L
         opponentEntryAtNanos = 0L
+        activeRequests.clear()
+        activeChoices.clear()
+        forceSwitchChoices.clear()
+        targetOptions.clear()
+        activeSlotIndex = 0
+        requiredSwitches = 0
+        selectedTargetIndex = -1
         opponentTeamDetails.clear()
         weather = ""
         terrain = ""
@@ -737,6 +807,9 @@ class BattleSession {
         when {
             playerSide -> {
                 playerPokemon = pokemon
+                activeSlotNames[fields[2].substringBefore(":").trim()] = pokemon
+                activeTeamNames.clear()
+                activeTeamNames += activeSlotNames.values
                 playerHp = fields[4]
                 applyDetails(true, fields[3])
                 playerCondition = condition(fields[4])
@@ -899,6 +972,13 @@ class BattleSession {
     private fun applyRequest(fields: List<String>) {
         val requestText = fields.getOrNull(2) ?: return
         teamPreviewOrder.clear()
+        activeRequests.clear()
+        activeChoices.clear()
+        forceSwitchChoices.clear()
+        targetOptions.clear()
+        activeSlotIndex = 0
+        requiredSwitches = 0
+        selectedTargetIndex = -1
         runCatching {
             val request = JSONObject(requestText)
             requestId = request.optInt("rqid", -1).takeIf { it >= 0 }
@@ -916,53 +996,73 @@ class BattleSession {
                 status = "Confirm your team order"
                 return@runCatching
             }
-            if (request.optJSONArray("forceSwitch")?.optBoolean(0) == true) {
+            val forceSwitch = request.optJSONArray("forceSwitch")
+            requiredSwitches = forceSwitch?.let { array -> (0 until array.length()).count { array.optBoolean(it) } } ?: 0
+            if (requiredSwitches > 0) {
                 decisionKind = DecisionKind.SWITCH
-                decisionAvailable = team.indices.any { !teamCondition(it).contains("FNT", true) }
+                decisionAvailable = team.indices.any { canSwitchTo(it) }
                 panel = Panel.TEAM
-                status = "Choose a Pokémon to switch in"
+                status = if (requiredSwitches > 1) "Choose a Pokémon to switch in 1/$requiredSwitches" else "Choose a Pokémon to switch in"
                 return@runCatching
             }
-            val active = request.optJSONArray("active")?.optJSONObject(0) ?: run {
+            val active = request.optJSONArray("active") ?: run {
                 decisionKind = DecisionKind.WAIT
                 decisionAvailable = false
                 status = "Waiting for a battle decision…"
                 return@runCatching
             }
-            val requestMoves = active.optJSONArray("moves") ?: run {
+            for (index in 0 until active.length()) active.optJSONObject(index)?.let(activeRequests::add)
+            if (activeRequests.isEmpty()) {
                 decisionKind = DecisionKind.WAIT
                 decisionAvailable = false
                 status = "Waiting for a battle decision…"
                 return@runCatching
             }
-            moves.clear()
-            for (index in 0 until requestMoves.length()) {
-                val move = requestMoves.getJSONObject(index)
-                val pp = move.optInt("pp", 0)
-                val power = move.optInt("basePower", 0).takeIf { it > 0 }?.toString() ?: "—"
-                val name = move.optString("move", "Move ${index + 1}")
-                moves += MoveOption(
-                    name,
-                    move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: moveTypeResolver?.invoke(name) ?: "UNKNOWN",
-                    pp,
-                    move.optInt("maxpp", pp),
-                    move.optString("category", "Status"),
-                    power,
-                    move.optString("accuracy", "—"),
-                    move.optBoolean("disabled") || pp <= 0
-                )
+            if (!applyActiveRequest(activeRequests[0])) {
+                decisionKind = DecisionKind.WAIT
+                decisionAvailable = false
+                status = "Waiting for a battle decision…"
             }
-            focusedMove = 0
-            decisionKind = DecisionKind.MOVE
-            decisionAvailable = moves.isNotEmpty()
-            panel = Panel.MOVES
-            status = "Choose a move"
-            playerDetails = playerDetails.copy(moves = moves.map { it.name })
-            team.indexOf(playerPokemon).takeIf { it >= 0 }?.let { teamDetails[it] = playerDetails }
-            updateAvailableGimmicks(active)
         }.onFailure {
             appendLog("Received an unreadable battle request.")
         }
+    }
+
+    private fun applyActiveRequest(active: JSONObject): Boolean {
+        val requestMoves = active.optJSONArray("moves") ?: return false
+        moves.clear()
+        for (index in 0 until requestMoves.length()) {
+            val move = requestMoves.getJSONObject(index)
+            val pp = move.optInt("pp", 0)
+            val power = move.optInt("basePower", 0).takeIf { it > 0 }?.toString() ?: "—"
+            val name = move.optString("move", "Move ${index + 1}")
+            moves += MoveOption(
+                name,
+                move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: moveTypeResolver?.invoke(name) ?: "UNKNOWN",
+                pp,
+                move.optInt("maxpp", pp),
+                move.optString("category", "Status"),
+                power,
+                move.optString("accuracy", "—"),
+                move.optBoolean("disabled") || pp <= 0,
+                move.optString("target")
+            )
+        }
+        focusedMove = 0
+        selectedTargetIndex = -1
+        decisionKind = DecisionKind.MOVE
+        decisionAvailable = moves.isNotEmpty()
+        panel = Panel.MOVES
+        status = if (activeRequests.size > 1) {
+            "Choose a move for active Pokémon ${activeSlotIndex + 1}/${activeRequests.size}"
+        } else {
+            "Choose a move"
+        }
+        playerDetails = playerDetails.copy(moves = moves.map { it.name })
+        team.indexOf(playerPokemon).takeIf { it >= 0 }?.let { teamDetails[it] = playerDetails }
+        updateAvailableGimmicks(active)
+        updateTargetOptions()
+        return moves.isNotEmpty()
     }
 
     private fun applyWin(fields: List<String>) {
@@ -974,6 +1074,13 @@ class BattleSession {
             requestId = null
             selectedGimmick = null
             teamPreviewOrder.clear()
+            activeRequests.clear()
+            activeChoices.clear()
+            forceSwitchChoices.clear()
+            targetOptions.clear()
+            activeSlotIndex = 0
+            requiredSwitches = 0
+            selectedTargetIndex = -1
             battleFinished = true
         }
     }
@@ -987,6 +1094,13 @@ class BattleSession {
         requestId = null
         selectedGimmick = null
         teamPreviewOrder.clear()
+        activeRequests.clear()
+        activeChoices.clear()
+        forceSwitchChoices.clear()
+        targetOptions.clear()
+        activeSlotIndex = 0
+        requiredSwitches = 0
+        selectedTargetIndex = -1
         battleFinished = true
     }
 
@@ -994,8 +1108,23 @@ class BattleSession {
         val message = fields.drop(2).joinToString("|").ifBlank { "The server rejected that choice." }
         appendLog(message)
         if (battleFinished || requestId == null || decisionKind == DecisionKind.WAIT) return
+        if (decisionKind == DecisionKind.MOVE && activeRequests.size > 1) {
+            activeChoices.clear()
+            activeSlotIndex = 0
+            applyActiveRequest(activeRequests[0])
+            status = "Choose a move for active Pokémon 1/${activeRequests.size}"
+            return
+        }
+        if (decisionKind == DecisionKind.SWITCH && requiredSwitches > 1) {
+            forceSwitchChoices.clear()
+            decisionAvailable = true
+            panel = Panel.TEAM
+            status = "Choose a Pokémon to switch in 1/$requiredSwitches"
+            return
+        }
         decisionAvailable = true
         selectedGimmick = null
+        selectedTargetIndex = -1
         panel = when (decisionKind) {
             DecisionKind.MOVE -> Panel.MOVES
             DecisionKind.SWITCH, DecisionKind.TEAM_PREVIEW -> Panel.TEAM
@@ -1138,6 +1267,20 @@ class BattleSession {
         availableGimmicks.clear()
         availableGimmicks += updated
         if (selectedGimmick !in availableGimmicks) selectedGimmick = null
+    }
+
+    private fun updateTargetOptions() {
+        targetOptions.clear()
+        selectedTargetIndex = -1
+        val move = moves.getOrNull(focusedMove) ?: return
+        if (activeRequests.size <= 1) return
+        val target = move.target.lowercase()
+        val options = when (target) {
+            "adjacentally", "adjacentallyorself" -> (1..activeRequests.size).map { TargetOption("Ally $it", "-$it") }
+            "normal", "adjacentfoe", "any" -> (1..activeRequests.size).map { TargetOption("Foe $it", it.toString()) }
+            else -> emptyList()
+        }
+        targetOptions += options
     }
 
     private fun appendLog(entry: String) {
@@ -1290,7 +1433,25 @@ class BattleSession {
                     status = "That Pokémon has fainted."
                     return
                 }
-                "/choose switch ${focusedTeam + 1}${requestId?.let { "|$it" } ?: ""}"
+                if (!canSwitchTo(focusedTeam)) {
+                    status = "${team[focusedTeam]} is already active."
+                    return
+                }
+                val switchChoice = "switch ${focusedTeam + 1}"
+                if (switchChoice in forceSwitchChoices) {
+                    status = "${team[focusedTeam]} is already selected."
+                    return
+                }
+                if (requiredSwitches > 1) {
+                    forceSwitchChoices += switchChoice
+                    if (forceSwitchChoices.size < requiredSwitches) {
+                        status = "Choose a Pokémon to switch in ${forceSwitchChoices.size + 1}/$requiredSwitches"
+                        return
+                    }
+                    "/choose ${forceSwitchChoices.joinToString(", ")}${requestId?.let { "|$it" } ?: ""}"
+                } else {
+                    "/choose $switchChoice${requestId?.let { "|$it" } ?: ""}"
+                }
             }
             else -> {
                 status = "Selected ${team[focusedTeam]}."
@@ -1312,10 +1473,17 @@ class BattleSession {
     private fun syncTeamFromRequest(request: JSONObject) {
         val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon") ?: return
         val synced = mutableListOf<PokemonDetails>()
+        activeTeamNames.clear()
+        activeSlotNames.clear()
+        var activeIndex = 0
         for (index in 0 until pokemon.length()) {
             val entry = pokemon.optJSONObject(index) ?: continue
             val details = entry.optString("details", entry.optString("ident").substringAfter(": "))
             val name = details.substringBefore(',').ifBlank { entry.optString("ident").substringAfter(": ", "Pokémon") }
+            if (entry.optBoolean("active")) {
+                activeSlotNames["$playerSlot${('a'.code + activeIndex).toChar()}"] = name
+                activeIndex += 1
+            }
             val known = teamDetails.firstOrNull { it.name.equals(name, true) }
             val levelGender = parseDetails(details)
             val condition = entry.optString("condition", "100/100")
@@ -1343,6 +1511,7 @@ class BattleSession {
         team += synced.map { it.name }
         teamDetails.clear()
         teamDetails += synced
+        activeTeamNames += activeSlotNames.values
         focusedTeam = focusedTeam.coerceIn(0, team.lastIndex)
         synced.firstOrNull { it.name.equals(playerPokemon, true) }?.let { details ->
             playerDetails = details
@@ -1352,6 +1521,10 @@ class BattleSession {
             playerGender = details.gender
         }
     }
+
+    private fun canSwitchTo(index: Int) = index in team.indices &&
+        !teamCondition(index).contains("FNT", true) &&
+        team[index] !in activeTeamNames
 
     private fun updateOpponentParty(details: PokemonDetails) {
         val index = opponentTeamDetails.indexOfFirst { it.name.equals(details.name, true) }
