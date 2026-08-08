@@ -51,7 +51,6 @@ class MainActivity : Activity() {
     private var activeSearchFormat: String? = null
     private var loginInFlight = false
     private var authenticated = false
-    private var guestRenameSentForConnection = false
     private var activeBattleRoomId: String? = null
     private var battleProtocolReady = false
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
@@ -523,7 +522,6 @@ class MainActivity : Activity() {
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
                         battleProtocolReady = false
                         session.setLiveBattleActive(false)
-                        guestRenameSentForConnection = false
                     }
                     val status = when (state) {
                         ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
@@ -567,16 +565,7 @@ class MainActivity : Activity() {
                     if (showdownConnection !== connection) return@runOnUiThread
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
-                        val credentials = credentialsStore.load()
-                        if (credentials == null && !update.named && !guestRenameSentForConnection) {
-                            getGuestUsername()?.takeUnless { it.equals(update.username, true) }?.let { guestUsername ->
-                                if (connection.sendGlobal(ShowdownAuthentication.guestRenameCommand(guestUsername))) {
-                                    guestRenameSentForConnection = true
-                                    session.setConnectionStatus("Choosing guest name ${guestUsername.trim()}…")
-                                }
-                            }
-                        }
-                        if (credentials == null || update.named) {
+                        if (credentialsStore.load() == null || update.named) {
                             authenticated = true
                             sendPendingLobbyCommands(connection)
                         }
@@ -663,7 +652,6 @@ class MainActivity : Activity() {
             }
         })
         showdownConnection = connection
-        guestRenameSentForConnection = false
         connection.connect()
     }
 
@@ -863,14 +851,13 @@ class MainActivity : Activity() {
 
     private fun showAccountSettings() {
         val credentials = credentialsStore.load()
-        val guestUsername = getGuestUsername()
         val username = EditText(this).apply {
             hint = "Username"
             setSingleLine(true)
-            setText(credentials?.username ?: guestUsername.orEmpty())
+            setText(credentials?.username.orEmpty())
         }
         val password = EditText(this).apply {
-            hint = "Password (leave blank for guest)"
+            hint = "Password"
             setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
             setText(credentials?.password.orEmpty())
@@ -887,20 +874,12 @@ class MainActivity : Activity() {
             .setNeutralButton("Sign out") { _, _ -> signOut() }
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save") { _, _ ->
-                val name = username.text.toString().trim()
-                val passwordValue = password.text.toString()
-                when {
-                    name.isBlank() -> session.setConnectionStatus("Enter a username.")
-                    passwordValue.isBlank() -> {
-                        credentialsStore.clear()
-                        saveGuestUsername(name)
-                        session.setConnectionStatus("Guest name saved. It will be used when you connect.")
-                    }
-                    else -> {
-                        credentialsStore.save(ShowdownCredentials(name, passwordValue))
-                        saveGuestUsername(null)
-                        session.setConnectionStatus("Showdown account saved. It will sign in when you connect.")
-                    }
+                val value = ShowdownCredentials(username.text.toString().trim(), password.text.toString())
+                if (value.username.isBlank() || value.password.isBlank()) {
+                    session.setConnectionStatus("Enter both a username and password.")
+                } else {
+                    credentialsStore.save(value)
+                    session.setConnectionStatus("Showdown account saved. It will sign in when you connect.")
                 }
             }
             .show()
@@ -908,7 +887,6 @@ class MainActivity : Activity() {
 
     private fun signOut() {
         credentialsStore.clear()
-        saveGuestUsername(null)
         lobbyState.clear()
         shouldMaintainConnection = false
         reconnectHandler.removeCallbacksAndMessages(null)
@@ -925,15 +903,6 @@ class MainActivity : Activity() {
         clearPersistedLobbyState()
         session.prepareForLobby()
         session.setConnectionStatus("Signed out of Showdown.")
-    }
-
-    private fun getGuestUsername() = getSharedPreferences("showdown", MODE_PRIVATE).getString("guest_username", null)
-
-    private fun saveGuestUsername(username: String?) {
-        getSharedPreferences("showdown", MODE_PRIVATE).edit().apply {
-            if (username.isNullOrBlank()) remove("guest_username") else putString("guest_username", username.trim())
-            apply()
-        }
     }
 
     private fun showTeamLibrary() {
