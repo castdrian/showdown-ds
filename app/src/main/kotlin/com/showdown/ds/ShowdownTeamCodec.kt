@@ -21,6 +21,25 @@ data class ShowdownTeamSet(
 )
 
 object ShowdownTeamCodec {
+    fun validate(sets: List<ShowdownTeamSet>): List<String> {
+        val errors = mutableListOf<String>()
+        val populated = sets.filter { it.hasContent() }
+        if (populated.isEmpty()) return listOf("Add at least one Pokémon to the team.")
+        if (populated.size > 6) errors += "A team can contain at most six Pokémon."
+        populated.forEachIndexed { index, set ->
+            val label = "Pokémon ${index + 1}"
+            if (set.species.isBlank() && set.nickname.isBlank()) errors += "$label needs a species."
+            if (set.moves.size > 4) errors += "$label can have at most four moves."
+            if (set.evs.size != 6 || set.evs.any { it !in 0..252 }) errors += "$label has invalid EVs."
+            if (set.evs.sum() > 510) errors += "$label has more than 510 total EVs."
+            if (set.ivs.size != 6 || set.ivs.any { it !in 0..31 }) errors += "$label has invalid IVs."
+            if (set.level !in 1..100) errors += "$label has an invalid level."
+            if (set.happiness !in 0..255) errors += "$label has invalid happiness."
+            if (set.dynamaxLevel !in 0..10) errors += "$label has an invalid Dynamax level."
+        }
+        return errors
+    }
+
     fun unpack(packed: String): List<ShowdownTeamSet> = packed
         .split(']')
         .mapNotNull { it.takeIf(String::isNotBlank)?.let(::unpackSet) }

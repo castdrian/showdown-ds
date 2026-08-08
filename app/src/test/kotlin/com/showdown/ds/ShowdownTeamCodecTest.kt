@@ -78,4 +78,20 @@ class ShowdownTeamCodecTest {
         assertEquals(listOf(0, 252, 0, 0, 0, 4), ShowdownTeamCodec.unpack(packed).single().evs)
         assertTrue(ShowdownTeamCodec.unpack("").isEmpty())
     }
+
+    @Test
+    fun validatesTeamSizeMovesAndCompetitiveLimits() {
+        val errors = ShowdownTeamCodec.validate(
+            listOf(
+                ShowdownTeamSet(
+                    species = "Pikachu",
+                    moves = listOf("Thunderbolt", "Surf", "Volt Tackle", "Nasty Plot", "Protect"),
+                    evs = listOf(252, 252, 0, 0, 0, 252)
+                )
+            )
+        )
+
+        assertTrue(errors.any { it.contains("at most four moves") })
+        assertTrue(errors.any { it.contains("510 total EVs") })
+    }
 }

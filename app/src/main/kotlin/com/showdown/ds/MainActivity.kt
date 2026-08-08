@@ -970,11 +970,25 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val copyButton = Button(this).apply {
+            text = "Copy packed team"
+            setOnClickListener {
+                val value = ShowdownTeamCodec.pack(setEditors.map(::readTeamSetEditor)).ifBlank { packed.text.toString().trim() }
+                if (value.isBlank()) {
+                    session.setConnectionStatus("Add at least one Pokémon before copying the team.")
+                } else {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown packed team", value))
+                    session.setConnectionStatus("Packed team copied to the clipboard.")
+                }
+            }
+        }
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(name)
             addView(format)
             addView(importButton)
+            addView(copyButton)
             addView(packed)
             addView(setFields)
         }
@@ -987,9 +1001,18 @@ class MainActivity : Activity() {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save") { _, _ ->
                 val teamFormat = format.text.toString().trim()
-                val teamPacked = ShowdownTeamCodec.pack(setEditors.map(::readTeamSetEditor)).ifBlank { packed.text.toString().trim() }
+                val editedSets = setEditors.map(::readTeamSetEditor)
+                val editedPacked = ShowdownTeamCodec.pack(editedSets)
+                val teamPacked = editedPacked.ifBlank { packed.text.toString().trim() }
+                val validation = if (editedPacked.isNotBlank()) {
+                    ShowdownTeamCodec.validate(editedSets)
+                } else {
+                    ShowdownTeamCodec.validate(ShowdownTeamCodec.unpack(teamPacked))
+                }
                 if (teamFormat.isBlank() || teamPacked.isBlank()) {
                     session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
+                } else if (validation.isNotEmpty()) {
+                    session.setConnectionStatus(validation.first())
                 } else {
                     teamLibrary.save(name.text.toString(), teamFormat, teamPacked, existing?.id ?: java.util.UUID.randomUUID().toString())
                     session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
