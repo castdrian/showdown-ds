@@ -51,6 +51,7 @@ class MainActivity : Activity() {
     private var loginInFlight = false
     private var authenticated = false
     private var activeBattleRoomId: String? = null
+    private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
     private val demoHandler = Handler(Looper.getMainLooper())
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
@@ -160,6 +161,19 @@ class MainActivity : Activity() {
         setContentView(createPrimaryScreen())
         displayManager?.registerDisplayListener(displayListener, null)
         showSecondaryDisplay()
+        restoreLobbyConnection(savedInstanceState)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("maintain_connection", shouldMaintainConnection)
+        outState.putBoolean("pending_search", pendingSearch)
+        outState.putString("pending_search_team", pendingSearchTeamPacked)
+        outState.putString("pending_lobby_status", pendingLobbyStatus)
+        outState.putStringArrayList("pending_lobby_commands", ArrayList(pendingLobbyCommands.orEmpty()))
+        outState.putStringArrayList("reconnect_lobby_commands", ArrayList(reconnectLobbyCommands.orEmpty()))
+        outState.putString("active_search_format", activeSearchFormat)
+        outState.putString("active_battle_room", activeBattleRoomId)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -474,6 +488,21 @@ class MainActivity : Activity() {
         connectLobbySocket()
     }
 
+    private fun restoreLobbyConnection(savedInstanceState: Bundle?) {
+        if (savedInstanceState?.getBoolean("maintain_connection") != true) return
+        shouldMaintainConnection = true
+        reconnectAttempt = 0
+        pendingSearch = savedInstanceState.getBoolean("pending_search")
+        pendingSearchTeamPacked = savedInstanceState.getString("pending_search_team")
+        pendingLobbyStatus = savedInstanceState.getString("pending_lobby_status")
+        pendingLobbyCommands = savedInstanceState.getStringArrayList("pending_lobby_commands")?.takeIf { it.isNotEmpty() }
+        reconnectLobbyCommands = savedInstanceState.getStringArrayList("reconnect_lobby_commands")?.takeIf { it.isNotEmpty() }
+        activeSearchFormat = savedInstanceState.getString("active_search_format")
+        activeBattleRoomId = savedInstanceState.getString("active_battle_room")
+        session.setLiveBattleActive(activeBattleRoomId != null)
+        connectLobbySocket()
+    }
+
     private fun connectLobbySocket() {
         lateinit var connection: ShowdownConnection
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
@@ -564,6 +593,13 @@ class MainActivity : Activity() {
                         lobbyState.applyProtocol(lines)
                         lobbyState.incomingChallenges.keys.firstOrNull { it !in previousChallenges }?.let { username ->
                             showIncomingChallenge(username, lobbyState.incomingChallenges[username].orEmpty())
+                        }
+                        val outgoingChallenge = lobbyState.outgoingChallenge
+                        if (outgoingChallenge != null && outgoingChallenge != displayedOutgoingChallenge) {
+                            displayedOutgoingChallenge = outgoingChallenge
+                            showOutgoingChallenge(outgoingChallenge)
+                        } else if (outgoingChallenge == null) {
+                            displayedOutgoingChallenge = null
                         }
                         if (lobbyState.isSearching(session.matchFormat.id)) {
                             session.setConnectionStatus("Searching ${session.matchFormat.label}…")
@@ -684,6 +720,17 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun showOutgoingChallenge(challenge: ShowdownLobbyState.OutgoingChallenge) {
+        AlertDialog.Builder(this)
+            .setTitle("Challenge pending")
+            .setMessage("Waiting for ${challenge.username} to accept your ${challenge.format} challenge.")
+            .setNegativeButton("Close", null)
+            .setPositiveButton("Cancel challenge") { _, _ ->
+                sendLobbyCommand(ShowdownLobbyState.cancelChallengeCommand(challenge.username), "Challenge cancelled.")
+            }
+            .show()
+    }
+
     private fun beginAcceptChallenge(username: String, format: String) {
         val matchFormat = BattleSession.MatchFormat(format, format)
         val teams = teamLibrary.teams().filter { it.format.equals(format, true) }
@@ -711,7 +758,10 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Connect to Showdown before using lobby challenges.")
             return
         }
-        if (commands.any { it.startsWith("/accept ") || it.startsWith("/challenge ") }) reconnectLobbyCommands = commands
+        when {
+            commands.any { it.startsWith("/accept ") || it.startsWith("/challenge ") } -> reconnectLobbyCommands = commands
+            commands.any { it.startsWith("/cancelchallenge ") || it.startsWith("/reject ") } -> reconnectLobbyCommands = null
+        }
         session.setConnectionStatus(status)
     }
 
@@ -787,6 +837,7 @@ class MainActivity : Activity() {
         reconnectLobbyCommands = null
         activeSearchFormat = null
         activeBattleRoomId = null
+        displayedOutgoingChallenge = null
         session.setLiveBattleActive(false)
         session.setConnectionStatus("Signed out of Showdown.")
     }

@@ -663,6 +663,8 @@ class BattleSession {
                     "faint" -> applyFaint(fields)
                     "request" -> applyRequest(fields)
                     "win" -> applyWin(fields)
+                    "tie", "draw", "prematureend" -> applyTie(fields)
+                    "error" -> applyBattleError(fields)
                     "c", "c:" -> applyChat(fields)
                     "message", "inactive", "inactiveoff" -> appendLog(fields.drop(2).joinToString("|"))
                 }
@@ -962,6 +964,37 @@ class BattleSession {
             selectedGimmick = null
             teamPreviewOrder.clear()
             battleFinished = true
+        }
+    }
+
+    private fun applyTie(fields: List<String>) {
+        val reason = fields.drop(2).joinToString("|").ifBlank { "The battle ended." }
+        status = reason
+        appendLog(reason)
+        decisionAvailable = false
+        decisionKind = DecisionKind.WAIT
+        requestId = null
+        selectedGimmick = null
+        teamPreviewOrder.clear()
+        battleFinished = true
+    }
+
+    private fun applyBattleError(fields: List<String>) {
+        val message = fields.drop(2).joinToString("|").ifBlank { "The server rejected that choice." }
+        appendLog(message)
+        if (battleFinished || requestId == null || decisionKind == DecisionKind.WAIT) return
+        decisionAvailable = true
+        selectedGimmick = null
+        panel = when (decisionKind) {
+            DecisionKind.MOVE -> Panel.MOVES
+            DecisionKind.SWITCH, DecisionKind.TEAM_PREVIEW -> Panel.TEAM
+            DecisionKind.WAIT -> panel
+        }
+        status = when (decisionKind) {
+            DecisionKind.MOVE -> "Choose a move"
+            DecisionKind.SWITCH -> "Choose a Pokémon to switch in"
+            DecisionKind.TEAM_PREVIEW -> "Confirm your team order"
+            DecisionKind.WAIT -> message
         }
     }
 
