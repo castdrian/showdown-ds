@@ -1212,9 +1212,18 @@ class MainActivity : Activity() {
         moveDex.load {
             val pokemonNames = moveDex.pokemonNames()
             val moveNames = moveDex.moveNames()
+            val itemNames = moveDex.itemNames()
+            val abilityNames = moveDex.abilityNames()
+            val natureNames = moveDex.natureNames()
+            val typeNames = moveDex.typeNames()
             setEditors.forEach { editor ->
                 updateTeamSuggestions(editor.species, pokemonNames)
+                updateTeamSuggestions(editor.item, itemNames)
+                updateTeamSuggestions(editor.ability, abilityNames)
                 updateTeamSuggestions(editor.moves, moveNames)
+                updateTeamSuggestions(editor.nature, natureNames)
+                updateTeamSuggestions(editor.hiddenPowerType, typeNames)
+                updateTeamSuggestions(editor.teraType, typeNames)
             }
         }
         val importButton = Button(this).apply {
@@ -1371,10 +1380,10 @@ class MainActivity : Activity() {
         val editor = TeamSetEditor(
             nickname = teamField("Nickname", set.nickname),
             species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames()),
-            item = teamField("Item", set.item),
-            ability = teamField("Ability", set.ability),
+            item = teamAutocompleteField("Item", set.item, moveDex.itemNames()),
+            ability = teamAutocompleteField("Ability", set.ability, moveDex.abilityNames()),
             moves = teamMovesField(set.moves.joinToString(","), moveDex.moveNames()),
-            nature = teamField("Nature", set.nature),
+            nature = teamAutocompleteField("Nature", set.nature, moveDex.natureNames()),
             evs = teamField("EVs HP,Atk,Def,SpA,SpD,Spe", set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty()),
             gender = teamField("Gender M or F", set.gender),
             ivs = teamField("IVs HP,Atk,Def,SpA,SpD,Spe", set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty()),
@@ -1382,10 +1391,10 @@ class MainActivity : Activity() {
             level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty()),
             happiness = teamField("Happiness", set.happiness.takeUnless { it == 255 }?.toString().orEmpty()),
             pokeBall = teamField("Poké Ball", set.pokeBall),
-            hiddenPowerType = teamField("Hidden Power type", set.hiddenPowerType),
+            hiddenPowerType = teamAutocompleteField("Hidden Power type", set.hiddenPowerType, moveDex.typeNames()),
             gigantamax = CheckBox(this).apply { text = "Gigantamax"; isChecked = set.gigantamax },
             dynamaxLevel = teamField("Dynamax level", set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty()),
-            teraType = teamField("Tera type", set.teraType)
+            teraType = teamAutocompleteField("Tera type", set.teraType, moveDex.typeNames())
         )
         listOf(
             editor.nickname,

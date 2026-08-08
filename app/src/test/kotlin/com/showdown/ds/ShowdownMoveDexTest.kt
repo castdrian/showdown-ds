@@ -22,4 +22,11 @@ class ShowdownMoveDexTest {
         assertEquals(listOf("Ice Beam", "Tackle"), ShowdownMoveDex.parseMoveNames(contents))
         assertEquals(listOf("Ice Beam", "Tackle"), ShowdownMoveDex.parsePokemonNames(contents))
     }
+
+    @Test
+    fun parsesSearchableNamesFromShowdownScripts() {
+        val contents = "exports.BattleItems = {leftovers:{name:\"Leftovers\"},choiceband:{name:\"Choice Band\"}}"
+
+        assertEquals(listOf("Choice Band", "Leftovers"), ShowdownMoveDex.parseScriptNames(contents))
+    }
 }

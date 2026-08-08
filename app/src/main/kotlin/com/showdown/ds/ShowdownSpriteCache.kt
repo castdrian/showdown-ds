@@ -154,6 +154,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestBytes("data/pokedex.json", receiver)
     }
 
+    fun requestItems(receiver: (File?) -> Unit) {
+        requestBytes("data/items.js", receiver)
+    }
+
+    fun requestAbilities(receiver: (File?) -> Unit) {
+        requestBytes("data/abilities.js", receiver)
+    }
+
     override fun close() {
         downloadExecutor.shutdownNow()
         memoryCache.evictAll()

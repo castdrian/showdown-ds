@@ -13,6 +13,8 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val pokemonTypes = mutableMapOf<String, List<String>>()
     private val moveNames = mutableListOf<String>()
     private val pokemonNames = mutableListOf<String>()
+    private val itemNames = mutableListOf<String>()
+    private val abilityNames = mutableListOf<String>()
     private val listeners = mutableListOf<() -> Unit>()
     private var loading = false
 
@@ -24,8 +26,16 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     fun pokemonNames() = pokemonNames.toList()
 
+    fun itemNames() = itemNames.toList()
+
+    fun abilityNames() = abilityNames.toList()
+
+    fun natureNames() = NATURE_NAMES
+
+    fun typeNames() = TYPE_NAMES
+
     fun load(listener: () -> Unit) {
-        if (moveTypes.isNotEmpty() && pokemonTypes.isNotEmpty() && moveNames.isNotEmpty() && pokemonNames.isNotEmpty()) {
+        if (moveTypes.isNotEmpty() && pokemonTypes.isNotEmpty() && moveNames.isNotEmpty() && pokemonNames.isNotEmpty() && itemNames.isNotEmpty() && abilityNames.isNotEmpty()) {
             listener()
             return
         }
@@ -36,24 +46,38 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
             if (executor.isShutdown) return@requestMoveDex
             resourceCache.requestPokedex { pokedexFile ->
                 if (executor.isShutdown) return@requestPokedex
-                executor.execute {
-                    val moveContents = file?.readText().orEmpty()
-                    val pokemonContents = pokedexFile?.readText().orEmpty()
-                    val loadedMoveTypes = parseMoveTypes(moveContents)
-                    val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
-                    val loadedMoveNames = parseMoveNames(moveContents)
-                    val loadedPokemonNames = parsePokemonNames(pokemonContents)
-                    mainHandler.post {
-                        loading = false
-                        moveTypes.putAll(loadedMoveTypes)
-                        pokemonTypes.putAll(loadedPokemonTypes)
-                        moveNames.clear()
-                        moveNames += loadedMoveNames
-                        pokemonNames.clear()
-                        pokemonNames += loadedPokemonNames
-                        val callbacks = listeners.toList()
-                        listeners.clear()
-                        callbacks.forEach { it() }
+                resourceCache.requestItems { itemsFile ->
+                    if (executor.isShutdown) return@requestItems
+                    resourceCache.requestAbilities { abilitiesFile ->
+                        if (executor.isShutdown) return@requestAbilities
+                        executor.execute {
+                            val moveContents = file?.readText().orEmpty()
+                            val pokemonContents = pokedexFile?.readText().orEmpty()
+                            val itemContents = itemsFile?.readText().orEmpty()
+                            val abilityContents = abilitiesFile?.readText().orEmpty()
+                            val loadedMoveTypes = parseMoveTypes(moveContents)
+                            val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
+                            val loadedMoveNames = parseMoveNames(moveContents)
+                            val loadedPokemonNames = parsePokemonNames(pokemonContents)
+                            val loadedItemNames = parseScriptNames(itemContents)
+                            val loadedAbilityNames = parseScriptNames(abilityContents)
+                            mainHandler.post {
+                                loading = false
+                                moveTypes.putAll(loadedMoveTypes)
+                                pokemonTypes.putAll(loadedPokemonTypes)
+                                moveNames.clear()
+                                moveNames += loadedMoveNames
+                                pokemonNames.clear()
+                                pokemonNames += loadedPokemonNames
+                                itemNames.clear()
+                                itemNames += loadedItemNames
+                                abilityNames.clear()
+                                abilityNames += loadedAbilityNames
+                                val callbacks = listeners.toList()
+                                listeners.clear()
+                                callbacks.forEach { it() }
+                            }
+                        }
                     }
                 }
             }
@@ -94,6 +118,14 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
         fun parsePokemonNames(contents: String): List<String> = parseNames(contents)
 
+        fun parseScriptNames(contents: String): List<String> = Regex("name:\"((?:\\\\.|[^\"])*)\"")
+            .findAll(contents)
+            .map { it.groupValues[1].replace("\\\\\"", "\"") }
+            .filter(String::isNotBlank)
+            .distinct()
+            .sorted()
+            .toList()
+
         private fun parseNames(contents: String): List<String> {
             val values = JSONObject(contents)
             return buildList {
@@ -109,5 +141,16 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
             .replace("♀", "f")
             .replace("♂", "m")
             .filter(Char::isLetterOrDigit)
+
+        private val NATURE_NAMES = listOf(
+            "Adamant", "Bashful", "Bold", "Brave", "Calm", "Careful", "Docile", "Gentle", "Hardy", "Hasty",
+            "Impish", "Jolly", "Lax", "Lonely", "Mild", "Modest", "Naive", "Naughty", "Quiet", "Quirky",
+            "Rash", "Relaxed", " sassy", "Serious", "Timid"
+        ).map(String::trim)
+
+        private val TYPE_NAMES = listOf(
+            "Bug", "Dark", "Dragon", "Electric", "Fairy", "Fighting", "Fire", "Flying", "Ghost", "Grass",
+            "Ground", "Ice", "Normal", "Poison", "Psychic", "Rock", "Steel", "Water"
+        )
     }
 }
