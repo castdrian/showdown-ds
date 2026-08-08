@@ -30,10 +30,22 @@ data class ShowdownServerEndpoint(
                 path.isBlank() || path == "/" -> "/showdown/websocket"
                 else -> "$path/showdown/websocket"
             }
+            val loginScheme = if (scheme == "ws") "http" else "https"
+            val loginUrl = if (isOfficialHost(host)) {
+                "https://play.pokemonshowdown.com/api/login"
+            } else {
+                "$loginScheme://$host$port/api/login"
+            }
             return ShowdownServerEndpoint(
                 host + port,
-                "$scheme://$host$port$socketPath"
+                "$scheme://$host$port$socketPath",
+                loginUrl
             )
         }
+
+        private fun isOfficialHost(host: String) = host == "pokemonshowdown.com" ||
+            host.endsWith(".pokemonshowdown.com") ||
+            host == "psim.us" ||
+            host.endsWith(".psim.us")
     }
 }
