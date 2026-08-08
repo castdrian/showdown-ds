@@ -32,6 +32,18 @@ class ShowdownTeamLibrary(context: Context) {
         write(updated)
     }
 
+    fun exportBackup(readable: Boolean): String {
+        val storedTeams = teams()
+        return if (readable) ShowdownTeamBackupCodec.toText(storedTeams) else ShowdownTeamBackupCodec.pack(storedTeams)
+    }
+
+    fun importBackup(backupText: String): List<ShowdownTeam> {
+        val imported = ShowdownTeamBackupCodec.parse(backupText)
+        if (imported.isEmpty()) return emptyList()
+        write(teams() + imported)
+        return imported
+    }
+
     private fun write(values: List<ShowdownTeam>) {
         preferences.edit().putString("teams", JSONArray().apply {
             values.forEach { value -> put(JSONObject().put("id", value.id).put("name", value.name).put("format", value.format).put("packed", value.packed)) }

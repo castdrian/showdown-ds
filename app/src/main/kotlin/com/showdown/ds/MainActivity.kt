@@ -905,9 +905,50 @@ class MainActivity : Activity() {
             .setItems(labels.toTypedArray()) { _, selected ->
                 if (selected == teams.size) showTeamEditor() else showTeamEditor(teams[selected])
             }
+            .setNeutralButton("Export backup") { _, _ -> copyTeamBackup() }
+            .setPositiveButton("Import backup") { _, _ -> showTeamBackupImport() }
             .setNegativeButton("Close", null)
             .show()
     }
+
+    private fun copyTeamBackup() {
+        val value = teamLibrary.exportBackup(readable = true)
+        if (value.isBlank()) {
+            session.setConnectionStatus("There are no teams to export.")
+            return
+        }
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team backup", value))
+        session.setConnectionStatus("Team backup copied to the clipboard.")
+    }
+
+    private fun showTeamBackupImport() {
+        val input = EditText(this).apply {
+            hint = "Paste a Showdown team backup"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setMinLines(8)
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clipboardValue = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString().orEmpty()
+            if (clipboardValue.isLikelyTeamBackup()) {
+                setText(clipboardValue)
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Import team backup")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Import") { _, _ ->
+                val imported = teamLibrary.importBackup(input.text.toString())
+                session.setConnectionStatus(
+                    if (imported.isEmpty()) "No valid Showdown teams were found in that backup."
+                    else "Imported ${imported.size} team${if (imported.size == 1) "" else "s"}."
+                )
+            }
+            .show()
+    }
+
+    private fun String.isLikelyTeamBackup() = contains("===") || contains("]") && contains("|") ||
+        contains("\n-") || contains("Ability:", true) || contains(" @ ")
 
     private fun showTeamEditor(existing: ShowdownTeam? = null) {
         val name = EditText(this).apply {
