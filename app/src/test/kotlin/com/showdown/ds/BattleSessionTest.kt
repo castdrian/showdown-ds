@@ -36,6 +36,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun failedMoveSubmissionRestoresTheDecision() {
+        val session = BattleSession()
+        session.applyProtocolLine("|request|{\"rqid\":9,\"active\":[{\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15}]}]}")
+
+        session.confirmSelection()
+        assertFalse(session.decisionAvailable)
+
+        session.handleDecisionSendFailure()
+
+        assertTrue(session.decisionAvailable)
+        assertEquals(BattleSession.Panel.MOVES, session.panel)
+        assertEquals("Connection unavailable. Choose a move again.", session.status)
+    }
+
+    @Test
     fun lobbyChatAndPrivateMessagesEnterActivity() {
         val session = BattleSession()
 

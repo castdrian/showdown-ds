@@ -652,6 +652,35 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun handleDecisionSendFailure() {
+        if (battleFinished || decisionAvailable) return
+        selectedGimmick = null
+        selectedTargetIndex = -1
+        activeChoices.clear()
+        forceSwitchChoices.clear()
+        activeSlotIndex = 0
+        when (decisionKind) {
+            DecisionKind.MOVE -> {
+                activeRequests.firstOrNull()?.let(::applyActiveRequest)
+                panel = Panel.MOVES
+                status = "Connection unavailable. Choose a move again."
+            }
+            DecisionKind.SWITCH -> {
+                panel = Panel.TEAM
+                decisionAvailable = team.indices.any(::canSwitchTo)
+                status = "Connection unavailable. Choose a Pokémon to switch in again."
+            }
+            DecisionKind.TEAM_PREVIEW -> {
+                teamPreviewOrder.clear()
+                panel = Panel.TEAM
+                decisionAvailable = team.isNotEmpty()
+                status = "Connection unavailable. Set your team order again."
+            }
+            DecisionKind.WAIT -> return
+        }
+        notifyListeners()
+    }
+
     fun openChatComposer() {
         publishClientAction(ClientAction.OPEN_CHAT)
     }

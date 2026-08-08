@@ -78,7 +78,7 @@ class MainActivity : Activity() {
         clearBattleEventPlayback()
         val roomId = activeBattleRoomId
         if (roomId != null) {
-            showdownConnection?.send(roomId, command)
+            if (showdownConnection?.send(roomId, command) != true) session.handleDecisionSendFailure()
         } else {
             runOnUiThread { resolveDemoTurn(command) }
         }
