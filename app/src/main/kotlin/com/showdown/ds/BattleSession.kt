@@ -1326,7 +1326,7 @@ class BattleSession {
                 move.optInt("maxpp", pp),
                 move.optString("category", "Status"),
                 power,
-                move.optString("accuracy", "—"),
+                moveAccuracy(move),
                 move.optBoolean("disabled") || pp <= 0,
                 move.optString("target")
             )
@@ -1346,6 +1346,15 @@ class BattleSession {
         updateAvailableGimmicks(active)
         updateTargetOptions()
         return moves.isNotEmpty()
+    }
+
+    private fun moveAccuracy(move: JSONObject): String {
+        return when (val value = move.opt("accuracy")) {
+            is Number -> value.toString().removeSuffix(".0")
+            is Boolean -> "—"
+            null, JSONObject.NULL -> "—"
+            else -> value.toString().takeIf { it.isNotBlank() && !it.equals("null", true) } ?: "—"
+        }
     }
 
     private fun prepareNextActiveRequest(): Boolean {
