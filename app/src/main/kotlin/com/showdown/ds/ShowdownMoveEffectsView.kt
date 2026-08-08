@@ -148,13 +148,32 @@ class ShowdownMoveEffectsView(
                             battle = new Battle({ id: 'showdownds', ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
                             battle.setMute(true);
                             hideChrome();
+                            var trackedMoveDuration = 0;
+                            var trackingMoveEffects = false;
+                            var animateEffect = battle.scene.animateEffect;
+                            battle.scene.animateEffect = function (element, effect, start, end, transition, after, additionalCss) {
+                                if (trackingMoveEffects) {
+                                    var startTime = Number(start && start.time) || 0;
+                                    var endTime = Number(end && end.time) || (startTime + 500);
+                                    var tail = after === 'fade' ? 100 : after === 'explode' ? 200 : 0;
+                                    trackedMoveDuration = Math.max(trackedMoveDuration, (this.timeOffset || 0) + endTime + tail);
+                                }
+                                return animateEffect.call(this, element, effect, start, end, transition, after, additionalCss);
+                            };
+                            var backgroundEffect = battle.scene.backgroundEffect;
+                            battle.scene.backgroundEffect = function (background, duration, opacity, delay) {
+                                if (trackingMoveEffects) trackedMoveDuration = Math.max(trackedMoveDuration, (Number(delay) || 0) + (Number(duration) || 0));
+                                return backgroundEffect.call(this, background, duration, opacity, delay);
+                            };
                             var runMoveAnim = battle.scene.runMoveAnim;
                             battle.scene.runMoveAnim = function (moveid, participants) {
-                                var startOffset = this.timeOffset || 0;
+                                trackedMoveDuration = 0;
+                                trackingMoveEffects = true;
                                 var result = runMoveAnim.call(this, moveid, participants);
+                                trackingMoveEffects = false;
                                 if (!this.animating || !window.ShowdownNativeAudio) return result;
-                                var visualDuration = Math.max(0, (this.timeOffset || 0) - startOffset);
-                                var presentationDuration = Math.max(0, Number(window.ShowdownNativeAudio.presentationDuration(Math.round(visualDuration))) || visualDuration);
+                                var visualDuration = Math.max(0, Math.round(trackedMoveDuration));
+                                var presentationDuration = Number(window.ShowdownNativeAudio.presentationDuration(visualDuration)) || visualDuration;
                                 window.ShowdownNativeAudio.play(String(moveid), presentationDuration);
                                 return result;
                             };

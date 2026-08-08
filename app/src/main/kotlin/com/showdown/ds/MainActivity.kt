@@ -494,7 +494,6 @@ class MainActivity : Activity() {
             }
             BattleSession.FeedbackType.MOVE -> Unit
             BattleSession.FeedbackType.HIT -> {
-                battleAudio.playImpact(feedback.impact)
                 playImpactHaptic(feedback.impact)
             }
         }

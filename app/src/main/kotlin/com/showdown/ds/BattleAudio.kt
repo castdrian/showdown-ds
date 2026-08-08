@@ -86,22 +86,6 @@ class BattleAudio(
 
     fun playCancel() = playNotification(0.25f)
 
-    fun playImpact(impact: BattleSession.HitImpact) {
-        val volume = when (impact) {
-            BattleSession.HitImpact.RESISTED -> 0.28f
-            BattleSession.HitImpact.NORMAL -> 0.45f
-            BattleSession.HitImpact.SUPER_EFFECTIVE -> 0.62f
-            BattleSession.HitImpact.CRITICAL -> 0.70f
-            BattleSession.HitImpact.SUPER_EFFECTIVE_CRITICAL -> 0.82f
-        }
-        val effect = when (impact) {
-            BattleSession.HitImpact.RESISTED -> "Hit Weak Not Very Effective"
-            BattleSession.HitImpact.NORMAL, BattleSession.HitImpact.CRITICAL -> "Hit Normal Damage"
-            BattleSession.HitImpact.SUPER_EFFECTIVE, BattleSession.HitImpact.SUPER_EFFECTIVE_CRITICAL -> "Hit Super Effective"
-        }
-        loadMoveSound(effect) { file -> file?.let { playFile(it, volume) } }
-    }
-
     fun preloadMoves(moves: List<String>) {
         moves.forEach { loadMoveSound(it) { } }
     }

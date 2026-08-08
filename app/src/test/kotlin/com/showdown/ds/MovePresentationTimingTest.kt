@@ -15,8 +15,8 @@ class MovePresentationTimingTest {
     }
 
     @Test
-    fun skipsPresentationWhenShowdownDoesNotScheduleAnAnimation() {
-        assertEquals(0L, MovePresentationTiming.duration(0L))
+    fun usesTheMeasuredAnimationFallbackWhenShowdownLeavesItsOffsetAtZero() {
+        assertEquals(850L, MovePresentationTiming.duration(0L))
     }
 
     @Test
