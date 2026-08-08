@@ -652,6 +652,10 @@ class MainActivity : Activity() {
                     }
                     if (roomId == null) {
                         session.applyServerFormats(lines)
+                        getSharedPreferences("showdown", MODE_PRIVATE).edit()
+                            .putString("match_format", session.matchFormat.id)
+                            .putString("match_format_label", session.matchFormat.label)
+                            .apply()
                         val previousChallenges = lobbyState.incomingChallenges
                         lobbyState.applyProtocol(lines)
                         lobbyState.incomingChallenges.keys.firstOrNull { it !in previousChallenges }?.let { username ->
@@ -1143,7 +1147,10 @@ class MainActivity : Activity() {
                 val format = formats[selected]
                 if (activeSearchFormat != null || pendingSearch) cancelActiveSearch()
                 session.setMatchFormat(format)
-                getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("match_format", format.id).apply()
+                getSharedPreferences("showdown", MODE_PRIVATE).edit()
+                    .putString("match_format", format.id)
+                    .putString("match_format_label", format.label)
+                    .apply()
                 dialog.dismiss()
             }
             .show()
@@ -1175,8 +1182,11 @@ class MainActivity : Activity() {
     }
 
     private fun loadMatchFormat(): BattleSession.MatchFormat {
-        val saved = getSharedPreferences("showdown", MODE_PRIVATE).getString("match_format", null)
-        return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved } ?: BattleSession.MatchFormat.GEN7_RANDOM
+        val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
+        val saved = preferences.getString("match_format", null)
+        return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved }
+            ?: saved?.let { BattleSession.MatchFormat(it, preferences.getString("match_format_label", it) ?: it) }
+            ?: BattleSession.MatchFormat.GEN7_RANDOM
     }
 
     private fun handleBattleFeedback(feedback: BattleSession.BattleFeedback) {
