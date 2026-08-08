@@ -52,6 +52,7 @@ class MainActivity : Activity() {
     private var activeSearchFormat: String? = null
     private var loginInFlight = false
     private var authenticated = false
+    private var serverUserNamed = false
     private var activeBattleRoomId: String? = null
     private var battleProtocolReady = false
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
@@ -435,7 +436,7 @@ class MainActivity : Activity() {
     }
 
     private fun showRoomList() {
-        if (!authenticated) {
+        if (!authenticated || !serverUserNamed) {
             session.setConnectionStatus("Sign in to browse public rooms.")
             return
         }
@@ -622,6 +623,7 @@ class MainActivity : Activity() {
         reconnectLobbyCommands = lobbyCommands
         loginInFlight = false
         authenticated = false
+        serverUserNamed = false
         persistLobbyState()
         connectLobbySocket()
     }
@@ -684,6 +686,7 @@ class MainActivity : Activity() {
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
                         battleProtocolReady = false
                         session.setLiveBattleActive(false)
+                        serverUserNamed = false
                         chatRoomDialog?.dismiss()
                         chatRoomState.clear()
                         pendingChatRoomId = null
@@ -730,6 +733,7 @@ class MainActivity : Activity() {
                     if (showdownConnection !== connection) return@runOnUiThread
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
+                        serverUserNamed = update.named
                         if (credentialsStore.load() == null || update.named) {
                             authenticated = true
                             sendPendingLobbyCommands(connection)
@@ -1073,6 +1077,7 @@ class MainActivity : Activity() {
         pendingLobbyStatus = null
         reconnectLobbyCommands = null
         activeSearchFormat = null
+        serverUserNamed = false
         activeBattleRoomId = null
         displayedOutgoingChallenge = null
         clearPersistedLobbyState()
