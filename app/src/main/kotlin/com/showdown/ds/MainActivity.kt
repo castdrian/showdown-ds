@@ -148,9 +148,8 @@ class MainActivity : Activity() {
     private var replayStatus: String? = null
     private var replayPaused = false
     private var replaySpeed = 1f
-    private var handledReplayLink: String? = null
+    private var activeReplayLink: String? = null
     private var replayLoadRequest: String? = null
-    private var activeReplaySource: String? = null
     private var playbackScheduledPauseMillis = 0L
     private var playbackScheduledAtMillis = 0L
     private var playbackScheduledSpeed = 1f
@@ -291,7 +290,7 @@ class MainActivity : Activity() {
         outState.putString("active_search_format", activeSearchFormat)
         outState.putString("active_battle_room", activeBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
-        outState.putString("active_replay_source", replayLoadRequest ?: activeReplaySource)
+        outState.putString("active_replay_source", replayLoadRequest ?: activeReplayLink)
         super.onSaveInstanceState(outState)
     }
 
@@ -1616,8 +1615,7 @@ class MainActivity : Activity() {
 
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
         replayLoadRequest = null
-        activeReplaySource = null
-        handledReplayLink = null
+        activeReplayLink = null
         chatRoomDialog?.dismiss()
         tournamentDialog?.dismiss()
         tournamentDialog = null
@@ -3015,19 +3013,17 @@ class MainActivity : Activity() {
 
     private fun loadReplay(normalized: String) {
         if (replayLoadRequest == normalized) return
-        if (handledReplayLink == normalized && session.isReplayMode()) return
+        if (activeReplayLink == normalized && session.isReplayMode()) return
         replayLoadRequest = normalized
         session.setConnectionStatus("Loading replay…")
         replayFetcher.fetch(normalized) { result ->
             if (replayLoadRequest != normalized) return@fetch
             replayLoadRequest = null
             result.onSuccess {
-                handledReplayLink = normalized
-                activeReplaySource = normalized
+                activeReplayLink = normalized
                 showReplay(it)
             }
                 .onFailure {
-                    handledReplayLink = null
                     session.setConnectionStatus("That replay could not be loaded.")
                 }
         }
