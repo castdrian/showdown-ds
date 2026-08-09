@@ -131,5 +131,12 @@ class ShowdownTeamRemoteTest {
         assertEquals("gen9ou", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] OU"))
         assertEquals("gen9randombattle", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] Random Battle"))
         assertEquals("gen9nationaldex", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] National Dex"))
+        val formats = listOf(
+            BattleSession.MatchFormat("gen9ou", "[Gen 9] OU"),
+            BattleSession.MatchFormat("gen9vgc2024regf", "[Gen 9] VGC 2024 Regulation F")
+        )
+        assertEquals("gen9ou", ShowdownTeamRemoteState.resolveFormatId("[Gen 9] OU", formats))
+        assertEquals("gen9vgc2024regf", ShowdownTeamRemoteState.resolveFormatId("[Gen 9] VGC 2024 Regulation F", formats))
+        assertNull(ShowdownTeamRemoteState.resolveFormatId("[Gen 9] Unknown Format", formats))
     }
 }

@@ -116,6 +116,13 @@ class ShowdownTeamRemoteState {
             }
         }
 
+        fun resolveFormatId(label: String, formats: List<BattleSession.MatchFormat>): String? {
+            val candidate = formatIdFromLabel(label)
+            return formats.firstOrNull { format ->
+                format.label.equals(label, true) || format.id.equals(candidate, true)
+            }?.id
+        }
+
         fun ownTeamsCommand() = "/join view-teams-all"
         fun browseCommand() = "/join view-teams-browse"
         fun searchCommand(format: String, pokemon: String, moves: String, ability: String, generation: String): String =

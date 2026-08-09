@@ -2914,8 +2914,11 @@ class MainActivity : Activity() {
             links.addView(Button(this).apply {
                 text = "Import ${selectedTeam.name}"
                 setOnClickListener {
-                    val format = session.availableMatchFormats().firstOrNull { it.label.equals(selectedTeam.formatLabel, true) }?.id
-                        ?: selectedTeam.formatId
+                    val format = ShowdownTeamRemoteState.resolveFormatId(selectedTeam.formatLabel, session.availableMatchFormats())
+                    if (format == null) {
+                        session.setConnectionStatus("Showdown has not advertised ${selectedTeam.formatLabel}; refresh formats before importing.")
+                        return@setOnClickListener
+                    }
                     teamLibrary.save(selectedTeam.name, format, packed)
                     session.setConnectionStatus("Imported ${selectedTeam.name} into the team library.")
                     teamRemoteDialog?.dismiss()
