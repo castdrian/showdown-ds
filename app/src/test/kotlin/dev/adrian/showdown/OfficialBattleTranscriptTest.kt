@@ -215,6 +215,33 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun keepsInactiveFormTypeAndFaintPacketsOffThePrimaryCard() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver(
+            mapOf(
+                "Incineroar" to listOf("FIRE", "DARK"),
+                "Rotom-Wash" to listOf("ELECTRIC", "WATER"),
+                "Rotom-Frost" to listOf("ELECTRIC", "ICE")
+            )::get
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Rotom-Wash|Rotom-Wash, L50|100/100",
+                "|-start|p1b: Rotom-Wash|typechange|ELECTRIC",
+                "|-terastallize|p1b: Rotom-Wash|ICE",
+                "|detailschange|p1b: Rotom-Wash|Rotom-Frost, L50",
+                "|faint|p1b: Rotom-Frost"
+            )
+        )
+
+        assertEquals("Incineroar", session.playerPokemon)
+        assertEquals(listOf("FIRE", "DARK"), session.playerDetails().types)
+        assertEquals("Rotom-Frost", session.teamMemberDetails(4).name)
+        assertEquals("FNT", session.teamMemberDetails(4).condition)
+    }
+
+    @Test
     fun carriesBoostsThroughOfficialBatonPassSwitches() {
         val session = BattleSession()
         session.applyProtocolPacket(

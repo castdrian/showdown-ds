@@ -1393,7 +1393,7 @@ class BattleSession {
                 playerActiveCombatants[slot] = it.copy(hp = "0 fnt", condition = "FNT")
                 updatePlayerPartyMember(it.name) { details -> details.copy(hp = "0 fnt", condition = "FNT") }
             }
-            if (slot.endsWith("a") || playerActiveCombatants.size == 1) {
+            if (slot.endsWith('a')) {
                 playerHp = "0 fnt"
                 playerCondition = "FNT"
                 updatePlayerDetails { it.copy(hp = playerHp, condition = playerCondition) }
@@ -1403,7 +1403,7 @@ class BattleSession {
                 opponentActiveCombatants[slot] = it.copy(hp = "0 fnt", condition = "FNT")
                 updateOpponentParty(it.name) { details -> details.copy(hp = "0 fnt", condition = "FNT") }
             }
-            if (slot.endsWith("a") || opponentActiveCombatants.size == 1) {
+            if (slot.endsWith('a')) {
                 opponentHp = "0 fnt"
                 opponentCondition = "FNT"
                 opponentDetails = opponentDetails.copy(hp = opponentHp, condition = opponentCondition)
@@ -1522,7 +1522,7 @@ class BattleSession {
             activeSlotNames[slot] = species
             activeTeamNames.clear()
             activeTeamNames += activeSlotNames.values
-            if (slot.endsWith("a") || playerActiveCombatants.size == 1) {
+            if (slot.endsWith('a')) {
                 playerPokemon = species
                 playerLevel = parsed.first
                 playerGender = parsed.second
@@ -1535,7 +1535,7 @@ class BattleSession {
                 opponentActiveCombatants[slot] = it.copy(name = species, types = types, level = parsed.first, gender = parsed.second)
                 updateOpponentParty(it.name) { party -> party.copy(name = species, types = types, level = parsed.first, gender = parsed.second) }
             }
-            if (slot.endsWith("a") || opponentActiveCombatants.size == 1) {
+            if (slot.endsWith('a')) {
                 opponentPokemon = species
                 opponentLevel = parsed.first
                 opponentGender = parsed.second
@@ -1557,13 +1557,13 @@ class BattleSession {
                 playerActiveCombatants[slot] = it.copy(types = listOf(teraType))
                 updatePlayerPartyMember(it.name) { details -> details.copy(types = listOf(teraType)) }
             }
-            if (slot.endsWith("a") || playerActiveCombatants.size == 1) updatePlayerDetails { it.copy(types = listOf(teraType)) }
+            if (slot.endsWith('a')) updatePlayerDetails { it.copy(types = listOf(teraType)) }
         } else {
             opponentActiveCombatants[slot]?.let {
                 opponentActiveCombatants[slot] = it.copy(types = listOf(teraType))
                 updateOpponentParty(it.name) { details -> details.copy(types = listOf(teraType)) }
             }
-            if (slot.endsWith("a") || opponentActiveCombatants.size == 1) opponentDetails = opponentDetails.copy(types = listOf(teraType))
+            if (slot.endsWith('a')) opponentDetails = opponentDetails.copy(types = listOf(teraType))
         }
         appendLog("${actor.substringAfter(':').trim()} Terastallized into $teraType.")
     }
@@ -2186,13 +2186,13 @@ class BattleSession {
             val name = combatant?.name ?: actorName
             combatant?.let { playerActiveCombatants[slot] = it.copy(types = types) }
             updatePlayerPartyMember(name) { details -> details.copy(types = types) }
-            if (slot.endsWith("a") || playerActiveCombatants.size <= 1) updatePlayerDetails { it.copy(types = types) }
+            if (slot.endsWith('a')) updatePlayerDetails { it.copy(types = types) }
         } else {
             val combatant = opponentActiveCombatants[slot]
             val name = combatant?.name ?: actorName
             combatant?.let { opponentActiveCombatants[slot] = it.copy(types = types) }
             updateOpponentParty(name) { details -> details.copy(types = types) }
-            if (slot.endsWith("a") || opponentActiveCombatants.size <= 1) opponentDetails = opponentDetails.copy(types = types)
+            if (slot.endsWith('a')) opponentDetails = opponentDetails.copy(types = types)
         }
     }
 
