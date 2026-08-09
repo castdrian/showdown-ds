@@ -2,7 +2,7 @@
 
 Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
-https://github.com/user-attachments/assets/08ef3f04-ce9c-4bcb-8f93-d4c31ff76a5a
+https://github.com/user-attachments/assets/ec825ee2-5ebe-4141-9d56-aecd09af57c8
 
 ## Hardware target
 
@@ -23,6 +23,19 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Set `AYN_THOR_VSYNC_RATE=120` when validating the upper display at its target refresh rate.
+
+## Promo capture
+
+Normalize a fresh Thor capture to the stacked 1920 × 2160, 30 fps format before uploading it to GitHub:
+
+```sh
+./scripts/normalize-promo-reel.sh capture.mp4 media/showdown-promo.mp4
+./scripts/verify-promo-reel.sh media/showdown-promo.mp4
+```
+
+## Support the project
+
+If this client is useful to you, [sponsor the project on GitHub](https://github.com/sponsors/castdrian) or [support it on Ko-fi](https://ko-fi.com/castdrian).
 
 ## Releases
 
