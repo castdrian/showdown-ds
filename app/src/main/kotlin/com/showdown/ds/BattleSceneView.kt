@@ -884,7 +884,7 @@ class BattleSceneView(
         val alpha = (1f - exit) * min(1f, 0.3f + arrival)
         val left = width * 0.33f + (1f - arrival) * width * 0.04f
         val right = width * 0.96f
-        val top = height * 0.83f
+        val top = height * 0.78f
         val bottom = height * 0.96f
         val bounds = RectF(left, top, right, bottom)
         paint.shader = LinearGradient(
@@ -905,15 +905,24 @@ class BattleSceneView(
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         paint.textSize = 40f * scale
-        val message = ellipsizeToWidth(session.latestBattleEvent, bounds.width() - 48f * scale, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 5f * scale
-        paint.strokeJoin = Paint.Join.ROUND
-        paint.color = Color.argb((220f * alpha).toInt(), 3, 12, 18)
-        canvas.drawText(message, left + 24f * scale, top + 81f * scale, paint)
-        paint.style = Paint.Style.FILL
-        paint.color = Color.argb((255f * alpha).toInt(), 255, 255, 255)
-        canvas.drawText(message, left + 24f * scale, top + 81f * scale, paint)
+        val lines = BattleFeedText.wrap(session.latestBattleEvent, bounds.width() - 48f * scale, 2, paint::measureText)
+            .ifEmpty { listOf("…") }
+        val lineHeight = 48f * scale
+        val firstBaseline = bounds.centerY() - lines.size * lineHeight / 2f - (paint.ascent() + paint.descent()) / 2f + lineHeight / 2f
+        canvas.save()
+        canvas.clipRect(bounds)
+        lines.forEachIndexed { index, line ->
+            val baseline = firstBaseline + index * lineHeight
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 5f * scale
+            paint.strokeJoin = Paint.Join.ROUND
+            paint.color = Color.argb((220f * alpha).toInt(), 3, 12, 18)
+            canvas.drawText(line, left + 24f * scale, baseline, paint)
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb((255f * alpha).toInt(), 255, 255, 255)
+            canvas.drawText(line, left + 24f * scale, baseline, paint)
+        }
+        canvas.restore()
     }
 
     private fun ellipsize(value: String, maximum: Int) = if (value.length <= maximum) value else "${value.take(maximum - 1)}…"

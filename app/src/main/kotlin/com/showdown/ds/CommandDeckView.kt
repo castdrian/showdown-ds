@@ -435,15 +435,17 @@ class CommandDeckView(
         paint.textSize = readableTextSize(28f, scale, 24f)
         canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.left + 20f * scale, bounds.top + 174f * scale, paint)
         drawFieldSummary(canvas, bounds, scale)
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(23f, scale, 20f)
-        paint.color = if (move.disabled) MAGENTA else Color.rgb(150, 231, 205)
-        canvas.drawText(if (move.disabled) "DISABLED" else "TAP AGAIN TO CONFIRM", bounds.left + 20f * scale, bounds.bottom - 24f * scale, paint)
+        if (move.disabled) {
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = readableTextSize(23f, scale, 20f)
+            paint.color = MAGENTA
+            canvas.drawText("DISABLED", bounds.left + 20f * scale, bounds.bottom - 24f * scale, paint)
+        }
     }
 
     private fun drawFieldSummary(canvas: Canvas, bounds: RectF, scale: Float) {
         val summaryTop = bounds.top + 220f * scale
-        val summaryBottom = bounds.bottom - 58f * scale
+        val summaryBottom = bounds.bottom - 18f * scale
         if (summaryBottom <= summaryTop + 56f * scale) return
         val info = session.battleInfo()
         val summary = RectF(bounds.left + 18f * scale, summaryTop, bounds.right - 18f * scale, summaryBottom)
