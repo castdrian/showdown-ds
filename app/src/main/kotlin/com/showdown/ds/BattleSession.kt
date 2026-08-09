@@ -66,7 +66,8 @@ class BattleSession {
         CHALLENGE_PLAYER,
         EXPORT_REPLAY,
         OPEN_REPLAY_CONTROLS,
-        SETTINGS_CHANGED
+        SETTINGS_CHANGED,
+        TOGGLE_BATTLE_TIMER
     }
 
     enum class BattleGimmick(val choiceSuffix: String, val label: String) {
@@ -263,6 +264,7 @@ class BattleSession {
     private val fieldEffects = mutableListOf<String>()
     private var battleClock: BattleClock? = null
     private var battleClockUpdatedAtNanos = 0L
+    private var battleTimerEnabled = false
     private val playerSideConditions = mutableListOf<String>()
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
@@ -374,9 +376,12 @@ class BattleSession {
         (it.turnSeconds - elapsed).coerceAtLeast(0)
     }
 
+    fun isBattleTimerEnabled() = battleTimerEnabled
+
     private fun clearBattleClock() {
         battleClock = null
         battleClockUpdatedAtNanos = 0L
+        battleTimerEnabled = false
     }
 
     fun setMoveTypeResolver(resolver: (String) -> String?) {
@@ -954,6 +959,7 @@ class BattleSession {
                     "c", "c:" -> applyChat(fields)
                     "inactive" -> {
                         val message = fields.drop(2).joinToString("|")
+                        battleTimerEnabled = true
                         val clock = parseBattleClock(message)
                         clock?.let {
                             battleClock = it
@@ -963,6 +969,7 @@ class BattleSession {
                     }
                     "inactiveoff" -> {
                         clearBattleClock()
+                        battleTimerEnabled = false
                     }
                     "message" -> fields.drop(2).joinToString("|").takeIf { it.isNotBlank() }?.let(::appendLog)
                     "raw", "html" -> appendMarkup(fields.drop(2).joinToString("|"))
@@ -1888,7 +1895,8 @@ class BattleSession {
         10 -> "Rooms"
         11 -> "Showdown account"
         12 -> "Configure server"
-        else -> if (replayMode) "Replay controls" else "Copy battle transcript"
+        13 -> if (replayMode) "Replay controls" else "Copy battle transcript"
+        else -> "Battle timer ${if (battleTimerEnabled) "on" else "off"}"
     }
 
     private fun applyMenuSelection() {
@@ -1955,12 +1963,16 @@ class BattleSession {
                 publishClientAction(ClientAction.CONFIGURE_SERVER)
                 "Choose a Pokémon Showdown server."
             }
-            else -> if (replayMode) {
+            13 -> if (replayMode) {
                 publishClientAction(ClientAction.OPEN_REPLAY_CONTROLS)
                 "Adjust replay playback."
             } else {
                 publishClientAction(ClientAction.EXPORT_REPLAY)
                 "Copy the battle transcript."
+            }
+            else -> {
+                publishClientAction(ClientAction.TOGGLE_BATTLE_TIMER)
+                "Battle timer ${if (battleTimerEnabled) "stopping" else "starting"}."
             }
         }
         if (focusedMenuItem in 4..8) publishClientAction(ClientAction.SETTINGS_CHANGED)
@@ -2183,7 +2195,7 @@ class BattleSession {
     }
 
     companion object {
-        const val MENU_ITEM_COUNT = 14
+        const val MENU_ITEM_COUNT = 15
         const val MENU_COLUMNS = 3
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 

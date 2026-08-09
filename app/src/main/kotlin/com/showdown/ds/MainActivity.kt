@@ -224,6 +224,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
                 BattleSession.ClientAction.EXPORT_REPLAY -> showReplayActions()
                 BattleSession.ClientAction.OPEN_REPLAY_CONTROLS -> showReplayControls()
+                BattleSession.ClientAction.TOGGLE_BATTLE_TIMER -> toggleBattleTimer()
                 BattleSession.ClientAction.SETTINGS_CHANGED -> {
                     persistUserPreferences()
                     battleAudio.updateOptions(session)
@@ -3623,6 +3624,20 @@ class MainActivity : Activity() {
         leftBattleRoomId = roomId
         clearBattleRoomState()
         session.setConnectionStatus("Left the battle room.")
+    }
+
+    private fun toggleBattleTimer() {
+        val roomId = activeBattleRoomId
+        if (roomId == null || !session.isLiveBattleActive() || session.isReplayMode()) {
+            session.setConnectionStatus("There is no live battle timer to change.")
+            return
+        }
+        val command = if (session.isBattleTimerEnabled()) "/timer off" else "/timer on"
+        if (showdownConnection?.send(roomId, command) == true) {
+            session.setConnectionStatus(if (command.endsWith("on")) "Starting the battle timer…" else "Stopping the battle timer…")
+        } else {
+            session.setConnectionStatus("Unable to change the battle timer.")
+        }
     }
 
     private fun loadServerEndpoint(): ShowdownServerEndpoint {

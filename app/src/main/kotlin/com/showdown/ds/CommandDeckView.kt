@@ -999,7 +999,8 @@ class CommandDeckView(
         10 -> "Rooms"
         11 -> "Account"
         12 -> "Server"
-        else -> if (entry == "Replay controls") "Replay controls" else "Copy transcript"
+        13 -> if (entry == "Replay controls") "Replay controls" else "Copy transcript"
+        else -> "Timer: ${entry.substringAfterLast(' ')}"
     }
 
     private fun movePalette(type: String): MovePalette {

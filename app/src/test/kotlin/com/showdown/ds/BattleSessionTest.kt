@@ -876,6 +876,30 @@ class BattleSessionTest {
     }
 
     @Test
+    fun battleMenuControlsTheAuthoritativeBattleTimerState() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+
+        session.applyProtocolPacket(listOf("|player|p1|ADRIAN", "|player|p2|GLADION", "|init|battle"))
+        session.setLocalUsername("ADRIAN")
+        session.setLiveBattleActive(true)
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(14)
+        session.confirmSelection()
+
+        assertEquals(listOf(BattleSession.ClientAction.TOGGLE_BATTLE_TIMER), actions)
+        assertEquals("Battle timer off", session.menuItems()[14])
+
+        session.applyProtocolLine("|inactive|Time left: 60 sec this turn | 300 sec total | 30 sec grace")
+        assertTrue(session.isBattleTimerEnabled())
+        assertEquals("Battle timer on", session.menuItems()[14])
+
+        session.applyProtocolLine("|inactiveoff|")
+        assertFalse(session.isBattleTimerEnabled())
+    }
+
+    @Test
     fun spectatorBattleMenuOffersLeaveInsteadOfForfeit() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()
