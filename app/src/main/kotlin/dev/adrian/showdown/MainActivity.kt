@@ -424,17 +424,19 @@ class MainActivity : Activity() {
     }
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        if (event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK && event.action == MotionEvent.ACTION_MOVE) {
-            val horizontal = axisDirection(event, MotionEvent.AXIS_X, MotionEvent.AXIS_HAT_X)
-            val vertical = axisDirection(event, MotionEvent.AXIS_Y, MotionEvent.AXIS_HAT_Y)
-            if (horizontal != controllerHorizontal || vertical != controllerVertical) {
-                controllerHorizontal = horizontal
-                controllerVertical = vertical
-                if (horizontal != 0 || vertical != 0) navigateController(horizontal, vertical)
-            }
-            return true
+        return if (handleControllerMotionEvent(event)) true else super.onGenericMotionEvent(event)
+    }
+
+    private fun handleControllerMotionEvent(event: MotionEvent): Boolean {
+        if (event.source and InputDevice.SOURCE_JOYSTICK != InputDevice.SOURCE_JOYSTICK || event.action != MotionEvent.ACTION_MOVE) return false
+        val horizontal = axisDirection(event, MotionEvent.AXIS_X, MotionEvent.AXIS_HAT_X)
+        val vertical = axisDirection(event, MotionEvent.AXIS_Y, MotionEvent.AXIS_HAT_Y)
+        if (horizontal != controllerHorizontal || vertical != controllerVertical) {
+            controllerHorizontal = horizontal
+            controllerVertical = vertical
+            if (horizontal != 0 || vertical != 0) navigateController(horizontal, vertical)
         }
-        return super.onGenericMotionEvent(event)
+        return true
     }
 
     override fun onPause() {
@@ -3909,6 +3911,18 @@ class MainActivity : Activity() {
     }
 
     private inner class ThorPresentation(context: Context, display: Display) : Presentation(context, display) {
+        override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                if (event.repeatCount > 0 && isConfirmButton(event.keyCode)) return true
+                if (handleControllerKey(event.keyCode)) return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
+
+        override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+            return if (handleControllerMotionEvent(event)) true else super.dispatchGenericMotionEvent(event)
+        }
+
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             setCancelable(false)
