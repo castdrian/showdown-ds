@@ -2634,12 +2634,29 @@ class BattleSession {
 
     private fun condition(hp: String) = hp.substringAfter(' ', "READY").uppercase()
 
-    private fun isPlayerSide(side: String) = side.startsWith(playerSlot)
+    private fun isPlayerSide(side: String): Boolean {
+        val playerGroup = battleSideGroup(playerSlot)
+        val sideGroup = battleSideGroup(side)
+        return (playerGroup != null && playerGroup == sideGroup) || (playerGroup == null && side.startsWith(playerSlot))
+    }
+
+    private fun battleSideGroup(side: String): Int? = side
+        .removePrefix("p")
+        .takeWhile(Char::isDigit)
+        .toIntOrNull()
+        ?.let {
+            when (it) {
+                1, 3 -> 1
+                2, 4 -> 2
+                else -> null
+            }
+        }
 
     private fun updatePerspective() {
         playerName = sideNames[playerSlot] ?: playerName
-        val opponentSlot = if (playerSlot == "p1") "p2" else "p1"
-        opponentName = sideNames[opponentSlot] ?: opponentName
+        sideNames.keys.firstOrNull { !isPlayerSide(it) }?.let { opponentSlot ->
+            opponentName = sideNames[opponentSlot] ?: opponentName
+        }
     }
 
     private fun healthFraction(hp: String): Float {
