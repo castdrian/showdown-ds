@@ -97,6 +97,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun endingLiveBattleClearsTheCancellableChoice() {
+        val session = BattleSession()
+        session.setLiveBattleActive(true)
+        session.applyProtocolLine("|request|{\"rqid\":9,\"active\":[{\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15}]}]}")
+
+        session.confirmSelection()
+        assertTrue(session.canCancelChoice())
+
+        session.setLiveBattleActive(false)
+
+        assertFalse(session.canCancelChoice())
+    }
+
+    @Test
     fun lobbyChatAndPrivateMessagesEnterActivity() {
         val session = BattleSession()
 

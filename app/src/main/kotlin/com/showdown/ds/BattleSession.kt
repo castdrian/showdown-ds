@@ -554,6 +554,7 @@ class BattleSession {
     fun setLiveBattleActive(value: Boolean) {
         if (liveBattleActive == value) return
         liveBattleActive = value
+        if (!value) choiceCanBeCancelled = false
         notifyListeners()
     }
 
@@ -1090,6 +1091,7 @@ class BattleSession {
         playerBoosts.clear()
         opponentBoosts.clear()
         decisionAvailable = false
+        choiceCanBeCancelled = false
         decisionKind = DecisionKind.WAIT
         panel = Panel.MOVES
         status = "Battle starting"
