@@ -21,11 +21,29 @@
             android:name="com.showdown.ds.MainActivity"
             android:configChanges="density|orientation|screenLayout|screenSize|smallestScreenSize"
             android:exported="true"
+            android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:screenOrientation="landscape">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="replay.pokemonshowdown.com"
+                    android:scheme="https" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="pokemonshowdown.com"
+                    android:pathPrefix="/replay/"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
     </application>

@@ -3,6 +3,7 @@ package com.showdown.ds
 import android.app.Activity
 import android.app.Presentation
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
@@ -147,6 +148,8 @@ class MainActivity : Activity() {
     private var replayStatus: String? = null
     private var replayPaused = false
     private var replaySpeed = 1f
+    private var handledReplayLink: String? = null
+    private var replayLoadRequest: String? = null
     private var playbackScheduledPauseMillis = 0L
     private var playbackScheduledAtMillis = 0L
     private var playbackScheduledSpeed = 1f
@@ -266,6 +269,13 @@ class MainActivity : Activity() {
         displayManager?.registerDisplayListener(displayListener, null)
         showSecondaryDisplay()
         restoreLobbyConnection(savedInstanceState)
+        handleIncomingIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -2978,17 +2988,40 @@ class MainActivity : Activity() {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Load") { _, _ ->
                 val source = input.text.toString().trim()
-                if (ShowdownReplayImporter.normalize(source) == null) {
+                val normalized = ShowdownReplayImporter.normalize(source)
+                if (normalized == null) {
                     session.setConnectionStatus("Paste a replay.pokemonshowdown.com URL.")
                 } else {
-                    session.setConnectionStatus("Loading replay…")
-                    replayFetcher.fetch(source) { result ->
-                        result.onSuccess(::showReplay)
-                            .onFailure { session.setConnectionStatus("That replay could not be loaded.") }
-                    }
+                    loadReplay(normalized)
                 }
             }
             .show()
+    }
+
+    private fun handleIncomingIntent(intent: Intent) {
+        if (intent.action != Intent.ACTION_VIEW) return
+        val source = intent.dataString ?: return
+        val normalized = ShowdownReplayImporter.normalize(source) ?: return
+        loadReplay(normalized)
+    }
+
+    private fun loadReplay(normalized: String) {
+        if (replayLoadRequest == normalized) return
+        if (handledReplayLink == normalized && session.isReplayMode()) return
+        replayLoadRequest = normalized
+        session.setConnectionStatus("Loading replay…")
+        replayFetcher.fetch(normalized) { result ->
+            if (replayLoadRequest != normalized) return@fetch
+            replayLoadRequest = null
+            result.onSuccess {
+                handledReplayLink = normalized
+                showReplay(it)
+            }
+                .onFailure {
+                    handledReplayLink = null
+                    session.setConnectionStatus("That replay could not be loaded.")
+                }
+        }
     }
 
     private fun showReplay(replay: ShowdownReplayPayload) {
