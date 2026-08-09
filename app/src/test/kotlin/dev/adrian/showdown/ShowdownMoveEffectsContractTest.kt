@@ -14,6 +14,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("if (battle.paused) battle.play();"))
         assertTrue(source.contains("this.__showdownNativeResultCue = null;"))
         assertTrue(source.contains("this.__showdownNativeResultCue = null;\n                                    nativeCue(cue);"))
+        assertTrue(source.contains("this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;"))
         assertFalse(source.contains("if (resultCue && this.scene.__showdownNativeResultCue === resultCue)"))
         assertFalse(source.contains("BattlePlaybackTiming.pauseAfter(packet)"))
         assertFalse(source.contains("postDelayed(flushRunnable"))
