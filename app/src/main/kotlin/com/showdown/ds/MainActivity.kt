@@ -140,7 +140,10 @@ class MainActivity : Activity() {
     private var battlePacketPlaybackScheduled = false
     private var replayStatus: String? = null
     private var replayPaused = false
+    private var replayPausedForLifecycle = false
     private var replaySpeed = 1f
+    private var restoredReplayPaused = false
+    private var restoredReplaySpeed = 1f
     private var activeReplayLink: String? = null
     private var replayLoadRequest: String? = null
     private var playbackScheduledPauseMillis = 0L
@@ -239,6 +242,8 @@ class MainActivity : Activity() {
         session = BattleSession().apply { prepareForLobby() }
         session.setMatchFormat(loadMatchFormat())
         loadUserPreferences()
+        restoredReplayPaused = savedInstanceState?.getBoolean("replay_paused") == true
+        restoredReplaySpeed = savedInstanceState?.getFloat("replay_speed", 1f) ?: 1f
         session.addListener(sessionListener)
         session.addProtocolListener(protocolListener)
         session.addDecisionListener(decisionListener)
@@ -285,6 +290,8 @@ class MainActivity : Activity() {
         outState.putString("active_battle_room", activeBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
         outState.putString("active_replay_source", replayLoadRequest ?: activeReplayLink)
+        outState.putBoolean("replay_paused", replayPaused || replayPausedForLifecycle)
+        outState.putFloat("replay_speed", replaySpeed)
         super.onSaveInstanceState(outState)
     }
 
@@ -384,13 +391,25 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        pauseReplayForLifecycle()
         if (::battleAudio.isInitialized) battleAudio.pauseMusic()
         super.onPause()
+    }
+
+    override fun onStop() {
+        pauseReplayForLifecycle()
+        super.onStop()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        resumeReplayForLifecycle()
     }
 
     override fun onResume() {
         super.onResume()
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
+        resumeReplayForLifecycle()
         if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
     }
 
@@ -590,12 +609,27 @@ class MainActivity : Activity() {
         pendingBattlePackets.clear()
         battlePacketPlaybackScheduled = false
         replayPaused = false
+        replayPausedForLifecycle = false
         replaySpeed = 1f
         playbackScheduledPauseMillis = 0L
         playbackScheduledAtMillis = 0L
         playbackScheduledSpeed = 1f
         playbackPausedRemainingMillis = null
         replayStatus = null
+    }
+
+    private fun pauseReplayForLifecycle() {
+        if (::session.isInitialized && session.isReplayMode() && !replayPaused) {
+            replayPausedForLifecycle = true
+            setReplayPaused(true)
+        }
+    }
+
+    private fun resumeReplayForLifecycle() {
+        if (::session.isInitialized && session.isReplayMode() && replayPausedForLifecycle) {
+            replayPausedForLifecycle = false
+            setReplayPaused(false)
+        }
     }
 
     private fun handleAppliedBattlePacket(packet: PendingBattlePacket) {
@@ -3090,8 +3124,14 @@ class MainActivity : Activity() {
         replay.players.firstOrNull()?.let(session::setLocalUsername)
         session.setReplayMode(true)
         session.setLiveBattleActive(true)
+        replayPaused = restoredReplayPaused
+        replayPausedForLifecycle = false
+        replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
         enqueueBattlePlayback(null, null, replay.log.lines())
         replayStatus = "Replay: ${replay.title}"
+        if (replayPaused) updateReplayStatus()
+        restoredReplayPaused = false
+        restoredReplaySpeed = 1f
     }
 
     private fun showFormatPicker() {
