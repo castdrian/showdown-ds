@@ -490,7 +490,7 @@ class MainActivity : Activity() {
         frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
-        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue).also { effects ->
+        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue) { session.protocolHistory() }.also { effects ->
             frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
             effects.setPlaybackSpeed(replaySpeed)
             effects.seed(session.protocolHistory())
@@ -3715,12 +3715,14 @@ class MainActivity : Activity() {
         replay.players.firstOrNull()?.let(session::setLocalUsername)
         session.setReplayMode(true)
         session.setLiveBattleActive(true)
-        replayPaused = restoredReplayPaused
+        val replayStartsPaused = restoredReplayPaused
+        replayPaused = false
         replayPausedForLifecycle = false
         replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
-        showdownMoveEffects?.setPlaybackPaused(replayPaused)
+        showdownMoveEffects?.setPlaybackPaused(false)
         enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)
+        if (replayStartsPaused) setReplayPaused(true)
         replayStatus = "Replay: ${replay.title}"
         if (replayPaused) updateReplayStatus()
         restoredReplayPaused = false

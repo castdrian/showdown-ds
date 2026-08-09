@@ -10,14 +10,14 @@ import android.webkit.WebViewClient
 import android.view.MotionEvent
 import android.webkit.JavascriptInterface
 import org.json.JSONArray
-import java.util.ArrayDeque
 
 @SuppressLint("SetJavaScriptEnabled")
 class ShowdownMoveEffectsView(
     context: Context,
-    private val audioCueListener: (BattleAudioCue) -> Unit
+    private val audioCueListener: (BattleAudioCue) -> Unit,
+    private val protocolHistoryProvider: () -> List<String>
 ) : WebView(context) {
-    private val pendingPackets = ArrayDeque<List<String>>()
+    private val pendingPackets = ShowdownMoveEffectsQueue()
     private var pageLoaded = false
     private var playbackPaused = false
     private var playbackSpeed = 1f
@@ -39,6 +39,7 @@ class ShowdownMoveEffectsView(
             override fun onPageFinished(view: WebView, url: String) {
                 pageLoaded = true
                 runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
+                seed(protocolHistoryProvider())
                 if (playbackPaused) runJavascript("window.ShowdownNativeEffects.pause();")
                 flushPendingPackets()
             }
@@ -48,9 +49,8 @@ class ShowdownMoveEffectsView(
 
     fun seed(lines: List<String>) {
         val packet = lines.filter { it.startsWith('|') }
-        if (packet.isEmpty()) return
-        pendingPackets.addLast(listOf(SEED_PREFIX) + packet)
-        flushPendingPackets()
+        pendingPackets.resetWith(packet)
+        if (packet.isNotEmpty()) flushPendingPackets(allowSeedWhilePaused = true)
     }
 
     fun applyProtocol(lines: List<String>) {
@@ -59,7 +59,7 @@ class ShowdownMoveEffectsView(
         if (packet.any { it.startsWith("|init|battle") }) {
             pendingPackets.clear()
         }
-        BattlePlaybackTiming.chunks(packet).forEach(pendingPackets::addLast)
+        BattlePlaybackTiming.chunks(packet).forEach(pendingPackets::add)
         flushPendingPackets()
     }
 
@@ -89,14 +89,19 @@ class ShowdownMoveEffectsView(
 
     override fun onTouchEvent(event: MotionEvent): Boolean = false
 
-    private fun flushPendingPackets() {
-        if (playbackPaused || !pageLoaded) return
-        while (pendingPackets.isNotEmpty()) {
-            val packet = pendingPackets.removeFirst()
-            val payload = JSONArray(packet)
-            val receiver = if (packet.firstOrNull() == SEED_PREFIX) "seed" else "receive"
-            val lines = if (receiver == "seed") JSONArray(packet.drop(1)) else payload
-            evaluateJavascript("window.ShowdownNativeEffects.$receiver($lines);", null)
+    private fun flushPendingPackets(allowSeedWhilePaused: Boolean = false) {
+        if ((!allowSeedWhilePaused && playbackPaused) || !pageLoaded) return
+        while (true) {
+            when (val packet = pendingPackets.poll() ?: break) {
+                is ShowdownMoveEffectsQueue.Packet.Seed -> evaluateJavascript(
+                    "window.ShowdownNativeEffects.seed(${JSONArray(packet.lines)});",
+                    null
+                )
+                is ShowdownMoveEffectsQueue.Packet.Receive -> evaluateJavascript(
+                    "window.ShowdownNativeEffects.receive(${JSONArray(packet.lines)});",
+                    null
+                )
+            }
         }
     }
 
@@ -106,7 +111,6 @@ class ShowdownMoveEffectsView(
 
     private companion object {
         const val BASE_URL = "https://play.pokemonshowdown.com/"
-        const val SEED_PREFIX = "__seed__"
         const val NATIVE_AUDIO_BRIDGE = "ShowdownNativeAudio"
         val DOCUMENT = """
             <!doctype html>

@@ -19,8 +19,20 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("this.scene.__showdownNativeResultCues.push(resultCue);"))
         assertFalse(source.contains("__showdownNativeResultCue = null"))
         assertTrue(source.contains("this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;"))
+        assertTrue(source.contains("seed(protocolHistoryProvider())"))
+        assertTrue(source.contains("flushPendingPackets(allowSeedWhilePaused = true)"))
         assertFalse(source.contains("if (resultCue && this.scene.__showdownNativeResultCue === resultCue)"))
         assertFalse(source.contains("BattlePlaybackTiming.pauseAfter(packet)"))
         assertFalse(source.contains("postDelayed(flushRunnable"))
+    }
+
+    @Test
+    fun pausedReplayAppliesItsInitialChunkBeforePausingPlayback() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val enqueueIndex = source.indexOf("enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)")
+        val pauseIndex = source.indexOf("if (replayStartsPaused) setReplayPaused(true)", enqueueIndex)
+
+        assertTrue(enqueueIndex >= 0)
+        assertTrue(pauseIndex > enqueueIndex)
     }
 }
