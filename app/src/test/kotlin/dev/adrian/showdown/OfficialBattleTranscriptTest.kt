@@ -48,6 +48,37 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun tracksOfficialBattlePhasesAndClearsTheMessageFeedMarker() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|init|battle")
+        assertEquals(BattleSession.BattlePhase.BATTLE, session.battlePhase)
+        assertTrue(session.battleFeedVisible)
+
+        session.applyProtocolLine("|teampreview")
+        assertEquals(BattleSession.BattlePhase.TEAM_PREVIEW, session.battlePhase)
+
+        session.applyProtocolLine("|start")
+        assertEquals(BattleSession.BattlePhase.BATTLE, session.battlePhase)
+
+        session.applyProtocolLine("|upkeep")
+        assertEquals(BattleSession.BattlePhase.UPKEEP, session.battlePhase)
+
+        session.applyProtocolLine("|")
+        assertFalse(session.battleFeedVisible)
+
+        session.applyProtocolLine("|-weather|RainDance")
+        assertTrue(session.battleFeedVisible)
+
+        session.applyProtocolLine("|")
+        session.applyProtocolLine("|-weather|RainDance")
+        assertFalse(session.battleFeedVisible)
+
+        session.applyProtocolLine("|-weather|Sun")
+        assertTrue(session.battleFeedVisible)
+    }
+
+    @Test
     fun presentsCommonSimulatorFailureAndFieldEvents() {
         val session = BattleSession()
 

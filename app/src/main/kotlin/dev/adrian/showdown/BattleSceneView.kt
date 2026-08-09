@@ -881,7 +881,7 @@ class BattleSceneView(
     }
 
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
-        if (session.latestBattleEvent.startsWith("Turn ")) return
+        if (!session.battleFeedVisible || session.latestBattleEvent.startsWith("Turn ")) return
         val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
         val arrival = min(1f, age / 0.18f)
         val alpha = min(1f, 0.3f + arrival)

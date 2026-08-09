@@ -451,7 +451,7 @@ class CommandDeckView(
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(23f, scale, 20f)
             paint.color = MAGENTA
-            canvas.drawText("DISABLED", bounds.left + detailPadding, bounds.bottom - 24f * scale, paint)
+            canvas.drawText("DISABLED", detailContent.left, bounds.bottom - 24f * scale, paint)
         }
     }
 

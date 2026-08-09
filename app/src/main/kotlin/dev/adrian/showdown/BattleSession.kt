@@ -18,6 +18,14 @@ class BattleSession {
         WAIT
     }
 
+    enum class BattlePhase {
+        LOBBY,
+        TEAM_PREVIEW,
+        BATTLE,
+        UPKEEP,
+        FINISHED
+    }
+
     data class MatchFormat(
         val id: String,
         val label: String,
@@ -360,6 +368,10 @@ class BattleSession {
         private set
     var battleFinished = false
         private set
+    var battlePhase = BattlePhase.LOBBY
+        private set
+    var battleFeedVisible = true
+        private set
 
     fun playerHealthFraction() = healthFraction(playerHp)
 
@@ -602,6 +614,8 @@ class BattleSession {
         activityMessages += chatMessages
         liveBattleActive = false
         battleFinished = false
+        battlePhase = BattlePhase.LOBBY
+        battleFeedVisible = true
         decisionAvailable = false
         choiceCanBeCancelled = false
         decisionKind = DecisionKind.WAIT
@@ -905,6 +919,10 @@ class BattleSession {
             packet.forEach { line ->
                 val fields = line.split('|')
                 if (fields.size < 2) return@forEach
+                if (line == "|") {
+                    battleFeedVisible = false
+                    return@forEach
+                }
                 when (fields[1]) {
                     "init" -> applyInit(fields)
                     "player" -> applyPlayer(fields)
@@ -922,7 +940,13 @@ class BattleSession {
                         }
                     }
                     "rated" -> appendLog("Rated battle.")
-                    "turn" -> applyTurn(fields)
+                    "teampreview" -> battlePhase = BattlePhase.TEAM_PREVIEW
+                    "start" -> battlePhase = BattlePhase.BATTLE
+                    "upkeep" -> battlePhase = BattlePhase.UPKEEP
+                    "turn" -> {
+                        battlePhase = BattlePhase.BATTLE
+                        applyTurn(fields)
+                    }
                     "switch", "drag", "replace" -> applySwitch(fields)
                     "swap" -> applySwap(fields)
                     "poke" -> applyPoke(fields)
@@ -1053,6 +1077,7 @@ class BattleSession {
         activityMessages += battleLog
         latestBattleEvent = "Battle starting"
         latestBattleEventAtNanos = System.nanoTime()
+        battleFeedVisible = true
         latestMoveEvent = ""
         latestMoveEventAtNanos = 0L
         latestFaintedPokemon = ""
@@ -1068,6 +1093,7 @@ class BattleSession {
         selectedGimmick = null
         availableGimmicks.clear()
         battleFinished = false
+        battlePhase = BattlePhase.BATTLE
         openingEntrances = 0
         latestOpeningEntranceAtNanos = 0L
         playerEntryAtNanos = 0L
@@ -1648,12 +1674,14 @@ class BattleSession {
             requestId = request.optInt("rqid", -1).takeIf { it >= 0 }
             syncTeamFromRequest(request)
             if (request.optBoolean("wait")) {
+                battlePhase = BattlePhase.BATTLE
                 decisionKind = DecisionKind.WAIT
                 decisionAvailable = false
                 status = "Waiting for the other player…"
                 return@runCatching
             }
             if (request.optBoolean("teamPreview")) {
+                battlePhase = BattlePhase.TEAM_PREVIEW
                 decisionKind = DecisionKind.TEAM_PREVIEW
                 decisionAvailable = team.isNotEmpty()
                 panel = Panel.TEAM
@@ -1661,6 +1689,7 @@ class BattleSession {
                 return@runCatching
             }
             val forceSwitch = request.optJSONArray("forceSwitch")
+            battlePhase = BattlePhase.BATTLE
             requiredSwitches = forceSwitch?.let { array -> (0 until array.length()).count { array.optBoolean(it) } } ?: 0
             if (requiredSwitches > 0) {
                 decisionKind = DecisionKind.SWITCH
@@ -1809,6 +1838,7 @@ class BattleSession {
             requiredSwitches = 0
             selectedTargetIndex = -1
             battleFinished = true
+            battlePhase = BattlePhase.FINISHED
         }
     }
 
@@ -1831,6 +1861,7 @@ class BattleSession {
         requiredSwitches = 0
         selectedTargetIndex = -1
         battleFinished = true
+        battlePhase = BattlePhase.FINISHED
     }
 
     private fun applyBattleError(fields: List<String>) {
@@ -2275,6 +2306,7 @@ class BattleSession {
 
     private fun appendLog(entry: String) {
         if (battleLog.lastOrNull() == entry) return
+        battleFeedVisible = true
         battleLog += entry
         if (battleLog.size > 32) battleLog.removeAt(0)
         appendActivity(entry)
