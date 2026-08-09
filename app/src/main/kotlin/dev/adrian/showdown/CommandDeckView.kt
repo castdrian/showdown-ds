@@ -409,9 +409,9 @@ class CommandDeckView(
         val detailPadding = 32f * scale
         val detailContent = RectF(
             bounds.left + detailPadding,
-            bounds.top + 16f * scale,
+            bounds.top + detailPadding,
             bounds.right - detailPadding,
-            bounds.bottom - 18f * scale
+            bounds.bottom - detailPadding
         )
         paint.color = Color.argb(100, 3, 14, 24)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
@@ -446,25 +446,24 @@ class CommandDeckView(
         canvas.drawText(metrics, detailContent.left, bounds.top + 132f * scale, paint)
         paint.textSize = readableTextSize(28f, scale, 24f)
         canvas.drawText("PP ${move.pp} / ${move.maxPp}", detailContent.left, bounds.top + 174f * scale, paint)
-        drawFieldSummary(canvas, bounds, detailContent, scale)
+        drawFieldSummary(canvas, bounds, detailContent, scale, move.disabled)
         if (move.disabled) {
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(23f, scale, 20f)
             paint.color = MAGENTA
-            canvas.drawText("DISABLED", detailContent.left, bounds.bottom - 24f * scale, paint)
+            canvas.drawText("DISABLED", detailContent.left, centeredTextBaseline(detailContent.bottom - 24f * scale), paint)
         }
     }
 
-    private fun drawFieldSummary(canvas: Canvas, bounds: RectF, detailContent: RectF, scale: Float) {
+    private fun drawFieldSummary(canvas: Canvas, bounds: RectF, detailContent: RectF, scale: Float, disabled: Boolean) {
         val summaryTop = bounds.top + 220f * scale
-        val summaryBottom = bounds.bottom - 18f * scale
+        val summaryBottom = detailContent.bottom - if (disabled) 48f * scale else 0f
         if (summaryBottom <= summaryTop + 56f * scale) return
         val info = session.battleInfo()
-        val summaryInset = 14f * scale
         val summary = RectF(
-            detailContent.left - summaryInset,
+            detailContent.left,
             summaryTop,
-            detailContent.right + summaryInset,
+            detailContent.right,
             summaryBottom
         )
         paint.color = Color.argb(72, 3, 14, 24)
