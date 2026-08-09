@@ -32,6 +32,18 @@ class BattleErrorRecoveryTest {
     }
 
     @Test
+    fun nullRequestClearsAStaleDecision() {
+        val session = BattleSession()
+        session.applyProtocolLine("|request|{\"rqid\":23,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}")
+
+        session.applyProtocolLine("|request|null")
+
+        assertEquals(false, session.decisionAvailable)
+        assertEquals(BattleSession.DecisionKind.WAIT, session.decisionKind)
+        assertEquals("Waiting for a battle decision…", session.status)
+    }
+
+    @Test
     fun tieAndPrematureEndMarkTheBattleFinished() {
         val session = BattleSession()
 

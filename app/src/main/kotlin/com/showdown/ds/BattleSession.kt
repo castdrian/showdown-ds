@@ -1383,6 +1383,14 @@ class BattleSession {
         activeSlotIndex = 0
         requiredSwitches = 0
         selectedTargetIndex = -1
+        if (requestText.trim().equals("null", true)) {
+            requestId = null
+            decisionKind = DecisionKind.WAIT
+            decisionAvailable = false
+            panel = Panel.MOVES
+            status = "Waiting for a battle decision…"
+            return
+        }
         runCatching {
             val request = JSONObject(requestText)
             requestId = request.optInt("rqid", -1).takeIf { it >= 0 }
