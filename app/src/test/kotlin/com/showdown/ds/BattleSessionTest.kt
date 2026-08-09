@@ -504,6 +504,29 @@ class BattleSessionTest {
     }
 
     @Test
+    fun doublesKeepAbilityAndItemDetailsOnTheCorrectPartyMembers() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Naganadel|Naganadel, L50|100/100",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|-ability|p1b: Naganadel|Beast Boost",
+                "|-item|p1b: Naganadel|Dragonium Z",
+                "|-endability|p1b: Naganadel"
+            )
+        )
+
+        assertEquals("Suppressed", session.teamMemberDetails(1).ability)
+        assertEquals("Dragonium Z", session.teamMemberDetails(1).item)
+        assertEquals("Incineroar", session.playerDetails().name)
+    }
+
+    @Test
     fun battlePacketEmitsAClassifiedCriticalHitAndCarriesTheRequestId() {
         val session = BattleSession()
         val feedback = mutableListOf<BattleSession.BattleFeedback>()

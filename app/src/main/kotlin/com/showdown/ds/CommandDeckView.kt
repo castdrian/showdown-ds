@@ -66,7 +66,11 @@ class CommandDeckView(
         drawTabs(canvas, width, scale)
         drawActivePanel(canvas, width, height, scale)
         drawTopBand(canvas, width, scale)
-        if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
+        if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null) {
+            postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
+        } else if (session.battleClockSeconds() != null) {
+            postInvalidateDelayed(1000L)
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -192,6 +196,26 @@ class CommandDeckView(
             titleBaseline,
             paint
         )
+        drawBattleClock(canvas, width, scale)
+    }
+
+    private fun drawBattleClock(canvas: Canvas, width: Float, scale: Float) {
+        val seconds = session.battleClockSeconds() ?: return
+        val badge = RectF(width - 188f * scale, 26f * scale, width - 36f * scale, 82f * scale)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(210, 24, 70, 83)
+        canvas.drawRoundRect(badge, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f * scale
+        paint.color = Color.rgb(132, 218, 213)
+        canvas.drawRoundRect(badge, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(24f, scale, 21f)
+        paint.color = PAPER
+        canvas.drawText("${seconds}s", badge.centerX(), centeredTextBaseline(badge.centerY()), paint)
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawTabs(canvas: Canvas, width: Float, scale: Float) {
@@ -431,6 +455,7 @@ class CommandDeckView(
         val lines = mutableListOf<String>()
         info.weather.takeIf { it.isNotBlank() }?.let { lines += "Weather  $it" }
         info.terrain.takeIf { it.isNotBlank() }?.let { lines += "Terrain  $it" }
+        info.fieldEffects.forEach { lines += "Field  $it" }
         info.playerSideConditions.takeIf { it.isNotEmpty() }?.let { lines += "Your side  ${it.joinToString(" · ")}" }
         info.opponentSideConditions.takeIf { it.isNotEmpty() }?.let { lines += "Opp. side  ${it.joinToString(" · ")}" }
         info.playerBoosts.takeIf { it.isNotEmpty() }?.let { lines += "Your boosts  ${formatBoosts(it)}" }
@@ -441,7 +466,13 @@ class CommandDeckView(
         paint.color = PAPER
         val lineHeight = 35f * scale
         var baseline = summary.top + 68f * scale
-        lines.take(5).forEach { line ->
+        val maxLines = ((summary.bottom - baseline - 16f * scale) / lineHeight).toInt().coerceAtLeast(1)
+        val visibleLines = if (lines.size <= maxLines) {
+            lines
+        } else {
+            lines.take((maxLines - 1).coerceAtLeast(1)) + "+${lines.size - maxLines + 1} more active effects"
+        }
+        visibleLines.forEach { line ->
             if (baseline <= summary.bottom - 16f * scale) {
                 canvas.drawText(fitTextToWidth(line, summary.width() - 32f * scale), summary.left + 16f * scale, baseline, paint)
                 baseline += lineHeight

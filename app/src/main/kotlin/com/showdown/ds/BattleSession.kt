@@ -167,7 +167,14 @@ class BattleSession {
         val playerSideConditions: List<String>,
         val opponentSideConditions: List<String>,
         val playerBoosts: Map<String, Int>,
-        val opponentBoosts: Map<String, Int>
+        val opponentBoosts: Map<String, Int>,
+        val fieldEffects: List<String> = emptyList()
+    )
+
+    data class BattleClock(
+        val turnSeconds: Int,
+        val totalSeconds: Int,
+        val graceSeconds: Int
     )
 
     private data class PendingHit(
@@ -253,6 +260,9 @@ class BattleSession {
     private var latestOpeningEntranceAtNanos = 0L
     private var weather = ""
     private var terrain = ""
+    private val fieldEffects = mutableListOf<String>()
+    private var battleClock: BattleClock? = null
+    private var battleClockUpdatedAtNanos = 0L
     private val playerSideConditions = mutableListOf<String>()
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
@@ -353,8 +363,21 @@ class BattleSession {
         playerSideConditions.toList(),
         opponentSideConditions.toList(),
         playerBoosts.toMap(),
-        opponentBoosts.toMap()
+        opponentBoosts.toMap(),
+        fieldEffects.toList()
     )
+
+    fun battleClock() = battleClock
+
+    fun battleClockSeconds(): Int? = battleClock?.let {
+        val elapsed = ((System.nanoTime() - battleClockUpdatedAtNanos) / 1_000_000_000L).toInt()
+        (it.turnSeconds - elapsed).coerceAtLeast(0)
+    }
+
+    private fun clearBattleClock() {
+        battleClock = null
+        battleClockUpdatedAtNanos = 0L
+    }
 
     fun setMoveTypeResolver(resolver: (String) -> String?) {
         moveTypeResolver = resolver
@@ -929,7 +952,19 @@ class BattleSession {
                     "tie", "draw", "prematureend" -> applyTie(fields)
                     "error" -> applyBattleError(fields)
                     "c", "c:" -> applyChat(fields)
-                    "message", "inactive", "inactiveoff" -> appendLog(fields.drop(2).joinToString("|"))
+                    "inactive" -> {
+                        val message = fields.drop(2).joinToString("|")
+                        val clock = parseBattleClock(message)
+                        clock?.let {
+                            battleClock = it
+                            battleClockUpdatedAtNanos = System.nanoTime()
+                        }
+                        if (clock == null) message.takeIf { it.isNotBlank() }?.let(::appendLog)
+                    }
+                    "inactiveoff" -> {
+                        clearBattleClock()
+                    }
+                    "message" -> fields.drop(2).joinToString("|").takeIf { it.isNotBlank() }?.let(::appendLog)
                     "raw", "html" -> appendMarkup(fields.drop(2).joinToString("|"))
                     "uhtml", "uhtmlchange" -> applyMarkup(fields.getOrNull(2), fields.drop(3).joinToString("|"))
                 }
@@ -1015,6 +1050,8 @@ class BattleSession {
         opponentTeamDetails.clear()
         weather = ""
         terrain = ""
+        fieldEffects.clear()
+        clearBattleClock()
         playerSideConditions.clear()
         opponentSideConditions.clear()
         playerBoosts.clear()
@@ -1459,8 +1496,21 @@ class BattleSession {
         while (activeChoices.size < activeRequests.size) activeChoices += ""
     }
 
+    private fun parseBattleClock(message: String): BattleClock? {
+        val match = Regex(
+            "Time left:\\s*(\\d+)\\s*sec this turn\\s*\\|\\s*(\\d+)\\s*sec total\\s*\\|\\s*(\\d+)\\s*sec grace",
+            RegexOption.IGNORE_CASE
+        ).find(message) ?: return null
+        return BattleClock(
+            turnSeconds = match.groupValues[1].toInt(),
+            totalSeconds = match.groupValues[2].toInt(),
+            graceSeconds = match.groupValues[3].toInt()
+        )
+    }
+
     private fun applyWin(fields: List<String>) {
         fields.getOrNull(2)?.let {
+            clearBattleClock()
             status = "$it won the battle."
             appendLog(status)
             decisionAvailable = false
@@ -1480,6 +1530,7 @@ class BattleSession {
     }
 
     private fun applyTie(fields: List<String>) {
+        clearBattleClock()
         val reason = fields.drop(2).joinToString("|").ifBlank { "The battle ended." }
         status = reason
         appendLog(reason)
@@ -1577,26 +1628,19 @@ class BattleSession {
 
     private fun applyAbility(fields: List<String>) {
         if (fields.size < 4) return
-        when {
-            isPlayerSide(fields[2]) -> updatePlayerDetails { it.copy(ability = fields[3]) }
-            else -> opponentDetails = opponentDetails.copy(ability = fields[3])
-        }
+        updateActorDetails(fields[2]) { it.copy(ability = fields[3]) }
     }
 
     private fun applyEndAbility(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
-        if (isPlayerSide(actor)) updatePlayerDetails { it.copy(ability = "Suppressed") }
-        else opponentDetails = opponentDetails.copy(ability = "Suppressed")
+        updateActorDetails(actor) { it.copy(ability = "Suppressed") }
         appendLog("${battleActor(actor)}'s ability was suppressed.")
     }
 
     private fun applyItem(fields: List<String>, replacement: String? = null) {
         if (fields.size < 3) return
         val item = replacement ?: fields.getOrNull(3) ?: return
-        when {
-            isPlayerSide(fields[2]) -> updatePlayerDetails { it.copy(item = item) }
-            else -> opponentDetails = opponentDetails.copy(item = item)
-        }
+        updateActorDetails(fields[2]) { it.copy(item = item) }
     }
 
     private fun applyWeather(fields: List<String>) {
@@ -1605,8 +1649,14 @@ class BattleSession {
     }
 
     private fun applyFieldEffect(fields: List<String>, enabled: Boolean) {
-        val effect = battleEffectName(fields.getOrNull(2)).takeIf { it.contains("Terrain", true) } ?: return
-        if (enabled) terrain = effect else if (terrain.equals(effect, true)) terrain = ""
+        val effect = battleEffectName(fields.getOrNull(2)).takeIf { it.isNotBlank() } ?: return
+        if (effect.contains("Terrain", true)) {
+            if (enabled) terrain = effect else if (terrain.equals(effect, true)) terrain = ""
+        } else if (enabled) {
+            if (effect !in fieldEffects) fieldEffects += effect
+        } else {
+            fieldEffects.removeAll { it.equals(effect, true) }
+        }
         appendLog(if (enabled) "$effect began." else "$effect ended.")
     }
 
@@ -1688,6 +1738,17 @@ class BattleSession {
         teamDetails.indexOfFirst { it.name.equals(previous.name, true) }
             .takeIf { it >= 0 }
             ?.let { teamDetails[it] = playerDetails }
+    }
+
+    private fun updateActorDetails(actor: String, transform: (PokemonDetails) -> PokemonDetails) {
+        val name = actor.substringAfter(':').trim()
+        if (isPlayerSide(actor)) {
+            updatePlayerPartyMember(name, transform)
+            if (name.equals(playerPokemon, true) || playerActiveCombatants.size <= 1) updatePlayerDetails(transform)
+        } else {
+            updateOpponentParty(name, transform)
+            if (name.equals(opponentPokemon, true) || opponentActiveCombatants.size <= 1) opponentDetails = transform(opponentDetails)
+        }
     }
 
     private fun updateAvailableGimmicks(active: JSONObject) {
