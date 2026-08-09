@@ -3,19 +3,22 @@ package com.showdown.ds
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.MotionEvent
+import android.webkit.JavascriptInterface
 import org.json.JSONArray
 import java.util.ArrayDeque
 
 @SuppressLint("SetJavaScriptEnabled")
 class ShowdownMoveEffectsView(
     context: Context,
-    private val audioCueListener: (List<String>) -> Unit
+    private val audioCueListener: (BattleAudioCue) -> Unit
 ) : WebView(context) {
     private val pendingPackets = ArrayDeque<List<String>>()
     private var flushScheduled = false
@@ -30,6 +33,7 @@ class ShowdownMoveEffectsView(
         flushScheduled = false
         flushPendingPackets()
     }
+    private val nativeAudioBridge = NativeAudioBridge(Handler(Looper.getMainLooper()), audioCueListener)
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
@@ -42,6 +46,7 @@ class ShowdownMoveEffectsView(
         settings.loadsImagesAutomatically = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        addJavascriptInterface(nativeAudioBridge, NATIVE_AUDIO_BRIDGE)
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 pageLoaded = true
@@ -123,7 +128,6 @@ class ShowdownMoveEffectsView(
         val payload = JSONArray(packet)
         val receiver = if (packet.firstOrNull() == SEED_PREFIX) "seed" else "receive"
         val lines = if (receiver == "seed") JSONArray(packet.drop(1)) else payload
-        if (receiver != "seed") audioCueListener(packet.toList())
         evaluateJavascript("window.ShowdownNativeEffects.$receiver($lines);", null)
         val pauseMillis = if (receiver == "seed") 0L else BattlePlaybackTiming.pauseAfter(packet)
         scheduleFlush(pauseMillis)
@@ -155,6 +159,7 @@ class ShowdownMoveEffectsView(
     private companion object {
         const val BASE_URL = "https://play.pokemonshowdown.com/"
         const val SEED_PREFIX = "__seed__"
+        const val NATIVE_AUDIO_BRIDGE = "ShowdownNativeAudio"
         val DOCUMENT = """
             <!doctype html>
             <html>
@@ -181,11 +186,43 @@ class ShowdownMoveEffectsView(
             </head>
             <body>
                 <div id="stage"><div id="battle"></div></div><div id="log"></div>
-                <script>
+                    <script>
                     (function () {
                         var battle = null;
                         var animationSpeed = 1;
                         var hideFrame = 0;
+                        function nativeCue(value) {
+                            if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.cue(value);
+                        }
+                        function installAudioHooks() {
+                            if (BattleScene.prototype.__showdownNativeAudioHooked) return;
+                            var originalRunMoveAnim = BattleScene.prototype.runMoveAnim;
+                            BattleScene.prototype.runMoveAnim = function (moveid, participants) {
+                                var move = this.battle.dex.moves.get(moveid);
+                                this.__showdownNativeDamageArmed = move && move.category !== 'Status';
+                                this.__showdownNativeDamagePlayed = false;
+                                return originalRunMoveAnim.apply(this, arguments);
+                            };
+                            var originalDamageAnim = BattleScene.prototype.damageAnim;
+                            BattleScene.prototype.damageAnim = function () {
+                                if (this.animating && this.__showdownNativeDamageArmed && !this.__showdownNativeDamagePlayed) {
+                                    this.__showdownNativeDamagePlayed = true;
+                                    nativeCue('generic_damage');
+                                }
+                                return originalDamageAnim.apply(this, arguments);
+                            };
+                            var originalRunMinor = Battle.prototype.runMinor;
+                            Battle.prototype.runMinor = function (args) {
+                                if (this.scene.animating && args[0] === '-supereffective') nativeCue('super_effective');
+                                if (this.scene.animating && args[0] === '-resisted') nativeCue('not_very_effective');
+                                if (this.scene.animating && args[0] === '-boost' && Number(args[3]) > 0) nativeCue('stat_boost');
+                                if (this.scene.animating && args[0] === '-unboost' && Number(args[3]) > 0) nativeCue('stat_drop');
+                                if (this.scene.animating && args[0] === '-setboost' && Number(args[3]) > 0) nativeCue('stat_boost');
+                                if (this.scene.animating && args[0] === '-setboost' && Number(args[3]) < 0) nativeCue('stat_drop');
+                                return originalRunMinor.apply(this, arguments);
+                            };
+                            BattleScene.prototype.__showdownNativeAudioHooked = true;
+                        }
                         function layout() {
                             var width = window.innerWidth;
                             var height = window.innerHeight;
@@ -209,6 +246,7 @@ class ShowdownMoveEffectsView(
                             hideFrame = window.requestAnimationFrame(keepChromeHidden);
                         }
                         function createBattle() {
+                            installAudioHooks();
                             if (battle) battle.destroy();
                             if (hideFrame) window.cancelAnimationFrame(hideFrame);
                             document.getElementById('battle').innerHTML = '';
@@ -261,5 +299,17 @@ class ShowdownMoveEffectsView(
             </body>
             </html>
         """.trimIndent()
+    }
+
+    private class NativeAudioBridge(
+        private val handler: Handler,
+        private val callback: (BattleAudioCue) -> Unit
+    ) {
+        @JavascriptInterface
+        fun cue(value: String) {
+            BattleAudioCueResolver.cueForNativeValue(value)?.let { cue ->
+                handler.post { callback(cue) }
+            }
+        }
     }
 }

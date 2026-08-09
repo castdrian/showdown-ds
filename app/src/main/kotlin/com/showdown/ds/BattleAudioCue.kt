@@ -10,7 +10,6 @@ enum class BattleAudioCue(val assetName: String) {
 
 object BattleAudioCueResolver {
     fun cueForProtocolLine(line: String): BattleAudioCue? = when {
-        line.startsWith("|move|") -> BattleAudioCue.GENERIC_DAMAGE
         line.startsWith("|-supereffective|") -> BattleAudioCue.SUPER_EFFECTIVE
         line.startsWith("|-resisted|") -> BattleAudioCue.NOT_VERY_EFFECTIVE
         line.startsWith("|-boost|") -> BattleAudioCue.STAT_BOOST
@@ -22,6 +21,15 @@ object BattleAudioCueResolver {
                 else -> null
             }
         }
+        else -> null
+    }
+
+    fun cueForNativeValue(value: String): BattleAudioCue? = when (value) {
+        "generic_damage" -> BattleAudioCue.GENERIC_DAMAGE
+        "super_effective" -> BattleAudioCue.SUPER_EFFECTIVE
+        "not_very_effective" -> BattleAudioCue.NOT_VERY_EFFECTIVE
+        "stat_boost" -> BattleAudioCue.STAT_BOOST
+        "stat_drop" -> BattleAudioCue.STAT_DROP
         else -> null
     }
 }

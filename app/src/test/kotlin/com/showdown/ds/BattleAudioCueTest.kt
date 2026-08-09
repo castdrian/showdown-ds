@@ -13,12 +13,14 @@ class BattleAudioCueTest {
         assertEquals(BattleAudioCue.STAT_DROP, BattleAudioCueResolver.cueForProtocolLine("|-unboost|p2a: Garchomp|def|1"))
         assertEquals(BattleAudioCue.STAT_BOOST, BattleAudioCueResolver.cueForProtocolLine("|-setboost|p1a: Pikachu|atk|2"))
         assertEquals(BattleAudioCue.STAT_DROP, BattleAudioCueResolver.cueForProtocolLine("|-setboost|p2a: Garchomp|def|-1"))
-        assertEquals(BattleAudioCue.GENERIC_DAMAGE, BattleAudioCueResolver.cueForProtocolLine("|move|p1a: Pikachu|Tackle|p2a: Garchomp"))
+        assertEquals(BattleAudioCue.GENERIC_DAMAGE, BattleAudioCueResolver.cueForNativeValue("generic_damage"))
+        assertEquals(BattleAudioCue.SUPER_EFFECTIVE, BattleAudioCueResolver.cueForNativeValue("super_effective"))
     }
 
     @Test
     fun ignoresProtocolLinesWithoutAnAudioCue() {
         assertNull(BattleAudioCueResolver.cueForProtocolLine("|-damage|p1a: Pikachu|100/100"))
+        assertNull(BattleAudioCueResolver.cueForProtocolLine("|move|p1a: Pikachu|Tackle|p2a: Garchomp"))
         assertNull(BattleAudioCueResolver.cueForProtocolLine("|-setboost|p1a: Pikachu|atk|0"))
     }
 }

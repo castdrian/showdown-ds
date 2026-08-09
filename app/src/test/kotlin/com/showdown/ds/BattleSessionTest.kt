@@ -891,7 +891,7 @@ class BattleSessionTest {
     }
 
     @Test
-    fun battleMenuCanExportTheProtocolTranscript() {
+    fun battleMenuOpensBattleControls() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()
         session.addClientActionListener { actions += it }
@@ -901,7 +901,7 @@ class BattleSessionTest {
         session.selectMenuItem(13)
         session.confirmSelection()
 
-        assertEquals(listOf(BattleSession.ClientAction.EXPORT_REPLAY), actions)
+        assertEquals(listOf(BattleSession.ClientAction.OPEN_REPLAY_CONTROLS), actions)
         assertTrue(session.protocolHistory().contains("|init|battle"))
     }
 

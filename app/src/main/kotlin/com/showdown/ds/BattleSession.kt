@@ -2030,7 +2030,7 @@ class BattleSession {
         10 -> "Rooms"
         11 -> "Showdown account"
         12 -> "Configure server"
-        13 -> if (replayMode) "Replay controls" else "Copy battle transcript"
+        13 -> if (replayMode) "Replay controls" else "Battle controls"
         else -> if (battleFinished) "Save replay" else "Battle timer ${if (battleTimerEnabled) "on" else "off"}"
     }
 
@@ -2098,12 +2098,9 @@ class BattleSession {
                     publishClientAction(ClientAction.CONFIGURE_SERVER)
                     "Choose a Pokémon Showdown server."
                 }
-                13 -> if (replayMode) {
+                13 -> {
                     publishClientAction(ClientAction.OPEN_REPLAY_CONTROLS)
-                    "Adjust replay playback."
-                } else {
-                    publishClientAction(ClientAction.EXPORT_REPLAY)
-                    "Copy the battle transcript."
+                    "Adjust battle playback."
                 }
                 else -> {
                     if (battleFinished) {

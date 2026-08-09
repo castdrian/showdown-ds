@@ -157,9 +157,9 @@ class MainActivity : Activity() {
     private var replayStatus: String? = null
     private var replayPaused = false
     private var replayPausedForLifecycle = false
-    private var replaySpeed = 1f
+    private var replaySpeed = DEFAULT_BATTLE_SPEED
     private var restoredReplayPaused = false
-    private var restoredReplaySpeed = 1f
+    private var restoredReplaySpeed = DEFAULT_BATTLE_SPEED
     private var activeReplayLink: String? = null
     private var replayLoadRequest: String? = null
     private var playbackScheduledPauseMillis = 0L
@@ -262,7 +262,7 @@ class MainActivity : Activity() {
         session.setMatchFormat(loadMatchFormat())
         loadUserPreferences()
         restoredReplayPaused = savedInstanceState?.getBoolean("replay_paused") == true
-        restoredReplaySpeed = savedInstanceState?.getFloat("replay_speed", 1f) ?: 1f
+        restoredReplaySpeed = savedInstanceState?.getFloat("replay_speed", replaySpeed) ?: replaySpeed
         savedInstanceState?.getString("pending_team_upload_local_id")?.let { localId ->
             pendingTeamUpload = PendingTeamUpload(localId, savedInstanceState.getString("pending_team_upload_packed").orEmpty())
         }
@@ -487,8 +487,9 @@ class MainActivity : Activity() {
         frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
-        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCues).also { effects ->
+        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue).also { effects ->
             frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
+            effects.setPlaybackSpeed(replaySpeed)
             effects.seed(session.protocolHistory())
         }
         return frame
@@ -589,7 +590,7 @@ class MainActivity : Activity() {
         battlePacketPlaybackScheduled = true
         playbackScheduledPauseMillis = pauseMillis
         playbackScheduledAtMillis = SystemClock.elapsedRealtime()
-        playbackScheduledSpeed = if (session.isReplayMode()) replaySpeed else 1f
+        playbackScheduledSpeed = replaySpeed
         battleEventHandler.postDelayed(
             playbackAdvanceRunnable,
             BattlePlaybackTiming.scaledPause(pauseMillis, playbackScheduledSpeed)
@@ -618,7 +619,6 @@ class MainActivity : Activity() {
     }
 
     private fun setReplaySpeed(value: Float) {
-        if (!session.isReplayMode()) return
         val nextSpeed = value.coerceIn(0.25f, 4f)
         if (nextSpeed == replaySpeed) return
         if (battlePacketPlaybackScheduled && !replayPaused) {
@@ -632,7 +632,8 @@ class MainActivity : Activity() {
             replaySpeed = nextSpeed
         }
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
-        updateReplayStatus()
+        getSharedPreferences("showdown", MODE_PRIVATE).edit().putFloat("battle_speed", replaySpeed).apply()
+        if (session.isReplayMode()) updateReplayStatus() else session.setConnectionStatus("Battle playback speed: ${replaySpeed.trimTrailingZero()}×")
     }
 
     private fun updateReplayStatus() {
@@ -657,10 +658,9 @@ class MainActivity : Activity() {
         pendingBattlePackets.clear()
         battlePacketPlaybackScheduled = false
         showdownMoveEffects?.setPlaybackPaused(false)
-        showdownMoveEffects?.setPlaybackSpeed(1f)
         replayPaused = false
         replayPausedForLifecycle = false
-        replaySpeed = 1f
+        showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         playbackScheduledPauseMillis = 0L
         playbackScheduledAtMillis = 0L
         playbackScheduledSpeed = 1f
@@ -3506,18 +3506,18 @@ class MainActivity : Activity() {
     }
 
     private fun showReplayControls() {
-        if (!session.isReplayMode()) {
-            session.setConnectionStatus("Load a replay before opening replay controls.")
-            return
-        }
-        val speeds = listOf(0.5f, 1f, 2f)
-        val labels = listOf(if (replayPaused) "Resume replay" else "Pause replay") + speeds.map { "Set speed to ${it.trimTrailingZero()}×" }
+        val speeds = listOf(0.5f, 0.75f, 1f, 1.5f)
+        val labels = mutableListOf<String>()
+        if (session.isReplayMode()) labels += if (replayPaused) "Resume replay" else "Pause replay"
+        labels += speeds.map { "Set battle speed to ${it.trimTrailingZero()}×" }
         ShowdownDialogBuilder(this)
-            .setTitle("Replay controls · ${replaySpeed.trimTrailingZero()}×")
+            .setTitle("Battle controls · ${replaySpeed.trimTrailingZero()}×")
             .setItems(labels.toTypedArray()) { _, selected ->
-                when {
-                    selected == 0 -> setReplayPaused(!replayPaused)
-                    selected - 1 in speeds.indices -> setReplaySpeed(speeds[selected - 1])
+                if (session.isReplayMode() && selected == 0) {
+                    setReplayPaused(!replayPaused)
+                } else {
+                    val speedIndex = selected - if (session.isReplayMode()) 1 else 0
+                    speeds.getOrNull(speedIndex)?.let(::setReplaySpeed)
                 }
             }
             .setNeutralButton("More actions") { _, _ -> showReplayActions() }
@@ -3708,6 +3708,7 @@ class MainActivity : Activity() {
 
     private fun loadUserPreferences() {
         val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
+        replaySpeed = preferences.getFloat("battle_speed", DEFAULT_BATTLE_SPEED).coerceIn(0.25f, 4f)
         session.applyUserPreferences(
             touchConfirmation = preferences.getBoolean("touch_confirmation", true),
             soundEffects = preferences.getBoolean("sound_effects", true),
@@ -3840,6 +3841,7 @@ class MainActivity : Activity() {
 
     companion object {
         const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
+        const val DEFAULT_BATTLE_SPEED = 0.75f
 
         init {
             System.loadLibrary("showdown_vulkan")
