@@ -162,7 +162,8 @@ class BattleSession {
         val hp: String,
         val condition: String,
         val entryAtNanos: Long,
-        val dynamaxed: Boolean = false
+        val dynamaxed: Boolean = false,
+        val gMaxed: Boolean = false
     )
 
     data class BattleInfo(
@@ -932,7 +933,7 @@ class BattleSession {
                     }
                     "-heal" -> {
                         applyHealth(fields)
-                        appendLog("${battleActor(fields.getOrNull(2))} recovered health.")
+                        if (!isSilent(fields)) appendLog("${battleActor(fields.getOrNull(2))} recovered health.")
                     }
                     "-sethp" -> applyHealth(fields)
                     "-status" -> applyStatus(fields)
@@ -1552,7 +1553,7 @@ class BattleSession {
                 typeChangeBySlot[slot] = types
                 typeAdditionsBySlot.remove(slot)
                 updateActiveTypes(actor, types)
-                appendLog("${battleActor(actor)}'s types changed to ${types.joinToString("/")}.")
+                if (!isSilent(fields)) appendLog("${battleActor(actor)}'s types changed to ${types.joinToString("/")}.")
             }
             "typeadd" -> {
                 if (slot in terastallizedSlots) return
@@ -1560,13 +1561,13 @@ class BattleSession {
                 val additions = typeAdditionsBySlot.getOrPut(slot) { mutableListOf() }
                 if (type !in additions) additions += type
                 updateActiveTypes(actor, effectiveTypes(slot))
-                appendLog("${battleActor(actor)} gained the $type type.")
+                if (!isSilent(fields)) appendLog("${battleActor(actor)} gained the $type type.")
             }
             "dynamax" -> {
-                updateDynamaxState(actor, true)
-                appendLog("${battleActor(actor)} Dynamaxed.")
+                updateDynamaxState(actor, true, fields.drop(4).any { it.equals("Gmax", true) })
+                if (!isSilent(fields)) appendLog("${battleActor(actor)} Dynamaxed.")
             }
-            else -> appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
+            else -> if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
         }
     }
 
@@ -1578,18 +1579,18 @@ class BattleSession {
             "typechange" -> {
                 typeChangeBySlot.remove(slot)
                 updateActiveTypes(actor, effectiveTypes(slot))
-                appendLog("${battleActor(actor)}'s temporary types ended.")
+                if (!isSilent(fields)) appendLog("${battleActor(actor)}'s temporary types ended.")
             }
             "typeadd" -> {
                 typeAdditionsBySlot.remove(slot)
                 updateActiveTypes(actor, effectiveTypes(slot))
-                appendLog("${battleActor(actor)}'s added type ended.")
+                if (!isSilent(fields)) appendLog("${battleActor(actor)}'s added type ended.")
             }
             "dynamax" -> {
                 updateDynamaxState(actor, false)
-                appendLog("${battleActor(actor)} returned to normal size.")
+                if (!isSilent(fields)) appendLog("${battleActor(actor)} returned to normal size.")
             }
-            else -> appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
+            else -> if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
         }
     }
 
@@ -2031,8 +2032,10 @@ class BattleSession {
     private fun battleTypes(value: String?): List<String> = value.orEmpty()
         .split('/', ',')
         .map { it.trim().uppercase() }
-        .filter { it.isNotBlank() && it != "???" }
+        .filter(String::isNotBlank)
         .distinct()
+
+    private fun isSilent(fields: List<String>) = fields.drop(2).any { it.trim().equals("[silent]", true) }
 
     private fun effectiveTypes(slot: String): List<String> {
         val base = typeChangeBySlot[slot] ?: baseTypesBySlot[slot].orEmpty()
@@ -2057,13 +2060,11 @@ class BattleSession {
         }
     }
 
-    private fun updateDynamaxState(actor: String, dynamaxed: Boolean) {
+    private fun updateDynamaxState(actor: String, dynamaxed: Boolean, gMaxed: Boolean = false) {
         val slot = actor.substringBefore(":").trim()
-        if (isPlayerSide(actor)) {
-            playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = it.copy(dynamaxed = dynamaxed) }
-        } else {
-            opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = it.copy(dynamaxed = dynamaxed) }
-        }
+        val update = { combatant: ActiveCombatant -> combatant.copy(dynamaxed = dynamaxed, gMaxed = dynamaxed && gMaxed) }
+        if (isPlayerSide(actor)) playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = update(it) }
+        else opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = update(it) }
     }
 
     private fun swapSlotState(oldSlot: String, newSlot: String) {

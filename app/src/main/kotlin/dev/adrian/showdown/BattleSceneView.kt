@@ -795,7 +795,11 @@ class BattleSceneView(
         paint.style = Paint.Style.FILL
         val left = bounds.left + 14f * scale
         val right = bounds.right - 14f * scale
-        val label = "${index + 1}  ${combatant.name}${if (combatant.dynamaxed) " · MAX" else ""}"
+        val label = "${index + 1}  ${combatant.name}${when {
+            combatant.gMaxed -> " · G-MAX"
+            combatant.dynamaxed -> " · MAX"
+            else -> ""
+        }}"
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(height * 0.25f, scale, 10.5f)
         paint.color = INK

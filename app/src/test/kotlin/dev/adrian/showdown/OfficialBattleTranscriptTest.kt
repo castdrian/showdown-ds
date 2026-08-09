@@ -118,8 +118,10 @@ class OfficialBattleTranscriptTest {
         session.applyProtocolLine("|-end|p1a: Mewtwo|typeadd")
         assertEquals(listOf("FIRE", "GHOST"), session.playerActiveCombatants().single().types)
         session.applyProtocolLine("|-end|p1a: Mewtwo|typechange")
-        session.applyProtocolLine("|-start|p2a: Dragapult|dynamax")
+        session.applyProtocolLine("|-start|p2a: Dragapult|Dynamax|Gmax|[silent]")
         assertTrue(session.opponentActiveCombatants().single().dynamaxed)
+        assertTrue(session.opponentActiveCombatants().single().gMaxed)
+        assertFalse(session.battleLog().any { it.contains("Dynamaxed") })
         session.applyProtocolLine("|-end|p2a: Dragapult|dynamax")
         session.applyProtocolLine("|-ohko|p2a: Dragapult")
         session.applyProtocolLine("|-combine|p1a: Mewtwo")
@@ -127,8 +129,38 @@ class OfficialBattleTranscriptTest {
         assertEquals(listOf("PSYCHIC"), session.playerDetails().types)
         assertEquals(listOf("PSYCHIC"), session.playerActiveCombatants().single().types)
         assertFalse(session.opponentActiveCombatants().single().dynamaxed)
+        assertFalse(session.opponentActiveCombatants().single().gMaxed)
         assertTrue(session.battleLog().contains("It's a one-hit KO!"))
         assertTrue(session.battleLog().contains("The move effects combined."))
+    }
+
+    @Test
+    fun keepsSilentProtocolStateChangesOutOfTheBattleLog() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("PSYCHIC"))::get)
+        session.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|70/100")
+        val initialLogSize = session.battleLog().size
+
+        session.applyProtocolLine("|-heal|p1a: Mewtwo|100/100|[silent]")
+        session.applyProtocolLine("|-start|p1a: Mewtwo|typechange|FIRE|[silent]")
+        session.applyProtocolLine("|-start|p1a: Mewtwo|typeadd|DARK|[silent]")
+        session.applyProtocolLine("|-start|p1a: Mewtwo|Focus Energy|[silent]")
+        session.applyProtocolLine("|-end|p1a: Mewtwo|typeadd|[silent]")
+        session.applyProtocolLine("|-end|p1a: Mewtwo|typechange|[silent]")
+
+        assertEquals("100/100", session.playerHp)
+        assertEquals(listOf("PSYCHIC"), session.playerActiveCombatants().single().types)
+        assertEquals(initialLogSize, session.battleLog().size)
+    }
+
+    @Test
+    fun preservesUnknownTypeProtocolStates() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("PSYCHIC"))::get)
+        session.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        session.applyProtocolLine("|-start|p1a: Mewtwo|typechange|???")
+
+        assertEquals(listOf("???"), session.playerActiveCombatants().single().types)
     }
 
     @Test
