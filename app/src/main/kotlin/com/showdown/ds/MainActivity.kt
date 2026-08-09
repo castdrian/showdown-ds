@@ -259,6 +259,15 @@ class MainActivity : Activity() {
         loadUserPreferences()
         restoredReplayPaused = savedInstanceState?.getBoolean("replay_paused") == true
         restoredReplaySpeed = savedInstanceState?.getFloat("replay_speed", 1f) ?: 1f
+        savedInstanceState?.getString("pending_team_upload_local_id")?.let { localId ->
+            pendingTeamUpload = PendingTeamUpload(localId, savedInstanceState.getString("pending_team_upload_packed").orEmpty())
+        }
+        savedInstanceState?.getString("pending_team_privacy_local_id")?.let { localId ->
+            pendingTeamPrivacy = PendingTeamPrivacy(localId, savedInstanceState.getString("pending_team_privacy_remote_id").orEmpty())
+        }
+        savedInstanceState?.getString("pending_team_delete_local_id")?.let { localId ->
+            pendingTeamDelete = PendingTeamDelete(localId, savedInstanceState.getString("pending_team_delete_remote_id").orEmpty())
+        }
         session.addListener(sessionListener)
         session.addProtocolListener(protocolListener)
         session.addDecisionListener(decisionListener)
@@ -303,6 +312,12 @@ class MainActivity : Activity() {
         outState.putString("active_search_format", activeSearchFormat)
         outState.putString("active_battle_room", activeBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
+        outState.putString("pending_team_upload_local_id", pendingTeamUpload?.localId)
+        outState.putString("pending_team_upload_packed", pendingTeamUpload?.packed)
+        outState.putString("pending_team_privacy_local_id", pendingTeamPrivacy?.localId)
+        outState.putString("pending_team_privacy_remote_id", pendingTeamPrivacy?.remoteId)
+        outState.putString("pending_team_delete_local_id", pendingTeamDelete?.localId)
+        outState.putString("pending_team_delete_remote_id", pendingTeamDelete?.remoteId)
         outState.putString("active_replay_source", replayLoadRequest ?: activeReplayLink)
         outState.putBoolean("replay_paused", replayPaused || replayPausedForLifecycle)
         outState.putFloat("replay_speed", replaySpeed)
