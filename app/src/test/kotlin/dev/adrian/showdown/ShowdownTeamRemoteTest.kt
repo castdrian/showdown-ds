@@ -98,6 +98,7 @@ class ShowdownTeamRemoteTest {
         assertEquals("secret", team.privateKey)
         assertEquals("Rain team", team.name)
         assertEquals("[Gen 9] OU", team.formatLabel)
+        assertEquals("gen9ou", team.formatId)
         assertEquals("adrian", team.owner)
         assertEquals(2, state.snapshot.packed?.split(']')?.size)
         assertEquals("/join view-teams-view-42-secret", ShowdownTeamRemoteState.viewCommand(team))
@@ -121,6 +122,14 @@ class ShowdownTeamRemoteTest {
         val team = state.snapshot.teams.single()
         assertEquals("Demo team", team.name)
         assertEquals("[Gen 9] OU", team.formatLabel)
+        assertEquals("gen9ou", team.formatId)
         assertEquals("adrian test", team.owner)
+    }
+
+    @Test
+    fun derivesShowdownFormatIdsFromServerLabels() {
+        assertEquals("gen9ou", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] OU"))
+        assertEquals("gen9randombattle", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] Random Battle"))
+        assertEquals("gen9nationaldex", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] National Dex"))
     }
 }

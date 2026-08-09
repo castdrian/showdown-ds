@@ -2106,41 +2106,69 @@ class MainActivity : Activity() {
 
     private fun showChallengeComposer(prefilledUsername: String? = null) {
         val username = EditText(this).apply {
-            hint = "Username"
+            hint = "Enter a username"
             setSingleLine(true)
             setText(prefilledUsername.orEmpty())
         }
+        var selectedFormat = session.matchFormat
+        val formatButton = Button(this).apply {
+            text = selectedFormat.label
+            isAllCaps = false
+            setOnClickListener {
+                showFormatPicker(selectedFormat) { format ->
+                    selectedFormat = format
+                    text = format.label
+                }
+            }
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = "Battle format"
+                setTextColor(0xffdceff2.toInt())
+                setTextSize(16f)
+                setPadding(0, 0, 0, (8f * resources.displayMetrics.density).toInt())
+            }, LinearLayout.LayoutParams(-1, -2))
+            addView(formatButton, LinearLayout.LayoutParams(-1, -2))
+            addView(TextView(this@MainActivity).apply {
+                text = "Opponent username"
+                setTextColor(0xffdceff2.toInt())
+                setTextSize(16f)
+                setPadding(0, (16f * resources.displayMetrics.density).toInt(), 0, (8f * resources.displayMetrics.density).toInt())
+            }, LinearLayout.LayoutParams(-1, -2))
+            addView(username, LinearLayout.LayoutParams(-1, -2))
+        }
         ShowdownDialogBuilder(this)
             .setTitle("Challenge player")
-            .setView(username)
+            .setView(form)
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Challenge") { _, _ -> beginChallenge(username.text.toString()) }
+            .setPositiveButton("Challenge") { _, _ -> beginChallenge(username.text.toString(), selectedFormat) }
             .show()
     }
 
-    private fun beginChallenge(username: String) {
+    private fun beginChallenge(username: String, format: BattleSession.MatchFormat = session.matchFormat) {
         val target = username.trim()
         if (target.isBlank()) {
             session.setConnectionStatus("Enter a username to challenge.")
             return
         }
-        val teams = teamLibrary.teams().filter { it.format.equals(session.matchFormat.id, true) }
-        if (session.matchFormat.usesRandomTeams) {
-            startChallenge(target, null)
+        val teams = teamLibrary.teams().filter { it.format.equals(format.id, true) }
+        if (format.usesRandomTeams) {
+            startChallenge(target, format, null)
         } else if (teams.isEmpty()) {
-            session.setConnectionStatus("Save a ${session.matchFormat.label} team before challenging.")
+            session.setConnectionStatus("Save a ${format.label} team before challenging.")
             showTeamLibrary()
         } else if (teams.size == 1) {
-            startChallenge(target, teams.single().packed)
+            startChallenge(target, format, teams.single().packed)
         } else {
-            showTeamPicker(teams) { startChallenge(target, it.packed) }
+            showTeamPicker(teams) { startChallenge(target, format, it.packed) }
         }
     }
 
-    private fun startChallenge(username: String, packedTeam: String?) {
+    private fun startChallenge(username: String, format: BattleSession.MatchFormat, packedTeam: String?) {
         startLobbyConnection(
-            ShowdownLobbyState.challengeCommands(username, session.matchFormat.id, packedTeam),
-            "Challenge sent to $username."
+            ShowdownLobbyState.challengeCommands(username, format.id, packedTeam),
+            "${format.label} challenge sent to $username."
         )
     }
 
@@ -2887,7 +2915,7 @@ class MainActivity : Activity() {
                 text = "Import ${selectedTeam.name}"
                 setOnClickListener {
                     val format = session.availableMatchFormats().firstOrNull { it.label.equals(selectedTeam.formatLabel, true) }?.id
-                        ?: session.matchFormat.id
+                        ?: selectedTeam.formatId
                     teamLibrary.save(selectedTeam.name, format, packed)
                     session.setConnectionStatus("Imported ${selectedTeam.name} into the team library.")
                     teamRemoteDialog?.dismiss()
@@ -3658,19 +3686,24 @@ class MainActivity : Activity() {
         restoredReplaySpeed = 1f
     }
 
-    private fun showFormatPicker() {
+    private fun showFormatPicker(
+        initialFormat: BattleSession.MatchFormat = session.matchFormat,
+        onSelected: (BattleSession.MatchFormat) -> Unit = { format ->
+            if (activeSearchFormat != null || pendingSearch) cancelActiveSearch()
+            session.setMatchFormat(format)
+            getSharedPreferences("showdown", MODE_PRIVATE).edit()
+                .putString("match_format", format.id)
+                .putString("match_format_label", format.label)
+                .apply()
+        }
+    ) {
         val formats = session.availableMatchFormats()
+        val selectedIndex = formats.indexOfFirst { it.id.equals(initialFormat.id, true) }.coerceAtLeast(0)
         ShowdownDialogBuilder(this)
             .setTitle("Battle format")
-            .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOf(session.matchFormat)) { dialog, selected ->
+            .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), selectedIndex) { _, selected ->
                 val format = formats[selected]
-                if (activeSearchFormat != null || pendingSearch) cancelActiveSearch()
-                session.setMatchFormat(format)
-                getSharedPreferences("showdown", MODE_PRIVATE).edit()
-                    .putString("match_format", format.id)
-                    .putString("match_format_label", format.label)
-                    .apply()
-                dialog.dismiss()
+                onSelected(format)
             }
             .show()
     }

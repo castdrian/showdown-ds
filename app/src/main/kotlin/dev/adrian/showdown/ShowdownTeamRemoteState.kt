@@ -9,7 +9,10 @@ class ShowdownTeamRemoteState {
         val name: String,
         val formatLabel: String,
         val owner: String
-    )
+    ) {
+        val formatId: String
+            get() = formatIdFromLabel(formatLabel)
+    }
 
     data class Snapshot(
         val title: String,
@@ -103,6 +106,16 @@ class ShowdownTeamRemoteState {
         .let { value -> runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value) }
 
     companion object {
+        fun formatIdFromLabel(label: String): String {
+            val normalized = label.trim().lowercase()
+            val generation = Regex("^\\[gen\\s*(\\d+)]\\s*").find(normalized)
+            val suffix = generation?.let { normalized.removeRange(it.range) } ?: normalized
+            return buildString {
+                generation?.groupValues?.getOrNull(1)?.let { append("gen").append(it) }
+                append(suffix.filter(Char::isLetterOrDigit))
+            }
+        }
+
         fun ownTeamsCommand() = "/join view-teams-all"
         fun browseCommand() = "/join view-teams-browse"
         fun searchCommand(format: String, pokemon: String, moves: String, ability: String, generation: String): String =
