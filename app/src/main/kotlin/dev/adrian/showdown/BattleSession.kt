@@ -909,6 +909,7 @@ class BattleSession {
                     "init" -> applyInit(fields)
                     "player" -> applyPlayer(fields)
                     "gametype" -> applyGameType(fields)
+                    "clearpoke" -> opponentTeamDetails.clear()
                     "gen" -> fields.getOrNull(2)?.toIntOrNull()?.let { appendLog("Generation $it battle.") }
                     "tier" -> if (fields.size > 2) {
                         format = fields[2]
@@ -1920,13 +1921,14 @@ class BattleSession {
     }
 
     private fun applyActivate(fields: List<String>) {
-        val actor = fields.getOrNull(2) ?: return
-        val effect = battleEffectName(fields.getOrNull(3)).ifBlank { "an effect" }
-        if (effect.equals("Baton Pass", true)) {
+        val actor = fields.getOrNull(2).orEmpty()
+        val hasActor = fields.size > 3 && actor.contains(":")
+        val effect = battleEffectName(fields.getOrNull(if (hasActor) 3 else 2)).ifBlank { "an effect" }
+        if (hasActor && effect.equals("Baton Pass", true)) {
             val slot = targetSlot(actor)
             pendingBatonPassBySide[sideForSlot(slot)] = slot
         }
-        appendLog("${battleActor(actor)} activated $effect.")
+        appendLog(if (hasActor) "${battleActor(actor)} activated $effect." else "$effect activated.")
     }
 
     private fun applyItem(fields: List<String>, replacement: String? = null) {
@@ -1936,7 +1938,9 @@ class BattleSession {
     }
 
     private fun applyWeather(fields: List<String>) {
+        val upkeep = fields.drop(3).any { it.trim().equals("[upkeep]", true) }
         weather = fields.getOrNull(2)?.takeUnless { it.equals("none", true) }.orEmpty()
+        if (upkeep) return
         appendLog(if (weather.isBlank()) "The weather cleared." else "The weather changed to $weather.")
     }
 

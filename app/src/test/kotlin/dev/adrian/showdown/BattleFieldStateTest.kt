@@ -53,4 +53,35 @@ class BattleFieldStateTest {
 
         assertEquals(null, session.battleClock())
     }
+
+    @Test
+    fun doesNotRepeatWeatherAnnouncementsDuringUpkeep() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-weather|RainDance",
+                "|-weather|RainDance|[upkeep]",
+                "|-activate|move: Splash"
+            )
+        )
+
+        assertEquals("RainDance", session.battleInfo().weather)
+        assertEquals(1, session.battleLog().count { it == "The weather changed to RainDance." })
+        assertTrue(session.battleLog().contains("Splash activated."))
+    }
+
+    @Test
+    fun clearsOpponentTeamPreviewEntriesWhenTheServerResetsPreview() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|poke|p2|Garchomp, L50|item",
+                "|clearpoke"
+            )
+        )
+
+        assertTrue(session.opponentPartyDetails().isEmpty())
+    }
 }
