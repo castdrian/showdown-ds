@@ -3,6 +3,7 @@ package com.showdown.ds
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.SoundPool
 import android.os.Handler
 import android.os.Looper
 import java.io.File
@@ -13,6 +14,17 @@ class BattleAudio(
     session: BattleSession
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val battleSoundPool = SoundPool.Builder()
+        .setMaxStreams(8)
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        )
+        .build()
+    private val battleSoundIds = mutableMapOf<BattleAudioCue, Int>()
+    private val loadedBattleSoundIds = mutableSetOf<Int>()
     private var notificationFile: File? = null
     private var bgmFile: File? = null
     private var bgmPlayer: MediaPlayer? = null
@@ -33,6 +45,16 @@ class BattleAudio(
     }
 
     init {
+        battleSoundPool.setOnLoadCompleteListener { _, sampleId, status ->
+            if (status == 0) loadedBattleSoundIds += sampleId
+        }
+        BattleAudioCue.values().forEach { cue ->
+            runCatching {
+                context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
+                    battleSoundIds[cue] = battleSoundPool.load(asset.fileDescriptor, asset.startOffset, asset.length, 1)
+                }
+            }
+        }
         resourceCache.requestAudio("audio/notification.wav") { notificationFile = it }
         requestMusic(selectedMusic)
     }
@@ -62,6 +84,7 @@ class BattleAudio(
         mainHandler.removeCallbacks(loopCheck)
         bgmPlayer?.release()
         bgmPlayer = null
+        battleSoundPool.release()
         transientPlayers.toList().forEach(::finishPlayer)
     }
 
@@ -72,8 +95,10 @@ class BattleAudio(
     fun playCancel() = playNotification(0.25f)
 
     fun playBattleCue(cue: BattleAudioCue) {
-        if (!soundEffectsEnabled) return
-        playCue(cue)
+        if (!soundEffectsEnabled || released) return
+        val soundId = battleSoundIds[cue] ?: return
+        if (soundId !in loadedBattleSoundIds) return
+        battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f)
     }
 
     fun playCry(species: String) {
@@ -132,14 +157,6 @@ class BattleAudio(
 
     private fun playFile(file: File, volume: Float) {
         playPlayer(volume) { player -> player.setDataSource(file.path) }
-    }
-
-    private fun playCue(cue: BattleAudioCue) {
-        playPlayer(0.72f) { player ->
-            context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
-                player.setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
-            }
-        }
     }
 
     private fun playPlayer(volume: Float, configure: (MediaPlayer) -> Unit) {
