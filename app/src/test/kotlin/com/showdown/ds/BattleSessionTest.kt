@@ -258,6 +258,7 @@ class BattleSessionTest {
 
         session.applyProtocolLine("|player|p1|ADRIAN")
         session.applyProtocolLine("|player|p2|GLADION")
+        session.applyProtocolLine("|gametype|doubles")
         session.applyProtocolLine("|tier|[Gen 7] OU")
         session.applyProtocolLine("|switch|p1a: Incineroar|Incineroar, L50, M|100/100")
         session.applyProtocolLine("|switch|p2a: Tapu Koko|Tapu Koko, L50|75/100")
@@ -271,6 +272,8 @@ class BattleSessionTest {
         assertEquals("75/100", session.opponentHp)
         assertEquals(7, session.turn)
         assertEquals("[Gen 7] OU", session.format)
+        assertEquals("doubles", session.gameType)
+        assertFalse(session.isSinglesBattle())
         assertTrue(session.battleLog().last().contains("Flare Blitz"))
     }
 

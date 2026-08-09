@@ -21,6 +21,7 @@ class OfficialBattleTranscriptTest {
                 "|teampreview",
                 "|teamsize|p1|1",
                 "|teamsize|p2|1",
+                "|rule|Species Clause: Limit one of each Pokémon",
                 "|start",
                 "|switch|p1a: Mewtwo|Mewtwo|353/353",
                 "|switch|p2a: Magikarp|Magikarp, L1, F|11/11",
@@ -38,6 +39,10 @@ class OfficialBattleTranscriptTest {
         assertEquals("0 fnt", session.opponentHp)
         assertEquals("ADRIAN won the battle.", session.status)
         assertEquals("Pressure", session.playerDetails().ability)
+        assertEquals("singles", session.gameType)
+        assertTrue(session.battleLog().contains("Battle type: Singles."))
+        assertTrue(session.battleLog().contains("Format: [Gen 7] Custom Game"))
+        assertTrue(session.battleLog().contains("Rule: Species Clause: Limit one of each Pokémon"))
         assertFalse(session.decisionAvailable)
         assertTrue(session.battleLog().any { it.contains("Psystrike") })
     }

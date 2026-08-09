@@ -307,6 +307,8 @@ class BattleSession {
         private set
     var opponentCondition = "READY"
         private set
+    var gameType = "singles"
+        private set
     var format = "[Gen 7] OU"
         private set
     var status = "Choose a move"
@@ -467,7 +469,7 @@ class BattleSession {
 
     fun availableMatchFormats() = availableMatchFormats.toList()
 
-    fun isSinglesBattle() = !format.contains("doubles", true) && !format.contains("multi", true)
+    fun isSinglesBattle() = gameType.equals("singles", true)
 
     fun showdownBackdrop() = SHOWDOWN_BACKDROPS[Math.floorMod(battleVisualSeed, SHOWDOWN_BACKDROPS.size)]
 
@@ -888,7 +890,19 @@ class BattleSession {
                 when (fields[1]) {
                     "init" -> applyInit(fields)
                     "player" -> applyPlayer(fields)
-                    "tier" -> if (fields.size > 2) format = fields[2]
+                    "gametype" -> applyGameType(fields)
+                    "gen" -> fields.getOrNull(2)?.toIntOrNull()?.let { appendLog("Generation $it battle.") }
+                    "tier" -> if (fields.size > 2) {
+                        format = fields[2]
+                        appendLog("Format: $format")
+                    }
+                    "rule" -> fields.getOrNull(2)?.let(::sanitizeMarkup)?.takeIf { it.isNotBlank() }?.let { appendLog("Rule: $it") }
+                    "teamsize" -> fields.getOrNull(2)?.let { side ->
+                        fields.getOrNull(3)?.toIntOrNull()?.let { size ->
+                            appendLog("${sideNames[side] ?: side} team size: $size")
+                        }
+                    }
+                    "rated" -> appendLog("Rated battle.")
                     "turn" -> applyTurn(fields)
                     "switch", "drag", "replace" -> applySwitch(fields)
                     "swap" -> applySwap(fields)
@@ -1020,6 +1034,7 @@ class BattleSession {
         playerName = localUsername ?: "PLAYER"
         opponentName = "OPPONENT"
         turn = 1
+        gameType = "singles"
         format = ""
         teamPreviewOrder.clear()
         battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
@@ -1070,6 +1085,19 @@ class BattleSession {
         decisionKind = DecisionKind.WAIT
         panel = Panel.MOVES
         status = "Battle starting"
+    }
+
+    private fun applyGameType(fields: List<String>) {
+        val value = fields.getOrNull(2)?.trim().orEmpty()
+        if (value.isBlank()) return
+        gameType = value
+        val label = when (value.lowercase()) {
+            "singles" -> "Singles"
+            "doubles" -> "Doubles"
+            "multi" -> "Multi"
+            else -> value.replaceFirstChar { it.uppercase() }
+        }
+        appendLog("Battle type: $label.")
     }
 
     private fun applyPlayer(fields: List<String>) {
