@@ -58,7 +58,10 @@ class CommandDeckView(
     override fun onDraw(canvas: Canvas) {
         val width = width.toFloat()
         val height = height.toFloat()
-        val scale = minOf(width / 1240f, height / 1080f)
+        val scale = minOf(
+            width / ThorDisplayProfile.LOWER_WIDTH_PIXELS,
+            height / ThorDisplayProfile.LOWER_HEIGHT_PIXELS
+        )
         drawBackground(canvas, width, height)
         drawTabs(canvas, width, scale)
         drawActivePanel(canvas, width, height, scale)
@@ -425,14 +428,14 @@ class CommandDeckView(
         paint.textSize = readableTextSize(20f, scale, 18f)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText("FIELD STATUS", summary.left + 16f * scale, summary.top + 31f * scale, paint)
-        val lines = mutableListOf(
-            "Weather  ${info.weather.ifBlank { "Clear" }}",
-            "Terrain  ${info.terrain.ifBlank { "None" }}"
-        )
+        val lines = mutableListOf<String>()
+        info.weather.takeIf { it.isNotBlank() }?.let { lines += "Weather  $it" }
+        info.terrain.takeIf { it.isNotBlank() }?.let { lines += "Terrain  $it" }
         info.playerSideConditions.takeIf { it.isNotEmpty() }?.let { lines += "Your side  ${it.joinToString(" · ")}" }
         info.opponentSideConditions.takeIf { it.isNotEmpty() }?.let { lines += "Opp. side  ${it.joinToString(" · ")}" }
         info.playerBoosts.takeIf { it.isNotEmpty() }?.let { lines += "Your boosts  ${formatBoosts(it)}" }
         info.opponentBoosts.takeIf { it.isNotEmpty() }?.let { lines += "Opp. boosts  ${formatBoosts(it)}" }
+        if (lines.isEmpty()) lines += "No active effects"
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = readableTextSize(21f, scale, 18f)
         paint.color = PAPER
@@ -1031,7 +1034,8 @@ class CommandDeckView(
 
     private fun readableTextSize(designPixels: Float, scale: Float, minimumPixels: Float = 12f): Float = maxOf(
         designPixels * scale,
-        minimumPixels * scale
+        minimumPixels * scale,
+        ThorDisplayProfile.minimumReadablePixels(width.toInt(), height.toInt())
     )
 
     private companion object {
