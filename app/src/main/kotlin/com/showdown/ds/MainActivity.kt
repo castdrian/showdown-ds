@@ -35,6 +35,11 @@ import java.util.Locale
 
 class MainActivity : Activity() {
     private data class RoomSelection(val id: String, val title: String, val subtitle: String, val chatRoom: Boolean)
+    private data class PendingBattlePacket(
+        val connection: ShowdownConnection?,
+        val roomId: String?,
+        val lines: List<String>
+    )
 
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
@@ -136,20 +141,15 @@ class MainActivity : Activity() {
             session.setConnectionStatus("That battle room is no longer available. Find another battle.")
         }
     }
-    private val pendingBattleEvents = ArrayDeque<String>()
-    private var battleEventPlaybackScheduled = false
+    private val pendingBattlePackets = ArrayDeque<PendingBattlePacket>()
+    private var battlePacketPlaybackScheduled = false
+    private var replayStatus: String? = null
     private var shouldMaintainConnection = false
     private var reconnectAttempt = 0
     private var reconnectScheduled = false
     private var controllerHorizontal = 0
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
-    private val battleEventListener = BattleSession.BattleEventListener { events ->
-        runOnUiThread {
-            pendingBattleEvents.addAll(events)
-            flushBattleEventPlayback()
-        }
-    }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread { showdownMoveEffects?.applyProtocol(lines) }
     }
@@ -158,7 +158,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Replays are read-only.")
             return@DecisionListener
         }
-        clearBattleEventPlayback()
+        clearBattlePlayback()
         val roomId = activeBattleRoomId
         if (roomId != null) {
             if (showdownConnection?.send(roomId, command) == true) {
@@ -229,7 +229,6 @@ class MainActivity : Activity() {
         session.setMatchFormat(loadMatchFormat())
         loadUserPreferences()
         session.addListener(sessionListener)
-        session.addBattleEventListener(battleEventListener)
         session.addProtocolListener(protocolListener)
         session.addDecisionListener(decisionListener)
         session.addChatListener(chatListener)
@@ -321,7 +320,6 @@ class MainActivity : Activity() {
         selectedPokedexEntry = null
         displayManager?.unregisterDisplayListener(displayListener)
         if (::session.isInitialized) session.removeListener(sessionListener)
-        if (::session.isInitialized) session.removeBattleEventListener(battleEventListener)
         if (::session.isInitialized) session.removeProtocolListener(protocolListener)
         if (::session.isInitialized) session.removeDecisionListener(decisionListener)
         if (::session.isInitialized) session.removeChatListener(chatListener)
@@ -330,7 +328,7 @@ class MainActivity : Activity() {
         battleAudioHandler.removeCallbacksAndMessages(null)
         reconnectHandler.removeCallbacksAndMessages(null)
         shouldMaintainConnection = false
-        clearBattleEventPlayback()
+        clearBattlePlayback()
         showdownConnection?.close()
         showdownConnection = null
         if (::battleAudio.isInitialized) battleAudio.release()
@@ -480,20 +478,63 @@ class MainActivity : Activity() {
         commandDeck?.invalidate()
     }
 
-    private fun flushBattleEventPlayback() {
-        if (battleEventPlaybackScheduled || pendingBattleEvents.isEmpty()) return
-        session.presentBattleEvent(pendingBattleEvents.removeFirst())
-        battleEventPlaybackScheduled = true
+    private fun flushBattlePlayback() {
+        if (battlePacketPlaybackScheduled || pendingBattlePackets.isEmpty()) {
+            if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty()) {
+                replayStatus?.let {
+                    replayStatus = null
+                    session.setConnectionStatus(it)
+                }
+            }
+            return
+        }
+        val packet = pendingBattlePackets.removeFirst()
+        if (packet.connection != null && showdownConnection !== packet.connection) {
+            flushBattlePlayback()
+            return
+        }
+        session.applyProtocolPacket(packet.lines)
+        handleAppliedBattlePacket(packet)
+        battlePacketPlaybackScheduled = true
         battleEventHandler.postDelayed({
-            battleEventPlaybackScheduled = false
-            flushBattleEventPlayback()
-        }, BattlePlaybackTiming.EVENT_PAUSE_MILLIS)
+            battlePacketPlaybackScheduled = false
+            flushBattlePlayback()
+        }, BattlePlaybackTiming.pauseAfter(packet.lines))
     }
 
-    private fun clearBattleEventPlayback() {
+    private fun enqueueBattlePlayback(connection: ShowdownConnection?, roomId: String?, lines: List<String>) {
+        if (lines.isEmpty()) return
+        if (lines.any { it.startsWith("|init|battle") }) clearBattlePlayback()
+        BattlePlaybackTiming.chunks(lines).forEach { chunk ->
+            if (chunk.isNotEmpty()) pendingBattlePackets.addLast(PendingBattlePacket(connection, roomId, chunk))
+        }
+        flushBattlePlayback()
+    }
+
+    private fun clearBattlePlayback() {
         battleEventHandler.removeCallbacksAndMessages(null)
-        pendingBattleEvents.clear()
-        battleEventPlaybackScheduled = false
+        pendingBattlePackets.clear()
+        battlePacketPlaybackScheduled = false
+        replayStatus = null
+    }
+
+    private fun handleAppliedBattlePacket(packet: PendingBattlePacket) {
+        val roomId = packet.roomId ?: return
+        if (packet.connection == null || showdownConnection !== packet.connection) return
+        if (session.isBattleFinished()) {
+            lobbyState.clearBattle(roomId)
+            activeBattleRoomId = null
+            battleProtocolReady = false
+            pendingDecisionCommand = null
+            clearPersistedLobbyState()
+            session.setLiveBattleActive(false)
+            return
+        }
+        if (activeBattleRoomId == roomId && battleProtocolReady && session.decisionAvailable) {
+            pendingDecisionCommand?.let { command ->
+                if (packet.connection.send(roomId, command)) pendingDecisionCommand = null
+            }
+        }
     }
 
     private fun findBattle() {
@@ -1497,7 +1538,7 @@ class MainActivity : Activity() {
         activeBattleRoomId = null
         battleProtocolReady = false
         pendingDecisionCommand = null
-        clearBattleEventPlayback()
+        clearBattlePlayback()
         shouldMaintainConnection = true
         reconnectAttempt = 0
         reconnectHandler.removeCallbacksAndMessages(null)
@@ -1707,28 +1748,15 @@ class MainActivity : Activity() {
                         }
                     }
                     if (roomId?.startsWith("battle-") == true) {
-                        if (lines.any { it.startsWith("|init|battle") }) clearBattleEventPlayback()
-                        if (lines.any { it.startsWith("|init|battle") }) reconnectHandler.removeCallbacks(battleRejoinTimeout)
+                        val startsBattle = lines.any { it.startsWith("|init|battle") }
+                        if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
                         activeBattleRoomId = roomId
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
+                        if (startsBattle) battleProtocolReady = true
                         persistLobbyState()
-                        session.applyProtocolPacket(lines)
-                        if (lines.any { it.startsWith("|init|battle") }) battleProtocolReady = true
-                        session.setLiveBattleActive(battleProtocolReady)
-                        if (session.isBattleFinished()) {
-                            lobbyState.clearBattle(roomId)
-                            activeBattleRoomId = null
-                            battleProtocolReady = false
-                            pendingDecisionCommand = null
-                            clearPersistedLobbyState()
-                        }
-                        session.setLiveBattleActive(activeBattleRoomId != null && battleProtocolReady)
-                        if (activeBattleRoomId == roomId && battleProtocolReady && session.decisionAvailable) {
-                            pendingDecisionCommand?.let { command ->
-                                if (connection.send(roomId, command)) pendingDecisionCommand = null
-                            }
-                        }
+                        session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
+                        enqueueBattlePlayback(connection, roomId, lines)
                     }
                     if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && !roomId.startsWith("view-tournaments") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
                         val changed = chatRoomState.applyProtocol(roomId, lines)
@@ -2891,13 +2919,13 @@ class MainActivity : Activity() {
         tournamentDialog = null
         chatRoomState.clear()
         pendingChatRoomId = null
-        clearBattleEventPlayback()
+        clearBattlePlayback()
         session.prepareForLobby()
         replay.players.firstOrNull()?.let(session::setLocalUsername)
         session.setReplayMode(true)
         session.setLiveBattleActive(true)
-        session.applyProtocolPacket(replay.log.lines())
-        session.setConnectionStatus("Replay: ${replay.title}")
+        enqueueBattlePlayback(null, null, replay.log.lines())
+        replayStatus = "Replay: ${replay.title}"
     }
 
     private fun showFormatPicker() {
