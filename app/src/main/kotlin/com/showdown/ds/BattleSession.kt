@@ -62,6 +62,7 @@ class BattleSession {
         CHOOSE_FORMAT,
         OPEN_CHAT,
         FORFEIT,
+        LEAVE_BATTLE,
         CHALLENGE_PLAYER,
         EXPORT_REPLAY,
         OPEN_REPLAY_CONTROLS,
@@ -522,6 +523,10 @@ class BattleSession {
     }
 
     fun isLiveBattleActive() = liveBattleActive
+
+    fun isBattleParticipant() = localUsername?.takeIf(String::isNotBlank)?.let { username ->
+        sideNames.values.any { it.equals(username, true) }
+    } == true
 
     fun setReplayMode(value: Boolean) {
         replayMode = value
@@ -1808,7 +1813,11 @@ class BattleSession {
         0 -> "Find a ${matchFormat.label}"
         1 -> "Battle format ${matchFormat.menuLabel}"
         2 -> "Open battle chat"
-        3 -> if (liveBattleActive && !replayMode) "Forfeit" else "Challenge player"
+        3 -> when {
+            liveBattleActive && !replayMode && isBattleParticipant() -> "Forfeit"
+            liveBattleActive && !replayMode -> "Leave battle"
+            else -> "Challenge player"
+        }
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
         5 -> "Background music ${if (musicEnabled) "on" else "off"}"
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
@@ -1837,8 +1846,13 @@ class BattleSession {
             }
             3 -> {
                 if (liveBattleActive && !replayMode) {
-                    publishClientAction(ClientAction.FORFEIT)
-                    "Forfeit requires confirmation."
+                    if (isBattleParticipant()) {
+                        publishClientAction(ClientAction.FORFEIT)
+                        "Forfeit requires confirmation."
+                    } else {
+                        publishClientAction(ClientAction.LEAVE_BATTLE)
+                        "Leave the spectated battle."
+                    }
                 } else {
                     publishClientAction(ClientAction.CHALLENGE_PLAYER)
                     "Challenge another player."

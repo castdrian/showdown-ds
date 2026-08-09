@@ -846,8 +846,26 @@ class BattleSessionTest {
         assertEquals(listOf(BattleSession.ClientAction.CHALLENGE_PLAYER), actions)
         assertEquals("Challenge player", session.menuItems()[3])
 
+        session.setLocalUsername("ADRIAN")
+        session.applyProtocolPacket(listOf("|player|p1|ADRIAN", "|player|p2|GLADION"))
         session.setLiveBattleActive(true)
         assertEquals("Forfeit", session.menuItems()[3])
+    }
+
+    @Test
+    fun spectatorBattleMenuOffersLeaveInsteadOfForfeit() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+        session.setLocalUsername("ADRIAN")
+        session.applyProtocolPacket(listOf("|player|p1|MISTY", "|player|p2|GLADION"))
+        session.setLiveBattleActive(true)
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(3)
+        session.confirmSelection()
+
+        assertEquals("Leave battle", session.menuItems()[3])
+        assertEquals(listOf(BattleSession.ClientAction.LEAVE_BATTLE), actions)
     }
 
     @Test

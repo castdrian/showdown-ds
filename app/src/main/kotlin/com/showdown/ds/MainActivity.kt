@@ -73,6 +73,8 @@ class MainActivity : Activity() {
     private var authenticated = false
     private var serverUserNamed = false
     private var activeBattleRoomId: String? = null
+    private var leftBattleRoomId: String? = null
+    private var pendingBattleJoinRoomId: String? = null
     private var battleProtocolReady = false
     private var pendingDecisionCommand: String? = null
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
@@ -209,6 +211,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.CHOOSE_FORMAT -> showFormatPicker()
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
+                BattleSession.ClientAction.LEAVE_BATTLE -> leaveBattle()
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
                 BattleSession.ClientAction.EXPORT_REPLAY -> showReplayActions()
                 BattleSession.ClientAction.OPEN_REPLAY_CONTROLS -> showReplayControls()
@@ -731,6 +734,7 @@ class MainActivity : Activity() {
                         roomListDialog = null
                         pendingChatRoomId = room.id.takeIf { room.chatRoom }
                         if (showdownConnection?.sendGlobal(ShowdownLobbyState.joinBattleCommand(room.id)) == true) {
+                            pendingBattleJoinRoomId = room.id.takeUnless { room.chatRoom }
                             session.setConnectionStatus("Joining ${room.title}…")
                         } else {
                             pendingChatRoomId = null
@@ -1616,6 +1620,7 @@ class MainActivity : Activity() {
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
         replayLoadRequest = null
         activeReplayLink = null
+        pendingBattleJoinRoomId = null
         chatRoomDialog?.dismiss()
         tournamentDialog?.dismiss()
         tournamentDialog = null
@@ -1837,6 +1842,14 @@ class MainActivity : Activity() {
                     }
                     if (roomId?.startsWith("battle-") == true) {
                         val startsBattle = lines.any { it.startsWith("|init|battle") }
+                        val rejectedJoin = lines.any { it.startsWith("|noinit|") }
+                        if (rejectedJoin && pendingBattleJoinRoomId == roomId) pendingBattleJoinRoomId = null
+                        val confirmedJoin = startsBattle && pendingBattleJoinRoomId == roomId
+                        if (roomId == leftBattleRoomId) {
+                            if (!confirmedJoin) return@runOnUiThread
+                            leftBattleRoomId = null
+                        }
+                        if (confirmedJoin) pendingBattleJoinRoomId = null
                         if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
                         activeBattleRoomId = roomId
                         activeSearchFormat = null
@@ -1865,6 +1878,7 @@ class MainActivity : Activity() {
 
     private fun joinMatchedBattle(connection: ShowdownConnection, roomId: String) {
         if (activeBattleRoomId != null || !connection.sendGlobal(ShowdownLobbyState.joinBattleCommand(roomId))) return
+        pendingBattleJoinRoomId = roomId
         activeSearchFormat?.let(lobbyState::clearSearch)
         activeSearchFormat = null
         pendingSearch = false
@@ -1915,6 +1929,7 @@ class MainActivity : Activity() {
             return
         }
         pendingLobbyCommands = null
+        pendingBattleJoinRoomId = commands.firstOrNull { it.startsWith("/join battle-") }?.removePrefix("/join ")
         val status = pendingLobbyStatus
         pendingSearch = false
         pendingLobbyStatus = null
@@ -3094,6 +3109,32 @@ class MainActivity : Activity() {
                 }
             }
             .show()
+    }
+
+    private fun leaveBattle() {
+        val roomId = activeBattleRoomId
+        if (roomId == null) {
+            session.setConnectionStatus("There is no battle room to leave.")
+            return
+        }
+        if (showdownConnection?.send(roomId, "/leave") != true) {
+            session.setConnectionStatus("Unable to leave the battle room.")
+            return
+        }
+        pendingBattleJoinRoomId = null
+        leftBattleRoomId = roomId
+        activeBattleRoomId = null
+        battleProtocolReady = false
+        pendingDecisionCommand = null
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        clearPersistedLobbyState()
+        clearBattlePlayback()
+        session.prepareForLobby()
+        session.setConnectionStatus("Left the battle room.")
     }
 
     private fun loadServerEndpoint(): ShowdownServerEndpoint {
