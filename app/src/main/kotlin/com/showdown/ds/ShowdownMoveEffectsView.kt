@@ -3,6 +3,7 @@ package com.showdown.ds
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
+import android.os.SystemClock
 import android.view.View
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -19,6 +20,12 @@ class ShowdownMoveEffectsView(
     private val pendingPackets = ArrayDeque<List<String>>()
     private var flushScheduled = false
     private var pageLoaded = false
+    private var playbackPaused = false
+    private var playbackSpeed = 1f
+    private var scheduledPauseMillis = 0L
+    private var scheduledAtMillis = 0L
+    private var scheduledSpeed = 1f
+    private var playbackPausedRemainingMillis: Long? = null
     private val flushRunnable = Runnable {
         flushScheduled = false
         flushPendingPackets()
@@ -38,6 +45,8 @@ class ShowdownMoveEffectsView(
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 pageLoaded = true
+                runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
+                if (playbackPaused) runJavascript("window.ShowdownNativeEffects.pause();")
                 flushPendingPackets()
             }
         }
@@ -58,15 +67,50 @@ class ShowdownMoveEffectsView(
             pendingPackets.clear()
             removeCallbacks(flushRunnable)
             flushScheduled = false
+            playbackPausedRemainingMillis = null
+            scheduledPauseMillis = 0L
+            scheduledAtMillis = 0L
+            scheduledSpeed = playbackSpeed
         }
         BattlePlaybackTiming.chunks(packet).forEach(pendingPackets::addLast)
         flushPendingPackets()
+    }
+
+    fun setPlaybackPaused(paused: Boolean) {
+        if (playbackPaused == paused) return
+        playbackPaused = paused
+        if (paused) {
+            playbackPausedRemainingMillis = remainingPauseMillis()
+            removeCallbacks(flushRunnable)
+            flushScheduled = false
+            runJavascript("window.ShowdownNativeEffects.pause();")
+        } else {
+            runJavascript("window.ShowdownNativeEffects.resume();")
+            playbackPausedRemainingMillis?.let { remainingMillis ->
+                playbackPausedRemainingMillis = null
+                scheduleFlush(remainingMillis)
+            } ?: flushPendingPackets()
+        }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        val nextSpeed = speed.coerceIn(0.25f, 4f)
+        if (nextSpeed == playbackSpeed) return
+        val remainingMillis = if (flushScheduled && !playbackPaused) remainingPauseMillis() else null
+        if (remainingMillis != null) {
+            removeCallbacks(flushRunnable)
+            flushScheduled = false
+        }
+        playbackSpeed = nextSpeed
+        runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
+        if (remainingMillis != null) scheduleFlush(remainingMillis)
     }
 
     fun release() {
         pendingPackets.clear()
         removeCallbacks(flushRunnable)
         flushScheduled = false
+        playbackPausedRemainingMillis = null
         stopLoading()
         destroy()
     }
@@ -74,7 +118,7 @@ class ShowdownMoveEffectsView(
     override fun onTouchEvent(event: MotionEvent): Boolean = false
 
     private fun flushPendingPackets() {
-        if (!pageLoaded || pendingPackets.isEmpty() || flushScheduled) return
+        if (playbackPaused || !pageLoaded || pendingPackets.isEmpty() || flushScheduled) return
         val packet = pendingPackets.removeFirst()
         val payload = JSONArray(packet)
         val receiver = if (packet.firstOrNull() == SEED_PREFIX) "seed" else "receive"
@@ -82,12 +126,30 @@ class ShowdownMoveEffectsView(
         if (receiver != "seed") audioCueListener(packet.toList())
         evaluateJavascript("window.ShowdownNativeEffects.$receiver($lines);", null)
         val pauseMillis = if (receiver == "seed") 0L else BattlePlaybackTiming.pauseAfter(packet)
+        scheduleFlush(pauseMillis)
+    }
+
+    private fun scheduleFlush(pauseMillis: Long) {
         flushScheduled = true
+        scheduledPauseMillis = pauseMillis
+        scheduledAtMillis = SystemClock.elapsedRealtime()
+        scheduledSpeed = playbackSpeed
         if (pauseMillis == 0L) {
             post(flushRunnable)
         } else {
-            postDelayed(flushRunnable, pauseMillis)
+            postDelayed(flushRunnable, BattlePlaybackTiming.scaledPause(pauseMillis, playbackSpeed))
         }
+    }
+
+    private fun remainingPauseMillis(): Long? {
+        if (!flushScheduled) return null
+        val elapsedMillis = (SystemClock.elapsedRealtime() - scheduledAtMillis).coerceAtLeast(0L)
+        val consumedMillis = (elapsedMillis * scheduledSpeed).toLong()
+        return (scheduledPauseMillis - consumedMillis).coerceAtLeast(0L)
+    }
+
+    private fun runJavascript(script: String) {
+        if (pageLoaded) evaluateJavascript(script, null)
     }
 
     private companion object {
@@ -122,6 +184,7 @@ class ShowdownMoveEffectsView(
                 <script>
                     (function () {
                         var battle = null;
+                        var animationSpeed = 1;
                         var hideFrame = 0;
                         function layout() {
                             var width = window.innerWidth;
@@ -152,6 +215,13 @@ class ShowdownMoveEffectsView(
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
                             battle.setMute(true);
+                            var scene = battle.scene;
+                            var updateAcceleration = scene.updateAcceleration;
+                            scene.updateAcceleration = function () {
+                                updateAcceleration.call(scene);
+                                scene.acceleration *= animationSpeed;
+                            };
+                            scene.acceleration = animationSpeed;
                             hideChrome();
                             layout();
                             keepChromeHidden();
@@ -174,6 +244,16 @@ class ShowdownMoveEffectsView(
                                 if (!battle || lines.some(function (line) { return line.indexOf('|init|battle') === 0; })) createBattle();
                                 add(lines);
                                 if (battle.paused) battle.play();
+                            },
+                            setSpeed: function (speed) {
+                                animationSpeed = Math.max(0.25, Math.min(4, Number(speed) || 1));
+                                if (battle) battle.scene.acceleration = animationSpeed;
+                            },
+                            pause: function () {
+                                if (battle) battle.pause();
+                            },
+                            resume: function () {
+                                if (battle && battle.paused) battle.play();
                             }
                         };
                     }());

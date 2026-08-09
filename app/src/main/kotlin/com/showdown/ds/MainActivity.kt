@@ -553,6 +553,7 @@ class MainActivity : Activity() {
     private fun setReplayPaused(value: Boolean) {
         if (!session.isReplayMode() || replayPaused == value) return
         replayPaused = value
+        showdownMoveEffects?.setPlaybackPaused(value)
         if (value) {
             if (battlePacketPlaybackScheduled) {
                 val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
@@ -584,6 +585,7 @@ class MainActivity : Activity() {
         } else {
             replaySpeed = nextSpeed
         }
+        showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         updateReplayStatus()
     }
 
@@ -595,9 +597,9 @@ class MainActivity : Activity() {
 
     private fun Float.trimTrailingZero(): String = if (this % 1f == 0f) toInt().toString() else toString()
 
-    private fun enqueueBattlePlayback(connection: ShowdownConnection?, roomId: String?, lines: List<String>) {
+    private fun enqueueBattlePlayback(connection: ShowdownConnection?, roomId: String?, lines: List<String>, resetOnBattleInit: Boolean = true) {
         if (lines.isEmpty()) return
-        if (lines.any { it.startsWith("|init|battle") }) clearBattlePlayback()
+        if (resetOnBattleInit && lines.any { it.startsWith("|init|battle") }) clearBattlePlayback()
         BattlePlaybackTiming.chunks(lines).forEach { chunk ->
             if (chunk.isNotEmpty()) pendingBattlePackets.addLast(PendingBattlePacket(connection, roomId, chunk))
         }
@@ -608,6 +610,8 @@ class MainActivity : Activity() {
         battleEventHandler.removeCallbacksAndMessages(null)
         pendingBattlePackets.clear()
         battlePacketPlaybackScheduled = false
+        showdownMoveEffects?.setPlaybackPaused(false)
+        showdownMoveEffects?.setPlaybackSpeed(1f)
         replayPaused = false
         replayPausedForLifecycle = false
         replaySpeed = 1f
@@ -3127,7 +3131,9 @@ class MainActivity : Activity() {
         replayPaused = restoredReplayPaused
         replayPausedForLifecycle = false
         replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
-        enqueueBattlePlayback(null, null, replay.log.lines())
+        showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
+        showdownMoveEffects?.setPlaybackPaused(replayPaused)
+        enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)
         replayStatus = "Replay: ${replay.title}"
         if (replayPaused) updateReplayStatus()
         restoredReplayPaused = false
