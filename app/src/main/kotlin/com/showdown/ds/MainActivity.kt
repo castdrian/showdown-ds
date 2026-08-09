@@ -72,6 +72,7 @@ class MainActivity : Activity() {
     private val pokedex = ShowdownPokedex()
     private val lobbyState = ShowdownLobbyState()
     private val friendsState = ShowdownFriendsState()
+    private val teamRemoteState = ShowdownTeamRemoteState()
     private val chatRoomState = ShowdownChatRoomState()
     private val loginClient = ShowdownLoginClient()
     private var pendingSearch = false
@@ -135,6 +136,9 @@ class MainActivity : Activity() {
     private var friendsDialog: ShowdownDialog? = null
     private var friendsContentView: TextView? = null
     private var friendsInput: EditText? = null
+    private var teamRemoteDialog: ShowdownDialog? = null
+    private var teamRemoteContentView: TextView? = null
+    private var teamRemoteLinks: LinearLayout? = null
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
@@ -357,6 +361,11 @@ class MainActivity : Activity() {
         friendsContentView = null
         friendsInput = null
         friendsState.clear()
+        teamRemoteDialog?.dismiss()
+        teamRemoteDialog = null
+        teamRemoteContentView = null
+        teamRemoteLinks = null
+        teamRemoteState.clear()
         pokedexDialog?.dismiss()
         pokedexDialog = null
         pokedexSearchInput = null
@@ -1823,6 +1832,7 @@ class MainActivity : Activity() {
                     if (showdownConnection !== connection) return@runOnUiThread
                     if (tournamentDirectoryState.applyProtocol(roomId, lines)) updateTournamentDirectoryDialog()
                     if (friendsState.applyProtocol(roomId, lines)) updateFriendsDialog()
+                    if (teamRemoteState.applyProtocol(roomId, lines) && teamRemoteDialog != null) updateTeamRemoteDialog()
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
                         serverUserNamed = update.named
@@ -1976,7 +1986,7 @@ class MainActivity : Activity() {
                         session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
                         enqueueBattlePlayback(connection, roomId, lines)
                     }
-                    if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && !roomId.startsWith("view-tournaments") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
+                    if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && !roomId.startsWith("view-tournaments") && !roomId.startsWith("view-teams-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
                         val changed = chatRoomState.applyProtocol(roomId, lines)
                         if (changed && pendingChatRoomId == roomId) {
                             pendingChatRoomId = null
@@ -2660,6 +2670,11 @@ class MainActivity : Activity() {
         friendsContentView = null
         friendsInput = null
         friendsState.clear()
+        teamRemoteDialog?.dismiss()
+        teamRemoteDialog = null
+        teamRemoteContentView = null
+        teamRemoteLinks = null
+        teamRemoteState.clear()
         clearPersistedLobbyState()
         session.prepareForLobby()
         session.setConnectionStatus("Signed out of Showdown.")
@@ -2667,7 +2682,7 @@ class MainActivity : Activity() {
 
     private fun showTeamLibrary() {
         val teams = teamLibrary.teams()
-        val labels = teams.map {
+        val labels = listOf("Browse remote teams") + teams.map {
             val remoteState = when {
                 it.remoteNeedsUpload -> " · Upload needed"
                 it.remoteId != null -> " · Uploaded"
@@ -2678,12 +2693,118 @@ class MainActivity : Activity() {
         ShowdownDialogBuilder(this)
             .setTitle("Team library")
             .setItems(labels.toTypedArray()) { _, selected ->
-                if (selected == teams.size) showTeamEditor() else showTeamEditor(teams[selected])
+                when {
+                    selected == 0 -> showTeamRemoteLibrary()
+                    selected == teams.size + 1 -> showTeamEditor()
+                    else -> showTeamEditor(teams[selected - 1])
+                }
             }
             .setNeutralButton("Export backup") { _, _ -> copyTeamBackup() }
             .setPositiveButton("Import backup") { _, _ -> showTeamBackupImport() }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    private fun showTeamRemoteLibrary() {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to Showdown to browse remote teams.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before browsing remote teams.")
+            return
+        }
+        teamRemoteDialog?.dismiss()
+        teamRemoteState.clear()
+        val density = resources.displayMetrics.density
+        val content = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+        }
+        val own = Button(this).apply {
+            text = "My uploaded teams"
+            setOnClickListener { requestTeamRemotePage(ShowdownTeamRemoteState.ownTeamsCommand()) }
+        }
+        val browse = Button(this).apply {
+            text = "Browse public teams"
+            setOnClickListener { requestTeamRemotePage(ShowdownTeamRemoteState.browseCommand()) }
+        }
+        val links = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(own)
+            addView(browse, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val root = ScrollView(this).apply {
+            isFillViewport = true
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(content, LinearLayout.LayoutParams(-1, -2))
+                addView(actions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+            }, -1, -2)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Remote teams")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (teamRemoteDialog === dialog) {
+                teamRemoteDialog = null
+                teamRemoteContentView = null
+                teamRemoteLinks = null
+                teamRemoteState.clear()
+            }
+        }
+        teamRemoteDialog = dialog
+        teamRemoteContentView = content
+        teamRemoteLinks = links
+        dialog.show()
+        updateTeamRemoteDialog()
+        requestTeamRemotePage(ShowdownTeamRemoteState.ownTeamsCommand())
+    }
+
+    private fun requestTeamRemotePage(command: String) {
+        if (showdownConnection?.sendGlobal(command) != true) {
+            session.setConnectionStatus("Remote team connection is not ready.")
+        }
+    }
+
+    private fun updateTeamRemoteDialog() {
+        val snapshot = teamRemoteState.snapshot
+        teamRemoteDialog?.setTitle(snapshot.title)
+        teamRemoteContentView?.text = snapshot.error ?: snapshot.text.ifBlank { "Choose a remote team list." }
+        val links = teamRemoteLinks ?: return
+        links.removeAllViews()
+        snapshot.teams.forEach { team ->
+            links.addView(Button(this).apply {
+                text = "${team.name}\n${team.formatLabel} · ${team.owner}"
+                setOnClickListener {
+                    requestTeamRemotePage(ShowdownTeamRemoteState.viewCommand(team))
+                    session.setConnectionStatus("Loading ${team.name}…")
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (6f * resources.displayMetrics.density).toInt()) })
+        }
+        val selectedTeam = snapshot.selectedTeam
+        val packed = snapshot.packed
+        if (selectedTeam != null && !packed.isNullOrBlank()) {
+            links.addView(Button(this).apply {
+                text = "Import ${selectedTeam.name}"
+                setOnClickListener {
+                    val format = session.availableMatchFormats().firstOrNull { it.label.equals(selectedTeam.formatLabel, true) }?.id
+                        ?: session.matchFormat.id
+                    teamLibrary.save(selectedTeam.name, format, packed)
+                    session.setConnectionStatus("Imported ${selectedTeam.name} into the team library.")
+                    teamRemoteDialog?.dismiss()
+                    showTeamLibrary()
+                }
+            })
+        }
     }
 
     private fun copyTeamBackup() {

@@ -78,4 +78,27 @@ class ShowdownTeamRemoteTest {
         assertTrue(uploaded.copy(packed = "Pikachu|||volttackle").remoteNeedsUpload)
         assertTrue(uploaded.copy(name = "Sun team").remoteNeedsUpload)
     }
+
+    @Test
+    fun parsesRemoteTeamPagesAndBuildsNavigationCommands() {
+        val state = ShowdownTeamRemoteState()
+        val html = """
+            <div class="ladder pad"><h2>adrian's last 1 team</h2><hr />
+            <strong>Rain team</strong><br /><small>Uploaded by: <strong>adrian</strong></small><br />
+            <small>Uploaded on: today</small><br /><small>Format: [Gen 9] OU</small>
+            <br /><a class="subtle" href="/view-team-42-secret">Pikachu</a><br />
+            <a href="https://psim.us/t/42-secret">View full team</a><hr /></div>
+        """.trimIndent()
+
+        assertTrue(state.applyProtocol("view-teams-all", listOf("|pagehtml|$html")))
+        val team = state.snapshot.teams.single()
+        assertEquals("42", team.remoteId)
+        assertEquals("secret", team.privateKey)
+        assertEquals("Rain team", team.name)
+        assertEquals("[Gen 9] OU", team.formatLabel)
+        assertEquals("adrian", team.owner)
+        assertEquals("/join view-teams-view-42-secret", ShowdownTeamRemoteState.viewCommand(team))
+        assertEquals("/join view-teams-all", ShowdownTeamRemoteState.ownTeamsCommand())
+        assertEquals("/join view-teams-browse", ShowdownTeamRemoteState.browseCommand())
+    }
 }
