@@ -67,6 +67,26 @@ class ShowdownTeamLibrary(context: Context) {
         return team
     }
 
+    fun duplicate(id: String): ShowdownTeam? {
+        val storedTeams = teams()
+        val original = storedTeams.firstOrNull { it.id == id } ?: return null
+        val baseName = "Copy of ${original.name}"
+        var copyName = baseName
+        var suffix = 2
+        while (storedTeams.any { it.name.equals(copyName, true) }) {
+            copyName = "$baseName $suffix"
+            suffix += 1
+        }
+        val copy = ShowdownTeam(
+            id = UUID.randomUUID().toString(),
+            name = copyName,
+            format = original.format,
+            packed = original.packed
+        )
+        write(storedTeams + copy)
+        return copy
+    }
+
     fun markUploaded(id: String, remoteId: String, privateKey: String?, packed: String) {
         val updated = teams().map { team ->
             if (team.id == id) team.copy(

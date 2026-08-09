@@ -3228,6 +3228,18 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val duplicateButton = existing?.let { team ->
+            Button(this).apply {
+                text = "Duplicate team"
+                setOnClickListener {
+                    teamLibrary.duplicate(team.id)?.let { copy ->
+                        session.setConnectionStatus("Duplicated ${team.name} as ${copy.name}.")
+                        teamEditorDialog?.dismiss()
+                    }
+                }
+            }
+        }
+        duplicateButton?.let(fields::addView)
         val dialog = builder.create()
         dialog.setOnShowListener {
             dialog.getButton(ShowdownDialog.BUTTON_POSITIVE)?.setOnClickListener {
