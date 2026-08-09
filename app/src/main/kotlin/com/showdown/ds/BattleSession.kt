@@ -68,7 +68,8 @@ class BattleSession {
         SAVE_REPLAY,
         OPEN_REPLAY_CONTROLS,
         SETTINGS_CHANGED,
-        TOGGLE_BATTLE_TIMER
+        TOGGLE_BATTLE_TIMER,
+        CANCEL_CHOICE
     }
 
     enum class BattleGimmick(val choiceSuffix: String, val label: String) {
@@ -266,6 +267,7 @@ class BattleSession {
     private var battleClock: BattleClock? = null
     private var battleClockUpdatedAtNanos = 0L
     private var battleTimerEnabled = false
+    private var choiceCanBeCancelled = false
     private val playerSideConditions = mutableListOf<String>()
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
@@ -380,6 +382,8 @@ class BattleSession {
     }
 
     fun isBattleTimerEnabled() = battleTimerEnabled
+
+    fun canCancelChoice() = choiceCanBeCancelled && !decisionAvailable && !battleFinished && !replayMode && liveBattleActive
 
     private fun clearBattleClock() {
         battleClock = null
@@ -563,6 +567,7 @@ class BattleSession {
         replayMode = value
         if (value) {
             decisionAvailable = false
+            choiceCanBeCancelled = false
             decisionKind = DecisionKind.WAIT
             activeRequests.clear()
             activeChoices.clear()
@@ -588,6 +593,7 @@ class BattleSession {
         liveBattleActive = false
         battleFinished = false
         decisionAvailable = false
+        choiceCanBeCancelled = false
         decisionKind = DecisionKind.WAIT
         panel = Panel.MENU
         status = "Find a battle or challenge a player."
@@ -764,6 +770,7 @@ class BattleSession {
                 appendLog("$playerPokemon chose ${gimmick?.label?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
+                choiceCanBeCancelled = true
                 selectedGimmick = null
                 selectedTargetIndex = -1
                 decisionListeners.toList().forEach { it.onDecision(choice) }
@@ -781,6 +788,7 @@ class BattleSession {
         selectedTargetIndex = -1
         activeChoices.clear()
         forceSwitchChoices.clear()
+        choiceCanBeCancelled = false
         activeSlotIndex = 0
         when (decisionKind) {
             DecisionKind.MOVE -> {
@@ -1473,6 +1481,7 @@ class BattleSession {
         activeChoices.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
+        choiceCanBeCancelled = false
         activeSlotIndex = 0
         requiredSwitches = 0
         selectedTargetIndex = -1
@@ -1537,6 +1546,7 @@ class BattleSession {
         val choice = fields.drop(2).joinToString("|").trim()
         if (choice.isBlank() || requestId == null || battleFinished) return
         decisionAvailable = false
+        choiceCanBeCancelled = true
         selectedGimmick = null
         selectedTargetIndex = -1
         targetOptions.clear()
@@ -1636,6 +1646,7 @@ class BattleSession {
             status = "$it won the battle."
             appendLog(status)
             decisionAvailable = false
+            choiceCanBeCancelled = false
             decisionKind = DecisionKind.WAIT
             requestId = null
             selectedGimmick = null
@@ -1657,6 +1668,7 @@ class BattleSession {
         status = reason
         appendLog(reason)
         decisionAvailable = false
+        choiceCanBeCancelled = false
         decisionKind = DecisionKind.WAIT
         requestId = null
         selectedGimmick = null
@@ -1678,6 +1690,7 @@ class BattleSession {
         if (decisionKind == DecisionKind.MOVE && activeRequests.size > 1) {
             activeChoices.clear()
             activeSlotIndex = 0
+            choiceCanBeCancelled = false
             prepareNextActiveRequest()
             return
         }
@@ -1689,6 +1702,7 @@ class BattleSession {
             return
         }
         decisionAvailable = true
+        choiceCanBeCancelled = false
         selectedGimmick = null
         selectedTargetIndex = -1
         panel = when (decisionKind) {
@@ -2164,6 +2178,7 @@ class BattleSession {
 
     private fun completeTeamSelection(choice: String) {
         decisionAvailable = false
+        choiceCanBeCancelled = true
         status = "Queued: ${team[focusedTeam]}"
         appendLog(if (choice.startsWith("/choose team")) "Team order submitted." else "${team[focusedTeam]} was selected.")
         chatMessages += "[You] $choice"

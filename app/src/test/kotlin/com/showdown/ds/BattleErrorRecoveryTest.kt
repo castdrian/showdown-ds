@@ -32,6 +32,17 @@ class BattleErrorRecoveryTest {
     }
 
     @Test
+    fun replayedSentChoiceCanBeCancelledInALiveBattle() {
+        val session = BattleSession()
+        session.setLiveBattleActive(true)
+        session.applyProtocolLine("|request|{\"rqid\":22,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}")
+
+        session.applyProtocolLine("|sentchoice|move 1|22")
+
+        assertTrue(session.canCancelChoice())
+    }
+
+    @Test
     fun nullRequestClearsAStaleDecision() {
         val session = BattleSession()
         session.applyProtocolLine("|request|{\"rqid\":23,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}")

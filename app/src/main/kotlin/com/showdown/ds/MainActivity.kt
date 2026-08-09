@@ -227,6 +227,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.SAVE_REPLAY -> saveBattleReplay()
                 BattleSession.ClientAction.OPEN_REPLAY_CONTROLS -> showReplayControls()
                 BattleSession.ClientAction.TOGGLE_BATTLE_TIMER -> toggleBattleTimer()
+                BattleSession.ClientAction.CANCEL_CHOICE -> cancelChoice()
                 BattleSession.ClientAction.SETTINGS_CHANGED -> {
                     persistUserPreferences()
                     battleAudio.updateOptions(session)
@@ -3679,6 +3680,19 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun cancelChoice() {
+        val roomId = activeBattleRoomId
+        if (roomId == null || !session.canCancelChoice() || !session.isBattleParticipant() || session.isReplayMode()) {
+            session.setConnectionStatus("There is no cancellable battle choice.")
+            return
+        }
+        if (showdownConnection?.send(roomId, "/undo") == true) {
+            session.setConnectionStatus("Cancelling your last choice…")
+        } else {
+            session.setConnectionStatus("Unable to cancel your last choice.")
+        }
+    }
+
     private fun loadServerEndpoint(): ShowdownServerEndpoint {
         val saved = getSharedPreferences("showdown", MODE_PRIVATE).getString("server_endpoint", null)
         return saved?.let(ShowdownServerEndpoint::fromInput) ?: ShowdownServerEndpoint.playShowdown
@@ -3798,6 +3812,11 @@ class MainActivity : Activity() {
 
                 override fun onConfirmation() {
                     battleAudio.playConfirm()
+                }
+
+                override fun onCancelChoice() {
+                    cancelChoice()
+                    battleAudio.playCancel()
                 }
             })
             frame.addView(commandDeck, FrameLayout.LayoutParams(-1, -1))

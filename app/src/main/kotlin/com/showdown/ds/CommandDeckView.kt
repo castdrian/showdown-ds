@@ -27,6 +27,7 @@ class CommandDeckView(
     interface InteractionListener {
         fun onNavigation()
         fun onConfirmation()
+        fun onCancelChoice()
     }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -42,6 +43,7 @@ class CommandDeckView(
     private val requestedTeamSprites = mutableSetOf<String>()
     private val typeIcons = mutableMapOf<String, Bitmap?>()
     private var activityChatBounds: RectF? = null
+    private var cancelChoiceBounds: RectF? = null
     private var zPowerSymbol: Bitmap? = null
     private var pressedMoveIndex: Int? = null
     private var pressStartedAt = 0L
@@ -109,6 +111,10 @@ class CommandDeckView(
             }
         }
         if (session.panel == BattleSession.Panel.MOVES) {
+            if (session.canCancelChoice() && cancelChoiceBounds?.contains(x, y) == true) {
+                interactionListener.onCancelChoice()
+                return true
+            }
             moveBounds.forEachIndexed { index, bounds ->
                 if (bounds?.contains(x, y) == true) {
                     session.selectMoveWithTouch(index)
@@ -488,6 +494,7 @@ class CommandDeckView(
         }
 
     private fun drawUtilityMessage(canvas: Canvas, bounds: RectF, scale: Float) {
+        cancelChoiceBounds = null
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(24f, scale, 21f)
@@ -498,6 +505,35 @@ class CommandDeckView(
         paint.color = PAPER
         val message = if (session.decisionAvailable) session.latestBattleEvent else session.status
         canvas.drawText(fitTextToWidth(message, bounds.width() - 24f * scale), bounds.centerX(), bounds.centerY() + 34f * scale, paint)
+        if (session.canCancelChoice()) {
+            cancelChoiceBounds = RectF(
+                bounds.left + 18f * scale,
+                bounds.bottom - 104f * scale,
+                bounds.right - 18f * scale,
+                bounds.bottom - 20f * scale
+            )
+            paint.shader = LinearGradient(
+                cancelChoiceBounds!!.left,
+                cancelChoiceBounds!!.top,
+                cancelChoiceBounds!!.right,
+                cancelChoiceBounds!!.bottom,
+                Color.rgb(112, 64, 103),
+                Color.rgb(67, 31, 67),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawRoundRect(cancelChoiceBounds!!, 18f * scale, 18f * scale, paint)
+            paint.shader = null
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 1.5f * scale
+            paint.color = Color.argb(188, 245, 157, 215)
+            canvas.drawRoundRect(cancelChoiceBounds!!, 18f * scale, 18f * scale, paint)
+            paint.style = Paint.Style.FILL
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = readableTextSize(22f, scale, 19f)
+            paint.color = PAPER
+            val baseline = cancelChoiceBounds!!.centerY() - (paint.ascent() + paint.descent()) / 2f
+            canvas.drawText("CANCEL CHOICE", cancelChoiceBounds!!.centerX(), baseline, paint)
+        }
         paint.textAlign = Paint.Align.LEFT
     }
 

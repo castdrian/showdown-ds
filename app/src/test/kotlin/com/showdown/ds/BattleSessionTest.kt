@@ -82,6 +82,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun sentMoveCanBeCancelledUntilTheNextRequest() {
+        val session = BattleSession()
+        session.setLiveBattleActive(true)
+        session.applyProtocolLine("|request|{\"rqid\":9,\"active\":[{\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15}]}]}")
+
+        session.confirmSelection()
+
+        assertTrue(session.canCancelChoice())
+
+        session.applyProtocolLine("|request|{\"rqid\":10,\"active\":[{\"moves\":[{\"move\":\"Flamethrower\",\"pp\":14}]}]}")
+
+        assertFalse(session.canCancelChoice())
+    }
+
+    @Test
     fun lobbyChatAndPrivateMessagesEnterActivity() {
         val session = BattleSession()
 
