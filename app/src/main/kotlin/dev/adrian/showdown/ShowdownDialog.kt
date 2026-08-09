@@ -153,7 +153,12 @@ class ShowdownDialog(context: Context) : Dialog(context) {
                 }
                 list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, dp(8)) })
             }
-            content.addView(list, FrameLayout.LayoutParams(-1, -2))
+            val scroll = ScrollView(context).apply {
+                isFillViewport = true
+                overScrollMode = View.OVER_SCROLL_NEVER
+                addView(list, ViewGroup.LayoutParams(-1, -2))
+            }
+            content.addView(scroll, FrameLayout.LayoutParams(-1, -2))
         }
         root.addView(content, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
         val actionBar = LinearLayout(context).apply {

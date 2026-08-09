@@ -3314,7 +3314,9 @@ class MainActivity : Activity() {
         val hiddenPowerType: EditText,
         val gigantamax: CheckBox,
         val dynamaxLevel: EditText,
-        val teraType: EditText
+        val teraType: EditText,
+        val advancedFields: LinearLayout,
+        val advancedToggle: Button
     )
 
     private fun createTeamSetEditor(parent: LinearLayout, index: Int, set: ShowdownTeamSet): TeamSetEditor {
@@ -3323,35 +3325,59 @@ class MainActivity : Activity() {
             textSize = 18f
             setPadding(0, 20, 0, 4)
         })
+        val nickname = teamField("Nickname", set.nickname)
+        val species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames())
+        val item = teamAutocompleteField("Item", set.item, moveDex.itemNames())
+        val ability = teamAutocompleteField("Ability", set.ability, moveDex.abilityNames())
+        val moves = teamMovesField(set.moves.joinToString(","), moveDex.moveNames())
+        val nature = teamAutocompleteField("Nature", set.nature, moveDex.natureNames())
+        val evs = teamField("EVs HP,Atk,Def,SpA,SpD,Spe", set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty())
+        val gender = teamField("Gender M or F", set.gender)
+        val ivs = teamField("IVs HP,Atk,Def,SpA,SpD,Spe", set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty())
+        val shiny = CheckBox(this).apply { text = "Shiny"; isChecked = set.shiny }
+        val level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty())
+        val happiness = teamField("Happiness", set.happiness.takeUnless { it == 255 }?.toString().orEmpty())
+        val pokeBall = teamField("Poké Ball", set.pokeBall)
+        val hiddenPowerType = teamAutocompleteField("Hidden Power type", set.hiddenPowerType, moveDex.typeNames())
+        val gigantamax = CheckBox(this).apply { text = "Gigantamax"; isChecked = set.gigantamax }
+        val dynamaxLevel = teamField("Dynamax level", set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty())
+        val teraType = teamAutocompleteField("Tera type", set.teraType, moveDex.typeNames())
+        val advancedFields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (set.hasAdvancedDetails()) View.VISIBLE else View.GONE
+        }
+        val advancedToggle = Button(this).apply {
+            isAllCaps = false
+            text = if (set.hasAdvancedDetails()) "Hide advanced details" else "Show advanced details"
+            setOnClickListener {
+                val visible = advancedFields.visibility != View.VISIBLE
+                advancedFields.visibility = if (visible) View.VISIBLE else View.GONE
+                text = if (visible) "Hide advanced details" else "Show advanced details"
+            }
+        }
         val editor = TeamSetEditor(
-            nickname = teamField("Nickname", set.nickname),
-            species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames()),
-            item = teamAutocompleteField("Item", set.item, moveDex.itemNames()),
-            ability = teamAutocompleteField("Ability", set.ability, moveDex.abilityNames()),
-            moves = teamMovesField(set.moves.joinToString(","), moveDex.moveNames()),
-            nature = teamAutocompleteField("Nature", set.nature, moveDex.natureNames()),
-            evs = teamField("EVs HP,Atk,Def,SpA,SpD,Spe", set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty()),
-            gender = teamField("Gender M or F", set.gender),
-            ivs = teamField("IVs HP,Atk,Def,SpA,SpD,Spe", set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty()),
-            shiny = CheckBox(this).apply { text = "Shiny"; isChecked = set.shiny },
-            level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty()),
-            happiness = teamField("Happiness", set.happiness.takeUnless { it == 255 }?.toString().orEmpty()),
-            pokeBall = teamField("Poké Ball", set.pokeBall),
-            hiddenPowerType = teamAutocompleteField("Hidden Power type", set.hiddenPowerType, moveDex.typeNames()),
-            gigantamax = CheckBox(this).apply { text = "Gigantamax"; isChecked = set.gigantamax },
-            dynamaxLevel = teamField("Dynamax level", set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty()),
-            teraType = teamAutocompleteField("Tera type", set.teraType, moveDex.typeNames())
+            nickname = nickname,
+            species = species,
+            item = item,
+            ability = ability,
+            moves = moves,
+            nature = nature,
+            evs = evs,
+            gender = gender,
+            ivs = ivs,
+            shiny = shiny,
+            level = level,
+            happiness = happiness,
+            pokeBall = pokeBall,
+            hiddenPowerType = hiddenPowerType,
+            gigantamax = gigantamax,
+            dynamaxLevel = dynamaxLevel,
+            teraType = teraType,
+            advancedFields = advancedFields,
+            advancedToggle = advancedToggle
         )
         listOf(
-            editor.nickname,
-            editor.species,
-            editor.item,
-            editor.ability,
-            editor.moves,
-            editor.nature,
-            editor.evs,
             editor.gender,
-            editor.ivs,
             editor.shiny,
             editor.level,
             editor.happiness,
@@ -3360,9 +3386,24 @@ class MainActivity : Activity() {
             editor.gigantamax,
             editor.dynamaxLevel,
             editor.teraType
+        ).forEach(advancedFields::addView)
+        listOf(
+            editor.nickname,
+            editor.species,
+            editor.item,
+            editor.ability,
+            editor.moves,
+            editor.nature,
+            editor.evs,
+            editor.ivs,
+            editor.advancedToggle,
+            editor.advancedFields
         ).forEach(parent::addView)
         return editor
     }
+
+    private fun ShowdownTeamSet.hasAdvancedDetails() = gender.isNotBlank() || shiny || level != 100 || happiness != 255 ||
+        pokeBall.isNotBlank() || hiddenPowerType.isNotBlank() || gigantamax || dynamaxLevel != 10 || teraType.isNotBlank()
 
     private fun teamField(hint: String, value: String): EditText = EditText(this).apply {
         this.hint = hint
@@ -3421,6 +3462,9 @@ class MainActivity : Activity() {
         editor.gigantamax.isChecked = set.gigantamax
         editor.dynamaxLevel.setText(set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty())
         editor.teraType.setText(set.teraType)
+        val visible = set.hasAdvancedDetails()
+        editor.advancedFields.visibility = if (visible) View.VISIBLE else View.GONE
+        editor.advancedToggle.text = if (visible) "Hide advanced details" else "Show advanced details"
     }
 
     private fun readTeamSetEditor(editor: TeamSetEditor): ShowdownTeamSet = ShowdownTeamSet(
