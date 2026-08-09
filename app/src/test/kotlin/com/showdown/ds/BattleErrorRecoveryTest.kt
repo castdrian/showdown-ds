@@ -20,6 +20,18 @@ class BattleErrorRecoveryTest {
     }
 
     @Test
+    fun sentChoiceKeepsAReplayedRequestLocked() {
+        val session = BattleSession()
+        session.applyProtocolLine("|request|{\"rqid\":22,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}")
+
+        session.applyProtocolLine("|sentchoice|move 1|22")
+
+        assertEquals(false, session.decisionAvailable)
+        assertEquals("Choice sent. Waiting for the other player…", session.status)
+        assertEquals(BattleSession.Panel.MOVES, session.panel)
+    }
+
+    @Test
     fun tieAndPrematureEndMarkTheBattleFinished() {
         val session = BattleSession()
 

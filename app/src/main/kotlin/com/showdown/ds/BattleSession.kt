@@ -953,6 +953,7 @@ class BattleSession {
                     "-terastallize" -> applyTerastallize(fields)
                     "faint" -> applyFaint(fields)
                     "request" -> applyRequest(fields)
+                    "sentchoice" -> applySentChoice(fields)
                     "win" -> applyWin(fields)
                     "tie", "draw", "prematureend" -> applyTie(fields)
                     "error" -> applyBattleError(fields)
@@ -1429,6 +1430,19 @@ class BattleSession {
         }.onFailure {
             appendLog("Received an unreadable battle request.")
         }
+    }
+
+    private fun applySentChoice(fields: List<String>) {
+        val choice = fields.drop(2).joinToString("|").trim()
+        if (choice.isBlank() || requestId == null || battleFinished) return
+        decisionAvailable = false
+        selectedGimmick = null
+        selectedTargetIndex = -1
+        targetOptions.clear()
+        activeChoices.clear()
+        forceSwitchChoices.clear()
+        activeSlotIndex = activeRequests.size
+        status = "Choice sent. Waiting for the other player…"
     }
 
     private fun applyActiveRequest(active: JSONObject): Boolean {
