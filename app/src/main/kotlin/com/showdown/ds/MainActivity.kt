@@ -150,6 +150,7 @@ class MainActivity : Activity() {
     private var replaySpeed = 1f
     private var handledReplayLink: String? = null
     private var replayLoadRequest: String? = null
+    private var activeReplaySource: String? = null
     private var playbackScheduledPauseMillis = 0L
     private var playbackScheduledAtMillis = 0L
     private var playbackScheduledSpeed = 1f
@@ -269,7 +270,9 @@ class MainActivity : Activity() {
         displayManager?.registerDisplayListener(displayListener, null)
         showSecondaryDisplay()
         restoreLobbyConnection(savedInstanceState)
-        handleIncomingIntent(intent)
+        if (!handleIncomingIntent(intent)) {
+            savedInstanceState?.getString("active_replay_source")?.let(::loadReplay)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -288,6 +291,7 @@ class MainActivity : Activity() {
         outState.putString("active_search_format", activeSearchFormat)
         outState.putString("active_battle_room", activeBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
+        outState.putString("active_replay_source", replayLoadRequest ?: activeReplaySource)
         super.onSaveInstanceState(outState)
     }
 
@@ -1611,6 +1615,9 @@ class MainActivity : Activity() {
     }
 
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
+        replayLoadRequest = null
+        activeReplaySource = null
+        handledReplayLink = null
         chatRoomDialog?.dismiss()
         tournamentDialog?.dismiss()
         tournamentDialog = null
@@ -2998,11 +3005,12 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun handleIncomingIntent(intent: Intent) {
-        if (intent.action != Intent.ACTION_VIEW) return
-        val source = intent.dataString ?: return
-        val normalized = ShowdownReplayImporter.normalize(source) ?: return
+    private fun handleIncomingIntent(intent: Intent): Boolean {
+        if (intent.action != Intent.ACTION_VIEW) return false
+        val source = intent.dataString ?: return false
+        val normalized = ShowdownReplayImporter.normalize(source) ?: return false
         loadReplay(normalized)
+        return true
     }
 
     private fun loadReplay(normalized: String) {
@@ -3015,6 +3023,7 @@ class MainActivity : Activity() {
             replayLoadRequest = null
             result.onSuccess {
                 handledReplayLink = normalized
+                activeReplaySource = normalized
                 showReplay(it)
             }
                 .onFailure {
