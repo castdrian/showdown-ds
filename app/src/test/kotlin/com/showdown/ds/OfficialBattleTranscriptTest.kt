@@ -99,13 +99,15 @@ class OfficialBattleTranscriptTest {
             listOf(
                 "|raw|<div class=\"broadcast-red\">A <b>battle</b> announcement &amp; rule</div>",
                 "|html|<p>The winner is <strong>ADRIAN</strong>.</p>",
-                "|uhtml|notice|<span>Use /help for commands.</span>"
+                "|uhtml|notice|<span>Use /help for commands.</span>",
+                "|message|ADRIAN's rating: 1053 &rarr; 1080"
             )
         )
 
         assertTrue(session.battleLog().contains("A battle announcement & rule"))
         assertTrue(session.battleLog().contains("The winner is ADRIAN."))
         assertTrue(session.battleLog().contains("Use /help for commands."))
+        assertTrue(session.battleLog().contains("ADRIAN's rating: 1053 → 1080"))
     }
 
     @Test

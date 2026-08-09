@@ -938,7 +938,7 @@ class BattleSession {
                     "-start" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} started.")
                     "-end" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} ended.")
                     "-endability" -> applyEndAbility(fields)
-                    "-hint", "-message" -> appendLog(fields.drop(2).joinToString("|").trim())
+                    "-hint", "-message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "-waiting" -> appendLog("${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}.")
                     "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
                     "-singlemove", "-singleturn" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))}.")
@@ -974,7 +974,7 @@ class BattleSession {
                         clearBattleClock()
                         battleTimerEnabled = false
                     }
-                    "message" -> fields.drop(2).joinToString("|").takeIf { it.isNotBlank() }?.let(::appendLog)
+                    "message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "raw", "html" -> appendMarkup(fields.drop(2).joinToString("|"))
                     "uhtml", "uhtmlchange" -> applyMarkup(fields.getOrNull(2), fields.drop(3).joinToString("|"))
                 }
@@ -1929,6 +1929,10 @@ class BattleSession {
             .replace("&gt;", ">")
             .replace("&quot;", "\"")
             .replace("&#39;", "'")
+            .replace("&rarr;", "→")
+            .replace("&larr;", "←")
+            .replace("&ndash;", "–")
+            .replace("&mdash;", "—")
             .replace(Regex("\\s+"), " ")
             .replace(Regex("\\s+([,.!?])"), "$1")
             .trim()
@@ -1987,83 +1991,84 @@ class BattleSession {
     }
 
     private fun applyMenuSelection() {
-        status = when (focusedMenuItem) {
-            0 -> {
-                publishClientAction(ClientAction.FIND_BATTLE)
-                "Connecting to a ${matchFormat.label}…"
-            }
-            1 -> {
-                publishClientAction(ClientAction.CHOOSE_FORMAT)
-                "Choose a battle format."
-            }
-            2 -> {
-                publishClientAction(ClientAction.OPEN_CHAT)
-                "Open battle chat."
-            }
-            3 -> {
-                if (liveBattleActive && !replayMode) {
-                    if (isBattleParticipant()) {
-                        publishClientAction(ClientAction.FORFEIT)
-                        "Forfeit requires confirmation."
-                    } else {
-                        publishClientAction(ClientAction.LEAVE_BATTLE)
-                        "Leave the spectated battle."
-                    }
-                } else {
-                    publishClientAction(ClientAction.CHALLENGE_PLAYER)
-                    "Challenge another player."
+        if (focusedMenuItem == 0) {
+            status = "Connecting to a ${matchFormat.label}…"
+            publishClientAction(ClientAction.FIND_BATTLE)
+        } else {
+            status = when (focusedMenuItem) {
+                1 -> {
+                    publishClientAction(ClientAction.CHOOSE_FORMAT)
+                    "Choose a battle format."
                 }
-            }
-            4 -> {
-                soundEffectsEnabled = !soundEffectsEnabled
-                "Sound effects ${if (soundEffectsEnabled) "enabled." else "muted."}"
-            }
-            5 -> {
-                musicEnabled = !musicEnabled
-                "Background music ${if (musicEnabled) "enabled." else "muted."}"
-            }
-            6 -> {
-                hapticsEnabled = !hapticsEnabled
-                "Haptics ${if (hapticsEnabled) "enabled." else "disabled."}"
-            }
-            7 -> {
-                touchConfirmationEnabled = !touchConfirmationEnabled
-                "Touch confirmation ${if (touchConfirmationEnabled) "enabled." else "disabled."}"
-            }
-            8 -> {
-                spriteStyle = if (spriteStyle == SpriteStyle.MODERN_3D) SpriteStyle.CLASSIC_2D else SpriteStyle.MODERN_3D
-                "${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "Classic"} sprite style enabled."
-            }
-            9 -> {
-                publishClientAction(ClientAction.CONFIGURE_TEAM)
-                "Manage your saved teams."
-            }
-            10 -> {
-                publishClientAction(ClientAction.OPEN_ROOMS)
-                "Browse Showdown rooms."
-            }
-            11 -> {
-                publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
-                "Configure your Showdown account."
-            }
-            12 -> {
-                publishClientAction(ClientAction.CONFIGURE_SERVER)
-                "Choose a Pokémon Showdown server."
-            }
-            13 -> if (replayMode) {
-                publishClientAction(ClientAction.OPEN_REPLAY_CONTROLS)
-                "Adjust replay playback."
-            } else {
-                publishClientAction(ClientAction.EXPORT_REPLAY)
-                "Copy the battle transcript."
-            }
-            else -> {
-                if (battleFinished) {
-                    publishClientAction(ClientAction.SAVE_REPLAY)
-                    "Saving the battle replay."
+                2 -> {
+                    publishClientAction(ClientAction.OPEN_CHAT)
+                    "Open battle chat."
+                }
+                3 -> {
+                    if (liveBattleActive && !replayMode) {
+                        if (isBattleParticipant()) {
+                            publishClientAction(ClientAction.FORFEIT)
+                            "Forfeit requires confirmation."
+                        } else {
+                            publishClientAction(ClientAction.LEAVE_BATTLE)
+                            "Leave the spectated battle."
+                        }
+                    } else {
+                        publishClientAction(ClientAction.CHALLENGE_PLAYER)
+                        "Challenge another player."
+                    }
+                }
+                4 -> {
+                    soundEffectsEnabled = !soundEffectsEnabled
+                    "Sound effects ${if (soundEffectsEnabled) "enabled." else "muted."}"
+                }
+                5 -> {
+                    musicEnabled = !musicEnabled
+                    "Background music ${if (musicEnabled) "enabled." else "muted."}"
+                }
+                6 -> {
+                    hapticsEnabled = !hapticsEnabled
+                    "Haptics ${if (hapticsEnabled) "enabled." else "disabled."}"
+                }
+                7 -> {
+                    touchConfirmationEnabled = !touchConfirmationEnabled
+                    "Touch confirmation ${if (touchConfirmationEnabled) "enabled." else "disabled."}"
+                }
+                8 -> {
+                    spriteStyle = if (spriteStyle == SpriteStyle.MODERN_3D) SpriteStyle.CLASSIC_2D else SpriteStyle.MODERN_3D
+                    "${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "Classic"} sprite style enabled."
+                }
+                9 -> {
+                    publishClientAction(ClientAction.CONFIGURE_TEAM)
+                    "Manage your saved teams."
+                }
+                10 -> {
+                    publishClientAction(ClientAction.OPEN_ROOMS)
+                    "Browse Showdown rooms."
+                }
+                11 -> {
+                    publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
+                    "Configure your Showdown account."
+                }
+                12 -> {
+                    publishClientAction(ClientAction.CONFIGURE_SERVER)
+                    "Choose a Pokémon Showdown server."
+                }
+                13 -> if (replayMode) {
+                    publishClientAction(ClientAction.OPEN_REPLAY_CONTROLS)
+                    "Adjust replay playback."
                 } else {
-                    publishClientAction(ClientAction.TOGGLE_BATTLE_TIMER)
-                    "Battle timer ${if (battleTimerEnabled) "stopping" else "starting"}."
+                    publishClientAction(ClientAction.EXPORT_REPLAY)
+                    "Copy the battle transcript."
+                }
+                else -> {
+                    if (battleFinished) {
+                        publishClientAction(ClientAction.SAVE_REPLAY)
+                        "Saving the battle replay."
+                    } else {
+                        publishClientAction(ClientAction.TOGGLE_BATTLE_TIMER)
+                        "Battle timer ${if (battleTimerEnabled) "stopping" else "starting"}."
+                    }
                 }
             }
         }

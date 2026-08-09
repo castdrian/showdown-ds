@@ -112,6 +112,10 @@ class ShowdownChatRoomState {
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
+        .replace("&rarr;", "→")
+        .replace("&larr;", "←")
+        .replace("&ndash;", "–")
+        .replace("&mdash;", "—")
         .replace(Regex("\\s+"), " ")
         .trim()
 }

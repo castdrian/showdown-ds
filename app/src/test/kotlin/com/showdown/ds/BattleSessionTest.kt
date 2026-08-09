@@ -932,6 +932,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun matchmakingActionCanReplaceItsInitialStatus() {
+        val session = BattleSession()
+        session.addClientActionListener { action ->
+            if (action == BattleSession.ClientAction.FIND_BATTLE) session.setConnectionStatus("Battle search cancelled.")
+        }
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(0)
+        session.confirmSelection()
+
+        assertEquals("Battle search cancelled.", session.status)
+    }
+
+    @Test
     fun spectatorBattleMenuOffersLeaveInsteadOfForfeit() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()
