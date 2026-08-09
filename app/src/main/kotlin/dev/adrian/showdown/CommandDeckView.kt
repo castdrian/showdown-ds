@@ -406,7 +406,13 @@ class CommandDeckView(
             return
         }
         val palette = movePalette(move.type)
-        val detailPadding = 28f * scale
+        val detailPadding = 32f * scale
+        val detailContent = RectF(
+            bounds.left + detailPadding,
+            bounds.top + 16f * scale,
+            bounds.right - detailPadding,
+            bounds.bottom - 18f * scale
+        )
         paint.color = Color.argb(100, 3, 14, 24)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.STROKE
@@ -418,23 +424,28 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(34f, scale, 29f)
         paint.color = PAPER
-        canvas.drawText(fitTextToWidth(move.name, bounds.width() - 104f * scale), bounds.left + detailPadding, bounds.top + 48f * scale, paint)
+        canvas.drawText(fitTextToWidth(move.name, detailContent.width() - 52f * scale), detailContent.left, bounds.top + 48f * scale, paint)
         val icon = typeIcon(move.type)
         if (icon != null) {
             source.set(0, 0, icon.width, icon.height)
-            destination.set(bounds.right - 72f * scale, bounds.top + 16f * scale, bounds.right - 28f * scale, bounds.top + 60f * scale)
+            destination.set(detailContent.right - 44f * scale, detailContent.top, detailContent.right, detailContent.top + 44f * scale)
             canvas.drawBitmap(icon, source, destination, paint)
         }
         paint.textSize = readableTextSize(24f, scale, 21f)
         paint.color = Color.rgb(153, 224, 220)
-        canvas.drawText("${move.type}  ·  ${move.category}", bounds.left + detailPadding, bounds.top + 92f * scale, paint)
+        canvas.drawText(
+            fitTextToWidth("${move.type}  ·  ${move.category}", detailContent.width()),
+            detailContent.left,
+            bounds.top + 92f * scale,
+            paint
+        )
         paint.textSize = readableTextSize(25f, scale, 22f)
         paint.color = PAPER
         val accuracy = move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—"
-        val metrics = fitTextToWidth("Power ${move.power}  ·  Accuracy $accuracy", bounds.width() - detailPadding * 2f)
-        canvas.drawText(metrics, bounds.left + detailPadding, bounds.top + 132f * scale, paint)
+        val metrics = fitTextToWidth("Power ${move.power}  ·  Accuracy $accuracy", detailContent.width())
+        canvas.drawText(metrics, detailContent.left, bounds.top + 132f * scale, paint)
         paint.textSize = readableTextSize(28f, scale, 24f)
-        canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.left + detailPadding, bounds.top + 174f * scale, paint)
+        canvas.drawText("PP ${move.pp} / ${move.maxPp}", detailContent.left, bounds.top + 174f * scale, paint)
         drawFieldSummary(canvas, bounds, scale)
         if (move.disabled) {
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
@@ -1010,7 +1021,7 @@ class CommandDeckView(
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
             paint.textSize = readableTextSize(38f, scale, 33f)
-            paint.color = if (index == 3) MAGENTA else PAPER
+            paint.color = if (index == 3 && (entry == "Forfeit" || entry == "Leave battle")) MAGENTA else PAPER
             val label = fitTextToWidth(entry, bounds.width() - 64f * scale)
             canvas.drawText(label, bounds.left + 32f * scale, centeredTextBaseline(bounds.centerY()), paint)
         }

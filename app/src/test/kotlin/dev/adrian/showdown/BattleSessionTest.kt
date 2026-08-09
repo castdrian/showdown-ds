@@ -859,6 +859,26 @@ class BattleSessionTest {
     }
 
     @Test
+    fun inactiveHealthAndStatusPacketsUpdateOnlyTheirPartyEntry() {
+        val session = BattleSession()
+
+        session.applyProtocolLine(
+            "|request|{\"rqid\":42,\"active\":[{\"moves\":[{\"move\":\"Fake Out\",\"type\":\"Normal\",\"pp\":10}]}],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50, M\",\"condition\":\"83/100\",\"active\":true},{\"ident\":\"p1: Rotom-Wash\",\"details\":\"Rotom-Wash, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|-heal|p1: Rotom-Wash|90/100",
+                "|-status|p1: Rotom-Wash|par"
+            )
+        )
+
+        assertEquals("83/100", session.playerHp)
+        assertEquals("READY", session.playerCondition)
+        assertEquals("90/100", session.teamMemberDetails(1).hp)
+        assertEquals("PAR", session.teamMemberDetails(1).condition)
+    }
+
+    @Test
     fun livePartyDetailsPreserveBallMetadata() {
         val session = BattleSession()
 

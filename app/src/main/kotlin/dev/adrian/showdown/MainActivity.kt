@@ -2354,6 +2354,9 @@ class MainActivity : Activity() {
                 "Use Find battle to enter matchmaking, or Challenge to play a named player.",
                 "Team builder supports packed, readable, JSON, and backup imports.",
                 "",
+                "Support this project",
+                "If Showdown DS is useful to you, sponsor development on GitHub.",
+                "",
                 "Useful commands",
                 "/help for server commands",
                 "/rules for room rules",
@@ -2365,6 +2368,10 @@ class MainActivity : Activity() {
             ).joinToString("\n")
             setPadding((12f * density).toInt(), (8f * density).toInt(), (12f * density).toInt(), (8f * density).toInt())
         }
+        val sponsorButton = Button(this).apply {
+            text = "Sponsor on GitHub"
+            styleDynamicDialogButton(this)
+        }
         val pokedexButton = Button(this).apply {
             text = "Open Pokédex"
             styleDynamicDialogButton(this)
@@ -2372,6 +2379,7 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(ScrollView(this@MainActivity).apply { addView(resources, -1, -2) }, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(sponsorButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(pokedexButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
         }
         val dialog = ShowdownDialogBuilder(this)
@@ -2384,6 +2392,13 @@ class MainActivity : Activity() {
             showPokedexDialog()
         }
         dialog.show()
+        sponsorButton.setOnClickListener {
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/sponsors/castdrian")))
+            }.onFailure {
+                session.setConnectionStatus("Open github.com/sponsors/castdrian to support the project.")
+            }
+        }
     }
 
     private fun showPokedexDialog() {

@@ -1350,16 +1350,18 @@ class BattleSession {
 
     private fun applyHealth(fields: List<String>) {
         if (fields.size < 4) return
-        val slot = fields[2].substringBefore(":").trim()
+        val actor = fields[2]
+        val slot = actor.substringBefore(":").trim()
+        val pokemon = actor.substringAfter(':').trim()
         val hp = fields[3]
         val currentCondition = condition(hp)
         when {
             isPlayerSide(fields[2]) -> {
                 playerActiveCombatants[slot]?.let {
                     playerActiveCombatants[slot] = it.copy(hp = hp, condition = currentCondition)
-                    updatePlayerPartyMember(it.name) { details -> details.copy(hp = hp, condition = currentCondition) }
                 }
-                if (slot.endsWith("a") || playerActiveCombatants.size == 1) {
+                updatePlayerPartyMember(pokemon) { details -> details.copy(hp = hp, condition = currentCondition) }
+                if (slot.endsWith('a')) {
                     playerHp = hp
                     playerCondition = currentCondition
                     updatePlayerDetails { it.copy(hp = playerHp, condition = playerCondition) }
@@ -1368,9 +1370,9 @@ class BattleSession {
             else -> {
                 opponentActiveCombatants[slot]?.let {
                     opponentActiveCombatants[slot] = it.copy(hp = hp, condition = currentCondition)
-                    updateOpponentParty(it.name) { details -> details.copy(hp = hp, condition = currentCondition) }
                 }
-                if (slot.endsWith("a") || opponentActiveCombatants.size == 1) {
+                updateOpponentParty(pokemon) { details -> details.copy(hp = hp, condition = currentCondition) }
+                if (slot.endsWith('a')) {
                     opponentHp = hp
                     opponentCondition = currentCondition
                     opponentDetails = opponentDetails.copy(hp = opponentHp, condition = opponentCondition)
@@ -1417,21 +1419,22 @@ class BattleSession {
         val actor = fields.getOrNull(2) ?: return
         val status = if (cured) "READY" else fields.getOrNull(3)?.uppercase() ?: return
         val slot = actor.substringBefore(":").trim()
+        val pokemon = actor.substringAfter(':').trim()
         if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let {
                 playerActiveCombatants[slot] = it.copy(condition = status)
-                updatePlayerPartyMember(it.name) { details -> details.copy(condition = status) }
             }
-            if (slot.endsWith("a") || playerActiveCombatants.size == 1) {
+            updatePlayerPartyMember(pokemon) { details -> details.copy(condition = status) }
+            if (slot.endsWith('a')) {
                 playerCondition = status
                 updatePlayerDetails { it.copy(condition = status) }
             }
         } else {
             opponentActiveCombatants[slot]?.let {
                 opponentActiveCombatants[slot] = it.copy(condition = status)
-                updateOpponentParty(it.name) { details -> details.copy(condition = status) }
             }
-            if (slot.endsWith("a") || opponentActiveCombatants.size == 1) {
+            updateOpponentParty(pokemon) { details -> details.copy(condition = status) }
+            if (slot.endsWith('a')) {
                 opponentCondition = status
                 opponentDetails = opponentDetails.copy(condition = status)
                 updateOpponentParty(opponentDetails)
@@ -2133,12 +2136,13 @@ class BattleSession {
 
     private fun updateActorDetails(actor: String, transform: (PokemonDetails) -> PokemonDetails) {
         val name = actor.substringAfter(':').trim()
+        val slot = actor.substringBefore(':').trim()
         if (isPlayerSide(actor)) {
             updatePlayerPartyMember(name, transform)
-            if (name.equals(playerPokemon, true) || playerActiveCombatants.size <= 1) updatePlayerDetails(transform)
+            if (slot.endsWith('a')) updatePlayerDetails(transform)
         } else {
             updateOpponentParty(name, transform)
-            if (name.equals(opponentPokemon, true) || opponentActiveCombatants.size <= 1) opponentDetails = transform(opponentDetails)
+            if (slot.endsWith('a')) opponentDetails = transform(opponentDetails)
         }
     }
 
