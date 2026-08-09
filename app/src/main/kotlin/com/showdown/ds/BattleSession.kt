@@ -65,6 +65,7 @@ class BattleSession {
         LEAVE_BATTLE,
         CHALLENGE_PLAYER,
         EXPORT_REPLAY,
+        SAVE_REPLAY,
         OPEN_REPLAY_CONTROLS,
         SETTINGS_CHANGED,
         TOGGLE_BATTLE_TIMER
@@ -1918,7 +1919,7 @@ class BattleSession {
         11 -> "Showdown account"
         12 -> "Configure server"
         13 -> if (replayMode) "Replay controls" else "Copy battle transcript"
-        else -> "Battle timer ${if (battleTimerEnabled) "on" else "off"}"
+        else -> if (battleFinished) "Save replay" else "Battle timer ${if (battleTimerEnabled) "on" else "off"}"
     }
 
     private fun applyMenuSelection() {
@@ -1993,8 +1994,13 @@ class BattleSession {
                 "Copy the battle transcript."
             }
             else -> {
-                publishClientAction(ClientAction.TOGGLE_BATTLE_TIMER)
-                "Battle timer ${if (battleTimerEnabled) "stopping" else "starting"}."
+                if (battleFinished) {
+                    publishClientAction(ClientAction.SAVE_REPLAY)
+                    "Saving the battle replay."
+                } else {
+                    publishClientAction(ClientAction.TOGGLE_BATTLE_TIMER)
+                    "Battle timer ${if (battleTimerEnabled) "stopping" else "starting"}."
+                }
             }
         }
         if (focusedMenuItem in 4..8) publishClientAction(ClientAction.SETTINGS_CHANGED)

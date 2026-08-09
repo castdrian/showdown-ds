@@ -85,6 +85,7 @@ class MainActivity : Activity() {
     private var authenticated = false
     private var serverUserNamed = false
     private var activeBattleRoomId: String? = null
+    private var completedBattleRoomId: String? = null
     private var leftBattleRoomId: String? = null
     private var pendingBattleJoinRoomId: String? = null
     private var battleProtocolReady = false
@@ -223,6 +224,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.LEAVE_BATTLE -> leaveBattle()
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
                 BattleSession.ClientAction.EXPORT_REPLAY -> showReplayActions()
+                BattleSession.ClientAction.SAVE_REPLAY -> saveBattleReplay()
                 BattleSession.ClientAction.OPEN_REPLAY_CONTROLS -> showReplayControls()
                 BattleSession.ClientAction.TOGGLE_BATTLE_TIMER -> toggleBattleTimer()
                 BattleSession.ClientAction.SETTINGS_CHANGED -> {
@@ -312,6 +314,7 @@ class MainActivity : Activity() {
         outState.putStringArrayList("reconnect_lobby_commands", ArrayList(reconnectLobbyCommands.orEmpty()))
         outState.putString("active_search_format", activeSearchFormat)
         outState.putString("active_battle_room", activeBattleRoomId)
+        outState.putString("completed_battle_room", completedBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
         outState.putString("pending_team_upload_local_id", pendingTeamUpload?.localId)
         outState.putString("pending_team_upload_packed", pendingTeamUpload?.packed)
@@ -683,6 +686,7 @@ class MainActivity : Activity() {
         if (packet.connection == null || showdownConnection !== packet.connection) return
         if (session.isBattleFinished()) {
             lobbyState.clearBattle(roomId)
+            completedBattleRoomId = roomId
             activeBattleRoomId = null
             battleProtocolReady = false
             pendingDecisionCommand = null
@@ -1700,6 +1704,7 @@ class MainActivity : Activity() {
         session.setReplayMode(false)
         session.prepareForLobby()
         activeBattleRoomId = null
+        completedBattleRoomId = null
         battleProtocolReady = false
         pendingDecisionCommand = null
         clearBattlePlayback()
@@ -1740,6 +1745,7 @@ class MainActivity : Activity() {
             ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
         activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
         activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
+        completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
         pendingDecisionCommand = savedInstanceState?.getString("pending_decision_command")
         battleProtocolReady = false
         session.setLiveBattleActive(false)
@@ -1765,6 +1771,7 @@ class MainActivity : Activity() {
 
     private fun clearBattleRoomState() {
         activeBattleRoomId = null
+        completedBattleRoomId = null
         pendingBattleJoinRoomId = null
         battleProtocolReady = false
         pendingDecisionCommand = null
@@ -2673,6 +2680,7 @@ class MainActivity : Activity() {
         teamPrivacyButton?.isEnabled = true
         teamPrivacyButton = null
         activeBattleRoomId = null
+        completedBattleRoomId = null
         pendingDecisionCommand = null
         displayedOutgoingChallenge = null
         privateMessageDialog?.dismiss()
@@ -3467,6 +3475,19 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun saveBattleReplay() {
+        val roomId = activeBattleRoomId ?: completedBattleRoomId
+        if (roomId == null) {
+            session.setConnectionStatus("There is no completed battle to save.")
+            return
+        }
+        if (showdownConnection?.send(roomId, "/savereplay") == true) {
+            session.setConnectionStatus("Saving the battle replay…")
+        } else {
+            session.setConnectionStatus("The battle replay could not be saved.")
+        }
+    }
+
     private fun showReplayControls() {
         if (!session.isReplayMode()) {
             session.setConnectionStatus("Load a replay before opening replay controls.")
@@ -3540,6 +3561,7 @@ class MainActivity : Activity() {
     private fun showReplay(replay: ShowdownReplayPayload) {
         if (isFinishing) return
         activeBattleRoomId = null
+        completedBattleRoomId = null
         battleProtocolReady = false
         pendingDecisionCommand = null
         activeSearchFormat = null

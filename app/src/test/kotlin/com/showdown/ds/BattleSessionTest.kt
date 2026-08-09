@@ -900,6 +900,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun completedBattleMenuOffersReplaySaving() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+
+        session.applyProtocolLine("|win|ADRIAN")
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(14)
+        session.confirmSelection()
+
+        assertEquals("Save replay", session.menuItems()[14])
+        assertEquals(listOf(BattleSession.ClientAction.SAVE_REPLAY), actions)
+    }
+
+    @Test
     fun spectatorBattleMenuOffersLeaveInsteadOfForfeit() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()
