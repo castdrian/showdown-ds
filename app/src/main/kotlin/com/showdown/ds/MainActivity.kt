@@ -1994,6 +1994,7 @@ class MainActivity : Activity() {
                         }
                         if (confirmedJoin) pendingBattleJoinRoomId = null
                         if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
+                        if (lines.any { it.startsWith("|sentchoice|") }) pendingDecisionCommand = null
                         activeBattleRoomId = roomId
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
