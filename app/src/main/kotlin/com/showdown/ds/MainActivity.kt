@@ -162,7 +162,9 @@ class MainActivity : Activity() {
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
-        runOnUiThread { showdownMoveEffects?.applyProtocol(lines) }
+        runOnUiThread {
+            showdownMoveEffects?.applyProtocol(lines)
+        }
     }
     private val decisionListener = BattleSession.DecisionListener { command ->
         if (session.isReplayMode()) {
@@ -412,7 +414,7 @@ class MainActivity : Activity() {
         frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
-        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::planMovePresentation, battleAudio::playMove).also { effects ->
+        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCues).also { effects ->
             frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
             effects.seed(session.protocolHistory())
         }

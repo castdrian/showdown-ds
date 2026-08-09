@@ -7,7 +7,6 @@ import android.view.View
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.webkit.JavascriptInterface
 import android.view.MotionEvent
 import org.json.JSONArray
 import java.util.ArrayDeque
@@ -15,8 +14,7 @@ import java.util.ArrayDeque
 @SuppressLint("SetJavaScriptEnabled")
 class ShowdownMoveEffectsView(
     context: Context,
-    private val movePresentationDuration: (Long) -> Long,
-    private val moveStartListener: (String, Long) -> Unit
+    private val audioCueListener: (List<String>) -> Unit
 ) : WebView(context) {
     private val pendingPackets = ArrayDeque<List<String>>()
     private var flushScheduled = false
@@ -37,7 +35,6 @@ class ShowdownMoveEffectsView(
         settings.loadsImagesAutomatically = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
-        addJavascriptInterface(MoveAudioBridge(), "ShowdownNativeAudio")
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 pageLoaded = true
@@ -82,6 +79,7 @@ class ShowdownMoveEffectsView(
         val payload = JSONArray(packet)
         val receiver = if (packet.firstOrNull() == SEED_PREFIX) "seed" else "receive"
         val lines = if (receiver == "seed") JSONArray(packet.drop(1)) else payload
+        if (receiver != "seed") audioCueListener(packet.toList())
         evaluateJavascript("window.ShowdownNativeEffects.$receiver($lines);", null)
         val pauseMillis = if (receiver == "seed") 0L else BattlePlaybackTiming.pauseAfter(packet)
         flushScheduled = true
@@ -89,16 +87,6 @@ class ShowdownMoveEffectsView(
             post(flushRunnable)
         } else {
             postDelayed(flushRunnable, pauseMillis)
-        }
-    }
-
-    private inner class MoveAudioBridge {
-        @JavascriptInterface
-        fun presentationDuration(visualDurationMillis: Long) = movePresentationDuration(visualDurationMillis)
-
-        @JavascriptInterface
-        fun play(move: String, presentationDurationMillis: Long) {
-            post { moveStartListener(move, presentationDurationMillis) }
         }
     }
 
@@ -165,35 +153,6 @@ class ShowdownMoveEffectsView(
                             battle = new Battle({ id: 'showdownds', ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
                             battle.setMute(true);
                             hideChrome();
-                            var trackedMoveDuration = 0;
-                            var trackingMoveEffects = false;
-                            var animateEffect = battle.scene.animateEffect;
-                            battle.scene.animateEffect = function (element, effect, start, end, transition, after, additionalCss) {
-                                if (trackingMoveEffects) {
-                                    var startTime = Number(start && start.time) || 0;
-                                    var endTime = Number(end && end.time) || (startTime + 500);
-                                    var tail = after === 'fade' ? 100 : after === 'explode' ? 200 : 0;
-                                    trackedMoveDuration = Math.max(trackedMoveDuration, (this.timeOffset || 0) + endTime + tail);
-                                }
-                                return animateEffect.call(this, element, effect, start, end, transition, after, additionalCss);
-                            };
-                            var backgroundEffect = battle.scene.backgroundEffect;
-                            battle.scene.backgroundEffect = function (background, duration, opacity, delay) {
-                                if (trackingMoveEffects) trackedMoveDuration = Math.max(trackedMoveDuration, (Number(delay) || 0) + (Number(duration) || 0));
-                                return backgroundEffect.call(this, background, duration, opacity, delay);
-                            };
-                            var runMoveAnim = battle.scene.runMoveAnim;
-                            battle.scene.runMoveAnim = function (moveid, participants) {
-                                trackedMoveDuration = 0;
-                                trackingMoveEffects = true;
-                                var result = runMoveAnim.call(this, moveid, participants);
-                                trackingMoveEffects = false;
-                                if (!this.animating || !window.ShowdownNativeAudio) return result;
-                                var visualDuration = Math.max(0, Math.round(trackedMoveDuration));
-                                var presentationDuration = Number(window.ShowdownNativeAudio.presentationDuration(visualDuration)) || visualDuration;
-                                window.ShowdownNativeAudio.play(String(moveid), presentationDuration);
-                                return result;
-                            };
                             layout();
                             keepChromeHidden();
                         }

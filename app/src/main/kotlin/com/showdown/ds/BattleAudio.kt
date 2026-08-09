@@ -2,16 +2,10 @@ package com.showdown.ds
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 
 class BattleAudio(
     private val context: Context,
@@ -22,19 +16,11 @@ class BattleAudio(
     private var notificationFile: File? = null
     private var bgmFile: File? = null
     private var bgmPlayer: MediaPlayer? = null
-    private var activeMovePlayer: MediaPlayer? = null
-    private var activeMoveStop: Runnable? = null
     private var bgmPrepared = false
     private var soundEffectsEnabled = true
     private var musicEnabled = false
-    private val moveSoundDirectory = File(context.cacheDir, "move-sfx").apply { mkdirs() }
-    private val moveSoundCache = ConcurrentHashMap<String, File>()
-    private val moveDurationCache = ConcurrentHashMap<String, Long>()
-    private val pendingMoveSounds = ConcurrentHashMap.newKeySet<String>()
-    private val moveSoundCallbacks = mutableMapOf<String, MutableList<(File?) -> Unit>>()
-    private val moveSoundLock = Any()
-    private val moveSoundExecutor = Executors.newFixedThreadPool(2)
-    private val moveSoundTimeline = MoveSoundTimeline()
+    private var released = false
+    private val transientPlayers = mutableSetOf<MediaPlayer>()
     private var selectedMusic = MUSIC[session.showdownMusicIndex()]
     private val loopCheck = object : Runnable {
         override fun run() {
@@ -72,12 +58,11 @@ class BattleAudio(
     }
 
     fun release() {
+        released = true
         mainHandler.removeCallbacks(loopCheck)
         bgmPlayer?.release()
         bgmPlayer = null
-        stopActiveMove()
-        moveSoundTimeline.beginMove()
-        moveSoundExecutor.shutdownNow()
+        transientPlayers.toList().forEach(::finishPlayer)
     }
 
     fun playNavigation() = playNotification(0.35f)
@@ -86,25 +71,11 @@ class BattleAudio(
 
     fun playCancel() = playNotification(0.25f)
 
-    fun preloadMoves(moves: List<String>) {
-        moves.forEach { loadMoveSound(it) { } }
-    }
+    fun preloadMoves(moves: List<String>) = Unit
 
-    fun planMovePresentation(visualDurationMillis: Long) = MovePresentationTiming.duration(visualDurationMillis)
-
-    fun playMove(move: String, presentationDurationMillis: Long) {
+    fun playBattleCues(lines: List<String>) {
         if (!soundEffectsEnabled) return
-        if (presentationDurationMillis <= 0L) return
-        val moveToken = moveSoundTimeline.beginMove(SystemClock.elapsedRealtime())
-        stopActiveMove()
-        val id = resourceId(move)
-        val audioDurationMillis = moveDurationMillis(move)
-        if (audioDurationMillis <= 0L) return
-        moveSoundCache[id]?.let { file ->
-            playMoveFile(file, audioDurationMillis, presentationDurationMillis, moveToken)
-            return
-        }
-        playMoveAsset(id, audioDurationMillis, presentationDurationMillis, moveToken)
+        lines.mapNotNull(BattleAudioCueResolver::cueForProtocolLine).forEach(::playCue)
     }
 
     fun playCry(species: String) {
@@ -161,135 +132,38 @@ class BattleAudio(
         if (soundEffectsEnabled) notificationFile?.let { playFile(it, volume) }
     }
 
-    private fun loadMoveSound(move: String, receiver: (File?) -> Unit) {
-        val id = resourceId(move)
-        moveSoundCache[id]?.let {
-            receiver(it)
-            return
-        }
-        synchronized(moveSoundLock) {
-            moveSoundCache[id]?.let {
-                receiver(it)
-                return
-            }
-            moveSoundCallbacks.getOrPut(id) { mutableListOf() } += receiver
-            if (!pendingMoveSounds.add(id)) return
-        }
-        moveSoundExecutor.execute {
-            val file = copyMoveSound(id)
-            if (file != null) moveSoundCache[id] = file
-            val callbacks = synchronized(moveSoundLock) {
-                pendingMoveSounds.remove(id)
-                moveSoundCallbacks.remove(id).orEmpty()
-            }
-            mainHandler.post { callbacks.forEach { it(file) } }
-        }
-    }
-
-    private fun copyMoveSound(id: String): File? {
-        val target = File(moveSoundDirectory, "$id.mp3")
-        if (target.isFile && target.length() > 0L) return target
-        return runCatching {
-            context.assets.open("move-sfx/$id.mp3").use { input ->
-                val temporary = File(target.parentFile, "${target.name}.part")
-                FileOutputStream(temporary).use { output -> input.copyTo(output) }
-                if (!temporary.renameTo(target)) throw IOException("Unable to cache move sound")
-            }
-            target
-        }.getOrNull()
-    }
-
     private fun playFile(file: File, volume: Float) {
-        MediaPlayer().apply {
-            setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            setDataSource(file.path)
-            setVolume(volume, volume)
-            setOnPreparedListener { start() }
-            setOnCompletionListener { release() }
-            prepareAsync()
+        playPlayer(volume) { player -> player.setDataSource(file.path) }
+    }
+
+    private fun playCue(cue: BattleAudioCue) {
+        playPlayer(0.72f) { player ->
+            context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
+                player.setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
+            }
         }
     }
 
-    private fun playMoveAsset(id: String, audioDurationMillis: Long, presentationDurationMillis: Long, moveToken: Long) {
-        val player = runCatching {
-            context.assets.openFd("move-sfx/$id.mp3").use { asset ->
-                MediaPlayer().apply {
-                    setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
-                }
+    private fun playPlayer(volume: Float, configure: (MediaPlayer) -> Unit) {
+        if (released) return
+        val player = MediaPlayer()
+        transientPlayers += player
+        runCatching {
+            configure(player)
+            player.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            player.setVolume(volume, volume)
+            player.setOnPreparedListener {
+                if (released || it !in transientPlayers) finishPlayer(it) else it.start()
             }
-        }.getOrNull() ?: return
-        startMovePlayer(player, audioDurationMillis, presentationDurationMillis, moveToken)
+            player.setOnCompletionListener(::finishPlayer)
+            player.setOnErrorListener { failed, _, _ -> finishPlayer(failed); true }
+            player.prepareAsync()
+        }.onFailure { finishPlayer(player) }
     }
 
-    private fun playMoveFile(file: File, audioDurationMillis: Long, presentationDurationMillis: Long, moveToken: Long) {
-        val player = runCatching {
-            MediaPlayer().apply { setDataSource(file.path) }
-        }.getOrNull() ?: return
-        startMovePlayer(player, audioDurationMillis, presentationDurationMillis, moveToken)
-    }
-
-    private fun startMovePlayer(player: MediaPlayer, audioDurationMillis: Long, presentationDurationMillis: Long, moveToken: Long) {
-        val visualDispatchAtMillis = SystemClock.elapsedRealtime()
-        player.apply {
-            setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            setVolume(0.72f, 0.72f)
-            setOnPreparedListener {
-                val remainingPresentationMillis = presentationDurationMillis - (SystemClock.elapsedRealtime() - visualDispatchAtMillis)
-                if (activeMovePlayer !== this || !moveSoundTimeline.isPlayable(moveToken, SystemClock.elapsedRealtime()) || remainingPresentationMillis <= 0L) {
-                    release()
-                    return@setOnPreparedListener
-                }
-                val window = MoveAudioWindow.plan(audioDurationMillis, remainingPresentationMillis)
-                isLooping = window.loop
-                start()
-                val stop = Runnable {
-                    if (activeMovePlayer === this) {
-                        activeMovePlayer = null
-                        release()
-                    }
-                }
-                activeMoveStop = stop
-                mainHandler.postDelayed(stop, window.durationMillis)
-            }
-            setOnCompletionListener {
-                if (activeMovePlayer === this) {
-                    activeMovePlayer = null
-                    activeMoveStop?.let(mainHandler::removeCallbacks)
-                    activeMoveStop = null
-                }
-                release()
-            }
-            prepareAsync()
-        }
-        activeMovePlayer = player
-    }
-
-    private fun stopActiveMove() {
-        activeMoveStop?.let(mainHandler::removeCallbacks)
-        activeMoveStop = null
-        activeMovePlayer?.let { player ->
-            runCatching { player.stop() }
-            player.release()
-        }
-        activeMovePlayer = null
-    }
-
-    private fun moveDurationMillis(move: String): Long {
-        val id = resourceId(move)
-        moveDurationCache[id]?.let { return it }
-        val duration = runCatching {
-            context.assets.openFd("move-sfx/$id.mp3").use { asset ->
-                val retriever = MediaMetadataRetriever()
-                try {
-                    retriever.setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
-                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                } finally {
-                    retriever.release()
-                }
-            }
-        }.getOrDefault(0L)
-        if (duration > 0L) moveDurationCache[id] = duration
-        return duration
+    private fun finishPlayer(player: MediaPlayer) {
+        transientPlayers.remove(player)
+        runCatching { player.release() }
     }
 
     private fun resourceId(value: String) = value.lowercase().replace(Regex("[^a-z0-9]"), "")
