@@ -2778,7 +2778,13 @@ class MainActivity : Activity() {
     private fun updateTeamRemoteDialog() {
         val snapshot = teamRemoteState.snapshot
         teamRemoteDialog?.setTitle(snapshot.title)
-        teamRemoteContentView?.text = snapshot.error ?: snapshot.text.ifBlank { "Choose a remote team list." }
+        val summary = when {
+            snapshot.error != null -> snapshot.error
+            snapshot.selectedTeam != null && !snapshot.packed.isNullOrBlank() -> "${snapshot.selectedTeam.name}\n${snapshot.selectedTeam.formatLabel} · ${snapshot.selectedTeam.owner}\n\nReady to import this team."
+            snapshot.teams.isNotEmpty() -> "Choose a team below to view its full export."
+            else -> snapshot.text.ifBlank { "Choose a remote team list." }
+        }
+        teamRemoteContentView?.text = summary
         val links = teamRemoteLinks ?: return
         links.removeAllViews()
         snapshot.teams.forEach { team ->

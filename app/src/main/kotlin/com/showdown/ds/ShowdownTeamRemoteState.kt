@@ -55,6 +55,10 @@ class ShowdownTeamRemoteState {
                     current = current.copy(error = line.removePrefix("|error|").trim(), text = "", teams = emptyList(), selectedTeam = null, packed = null)
                     changed = true
                 }
+                line.startsWith("|popup|") -> {
+                    current = current.copy(error = line.removePrefix("|popup|").trim(), text = "", teams = emptyList(), selectedTeam = null, packed = null)
+                    changed = true
+                }
             }
         }
         return changed
