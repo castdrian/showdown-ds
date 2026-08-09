@@ -215,6 +215,26 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun carriesBoostsThroughOfficialBatonPassSwitches() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Ninjask|Ninjask, L50|100/100",
+                "|-boost|p1a: Ninjask|spe|2",
+                "|-activate|p1a: Ninjask|move: Baton Pass",
+                "|switch|p1a: Smeargle|Smeargle, L50|100/100"
+            )
+        )
+
+        assertEquals(mapOf("spe" to 2), session.battleInfo().playerBoosts)
+
+        session.applyProtocolLine("|-boost|p1a: Smeargle|atk|1")
+        session.applyProtocolLine("|switch|p1a: Vaporeon|Vaporeon, L50|100/100|[from] move: Baton Pass")
+
+        assertEquals(mapOf("spe" to 2, "atk" to 1), session.battleInfo().playerBoosts)
+    }
+
+    @Test
     fun keepsMarkupBattleAnnouncementsReadableInActivity() {
         val session = BattleSession()
 

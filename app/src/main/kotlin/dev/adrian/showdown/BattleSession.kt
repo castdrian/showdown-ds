@@ -280,6 +280,7 @@ class BattleSession {
     private val opponentBoosts = mutableMapOf<String, Int>()
     private val playerBoostsBySlot = mutableMapOf<String, MutableMap<String, Int>>()
     private val opponentBoostsBySlot = mutableMapOf<String, MutableMap<String, Int>>()
+    private val pendingBatonPassBySide = mutableMapOf<String, String>()
 
     var panel = Panel.MOVES
         private set
@@ -965,13 +966,13 @@ class BattleSession {
                     "-immune" -> appendLog("${battleActor(fields.getOrNull(2))} is immune.")
                     "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
                     "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge.")
-                    "-activate" -> appendLog("${battleActor(fields.getOrNull(2))} activated ${battleEffectName(fields.getOrNull(3))}.")
                     "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
                     "-hint", "-message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "-waiting" -> appendLog("${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}.")
                     "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
                     "-singlemove", "-singleturn" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))}.")
+                    "-activate" -> applyActivate(fields)
                     "-ohko" -> appendLog("It's a one-hit KO!")
                     "-combine" -> appendLog("The move effects combined.")
                     "-candynamax" -> appendLog("Dynamax is available.")
@@ -1112,6 +1113,7 @@ class BattleSession {
         opponentBoosts.clear()
         playerBoostsBySlot.clear()
         opponentBoostsBySlot.clear()
+        pendingBatonPassBySide.clear()
         decisionAvailable = false
         choiceCanBeCancelled = false
         decisionKind = DecisionKind.WAIT
@@ -1152,6 +1154,12 @@ class BattleSession {
         val pokemon = fields[3].substringBefore(',')
         val playerSide = isPlayerSide(fields[2])
         val slot = fields[2].substringBefore(":").trim()
+        val side = sideForSlot(slot)
+        if (fields.drop(5).any { it.contains("Baton Pass", true) }) pendingBatonPassBySide[side] = slot
+        val passedBoosts = pendingBatonPassBySide.remove(side)?.let { sourceSlot ->
+            val slots = if (playerSide) playerBoostsBySlot else opponentBoostsBySlot
+            slots.remove(sourceSlot)?.toMap()
+        }
         val entryDelayMillis = queueEntry(playerSide)
         val parsedDetails = parseDetails(fields[3])
         val hp = fields[4]
@@ -1170,6 +1178,7 @@ class BattleSession {
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
                 playerBoostsBySlot.remove(slot)
+                if (!passedBoosts.isNullOrEmpty()) playerBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
                     types = baseTypes,
@@ -1199,6 +1208,7 @@ class BattleSession {
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
                 opponentBoostsBySlot.remove(slot)
+                if (!passedBoosts.isNullOrEmpty()) opponentBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
                     types = baseTypes,
@@ -1909,6 +1919,16 @@ class BattleSession {
         appendLog("${battleActor(actor)}'s ability was suppressed.")
     }
 
+    private fun applyActivate(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val effect = battleEffectName(fields.getOrNull(3)).ifBlank { "an effect" }
+        if (effect.equals("Baton Pass", true)) {
+            val slot = targetSlot(actor)
+            pendingBatonPassBySide[sideForSlot(slot)] = slot
+        }
+        appendLog("${battleActor(actor)} activated $effect.")
+    }
+
     private fun applyItem(fields: List<String>, replacement: String? = null) {
         if (fields.size < 3) return
         val item = replacement ?: fields.getOrNull(3) ?: return
@@ -2068,6 +2088,8 @@ class BattleSession {
     private fun boostSlots(actor: String) = if (isPlayerSide(actor)) playerBoostsBySlot else opponentBoostsBySlot
 
     private fun targetSlot(actor: String) = actor.substringBefore(':').trim()
+
+    private fun sideForSlot(slot: String) = slot.dropLast(1)
 
     private fun removeEmptyBoostSlot(actor: String) {
         val slots = boostSlots(actor)
