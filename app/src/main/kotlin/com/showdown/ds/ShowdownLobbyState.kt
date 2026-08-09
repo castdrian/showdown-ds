@@ -158,6 +158,13 @@ class ShowdownLobbyState {
     }
 
     companion object {
+        fun noInitReason(lines: List<String>): String? = lines.firstOrNull { it.startsWith("|noinit|") }?.let { line ->
+            val fields = line.split('|', limit = 4)
+            fields.getOrNull(3)?.trim()?.takeIf { it.isNotBlank() }
+                ?: fields.getOrNull(2)?.trim()?.takeIf { it.isNotBlank() }
+                ?: "That battle room is no longer available."
+        }
+
         fun searchCommands(format: String, packedTeam: String?) = listOf("/utm ${packedTeam?.takeIf { it.isNotBlank() } ?: "null"}", "/search $format")
 
         fun challengeCommands(username: String, format: String, packedTeam: String?) = listOf(

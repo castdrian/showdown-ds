@@ -134,6 +134,15 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun extractsTheHumanReadableNoInitReason() {
+        assertEquals(
+            "The room \"battle-gen9ou-1\" does not exist.",
+            ShowdownLobbyState.noInitReason(listOf("|noinit|nonexistent|The room \"battle-gen9ou-1\" does not exist."))
+        )
+        assertEquals(null, ShowdownLobbyState.noInitReason(listOf("|init|battle")))
+    }
+
+    @Test
     fun clearsCachedRoomsAndChallengesWhenTheSessionEnds() {
         val lobby = ShowdownLobbyState()
         lobby.applyProtocol(

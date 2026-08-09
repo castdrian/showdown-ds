@@ -1978,17 +1978,21 @@ class MainActivity : Activity() {
                         }
                     }
                     if (roomId?.startsWith("battle-") == true) {
-                        val noInitMessage = lines.firstOrNull { it.startsWith("|noinit|") }
-                            ?.removePrefix("|noinit|")
-                            ?.trim()
-                            ?.ifBlank { "That battle room is no longer available." }
+                        val noInitMessage = ShowdownLobbyState.noInitReason(lines)
                         if (noInitMessage != null && roomId != leftBattleRoomId &&
                             (roomId == activeBattleRoomId || roomId == pendingBattleJoinRoomId)
                         ) {
+                            val wasPendingJoin = pendingBattleJoinRoomId == roomId && activeBattleRoomId != roomId
                             reconnectHandler.removeCallbacks(battleRejoinTimeout)
+                            lobbyState.clearBattle(roomId)
                             leftBattleRoomId = roomId
                             clearBattleRoomState()
-                            session.setConnectionStatus(noInitMessage)
+                            if (wasPendingJoin) {
+                                session.setConnectionStatus("That battle ended before you could join. Finding another battle…")
+                                beginBattleSearch()
+                            } else {
+                                session.setConnectionStatus(noInitMessage)
+                            }
                             return@runOnUiThread
                         }
                         val startsBattle = lines.any { it.startsWith("|init|battle") }
