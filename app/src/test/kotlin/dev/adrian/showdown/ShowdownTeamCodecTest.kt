@@ -120,8 +120,10 @@ Tera Type: Steel
         assertEquals(listOf(4, 0, 0, 252, 0, 252), set.evs)
         assertEquals(listOf(31, 0, 31, 31, 31, 31), set.ivs)
         assertTrue(set.shiny)
-        assertTrue(ShowdownTeamCodec.toText(listOf(set)).contains("Tera Type: Steel"))
-        assertEquals(1, ShowdownTeamCodec.parse(ShowdownTeamCodec.toText(listOf(set))).size)
+        val text = ShowdownTeamCodec.toText(listOf(set))
+        assertEquals("Lead (Gholdengo) (F) @ Leftovers", text.lineSequence().first())
+        assertTrue(text.contains("Tera Type: Steel"))
+        assertEquals(1, ShowdownTeamCodec.parse(text).size)
     }
 
     @Test
