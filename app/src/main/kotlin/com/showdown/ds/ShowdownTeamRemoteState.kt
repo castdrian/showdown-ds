@@ -80,6 +80,7 @@ class ShowdownTeamRemoteState {
 
     private fun toReadableText(html: String): String = html
         .replace(Regex("<br\\s*/?>"), "\n")
+        .replace(Regex("<hr\\s*/?>"), "\n\n")
         .replace(Regex("</(?:p|h[1-6]|div|li|form|hr|tr)>"), "\n")
         .replace(Regex("<[^>]+>"), "")
         .replace("&nbsp;", " ")

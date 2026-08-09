@@ -87,7 +87,9 @@ class ShowdownTeamRemoteTest {
             <strong>Rain team</strong><br /><small>Uploaded by: <strong>adrian</strong></small><br />
             <small>Uploaded on: today</small><br /><small>Format: [Gen 9] OU</small>
             <br /><a class="subtle" href="/view-team-42-secret">Pikachu</a><br />
-            <a href="https://psim.us/t/42-secret">View full team</a><hr /></div>
+            <a href="https://psim.us/t/42-secret">View full team</a><hr />
+            Pikachu @ Light Ball<br />Ability: Static<br />- Thunderbolt<hr />
+            Rotom-Wash @ Leftovers<br />Ability: Levitate<br />- Hydro Pump</div>
         """.trimIndent()
 
         assertTrue(state.applyProtocol("view-teams-all", listOf("|pagehtml|$html")))
@@ -97,6 +99,7 @@ class ShowdownTeamRemoteTest {
         assertEquals("Rain team", team.name)
         assertEquals("[Gen 9] OU", team.formatLabel)
         assertEquals("adrian", team.owner)
+        assertEquals(2, state.snapshot.packed?.split(']')?.size)
         assertEquals("/join view-teams-view-42-secret", ShowdownTeamRemoteState.viewCommand(team))
         assertEquals("/join view-teams-all", ShowdownTeamRemoteState.ownTeamsCommand())
         assertEquals("/join view-teams-browse", ShowdownTeamRemoteState.browseCommand())
