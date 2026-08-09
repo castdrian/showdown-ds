@@ -267,7 +267,7 @@ class BattleSession {
     private var activeSlotIndex = 0
     private var requiredSwitches = 0
     private var selectedTargetIndex = -1
-    private var touchMoveConfirmationIndex: Int? = null
+    private var restoredPlayerSlot: String? = null
     private val sideNames = mutableMapOf<String, String>()
     private var playerSlot = "p1"
     private var localUsername: String? = null
@@ -353,8 +353,6 @@ class BattleSession {
     var decisionKind = DecisionKind.MOVE
         private set
     var matchFormat = MatchFormat.GEN7_RANDOM
-        private set
-    var touchConfirmationEnabled = true
         private set
     var soundEffectsEnabled = true
         private set
@@ -565,6 +563,16 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun battlePlayerSlot() = playerSlot
+
+    fun restoreBattlePlayerSlot(slot: String?) {
+        val value = slot?.takeIf { it.matches(Regex("p[1-4]")) } ?: return
+        restoredPlayerSlot = value
+        playerSlot = value
+        updatePerspective()
+        notifyListeners()
+    }
+
     fun localUsername() = localUsername.orEmpty()
 
     fun setConnectionStatus(value: String) {
@@ -602,6 +610,7 @@ class BattleSession {
     fun isReplayMode() = replayMode
 
     fun prepareForLobby() {
+        restoredPlayerSlot = null
         applyInit(listOf("", "init", "battle"))
         replayMode = false
         protocolHistory.clear()
@@ -643,13 +652,11 @@ class BattleSession {
     }
 
     fun applyUserPreferences(
-        touchConfirmation: Boolean,
         soundEffects: Boolean,
         music: Boolean,
         haptics: Boolean,
         spriteStyle: SpriteStyle
     ) {
-        touchConfirmationEnabled = touchConfirmation
         soundEffectsEnabled = soundEffects
         musicEnabled = music
         hapticsEnabled = haptics
@@ -684,12 +691,6 @@ class BattleSession {
             notifyListeners()
             return
         }
-        if (touchConfirmationEnabled && touchMoveConfirmationIndex != index) {
-            touchMoveConfirmationIndex = index
-            focusMove(index)
-            return
-        }
-        touchMoveConfirmationIndex = null
         focusedMove = index
         panel = Panel.MOVES
         updateTargetOptions()
@@ -760,7 +761,6 @@ class BattleSession {
     }
 
     fun confirmSelection() {
-        touchMoveConfirmationIndex = null
         when (panel) {
             Panel.MOVES -> {
                 if (!decisionAvailable || decisionKind != DecisionKind.MOVE || focusedMove !in moves.indices) return
@@ -1119,7 +1119,7 @@ class BattleSession {
         typeChangeBySlot.clear()
         typeAdditionsBySlot.clear()
         terastallizedSlots.clear()
-        playerSlot = "p1"
+        playerSlot = restoredPlayerSlot ?: "p1"
         activeRequests.clear()
         activeChoices.clear()
         forceSwitchChoices.clear()
@@ -1756,7 +1756,6 @@ class BattleSession {
             )
         }
         focusedMove = 0
-        touchMoveConfirmationIndex = null
         selectedTargetIndex = -1
         decisionKind = DecisionKind.MOVE
         decisionAvailable = moves.isNotEmpty()
@@ -2398,13 +2397,12 @@ class BattleSession {
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
         5 -> "Background music ${if (musicEnabled) "on" else "off"}"
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
-        7 -> "Touch confirmation ${if (touchConfirmationEnabled) "on" else "off"}"
-        8 -> "Sprite style ${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "classic"}"
-        9 -> "Team library"
-        10 -> "Rooms"
-        11 -> "Showdown account"
-        12 -> "Configure server"
-        13 -> if (replayMode) "Replay controls" else "Battle controls"
+        7 -> "Sprite style ${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "classic"}"
+        8 -> "Team library"
+        9 -> "Rooms"
+        10 -> "Showdown account"
+        11 -> "Configure server"
+        12 -> if (replayMode) "Replay controls" else "Battle controls"
         else -> if (battleFinished) "Save replay" else "Battle timer ${if (battleTimerEnabled) "on" else "off"}"
     }
 
@@ -2449,30 +2447,26 @@ class BattleSession {
                     "Haptics ${if (hapticsEnabled) "enabled." else "disabled."}"
                 }
                 7 -> {
-                    touchConfirmationEnabled = !touchConfirmationEnabled
-                    "Touch confirmation ${if (touchConfirmationEnabled) "enabled." else "disabled."}"
-                }
-                8 -> {
                     spriteStyle = if (spriteStyle == SpriteStyle.MODERN_3D) SpriteStyle.CLASSIC_2D else SpriteStyle.MODERN_3D
                     "${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "Classic"} sprite style enabled."
                 }
-                9 -> {
+                8 -> {
                     publishClientAction(ClientAction.CONFIGURE_TEAM)
                     "Manage your saved teams."
                 }
-                10 -> {
+                9 -> {
                     publishClientAction(ClientAction.OPEN_ROOMS)
                     "Browse Showdown rooms."
                 }
-                11 -> {
+                10 -> {
                     publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
                     "Configure your Showdown account."
                 }
-                12 -> {
+                11 -> {
                     publishClientAction(ClientAction.CONFIGURE_SERVER)
                     "Choose a Pokémon Showdown server."
                 }
-                13 -> {
+                12 -> {
                     publishClientAction(ClientAction.OPEN_REPLAY_CONTROLS)
                     "Adjust battle playback."
                 }
@@ -2487,7 +2481,7 @@ class BattleSession {
                 }
             }
         }
-        if (focusedMenuItem in 4..8) publishClientAction(ClientAction.SETTINGS_CHANGED)
+        if (focusedMenuItem in 4..7) publishClientAction(ClientAction.SETTINGS_CHANGED)
     }
 
     private fun confirmTeamSelection() {
@@ -2727,7 +2721,7 @@ class BattleSession {
     }
 
     companion object {
-        const val MENU_ITEM_COUNT = 15
+        const val MENU_ITEM_COUNT = 14
         const val MENU_COLUMNS = 3
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 

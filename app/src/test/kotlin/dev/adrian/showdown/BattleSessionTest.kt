@@ -97,6 +97,25 @@ class BattleSessionTest {
     }
 
     @Test
+    fun restoredBattleSideSurvivesARejoinWithoutTheOldGuestName() {
+        val session = BattleSession()
+        session.prepareForLobby()
+        session.setLocalUsername("GuestNew")
+        session.restoreBattlePlayerSlot("p2")
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|ThorOpp",
+                "|player|p2|GuestOld"
+            )
+        )
+
+        assertEquals("p2", session.battlePlayerSlot())
+        assertEquals("GuestOld", session.playerName)
+        assertEquals("ThorOpp", session.opponentName)
+    }
+
+    @Test
     fun endingLiveBattleClearsTheCancellableChoice() {
         val session = BattleSession()
         session.setLiveBattleActive(true)
@@ -472,42 +491,23 @@ class BattleSessionTest {
     }
 
     @Test
-    fun touchRequiresASecondTapByDefaultAndCanBeDisabled() {
+    fun touchSelectsAndSendsAMoveOnTheFirstTap() {
         val session = BattleSession()
-
-        session.selectMoveWithTouch(2)
-        assertTrue(session.touchConfirmationEnabled)
-        assertEquals(2, session.focusedMove)
-        assertFalse(session.chatMessages().last().contains("/choose move 3"))
 
         session.selectMoveWithTouch(2)
         assertTrue(session.chatMessages().last().contains("/choose move 3"))
         assertEquals("Incineroar chose Darkest Lariat.", session.latestBattleEvent)
         assertEquals("Move sent: Darkest Lariat", session.status)
-
-        session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(7)
-        session.confirmSelection()
-        session.applyProtocolLine("|request|{\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35},{\"move\":\"Growl\",\"pp\":40}]}]}")
-        session.selectMoveWithTouch(1)
-
-        assertFalse(session.touchConfirmationEnabled)
-        assertEquals(1, session.focusedMove)
-        assertTrue(session.chatMessages().last().contains("/choose move 2"))
     }
 
     @Test
-    fun touchRequiresASecondTapEvenForTheInitiallyFocusedMove() {
+    fun touchSelectsTheInitiallyFocusedMoveOnTheFirstTap() {
         val session = BattleSession()
 
         session.selectMoveWithTouch(0)
 
-        assertFalse(session.chatMessages().last().contains("/choose move 1"))
-        assertEquals(0, session.focusedMove)
-
-        session.selectMoveWithTouch(0)
-
         assertTrue(session.chatMessages().last().contains("/choose move 1"))
+        assertEquals(0, session.focusedMove)
     }
 
     @Test
@@ -533,7 +533,7 @@ class BattleSessionTest {
 
         assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(8)
+        session.selectMenuItem(7)
         session.confirmSelection()
 
         assertEquals(BattleSession.SpriteStyle.CLASSIC_2D, session.spriteStyle)
@@ -913,13 +913,13 @@ class BattleSessionTest {
         session.selectPanel(BattleSession.Panel.MENU)
         session.selectMenuItem(0)
         session.confirmSelection()
+        session.selectMenuItem(8)
+        session.confirmSelection()
         session.selectMenuItem(9)
         session.confirmSelection()
         session.selectMenuItem(10)
         session.confirmSelection()
         session.selectMenuItem(11)
-        session.confirmSelection()
-        session.selectMenuItem(12)
         session.confirmSelection()
         assertEquals(
             listOf(
@@ -941,7 +941,7 @@ class BattleSessionTest {
         session.applyProtocolLine("|init|battle")
 
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(13)
+        session.selectMenuItem(12)
         session.confirmSelection()
 
         assertEquals(listOf(BattleSession.ClientAction.OPEN_REPLAY_CONTROLS), actions)
@@ -977,15 +977,15 @@ class BattleSessionTest {
         session.setLocalUsername("ADRIAN")
         session.setLiveBattleActive(true)
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(14)
+        session.selectMenuItem(13)
         session.confirmSelection()
 
         assertEquals(listOf(BattleSession.ClientAction.TOGGLE_BATTLE_TIMER), actions)
-        assertEquals("Battle timer off", session.menuItems()[14])
+        assertEquals("Battle timer off", session.menuItems()[13])
 
         session.applyProtocolLine("|inactive|Time left: 60 sec this turn | 300 sec total | 30 sec grace")
         assertTrue(session.isBattleTimerEnabled())
-        assertEquals("Battle timer on", session.menuItems()[14])
+        assertEquals("Battle timer on", session.menuItems()[13])
 
         session.applyProtocolLine("|inactiveoff|")
         assertFalse(session.isBattleTimerEnabled())
@@ -999,10 +999,10 @@ class BattleSessionTest {
 
         session.applyProtocolLine("|win|ADRIAN")
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(14)
+        session.selectMenuItem(13)
         session.confirmSelection()
 
-        assertEquals("Save replay", session.menuItems()[14])
+        assertEquals("Save replay", session.menuItems()[13])
         assertEquals(listOf(BattleSession.ClientAction.SAVE_REPLAY), actions)
     }
 
@@ -1054,14 +1054,12 @@ class BattleSessionTest {
         val session = BattleSession()
 
         session.applyUserPreferences(
-            touchConfirmation = false,
             soundEffects = false,
             music = true,
             haptics = false,
             spriteStyle = BattleSession.SpriteStyle.CLASSIC_2D
         )
 
-        assertFalse(session.touchConfirmationEnabled)
         assertFalse(session.soundEffectsEnabled)
         assertTrue(session.musicEnabled)
         assertFalse(session.hapticsEnabled)
@@ -1146,10 +1144,10 @@ class BattleSessionTest {
 
         session.setReplayMode(true)
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(13)
+        session.selectMenuItem(12)
         session.confirmSelection()
 
-        assertEquals("Replay controls", session.menuItems()[13])
+        assertEquals("Replay controls", session.menuItems()[12])
         assertEquals(listOf(BattleSession.ClientAction.OPEN_REPLAY_CONTROLS), actions)
     }
 }

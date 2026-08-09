@@ -315,6 +315,7 @@ class MainActivity : Activity() {
         outState.putStringArrayList("reconnect_lobby_commands", ArrayList(reconnectLobbyCommands.orEmpty()))
         outState.putString("active_search_format", activeSearchFormat)
         outState.putString("active_battle_room", activeBattleRoomId)
+        outState.putString("battle_player_slot", session.battlePlayerSlot())
         outState.putString("completed_battle_room", completedBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
         outState.putString("pending_team_upload_local_id", pendingTeamUpload?.localId)
@@ -697,6 +698,7 @@ class MainActivity : Activity() {
             session.setLiveBattleActive(false)
             return
         }
+        persistLobbyState()
         if (activeBattleRoomId == roomId && battleProtocolReady && session.decisionAvailable) {
             pendingDecisionCommand?.let { command ->
                 if (packet.connection.send(roomId, command)) pendingDecisionCommand = null
@@ -1748,6 +1750,8 @@ class MainActivity : Activity() {
             ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
         activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
         activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
+        val battlePlayerSlot = savedInstanceState?.getString("battle_player_slot") ?: preferences.getString("battle_player_slot", null)
+        if (activeBattleRoomId != null) session.restoreBattlePlayerSlot(battlePlayerSlot)
         completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
         pendingDecisionCommand = savedInstanceState?.getString("pending_decision_command")
         battleProtocolReady = false
@@ -1765,6 +1769,7 @@ class MainActivity : Activity() {
             .putString("reconnect_lobby_commands", encodeLobbyCommands(reconnectLobbyCommands))
             .putString("active_search_format", activeSearchFormat)
             .putString("active_battle_room", activeBattleRoomId)
+            .putString("battle_player_slot", activeBattleRoomId?.let { session.battlePlayerSlot() })
             .apply()
     }
 
@@ -2013,7 +2018,6 @@ class MainActivity : Activity() {
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
                         if (startsBattle) battleProtocolReady = true
-                        persistLobbyState()
                         session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
                         enqueueBattlePlayback(connection, roomId, lines)
                     }
@@ -2036,6 +2040,7 @@ class MainActivity : Activity() {
 
     private fun joinMatchedBattle(connection: ShowdownConnection, roomId: String) {
         if (activeBattleRoomId != null || !connection.sendGlobal(ShowdownLobbyState.joinBattleCommand(roomId))) return
+        session.prepareForLobby()
         pendingBattleJoinRoomId = roomId
         activeSearchFormat?.let(lobbyState::clearSearch)
         activeSearchFormat = null
@@ -3823,7 +3828,6 @@ class MainActivity : Activity() {
         val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
         replaySpeed = preferences.getFloat("battle_speed", DEFAULT_BATTLE_SPEED).coerceIn(0.25f, 4f)
         session.applyUserPreferences(
-            touchConfirmation = preferences.getBoolean("touch_confirmation", true),
             soundEffects = preferences.getBoolean("sound_effects", true),
             music = preferences.getBoolean("music", true),
             haptics = preferences.getBoolean("haptics", true),
@@ -3835,7 +3839,6 @@ class MainActivity : Activity() {
 
     private fun persistUserPreferences() {
         getSharedPreferences("showdown", MODE_PRIVATE).edit()
-            .putBoolean("touch_confirmation", session.touchConfirmationEnabled)
             .putBoolean("sound_effects", session.soundEffectsEnabled)
             .putBoolean("music", session.musicEnabled)
             .putBoolean("haptics", session.hapticsEnabled)

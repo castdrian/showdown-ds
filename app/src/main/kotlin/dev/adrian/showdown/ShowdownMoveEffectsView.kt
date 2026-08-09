@@ -150,14 +150,13 @@ class ShowdownMoveEffectsView(
                                 this.__showdownNativeDamageArmed = move && move.category !== 'Status';
                                 this.__showdownNativeDamagePlayed = false;
                                 this.__showdownNativeDamagePending = false;
-                                this.__showdownNativeResultCue = null;
+                                this.__showdownNativeResultCues = [];
                                 return originalRunMoveAnim.apply(this, arguments);
                             };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
                             BattleScene.prototype.resultAnim = function () {
-                                if (this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeResultCue) {
-                                    var cue = this.__showdownNativeResultCue;
-                                    this.__showdownNativeResultCue = null;
+                                if (this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeResultCues && this.__showdownNativeResultCues.length) {
+                                    var cue = this.__showdownNativeResultCues.shift();
                                     nativeCue(cue);
                                 }
                                 return originalResultAnim.apply(this, arguments);
@@ -176,6 +175,7 @@ class ShowdownMoveEffectsView(
                                 var resultCue = null;
                                 var kwArgs = arguments[1] || {};
                                 this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;
+                                if (!this.scene.__showdownNativeResultCues) this.scene.__showdownNativeResultCues = [];
                                 if (this.scene.animating && !kwArgs.silent) {
                                     var magnitude = Number(args[3]);
                                     if (args[0] === '-supereffective') resultCue = 'super_effective';
@@ -183,7 +183,7 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-boost' && magnitude !== 0) resultCue = magnitude > 0 ? 'stat_boost' : 'stat_drop';
                                     if (args[0] === '-unboost' && magnitude !== 0) resultCue = magnitude > 0 ? 'stat_drop' : 'stat_boost';
                                     if (args[0] === '-setboost' && magnitude !== 0) resultCue = magnitude > 0 ? 'stat_boost' : 'stat_drop';
-                                    this.scene.__showdownNativeResultCue = resultCue;
+                                    if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
                                     if (args[0] === '-damage' && !kwArgs.from && this.scene.__showdownNativeDamageArmed) this.scene.__showdownNativeDamagePending = true;
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
