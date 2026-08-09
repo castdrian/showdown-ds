@@ -2357,6 +2357,9 @@ class MainActivity : Activity() {
                 "Support this project",
                 "If Showdown DS is useful to you, sponsor development on GitHub.",
                 "",
+                "Battle audio",
+                "Preview the same damage, effectiveness, and stat-change cues used in battles.",
+                "",
                 "Useful commands",
                 "/help for server commands",
                 "/rules for room rules",
@@ -2372,6 +2375,10 @@ class MainActivity : Activity() {
             text = "Sponsor on GitHub"
             styleDynamicDialogButton(this)
         }
+        val audioButton = Button(this).apply {
+            text = "Preview battle sounds"
+            styleDynamicDialogButton(this)
+        }
         val pokedexButton = Button(this).apply {
             text = "Open Pokédex"
             styleDynamicDialogButton(this)
@@ -2380,6 +2387,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             addView(ScrollView(this@MainActivity).apply { addView(resources, -1, -2) }, LinearLayout.LayoutParams(-1, 0, 1f))
             addView(sponsorButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+            addView(audioButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(pokedexButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
         }
         val dialog = ShowdownDialogBuilder(this)
@@ -2397,6 +2405,14 @@ class MainActivity : Activity() {
                 startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/sponsors/castdrian")))
             }.onFailure {
                 session.setConnectionStatus("Open github.com/sponsors/castdrian to support the project.")
+            }
+        }
+        audioButton.setOnClickListener {
+            if (!session.soundEffectsEnabled) {
+                session.setConnectionStatus("Enable sound effects from Menu before previewing battle sounds.")
+            } else {
+                session.setConnectionStatus("Playing battle sound preview…")
+                battleAudio.playCuePreview { session.setConnectionStatus("Battle sound preview complete.") }
             }
         }
     }

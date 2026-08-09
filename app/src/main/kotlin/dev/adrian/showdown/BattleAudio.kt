@@ -43,6 +43,7 @@ class BattleAudio(
     private var musicEnabled = false
     private val released = AtomicBoolean(false)
     private val transientPlayers = mutableSetOf<MediaPlayer>()
+    private val previewRunnables = mutableSetOf<Runnable>()
     private var selectedMusic = MUSIC[session.showdownMusicIndex()]
     private val loopCheck = object : Runnable {
         override fun run() {
@@ -99,6 +100,8 @@ class BattleAudio(
     fun release() {
         if (!released.compareAndSet(false, true)) return
         mainHandler.removeCallbacks(loopCheck)
+        previewRunnables.toList().forEach(mainHandler::removeCallbacks)
+        previewRunnables.clear()
         bgmPlayer?.release()
         bgmPlayer = null
         audioCueHandler.removeCallbacksAndMessages(null)
@@ -115,6 +118,19 @@ class BattleAudio(
     fun playConfirm() = playNotification(0.55f)
 
     fun playCancel() = playNotification(0.25f)
+
+    fun playCuePreview(onComplete: () -> Unit) {
+        previewRunnables.toList().forEach(mainHandler::removeCallbacks)
+        previewRunnables.clear()
+        if (!soundEffectsEnabled.get()) {
+            onComplete()
+            return
+        }
+        BattleAudioCue.values().forEachIndexed { index, cue ->
+            postPreview(index * CUE_PREVIEW_INTERVAL_MILLIS) { playBattleCue(cue) }
+        }
+        postPreview(BattleAudioCue.values().size * CUE_PREVIEW_INTERVAL_MILLIS, onComplete)
+    }
 
     fun playBattleCue(cue: BattleAudioCue) {
         audioCueHandler.post {
@@ -212,6 +228,16 @@ class BattleAudio(
         if (soundEffectsEnabled.get()) notificationFile?.let { playFile(it, volume) }
     }
 
+    private fun postPreview(delayMillis: Long, action: () -> Unit) {
+        lateinit var runnable: Runnable
+        runnable = Runnable {
+            previewRunnables.remove(runnable)
+            if (!released.get()) action()
+        }
+        previewRunnables += runnable
+        mainHandler.postDelayed(runnable, delayMillis)
+    }
+
     private fun playFile(file: File, volume: Float) {
         playPlayer(volume) { player -> player.setDataSource(file.path) }
     }
@@ -262,6 +288,7 @@ class BattleAudio(
         )
         const val MAX_PENDING_BATTLE_CUES = 16
         const val MAX_PENDING_BATTLE_CUE_AGE_MILLIS = 350L
+        const val CUE_PREVIEW_INTERVAL_MILLIS = 650L
     }
 
 }
