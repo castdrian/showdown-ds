@@ -185,6 +185,36 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun preservesTransformAndPerSlotBoostStateFromOfficialPackets() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",
+                "|switch|p2a: Dragapult|Dragapult, L50|100/100",
+                "|-boost|p1a: Mewtwo|atk|2",
+                "|-boost|p1b: Mimikyu|def|1",
+                "|-boost|p2a: Dragapult|spa|2"
+            )
+        )
+
+        session.applyProtocolLine("|-swapboost|p1a: Mewtwo|p1b: Mimikyu|def")
+        assertEquals(mapOf("atk" to 2, "def" to 1), session.battleInfo().playerBoosts)
+
+        session.applyProtocolLine("|-transform|p1a: Mewtwo|p2a: Dragapult")
+        assertEquals(mapOf("spa" to 2), session.battleInfo().playerBoosts)
+
+        session.applyProtocolLine("|-copyboost|p1a: Dragapult|p1b: Mimikyu")
+        session.applyProtocolLine("|-invertboost|p1b: Mimikyu")
+        session.applyProtocolLine("|-clearnegativeboost|p1b: Mimikyu")
+
+        assertEquals(mapOf("spa" to 2), session.battleInfo().playerBoosts)
+
+        session.applyProtocolLine("|faint|p1a: Dragapult")
+        assertTrue(session.battleInfo().playerBoosts.isEmpty())
+    }
+
+    @Test
     fun keepsMarkupBattleAnnouncementsReadableInActivity() {
         val session = BattleSession()
 

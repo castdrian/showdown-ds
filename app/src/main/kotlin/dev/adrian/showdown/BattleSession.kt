@@ -278,6 +278,8 @@ class BattleSession {
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
     private val opponentBoosts = mutableMapOf<String, Int>()
+    private val playerBoostsBySlot = mutableMapOf<String, MutableMap<String, Int>>()
+    private val opponentBoostsBySlot = mutableMapOf<String, MutableMap<String, Int>>()
 
     var panel = Panel.MOVES
         private set
@@ -955,10 +957,6 @@ class BattleSession {
                     "-boost" -> applyBoost(fields, 1)
                     "-unboost" -> applyBoost(fields, -1)
                     "-setboost" -> applySetBoost(fields)
-                    "-swapboost" -> appendLog("${battleActor(fields.getOrNull(2))} swapped stat changes with ${battleActor(fields.getOrNull(3))}.")
-                    "-invertboost" -> appendLog("${battleActor(fields.getOrNull(2))}'s stat changes were inverted.")
-                    "-clearpositiveboost" -> appendLog("${battleActor(fields.getOrNull(2))}'s positive stat changes were cleared.")
-                    "-copyboost" -> appendLog("${battleActor(fields.getOrNull(2))} copied stat changes from ${battleActor(fields.getOrNull(3))}.")
                     "cant" -> applyCant(fields)
                     "-fail" -> appendLog("${battleActor(fields.getOrNull(2))} failed to use ${battleEffectName(fields.getOrNull(3))}.")
                     "-block" -> appendLog("${battleActor(fields.getOrNull(2))} was blocked by ${battleEffectName(fields.getOrNull(3))}.")
@@ -983,6 +981,10 @@ class BattleSession {
                     "-clearallboost" -> clearAllBoosts()
                     "-clearboost" -> clearBoosts(fields)
                     "-clearnegativeboost" -> clearNegativeBoosts(fields)
+                    "-clearpositiveboost" -> clearPositiveBoosts(fields)
+                    "-copyboost" -> copyBoosts(fields)
+                    "-invertboost" -> invertBoosts(fields)
+                    "-swapboost" -> swapBoosts(fields)
                     "detailschange", "-formechange", "-burst" -> applyFormChange(fields)
                     "-transform" -> applyTransform(fields)
                     "-mega" -> appendLog("${battleActor(fields.getOrNull(2))} Mega Evolved.")
@@ -1108,6 +1110,8 @@ class BattleSession {
         opponentSideConditions.clear()
         playerBoosts.clear()
         opponentBoosts.clear()
+        playerBoostsBySlot.clear()
+        opponentBoostsBySlot.clear()
         decisionAvailable = false
         choiceCanBeCancelled = false
         decisionKind = DecisionKind.WAIT
@@ -1165,6 +1169,7 @@ class BattleSession {
                 typeChangeBySlot.remove(slot)
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
+                playerBoostsBySlot.remove(slot)
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
                     types = baseTypes,
@@ -1193,6 +1198,7 @@ class BattleSession {
                 typeChangeBySlot.remove(slot)
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
+                opponentBoostsBySlot.remove(slot)
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
                     types = baseTypes,
@@ -1213,6 +1219,7 @@ class BattleSession {
                 }
             }
         }
+        refreshVisibleBoosts()
         val message = sendOutMessage(pokemon, playerSide)
         appendLog(message)
         publishFeedback(BattleFeedback(FeedbackType.ENTRY, actor = pokemon, delayMillis = entryDelayMillis, message = message))
@@ -1390,6 +1397,8 @@ class BattleSession {
                 updateOpponentParty(opponentDetails)
             }
         }
+        if (isPlayerSide(actor)) playerBoostsBySlot.remove(slot) else opponentBoostsBySlot.remove(slot)
+        refreshVisibleBoosts()
         appendLog("$pokemon fainted.")
     }
 
@@ -1462,10 +1471,14 @@ class BattleSession {
             "♀" -> ", F"
             else -> ""
         }
+        val targetBoosts = boostSlots(target)[targetSlot(target)].orEmpty().toMap()
         applyFormChange(
             listOf("", "-transform", actor, "$species, L$level$gender"),
             targetDetails?.types
         )
+        val actorBoosts = boostSlots(actor)
+        if (targetBoosts.isEmpty()) actorBoosts.remove(targetSlot(actor)) else actorBoosts[targetSlot(actor)] = targetBoosts.toMutableMap()
+        refreshVisibleBoosts()
         targetDetails?.let { details ->
             updateActorDetails("${actor.substringBefore(':')}: $species") { current ->
                 current.copy(
@@ -1937,8 +1950,10 @@ class BattleSession {
         val side = fields.getOrNull(2) ?: return
         val stat = fields.getOrNull(3)?.lowercase()?.takeIf { it in BOOST_STATS } ?: return
         val amount = fields.getOrNull(4)?.toIntOrNull() ?: return
-        val boosts = if (isPlayerSide(side)) playerBoosts else opponentBoosts
+        val boosts = boostSlots(side).getOrPut(targetSlot(side)) { mutableMapOf() }
         updateBoost(boosts, stat, (boosts[stat] ?: 0) + amount * direction)
+        removeEmptyBoostSlot(side)
+        refreshVisibleBoosts()
         appendLog("${battleActor(side)} ${if (direction > 0) "gained" else "lost"} $amount $stat.")
     }
 
@@ -1946,11 +1961,16 @@ class BattleSession {
         val side = fields.getOrNull(2) ?: return
         val stat = fields.getOrNull(3)?.lowercase()?.takeIf { it in BOOST_STATS } ?: return
         val amount = fields.getOrNull(4)?.toIntOrNull() ?: return
-        updateBoost(if (isPlayerSide(side)) playerBoosts else opponentBoosts, stat, amount)
+        val boosts = boostSlots(side).getOrPut(targetSlot(side)) { mutableMapOf() }
+        updateBoost(boosts, stat, amount)
+        removeEmptyBoostSlot(side)
+        refreshVisibleBoosts()
         appendLog("${battleActor(side)}'s $stat was set to $amount.")
     }
 
     private fun clearAllBoosts() {
+        playerBoostsBySlot.clear()
+        opponentBoostsBySlot.clear()
         playerBoosts.clear()
         opponentBoosts.clear()
         appendLog("All stat changes were reset.")
@@ -1958,14 +1978,77 @@ class BattleSession {
 
     private fun clearBoosts(fields: List<String>) {
         val side = fields.getOrNull(2) ?: return
-        if (isPlayerSide(side)) playerBoosts.clear() else opponentBoosts.clear()
+        boostSlots(side).remove(targetSlot(side))
+        refreshVisibleBoosts()
         appendLog("${if (isPlayerSide(side)) "Your" else "The opponent's"} stat changes were reset.")
     }
 
     private fun clearNegativeBoosts(fields: List<String>) {
         val side = fields.getOrNull(2) ?: return
-        val boosts = if (isPlayerSide(side)) playerBoosts else opponentBoosts
-        boosts.filterValues { it < 0 }.keys.toList().forEach(boosts::remove)
+        boostSlots(side)[targetSlot(side)]?.let { boosts ->
+            boosts.filterValues { it < 0 }.keys.toList().forEach(boosts::remove)
+            removeEmptyBoostSlot(side)
+            refreshVisibleBoosts()
+        }
+    }
+
+    private fun clearPositiveBoosts(fields: List<String>) {
+        val side = fields.getOrNull(2) ?: return
+        boostSlots(side)[targetSlot(side)]?.let { boosts ->
+            boosts.filterValues { it > 0 }.keys.toList().forEach(boosts::remove)
+            removeEmptyBoostSlot(side)
+            refreshVisibleBoosts()
+        }
+    }
+
+    private fun copyBoosts(fields: List<String>) {
+        val source = fields.getOrNull(2) ?: return
+        val target = fields.getOrNull(3) ?: return
+        val copied = boostSlots(source)[targetSlot(source)].orEmpty().toMap()
+        val destination = boostSlots(target)
+        if (copied.isEmpty()) destination.remove(targetSlot(target)) else destination[targetSlot(target)] = copied.toMutableMap()
+        refreshVisibleBoosts()
+        appendLog("${battleActor(target)} copied stat changes from ${battleActor(source)}.")
+    }
+
+    private fun invertBoosts(fields: List<String>) {
+        val side = fields.getOrNull(2) ?: return
+        boostSlots(side)[targetSlot(side)]?.let { boosts ->
+            boosts.keys.toList().forEach { stat -> boosts[stat] = -(boosts[stat] ?: 0) }
+            removeEmptyBoostSlot(side)
+            refreshVisibleBoosts()
+        }
+        appendLog("${battleActor(side)}'s stat changes were inverted.")
+    }
+
+    private fun swapBoosts(fields: List<String>) {
+        val first = fields.getOrNull(2) ?: return
+        val second = fields.getOrNull(3) ?: return
+        val firstMap = boostSlots(first)
+        val secondMap = boostSlots(second)
+        val firstSlot = targetSlot(first)
+        val secondSlot = targetSlot(second)
+        if (firstMap === secondMap && firstSlot == secondSlot) return
+        val stats = fields.getOrNull(4)
+            ?.split(',')
+            ?.map(String::trim)
+            ?.map(String::lowercase)
+            ?.filter { it in BOOST_STATS }
+            ?.toSet()
+            ?.takeIf { it.isNotEmpty() }
+            ?: BOOST_STATS
+        val firstBoosts = firstMap.getOrPut(firstSlot) { mutableMapOf() }
+        val secondBoosts = secondMap.getOrPut(secondSlot) { mutableMapOf() }
+        stats.forEach { stat ->
+            val firstValue = firstBoosts[stat]
+            val secondValue = secondBoosts[stat]
+            if (secondValue == null) firstBoosts.remove(stat) else firstBoosts[stat] = secondValue
+            if (firstValue == null) secondBoosts.remove(stat) else secondBoosts[stat] = firstValue
+        }
+        removeEmptyBoostSlot(first)
+        removeEmptyBoostSlot(second)
+        refreshVisibleBoosts()
+        appendLog("${battleActor(first)} and ${battleActor(second)} swapped stat changes.")
     }
 
     private fun swapSideConditions() {
@@ -1980,6 +2063,29 @@ class BattleSession {
     private fun updateBoost(boosts: MutableMap<String, Int>, stat: String, value: Int) {
         val bounded = value.coerceIn(-6, 6)
         if (bounded == 0) boosts.remove(stat) else boosts[stat] = bounded
+    }
+
+    private fun boostSlots(actor: String) = if (isPlayerSide(actor)) playerBoostsBySlot else opponentBoostsBySlot
+
+    private fun targetSlot(actor: String) = actor.substringBefore(':').trim()
+
+    private fun removeEmptyBoostSlot(actor: String) {
+        val slots = boostSlots(actor)
+        val slot = targetSlot(actor)
+        if (slots[slot].isNullOrEmpty()) slots.remove(slot)
+    }
+
+    private fun refreshVisibleBoosts() {
+        fun visible(active: Map<String, ActiveCombatant>, slots: Map<String, MutableMap<String, Int>>): Map<String, Int> {
+            val primarySlot = active.keys.firstOrNull { it.endsWith('a') }
+            return primarySlot?.let { slots[it] }?.toMap()
+                ?: slots.values.firstOrNull()?.toMap()
+                ?: emptyMap()
+        }
+        playerBoosts.clear()
+        playerBoosts.putAll(visible(playerActiveCombatants, playerBoostsBySlot))
+        opponentBoosts.clear()
+        opponentBoosts.putAll(visible(opponentActiveCombatants, opponentBoostsBySlot))
     }
 
     private fun battleActor(value: String?) = value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" }
@@ -2077,10 +2183,12 @@ class BattleSession {
         swap(baseTypesBySlot)
         swap(typeChangeBySlot)
         swap(typeAdditionsBySlot)
+        if (isPlayerSide(oldSlot)) swap(playerBoostsBySlot) else swap(opponentBoostsBySlot)
         val oldTera = terastallizedSlots.remove(oldSlot)
         val newTera = terastallizedSlots.remove(newSlot)
         if (oldTera) terastallizedSlots += newSlot
         if (newTera) terastallizedSlots += oldSlot
+        refreshVisibleBoosts()
     }
 
     private fun statusLabel(status: String) = when (status) {
@@ -2439,6 +2547,8 @@ class BattleSession {
                 }
             }
         }
+        playerBoostsBySlot.keys.filterNot(activeSlotNames::containsKey).toList().forEach(playerBoostsBySlot::remove)
+        refreshVisibleBoosts()
         focusedTeam = focusedTeam.coerceIn(0, team.lastIndex)
         synced.firstOrNull { it.name.equals(playerPokemon, true) }?.let { details ->
             playerDetails = details

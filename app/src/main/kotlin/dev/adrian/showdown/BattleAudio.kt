@@ -7,7 +7,9 @@ import android.media.SoundPool
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.SystemClock
 import java.io.File
+import java.util.ArrayDeque
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -16,6 +18,8 @@ class BattleAudio(
     private val resourceCache: ShowdownSpriteCache,
     session: BattleSession
 ) {
+    private data class PendingBattleCue(val cue: BattleAudioCue, val queuedAtMillis: Long)
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioCueThread = HandlerThread("showdown-audio").also { it.start() }
     private val audioCueHandler = Handler(audioCueThread.looper)
@@ -30,6 +34,7 @@ class BattleAudio(
         .build()
     private val battleSoundIds = mutableMapOf<BattleAudioCue, Int>()
     private val loadedBattleSoundIds = Collections.synchronizedSet(mutableSetOf<Int>())
+    private val pendingBattleCues = ArrayDeque<PendingBattleCue>()
     private var notificationFile: File? = null
     private var bgmFile: File? = null
     private var bgmPlayer: MediaPlayer? = null
@@ -51,7 +56,12 @@ class BattleAudio(
 
     init {
         battleSoundPool.setOnLoadCompleteListener { _, sampleId, status ->
-            if (status == 0) loadedBattleSoundIds += sampleId
+            if (status == 0) {
+                audioCueHandler.post {
+                    loadedBattleSoundIds += sampleId
+                    flushPendingBattleCues()
+                }
+            }
         }
         BattleAudioCue.values().forEach { cue ->
             runCatching {
@@ -67,7 +77,9 @@ class BattleAudio(
     fun updateOptions(session: BattleSession) {
         val requestedMusic = MUSIC[session.showdownMusicIndex()]
         if (requestedMusic != selectedMusic) selectMusic(requestedMusic)
-        soundEffectsEnabled.set(session.soundEffectsEnabled)
+        val effectsEnabled = session.soundEffectsEnabled
+        soundEffectsEnabled.set(effectsEnabled)
+        if (!effectsEnabled) audioCueHandler.post { pendingBattleCues.clear() }
         musicEnabled = session.musicEnabled
         if (musicEnabled) {
             startMusicIfReady()
@@ -91,6 +103,7 @@ class BattleAudio(
         bgmPlayer = null
         audioCueHandler.removeCallbacksAndMessages(null)
         audioCueHandler.post {
+            pendingBattleCues.clear()
             battleSoundPool.release()
             audioCueThread.quitSafely()
         }
@@ -105,11 +118,44 @@ class BattleAudio(
 
     fun playBattleCue(cue: BattleAudioCue) {
         audioCueHandler.post {
-            if (!soundEffectsEnabled.get() || released.get()) return@post
+            if (released.get()) return@post
+            if (!soundEffectsEnabled.get()) {
+                pendingBattleCues.clear()
+                return@post
+            }
             val soundId = battleSoundIds[cue] ?: return@post
-            if (soundId !in loadedBattleSoundIds) return@post
-            battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f)
+            if (soundId !in loadedBattleSoundIds) {
+                if (pendingBattleCues.size < MAX_PENDING_BATTLE_CUES) {
+                    pendingBattleCues.addLast(PendingBattleCue(cue, SystemClock.elapsedRealtime()))
+                }
+                return@post
+            }
+            playBattleCueNow(soundId)
         }
+    }
+
+    private fun flushPendingBattleCues() {
+        if (released.get() || !soundEffectsEnabled.get()) {
+            pendingBattleCues.clear()
+            return
+        }
+        val pendingCount = pendingBattleCues.size
+        repeat(pendingCount) {
+            if (pendingBattleCues.isEmpty()) return@repeat
+            val pending = pendingBattleCues.removeFirst()
+            if (SystemClock.elapsedRealtime() - pending.queuedAtMillis > MAX_PENDING_BATTLE_CUE_AGE_MILLIS) return@repeat
+            val soundId = battleSoundIds[pending.cue]
+            if (soundId == null || soundId !in loadedBattleSoundIds) {
+                pendingBattleCues.addLast(pending)
+            } else {
+                playBattleCueNow(soundId)
+            }
+        }
+    }
+
+    private fun playBattleCueNow(soundId: Int) {
+        if (released.get() || !soundEffectsEnabled.get()) return
+        battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f)
     }
 
     fun playCry(species: String) {
@@ -214,6 +260,8 @@ class BattleAudio(
             Music("audio/sm-trainer.mp3", 8323, 89230),
             Music("audio/sm-rival.mp3", 11389, 62158)
         )
+        const val MAX_PENDING_BATTLE_CUES = 16
+        const val MAX_PENDING_BATTLE_CUE_AGE_MILLIS = 350L
     }
 
 }

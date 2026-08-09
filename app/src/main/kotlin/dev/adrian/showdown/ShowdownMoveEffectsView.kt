@@ -186,7 +186,6 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-damage' && !kwArgs.from && this.scene.__showdownNativeDamageArmed) this.scene.__showdownNativeDamagePending = true;
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
-                                if (resultCue && this.scene.__showdownNativeResultCue === resultCue) this.scene.__showdownNativeResultCue = null;
                                 return result;
                             };
                             BattleScene.prototype.__showdownNativeAudioHooked = true;
