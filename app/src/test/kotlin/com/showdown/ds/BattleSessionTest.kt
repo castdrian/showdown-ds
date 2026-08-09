@@ -951,4 +951,19 @@ class BattleSessionTest {
         assertFalse(session.decisionAvailable)
         assertFalse(session.menuItems()[3].contains("Forfeit"))
     }
+
+    @Test
+    fun replayMenuOpensReplayControls() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+
+        session.setReplayMode(true)
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(13)
+        session.confirmSelection()
+
+        assertEquals("Replay controls", session.menuItems()[13])
+        assertEquals(listOf(BattleSession.ClientAction.OPEN_REPLAY_CONTROLS), actions)
+    }
 }

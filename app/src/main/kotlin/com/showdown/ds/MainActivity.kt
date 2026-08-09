@@ -9,6 +9,7 @@ import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.text.Editable
@@ -144,6 +145,16 @@ class MainActivity : Activity() {
     private val pendingBattlePackets = ArrayDeque<PendingBattlePacket>()
     private var battlePacketPlaybackScheduled = false
     private var replayStatus: String? = null
+    private var replayPaused = false
+    private var replaySpeed = 1f
+    private var playbackScheduledPauseMillis = 0L
+    private var playbackScheduledAtMillis = 0L
+    private var playbackScheduledSpeed = 1f
+    private var playbackPausedRemainingMillis: Long? = null
+    private val playbackAdvanceRunnable = Runnable {
+        battlePacketPlaybackScheduled = false
+        flushBattlePlayback()
+    }
     private var shouldMaintainConnection = false
     private var reconnectAttempt = 0
     private var reconnectScheduled = false
@@ -195,6 +206,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
                 BattleSession.ClientAction.EXPORT_REPLAY -> showReplayActions()
+                BattleSession.ClientAction.OPEN_REPLAY_CONTROLS -> showReplayControls()
                 BattleSession.ClientAction.SETTINGS_CHANGED -> {
                     persistUserPreferences()
                     battleAudio.updateOptions(session)
@@ -479,6 +491,7 @@ class MainActivity : Activity() {
     }
 
     private fun flushBattlePlayback() {
+        if (replayPaused && session.isReplayMode()) return
         if (battlePacketPlaybackScheduled || pendingBattlePackets.isEmpty()) {
             if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty()) {
                 replayStatus?.let {
@@ -495,12 +508,64 @@ class MainActivity : Activity() {
         }
         session.applyProtocolPacket(packet.lines)
         handleAppliedBattlePacket(packet)
-        battlePacketPlaybackScheduled = true
-        battleEventHandler.postDelayed({
-            battlePacketPlaybackScheduled = false
-            flushBattlePlayback()
-        }, BattlePlaybackTiming.pauseAfter(packet.lines))
+        scheduleBattlePlayback(BattlePlaybackTiming.pauseAfter(packet.lines))
     }
+
+    private fun scheduleBattlePlayback(pauseMillis: Long) {
+        battlePacketPlaybackScheduled = true
+        playbackScheduledPauseMillis = pauseMillis
+        playbackScheduledAtMillis = SystemClock.elapsedRealtime()
+        playbackScheduledSpeed = if (session.isReplayMode()) replaySpeed else 1f
+        battleEventHandler.postDelayed(
+            playbackAdvanceRunnable,
+            BattlePlaybackTiming.scaledPause(pauseMillis, playbackScheduledSpeed)
+        )
+    }
+
+    private fun setReplayPaused(value: Boolean) {
+        if (!session.isReplayMode() || replayPaused == value) return
+        replayPaused = value
+        if (value) {
+            if (battlePacketPlaybackScheduled) {
+                val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
+                val consumedMillis = (elapsedMillis * playbackScheduledSpeed).toLong()
+                playbackPausedRemainingMillis = (playbackScheduledPauseMillis - consumedMillis).coerceAtLeast(0L)
+            }
+            battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
+            battlePacketPlaybackScheduled = false
+        } else {
+            playbackPausedRemainingMillis?.let { remainingMillis ->
+                playbackPausedRemainingMillis = null
+                scheduleBattlePlayback(remainingMillis)
+            } ?: flushBattlePlayback()
+        }
+        updateReplayStatus()
+    }
+
+    private fun setReplaySpeed(value: Float) {
+        if (!session.isReplayMode()) return
+        val nextSpeed = value.coerceIn(0.25f, 4f)
+        if (nextSpeed == replaySpeed) return
+        if (battlePacketPlaybackScheduled && !replayPaused) {
+            val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
+            val consumedMillis = (elapsedMillis * playbackScheduledSpeed).toLong()
+            val remainingMillis = (playbackScheduledPauseMillis - consumedMillis).coerceAtLeast(0L)
+            battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
+            replaySpeed = nextSpeed
+            scheduleBattlePlayback(remainingMillis)
+        } else {
+            replaySpeed = nextSpeed
+        }
+        updateReplayStatus()
+    }
+
+    private fun updateReplayStatus() {
+        val title = replayStatus ?: return
+        val state = if (replayPaused) "Paused" else "${replaySpeed.trimTrailingZero()}×"
+        session.setConnectionStatus("$title · $state")
+    }
+
+    private fun Float.trimTrailingZero(): String = if (this % 1f == 0f) toInt().toString() else toString()
 
     private fun enqueueBattlePlayback(connection: ShowdownConnection?, roomId: String?, lines: List<String>) {
         if (lines.isEmpty()) return
@@ -515,6 +580,12 @@ class MainActivity : Activity() {
         battleEventHandler.removeCallbacksAndMessages(null)
         pendingBattlePackets.clear()
         battlePacketPlaybackScheduled = false
+        replayPaused = false
+        replaySpeed = 1f
+        playbackScheduledPauseMillis = 0L
+        playbackScheduledAtMillis = 0L
+        playbackScheduledSpeed = 1f
+        playbackPausedRemainingMillis = null
         replayStatus = null
     }
 
@@ -2867,6 +2938,26 @@ class MainActivity : Activity() {
             .setItems(arrayOf("Copy transcript", "Load replay URL")) { _, selected ->
                 if (selected == 0) copyBattleTranscript() else showReplayUrlDialog()
             }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showReplayControls() {
+        if (!session.isReplayMode()) {
+            session.setConnectionStatus("Load a replay before opening replay controls.")
+            return
+        }
+        val speeds = listOf(0.5f, 1f, 2f)
+        val labels = listOf(if (replayPaused) "Resume replay" else "Pause replay") + speeds.map { "Set speed to ${it.trimTrailingZero()}×" }
+        ShowdownDialogBuilder(this)
+            .setTitle("Replay controls · ${replaySpeed.trimTrailingZero()}×")
+            .setItems(labels.toTypedArray()) { _, selected ->
+                when {
+                    selected == 0 -> setReplayPaused(!replayPaused)
+                    selected - 1 in speeds.indices -> setReplaySpeed(speeds[selected - 1])
+                }
+            }
+            .setNeutralButton("More actions") { _, _ -> showReplayActions() }
             .setNegativeButton("Close", null)
             .show()
     }

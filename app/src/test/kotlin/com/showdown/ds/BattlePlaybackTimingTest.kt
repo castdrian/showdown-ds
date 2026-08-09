@@ -46,4 +46,11 @@ class BattlePlaybackTimingTest {
     fun doesNotDelayUnrelatedProtocolMetadata() {
         assertEquals(0L, BattlePlaybackTiming.pauseAfter(listOf("|-weather|SunnyDay", "|-fieldstart|move: Electric Terrain")))
     }
+
+    @Test
+    fun scalesReplayPausesWithoutChangingLiveTiming() {
+        assertEquals(1_300L, BattlePlaybackTiming.scaledPause(2_600L, 2f))
+        assertEquals(5_200L, BattlePlaybackTiming.scaledPause(2_600L, 0.5f))
+        assertEquals(2_600L, BattlePlaybackTiming.scaledPause(2_600L, 1f))
+    }
 }

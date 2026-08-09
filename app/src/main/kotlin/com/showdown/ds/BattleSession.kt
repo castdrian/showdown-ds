@@ -64,6 +64,7 @@ class BattleSession {
         FORFEIT,
         CHALLENGE_PLAYER,
         EXPORT_REPLAY,
+        OPEN_REPLAY_CONTROLS,
         SETTINGS_CHANGED
     }
 
@@ -1817,7 +1818,7 @@ class BattleSession {
         10 -> "Rooms"
         11 -> "Showdown account"
         12 -> "Configure server"
-        else -> "Copy battle transcript"
+        else -> if (replayMode) "Replay controls" else "Copy battle transcript"
     }
 
     private fun applyMenuSelection() {
@@ -1879,7 +1880,10 @@ class BattleSession {
                 publishClientAction(ClientAction.CONFIGURE_SERVER)
                 "Choose a Pokémon Showdown server."
             }
-            else -> {
+            else -> if (replayMode) {
+                publishClientAction(ClientAction.OPEN_REPLAY_CONTROLS)
+                "Adjust replay playback."
+            } else {
                 publishClientAction(ClientAction.EXPORT_REPLAY)
                 "Copy the battle transcript."
             }

@@ -1,5 +1,7 @@
 package com.showdown.ds
 
+import kotlin.math.roundToLong
+
 object BattlePlaybackTiming {
     const val EVENT_PAUSE_MILLIS = 2_600L
 
@@ -24,6 +26,11 @@ object BattlePlaybackTiming {
         lines.any { it.startsWith("|switch|") || it.startsWith("|drag|") || it.startsWith("|replace|") } -> SWITCH_PAUSE_MILLIS
         lines.any { it.startsWith("|turn|") } -> TURN_PAUSE_MILLIS
         else -> 0L
+    }
+
+    fun scaledPause(pauseMillis: Long, speed: Float): Long {
+        if (pauseMillis <= 0L) return 0L
+        return (pauseMillis / speed.coerceIn(0.25f, 4f)).roundToLong().coerceAtLeast(1L)
     }
 
     private fun isActionBoundary(line: String) =
