@@ -9,19 +9,16 @@ enum class BattleAudioCue(val assetName: String) {
 }
 
 object BattleAudioCueResolver {
-    fun cueForProtocolLine(line: String): BattleAudioCue? = when {
-        line.startsWith("|-supereffective|") -> BattleAudioCue.SUPER_EFFECTIVE
-        line.startsWith("|-resisted|") -> BattleAudioCue.NOT_VERY_EFFECTIVE
-        line.startsWith("|-boost|") -> BattleAudioCue.STAT_BOOST
-        line.startsWith("|-unboost|") -> BattleAudioCue.STAT_DROP
-        line.startsWith("|-setboost|") -> line.substringAfterLast('|').toIntOrNull()?.let {
-            when {
-                it > 0 -> BattleAudioCue.STAT_BOOST
-                it < 0 -> BattleAudioCue.STAT_DROP
-                else -> null
-            }
+    fun cueForProtocolLine(line: String): BattleAudioCue? {
+        val fields = line.split('|')
+        return when (fields.getOrNull(1)) {
+            "-supereffective" -> BattleAudioCue.SUPER_EFFECTIVE
+            "-resisted" -> BattleAudioCue.NOT_VERY_EFFECTIVE
+            "-boost" -> statCue(fields.getOrNull(4)?.toIntOrNull(), BattleAudioCue.STAT_BOOST, BattleAudioCue.STAT_DROP)
+            "-unboost" -> statCue(fields.getOrNull(4)?.toIntOrNull(), BattleAudioCue.STAT_DROP, BattleAudioCue.STAT_BOOST)
+            "-setboost" -> statCue(fields.getOrNull(4)?.toIntOrNull(), BattleAudioCue.STAT_BOOST, BattleAudioCue.STAT_DROP)
+            else -> null
         }
-        else -> null
     }
 
     fun cueForNativeValue(value: String): BattleAudioCue? = when (value) {
@@ -31,5 +28,11 @@ object BattleAudioCueResolver {
         "stat_boost" -> BattleAudioCue.STAT_BOOST
         "stat_drop" -> BattleAudioCue.STAT_DROP
         else -> null
+    }
+
+    private fun statCue(amount: Int?, positiveCue: BattleAudioCue, negativeCue: BattleAudioCue): BattleAudioCue? = when {
+        amount == null || amount == 0 -> null
+        amount > 0 -> positiveCue
+        else -> negativeCue
     }
 }

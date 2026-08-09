@@ -6,8 +6,8 @@ https://github.com/user-attachments/assets/ec825ee2-5ebe-4141-9d56-aecd09af57c8
 
 ## Hardware target
 
-- Upper display: 1920 × 1080 pixels, 6 inches, 120 Hz.
-- Lower display: 1240 × 1080 pixels, 3.92 inches, 60 Hz.
+- Upper display: 1920 × 1080 pixels, 15.24 cm, 120 Hz.
+- Lower display: 1240 × 1080 pixels, 9.96 cm, 60 Hz.
 - Closed enclosure: 150 × 94 × 25.6 mm, approximately 380 g.
 
 The repository AVD uses the two display resolutions and densities from the Thor target. The published hardware specifications are summarized by [Android Central](https://www.androidcentral.com/gaming/android-games/ayn-thor-pre-orders-open-tonight-and-its-much-cheaper-than-i-thought).
