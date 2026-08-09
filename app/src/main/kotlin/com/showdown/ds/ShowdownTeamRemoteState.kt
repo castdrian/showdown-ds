@@ -97,6 +97,8 @@ class ShowdownTeamRemoteState {
     companion object {
         fun ownTeamsCommand() = "/join view-teams-all"
         fun browseCommand() = "/join view-teams-browse"
+        fun searchCommand(format: String, pokemon: String, moves: String, ability: String, generation: String): String =
+            "/join view-teams-searchpublic---${format.trim()}--${pokemon.trim()}--${moves.trim()}--${ability.trim()}--${generation.trim()}"
         fun viewCommand(team: RemoteTeam) = "/join view-teams-view-${team.remoteId}${team.privateKey?.let { "-$it" }.orEmpty()}"
     }
 }

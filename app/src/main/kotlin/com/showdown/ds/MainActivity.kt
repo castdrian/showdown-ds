@@ -2705,7 +2705,7 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun showTeamRemoteLibrary() {
+    private fun showTeamRemoteLibrary(initialCommand: String = ShowdownTeamRemoteState.ownTeamsCommand()) {
         if (!authenticated || !serverUserNamed) {
             session.setConnectionStatus("Sign in to Showdown to browse remote teams.")
             return
@@ -2731,6 +2731,10 @@ class MainActivity : Activity() {
             text = "Browse public teams"
             setOnClickListener { requestTeamRemotePage(ShowdownTeamRemoteState.browseCommand()) }
         }
+        val search = Button(this).apply {
+            text = "Search public teams"
+            setOnClickListener { showRemoteTeamSearch() }
+        }
         val links = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -2738,6 +2742,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             addView(own)
             addView(browse, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(search, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
             addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
         }
         val root = ScrollView(this).apply {
@@ -2766,7 +2771,56 @@ class MainActivity : Activity() {
         teamRemoteLinks = links
         dialog.show()
         updateTeamRemoteDialog()
-        requestTeamRemotePage(ShowdownTeamRemoteState.ownTeamsCommand())
+        requestTeamRemotePage(initialCommand)
+    }
+
+    private fun showRemoteTeamSearch() {
+        val format = EditText(this).apply {
+            hint = "Format ID, for example gen9ou"
+            setSingleLine(true)
+            setText(session.matchFormat.id)
+        }
+        val pokemon = EditText(this).apply {
+            hint = "Pokémon, comma separated"
+            setSingleLine(true)
+        }
+        val moves = EditText(this).apply {
+            hint = "Moves, comma separated"
+            setSingleLine(true)
+        }
+        val ability = EditText(this).apply {
+            hint = "Ability"
+            setSingleLine(true)
+        }
+        val generation = EditText(this).apply {
+            hint = "Generation, for example 9"
+            setSingleLine(true)
+        }
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(format)
+            addView(pokemon)
+            addView(moves)
+            addView(ability)
+            addView(generation)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Search public teams")
+            .setView(fields)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Search") { _, _ ->
+                val command = ShowdownTeamRemoteState.searchCommand(
+                    format.text.toString(),
+                    pokemon.text.toString(),
+                    moves.text.toString(),
+                    ability.text.toString(),
+                    generation.text.toString()
+                )
+                teamRemoteDialog?.dismiss()
+                showTeamRemoteLibrary(command)
+            }
+            .create()
+        dialog.show()
     }
 
     private fun requestTeamRemotePage(command: String) {

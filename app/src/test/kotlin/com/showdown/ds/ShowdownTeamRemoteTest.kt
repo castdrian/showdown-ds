@@ -100,6 +100,10 @@ class ShowdownTeamRemoteTest {
         assertEquals("/join view-teams-view-42-secret", ShowdownTeamRemoteState.viewCommand(team))
         assertEquals("/join view-teams-all", ShowdownTeamRemoteState.ownTeamsCommand())
         assertEquals("/join view-teams-browse", ShowdownTeamRemoteState.browseCommand())
+        assertEquals(
+            "/join view-teams-searchpublic---gen9ou--Pikachu--Thunderbolt--Static--9",
+            ShowdownTeamRemoteState.searchCommand("gen9ou", "Pikachu", "Thunderbolt", "Static", "9")
+        )
         assertTrue(state.applyProtocol("view-teams-all", listOf("|popup|Teams are unavailable.")))
         assertEquals("Teams are unavailable.", state.snapshot.error)
     }
