@@ -795,7 +795,7 @@ class BattleSceneView(
         paint.style = Paint.Style.FILL
         val left = bounds.left + 14f * scale
         val right = bounds.right - 14f * scale
-        val label = "${index + 1}  ${combatant.name}"
+        val label = "${index + 1}  ${combatant.name}${if (combatant.dynamaxed) " · MAX" else ""}"
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(height * 0.25f, scale, 10.5f)
         paint.color = INK
@@ -880,8 +880,7 @@ class BattleSceneView(
         if (session.latestBattleEvent.startsWith("Turn ")) return
         val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
         val arrival = min(1f, age / 0.18f)
-        val exit = ((age - 4.1f) / 0.5f).coerceIn(0f, 1f)
-        val alpha = (1f - exit) * min(1f, 0.3f + arrival)
+        val alpha = min(1f, 0.3f + arrival)
         val left = width * 0.33f + (1f - arrival) * width * 0.04f
         val right = width * 0.96f
         val top = height * 0.78f

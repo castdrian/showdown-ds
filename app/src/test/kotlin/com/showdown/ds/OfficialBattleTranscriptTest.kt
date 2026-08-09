@@ -97,6 +97,62 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun appliesTemporaryTypesDynamaxAndOneLineBattleResults() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver(
+            mapOf(
+                "Mewtwo" to listOf("PSYCHIC"),
+                "Dragapult" to listOf("DRAGON", "GHOST")
+            )::get
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p2a: Dragapult|Dragapult, L50|100/100"
+            )
+        )
+        session.applyProtocolLine("|-start|p1a: Mewtwo|typechange|FIRE/GHOST")
+        assertEquals(listOf("FIRE", "GHOST"), session.playerActiveCombatants().single().types)
+        session.applyProtocolLine("|-start|p1a: Mewtwo|typeadd|DARK")
+        assertEquals(listOf("FIRE", "GHOST", "DARK"), session.playerActiveCombatants().single().types)
+        session.applyProtocolLine("|-end|p1a: Mewtwo|typeadd")
+        assertEquals(listOf("FIRE", "GHOST"), session.playerActiveCombatants().single().types)
+        session.applyProtocolLine("|-end|p1a: Mewtwo|typechange")
+        session.applyProtocolLine("|-start|p2a: Dragapult|dynamax")
+        assertTrue(session.opponentActiveCombatants().single().dynamaxed)
+        session.applyProtocolLine("|-end|p2a: Dragapult|dynamax")
+        session.applyProtocolLine("|-ohko|p2a: Dragapult")
+        session.applyProtocolLine("|-combine|p1a: Mewtwo")
+
+        assertEquals(listOf("PSYCHIC"), session.playerDetails().types)
+        assertEquals(listOf("PSYCHIC"), session.playerActiveCombatants().single().types)
+        assertFalse(session.opponentActiveCombatants().single().dynamaxed)
+        assertTrue(session.battleLog().contains("It's a one-hit KO!"))
+        assertTrue(session.battleLog().contains("The move effects combined."))
+    }
+
+    @Test
+    fun resolvesTransformTargetsFromOfficialActorPackets() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver(
+            mapOf(
+                "Mewtwo" to listOf("PSYCHIC"),
+                "Dragapult" to listOf("DRAGON", "GHOST")
+            )::get
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p2a: Dragapult|Dragapult, L50|100/100",
+                "|-transform|p1a: Mewtwo|p2a: Dragapult"
+            )
+        )
+
+        assertEquals("Dragapult", session.playerPokemon)
+        assertEquals(listOf("DRAGON", "GHOST"), session.playerDetails().types)
+    }
+
+    @Test
     fun keepsMarkupBattleAnnouncementsReadableInActivity() {
         val session = BattleSession()
 

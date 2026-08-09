@@ -161,7 +161,8 @@ class BattleSession {
         val gender: String,
         val hp: String,
         val condition: String,
-        val entryAtNanos: Long
+        val entryAtNanos: Long,
+        val dynamaxed: Boolean = false
     )
 
     data class BattleInfo(
@@ -243,6 +244,10 @@ class BattleSession {
     private val opponentActiveCombatants = linkedMapOf<String, ActiveCombatant>()
     private val activeTeamNames = mutableSetOf<String>()
     private val activeSlotNames = mutableMapOf<String, String>()
+    private val baseTypesBySlot = mutableMapOf<String, List<String>>()
+    private val typeChangeBySlot = mutableMapOf<String, List<String>>()
+    private val typeAdditionsBySlot = mutableMapOf<String, MutableList<String>>()
+    private val terastallizedSlots = mutableSetOf<String>()
     private var battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
     private var pendingHit: PendingHit? = null
     private var requestId: Int? = null
@@ -925,7 +930,11 @@ class BattleSession {
                         applyHealth(fields)
                         pendingHit = PendingHit(fields[2].substringAfter(':').trim(), fields[2].substringAfter(':').trim())
                     }
-                    "-heal", "-sethp" -> applyHealth(fields)
+                    "-heal" -> {
+                        applyHealth(fields)
+                        appendLog("${battleActor(fields.getOrNull(2))} recovered health.")
+                    }
+                    "-sethp" -> applyHealth(fields)
                     "-status" -> applyStatus(fields)
                     "-curestatus" -> applyStatus(fields, cured = true)
                     "-cureteam" -> cureTeam(fields)
@@ -958,24 +967,28 @@ class BattleSession {
                     "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
                     "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge.")
                     "-activate" -> appendLog("${battleActor(fields.getOrNull(2))} activated ${battleEffectName(fields.getOrNull(3))}.")
-                    "-start" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} started.")
-                    "-end" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))} ended.")
+                    "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
                     "-hint", "-message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "-waiting" -> appendLog("${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}.")
                     "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
                     "-singlemove", "-singleturn" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))}.")
+                    "-ohko" -> appendLog("It's a one-hit KO!")
+                    "-combine" -> appendLog("The move effects combined.")
+                    "-candynamax" -> appendLog("Dynamax is available.")
                     "-nothing" -> appendLog("The move had no effect.")
                     "-zpower" -> appendLog("${battleActor(fields.getOrNull(2))} used a Z-Power move.")
                     "-zbroken" -> appendLog("${battleActor(fields.getOrNull(2))}'s protection was broken by Z-Power.")
                     "-clearallboost" -> clearAllBoosts()
                     "-clearboost" -> clearBoosts(fields)
                     "-clearnegativeboost" -> clearNegativeBoosts(fields)
-                    "detailschange", "-formechange", "-transform", "-burst" -> applyFormChange(fields)
+                    "detailschange", "-formechange", "-burst" -> applyFormChange(fields)
+                    "-transform" -> applyTransform(fields)
                     "-mega" -> appendLog("${battleActor(fields.getOrNull(2))} Mega Evolved.")
                     "-primal" -> appendLog("${battleActor(fields.getOrNull(2))} reverted to its primal form.")
                     "-center" -> appendLog("The remaining Pokémon moved to the center of the field.")
                     "-terastallize" -> applyTerastallize(fields)
+                    "-start" -> applyStart(fields)
                     "faint" -> applyFaint(fields)
                     "request" -> applyRequest(fields)
                     "sentchoice" -> applySentChoice(fields)
@@ -1071,6 +1084,10 @@ class BattleSession {
         sideNames.clear()
         activeTeamNames.clear()
         activeSlotNames.clear()
+        baseTypesBySlot.clear()
+        typeChangeBySlot.clear()
+        typeAdditionsBySlot.clear()
+        terastallizedSlots.clear()
         playerSlot = "p1"
         activeRequests.clear()
         activeChoices.clear()
@@ -1142,9 +1159,14 @@ class BattleSession {
                 activeTeamNames += activeSlotNames.values
                 val index = team.indexOfFirst { it.equals(pokemon, true) }
                 val activeDetails = if (index >= 0) teamDetails[index] else playerDetails.copy(name = pokemon, types = resolvedTypes(pokemon))
+                val baseTypes = baseTypesFor(pokemon, activeDetails.types)
+                baseTypesBySlot[slot] = baseTypes
+                typeChangeBySlot.remove(slot)
+                typeAdditionsBySlot.remove(slot)
+                terastallizedSlots.remove(slot)
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
-                    types = resolvedTypes(pokemon, activeDetails.types),
+                    types = baseTypes,
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
                     hp = hp,
@@ -1165,9 +1187,14 @@ class BattleSession {
                 val primary = slot.endsWith("a") || opponentActiveCombatants.isEmpty()
                 val existing = opponentTeamDetails.firstOrNull { it.name.equals(pokemon, true) }
                 val activeDetails = existing ?: opponentDetails.copy(name = pokemon, types = resolvedTypes(pokemon))
+                val baseTypes = baseTypesFor(pokemon, activeDetails.types)
+                baseTypesBySlot[slot] = baseTypes
+                typeChangeBySlot.remove(slot)
+                typeAdditionsBySlot.remove(slot)
+                terastallizedSlots.remove(slot)
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
-                    types = resolvedTypes(pokemon, activeDetails.types),
+                    types = baseTypes,
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
                     hp = hp,
@@ -1204,6 +1231,7 @@ class BattleSession {
         val displaced = combatants.remove(newSlot)
         combatants[newSlot] = moving.copy(slot = newSlot)
         displaced?.let { combatants[oldSlot] = it.copy(slot = oldSlot) }
+        swapSlotState(oldSlot, newSlot)
         if (playerSide) {
             val movingName = activeSlotNames.remove(oldSlot)
             val displacedName = activeSlotNames.remove(newSlot)
@@ -1388,6 +1416,7 @@ class BattleSession {
                 updateOpponentParty(opponentDetails)
             }
         }
+        appendLog(if (cured) "${battleActor(actor)}'s status was cured." else "${battleActor(actor)} became ${statusLabel(status)}.")
     }
 
     private fun cureTeam(fields: List<String>) {
@@ -1418,15 +1447,49 @@ class BattleSession {
     }
 
     private fun applyFormChange(fields: List<String>) {
+        applyFormChange(fields, null)
+    }
+
+    private fun applyTransform(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val target = fields.getOrNull(3) ?: return
+        val targetDetails = actorDetails(target)
+        val species = targetDetails?.name ?: target.substringAfter(':').trim().ifBlank { return }
+        val level = targetDetails?.level ?: "50"
+        val gender = when (targetDetails?.gender) {
+            "♂" -> ", M"
+            "♀" -> ", F"
+            else -> ""
+        }
+        applyFormChange(
+            listOf("", "-transform", actor, "$species, L$level$gender"),
+            targetDetails?.types
+        )
+        targetDetails?.let { details ->
+            updateActorDetails("${actor.substringBefore(':')}: $species") { current ->
+                current.copy(
+                    ability = details.ability,
+                    moves = details.moves
+                )
+            }
+        }
+    }
+
+    private fun applyFormChange(fields: List<String>, typeOverride: List<String>?) {
         val actor = fields.getOrNull(2) ?: return
         val details = fields.getOrNull(3) ?: return
         val species = details.substringBefore(',').trim().ifBlank { return }
         val slot = actor.substringBefore(":").trim()
+        val baseTypes = typeOverride?.takeIf { it.isNotEmpty() } ?: baseTypesFor(species, resolvedTypes(species))
+        baseTypesBySlot[slot] = baseTypes
+        typeChangeBySlot.remove(slot)
+        typeAdditionsBySlot.remove(slot)
         if (isPlayerSide(actor)) {
             val parsed = parseDetails(details)
             playerActiveCombatants[slot]?.let {
-                playerActiveCombatants[slot] = it.copy(name = species, types = resolvedTypes(species), level = parsed.first, gender = parsed.second)
-                updatePlayerPartyMember(it.name) { party -> party.copy(name = species, types = resolvedTypes(species), level = parsed.first, gender = parsed.second) }
+                val types = if (slot in terastallizedSlots) it.types else baseTypes
+                playerActiveCombatants[slot] = it.copy(name = species, types = types, level = parsed.first, gender = parsed.second)
+                updatePlayerPartyMember(it.name) { party -> party.copy(name = species, types = types, level = parsed.first, gender = parsed.second) }
             }
             activeSlotNames[slot] = species
             activeTeamNames.clear()
@@ -1435,19 +1498,20 @@ class BattleSession {
                 playerPokemon = species
                 playerLevel = parsed.first
                 playerGender = parsed.second
-                updatePlayerDetails { it.copy(name = species, types = resolvedTypes(species), level = playerLevel, gender = playerGender) }
+                updatePlayerDetails { it.copy(name = species, types = if (slot in terastallizedSlots) it.types else baseTypes, level = playerLevel, gender = playerGender) }
             }
         } else {
             val parsed = parseDetails(details)
             opponentActiveCombatants[slot]?.let {
-                opponentActiveCombatants[slot] = it.copy(name = species, types = resolvedTypes(species), level = parsed.first, gender = parsed.second)
-                updateOpponentParty(it.name) { party -> party.copy(name = species, types = resolvedTypes(species), level = parsed.first, gender = parsed.second) }
+                val types = if (slot in terastallizedSlots) it.types else baseTypes
+                opponentActiveCombatants[slot] = it.copy(name = species, types = types, level = parsed.first, gender = parsed.second)
+                updateOpponentParty(it.name) { party -> party.copy(name = species, types = types, level = parsed.first, gender = parsed.second) }
             }
             if (slot.endsWith("a") || opponentActiveCombatants.size == 1) {
                 opponentPokemon = species
                 opponentLevel = parsed.first
                 opponentGender = parsed.second
-                opponentDetails = opponentDetails.copy(name = species, types = resolvedTypes(species), level = opponentLevel, gender = opponentGender)
+                opponentDetails = opponentDetails.copy(name = species, types = if (slot in terastallizedSlots) opponentDetails.types else baseTypes, level = opponentLevel, gender = opponentGender)
             }
         }
         appendLog("$species changed form.")
@@ -1455,8 +1519,11 @@ class BattleSession {
 
     private fun applyTerastallize(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
-        val teraType = fields.getOrNull(3)?.uppercase() ?: return
+        val teraType = fields.getOrNull(3)?.uppercase()?.takeIf { it.isNotBlank() } ?: return
         val slot = actor.substringBefore(":").trim()
+        terastallizedSlots += slot
+        typeChangeBySlot.remove(slot)
+        typeAdditionsBySlot.remove(slot)
         if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let {
                 playerActiveCombatants[slot] = it.copy(types = listOf(teraType))
@@ -1471,6 +1538,59 @@ class BattleSession {
             if (slot.endsWith("a") || opponentActiveCombatants.size == 1) opponentDetails = opponentDetails.copy(types = listOf(teraType))
         }
         appendLog("${actor.substringAfter(':').trim()} Terastallized into $teraType.")
+    }
+
+    private fun applyStart(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val slot = actor.substringBefore(":").trim()
+        val effect = fields.getOrNull(3).orEmpty().substringAfter(": ").lowercase()
+        when (effect) {
+            "typechange" -> {
+                if (slot in terastallizedSlots) return
+                val types = battleTypes(fields.getOrNull(4))
+                if (types.isEmpty()) return
+                typeChangeBySlot[slot] = types
+                typeAdditionsBySlot.remove(slot)
+                updateActiveTypes(actor, types)
+                appendLog("${battleActor(actor)}'s types changed to ${types.joinToString("/")}.")
+            }
+            "typeadd" -> {
+                if (slot in terastallizedSlots) return
+                val type = battleTypes(fields.getOrNull(4)).firstOrNull() ?: return
+                val additions = typeAdditionsBySlot.getOrPut(slot) { mutableListOf() }
+                if (type !in additions) additions += type
+                updateActiveTypes(actor, effectiveTypes(slot))
+                appendLog("${battleActor(actor)} gained the $type type.")
+            }
+            "dynamax" -> {
+                updateDynamaxState(actor, true)
+                appendLog("${battleActor(actor)} Dynamaxed.")
+            }
+            else -> appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
+        }
+    }
+
+    private fun applyEnd(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val slot = actor.substringBefore(":").trim()
+        val effect = fields.getOrNull(3).orEmpty().substringAfter(": ").lowercase()
+        when (effect) {
+            "typechange" -> {
+                typeChangeBySlot.remove(slot)
+                updateActiveTypes(actor, effectiveTypes(slot))
+                appendLog("${battleActor(actor)}'s temporary types ended.")
+            }
+            "typeadd" -> {
+                typeAdditionsBySlot.remove(slot)
+                updateActiveTypes(actor, effectiveTypes(slot))
+                appendLog("${battleActor(actor)}'s added type ended.")
+            }
+            "dynamax" -> {
+                updateDynamaxState(actor, false)
+                appendLog("${battleActor(actor)} returned to normal size.")
+            }
+            else -> appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
+        }
     }
 
     private fun applyRequest(fields: List<String>) {
@@ -1887,6 +2007,89 @@ class BattleSession {
             updateOpponentParty(name, transform)
             if (name.equals(opponentPokemon, true) || opponentActiveCombatants.size <= 1) opponentDetails = transform(opponentDetails)
         }
+    }
+
+    private fun actorDetails(actor: String): PokemonDetails? {
+        val slot = actor.substringBefore(":").trim()
+        if (!actor.contains(":")) return null
+        return if (isPlayerSide(actor)) {
+            playerActiveCombatants[slot]?.let { combatant ->
+                teamDetails.firstOrNull { it.name.equals(combatant.name, true) }
+                    ?: playerDetails.takeIf { it.name.equals(combatant.name, true) }
+            }
+        } else {
+            opponentActiveCombatants[slot]?.let { combatant ->
+                opponentTeamDetails.firstOrNull { it.name.equals(combatant.name, true) }
+                    ?: opponentDetails.takeIf { it.name.equals(combatant.name, true) }
+            }
+        }
+    }
+
+    private fun baseTypesFor(species: String, fallback: List<String>) =
+        pokemonTypeResolver?.invoke(species)?.takeIf { it.isNotEmpty() } ?: fallback
+
+    private fun battleTypes(value: String?): List<String> = value.orEmpty()
+        .split('/', ',')
+        .map { it.trim().uppercase() }
+        .filter { it.isNotBlank() && it != "???" }
+        .distinct()
+
+    private fun effectiveTypes(slot: String): List<String> {
+        val base = typeChangeBySlot[slot] ?: baseTypesBySlot[slot].orEmpty()
+        return (base + typeAdditionsBySlot[slot].orEmpty()).distinct()
+    }
+
+    private fun updateActiveTypes(actor: String, types: List<String>) {
+        val slot = actor.substringBefore(":").trim()
+        val actorName = actor.substringAfter(':').trim()
+        if (isPlayerSide(actor)) {
+            val combatant = playerActiveCombatants[slot]
+            val name = combatant?.name ?: actorName
+            combatant?.let { playerActiveCombatants[slot] = it.copy(types = types) }
+            updatePlayerPartyMember(name) { details -> details.copy(types = types) }
+            if (slot.endsWith("a") || playerActiveCombatants.size <= 1) updatePlayerDetails { it.copy(types = types) }
+        } else {
+            val combatant = opponentActiveCombatants[slot]
+            val name = combatant?.name ?: actorName
+            combatant?.let { opponentActiveCombatants[slot] = it.copy(types = types) }
+            updateOpponentParty(name) { details -> details.copy(types = types) }
+            if (slot.endsWith("a") || opponentActiveCombatants.size <= 1) opponentDetails = opponentDetails.copy(types = types)
+        }
+    }
+
+    private fun updateDynamaxState(actor: String, dynamaxed: Boolean) {
+        val slot = actor.substringBefore(":").trim()
+        if (isPlayerSide(actor)) {
+            playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = it.copy(dynamaxed = dynamaxed) }
+        } else {
+            opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = it.copy(dynamaxed = dynamaxed) }
+        }
+    }
+
+    private fun swapSlotState(oldSlot: String, newSlot: String) {
+        fun <T> swap(map: MutableMap<String, T>) {
+            val oldValue = map.remove(oldSlot)
+            val newValue = map.remove(newSlot)
+            oldValue?.let { map[newSlot] = it }
+            newValue?.let { map[oldSlot] = it }
+        }
+        swap(baseTypesBySlot)
+        swap(typeChangeBySlot)
+        swap(typeAdditionsBySlot)
+        val oldTera = terastallizedSlots.remove(oldSlot)
+        val newTera = terastallizedSlots.remove(newSlot)
+        if (oldTera) terastallizedSlots += newSlot
+        if (newTera) terastallizedSlots += oldSlot
+    }
+
+    private fun statusLabel(status: String) = when (status) {
+        "BRN" -> "burned"
+        "FRZ" -> "frozen"
+        "PAR" -> "paralyzed"
+        "PSN" -> "poisoned"
+        "TOX" -> "badly poisoned"
+        "SLP" -> "asleep"
+        else -> status.lowercase()
     }
 
     private fun updateAvailableGimmicks(active: JSONObject) {
