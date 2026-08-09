@@ -891,6 +891,7 @@ class BattleSession {
                     "tier" -> if (fields.size > 2) format = fields[2]
                     "turn" -> applyTurn(fields)
                     "switch", "drag", "replace" -> applySwitch(fields)
+                    "swap" -> applySwap(fields)
                     "poke" -> applyPoke(fields)
                     "move" -> {
                         publishPendingHit()
@@ -1150,6 +1151,69 @@ class BattleSession {
         appendLog(message)
         publishFeedback(BattleFeedback(FeedbackType.ENTRY, actor = pokemon, delayMillis = entryDelayMillis, message = message))
         publishFeedback(BattleFeedback(FeedbackType.POKEMON_CRY, actor = pokemon, delayMillis = entryDelayMillis))
+    }
+
+    private fun applySwap(fields: List<String>) {
+        val actor = fields.getOrNull(2)?.trim().orEmpty()
+        val oldSlot = actor.substringBefore(':').trim()
+        val position = fields.getOrNull(3)?.toIntOrNull() ?: return
+        val sidePrefix = oldSlot.dropLast(1).takeIf { it.isNotBlank() } ?: return
+        val newSlot = "$sidePrefix${('a'.code + position).toChar()}"
+        if (oldSlot == newSlot) return
+        val playerSide = isPlayerSide(oldSlot)
+        val combatants = if (playerSide) playerActiveCombatants else opponentActiveCombatants
+        val moving = combatants.remove(oldSlot) ?: return
+        val displaced = combatants.remove(newSlot)
+        combatants[newSlot] = moving.copy(slot = newSlot)
+        displaced?.let { combatants[oldSlot] = it.copy(slot = oldSlot) }
+        if (playerSide) {
+            val movingName = activeSlotNames.remove(oldSlot)
+            val displacedName = activeSlotNames.remove(newSlot)
+            movingName?.let { activeSlotNames[newSlot] = it }
+            displacedName?.let { activeSlotNames[oldSlot] = it }
+            activeTeamNames.clear()
+            activeTeamNames += activeSlotNames.values
+            refreshPlayerPrimary()
+        } else {
+            refreshOpponentPrimary()
+        }
+        appendLog("${moving.name} moved to position ${position + 1}.")
+    }
+
+    private fun refreshPlayerPrimary() {
+        val primary = playerActiveCombatants.entries.firstOrNull { it.key.endsWith('a') }?.value ?: return
+        playerPokemon = primary.name
+        playerHp = primary.hp
+        playerLevel = primary.level
+        playerGender = primary.gender
+        playerCondition = primary.condition
+        updatePlayerDetails {
+            it.copy(
+                name = primary.name,
+                types = primary.types,
+                level = primary.level,
+                gender = primary.gender,
+                hp = primary.hp,
+                condition = primary.condition
+            )
+        }
+    }
+
+    private fun refreshOpponentPrimary() {
+        val primary = opponentActiveCombatants.entries.firstOrNull { it.key.endsWith('a') }?.value ?: return
+        opponentPokemon = primary.name
+        opponentHp = primary.hp
+        opponentLevel = primary.level
+        opponentGender = primary.gender
+        opponentCondition = primary.condition
+        opponentDetails = opponentDetails.copy(
+            name = primary.name,
+            types = primary.types,
+            level = primary.level,
+            gender = primary.gender,
+            hp = primary.hp,
+            condition = primary.condition
+        )
     }
 
     private fun applyPoke(fields: List<String>) {

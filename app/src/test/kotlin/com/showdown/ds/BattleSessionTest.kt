@@ -206,6 +206,23 @@ class BattleSessionTest {
     }
 
     @Test
+    fun activePokemonSwapsUpdateTheDisplayedPrimaryCombatant() {
+        val session = BattleSession()
+        session.setLocalUsername("ADRIAN")
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",
+                "|swap|p1b|0"
+            )
+        )
+
+        assertEquals(listOf("Mimikyu", "Incineroar"), session.playerActiveCombatants().map { it.name })
+        assertEquals("Mimikyu", session.playerPokemon)
+    }
+
+    @Test
     fun teamPreviewBuildsTheSubmittedOrderFromIndividualSelections() {
         val session = BattleSession()
         val decisions = mutableListOf<String>()
