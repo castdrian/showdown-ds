@@ -5,7 +5,24 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-data class ShowdownTeam(val id: String, val name: String, val format: String, val packed: String)
+data class ShowdownTeam(
+    val id: String,
+    val name: String,
+    val format: String,
+    val packed: String,
+    val remoteId: String? = null,
+    val remotePrivateKey: String? = null,
+    val uploadedPacked: String? = null,
+    val uploadedName: String? = null,
+    val uploadedFormat: String? = null
+) {
+    val remoteNeedsUpload: Boolean
+        get() = remoteId != null && (
+            (uploadedPacked != null && uploadedPacked != packed) ||
+                (uploadedName != null && uploadedName != name) ||
+                (uploadedFormat != null && uploadedFormat != format)
+            )
+}
 
 class ShowdownTeamLibrary(context: Context) {
     private val preferences = context.getSharedPreferences("showdown_teams", Context.MODE_PRIVATE)
@@ -15,16 +32,65 @@ class ShowdownTeamLibrary(context: Context) {
         buildList {
             for (index in 0 until values.length()) {
                 val value = values.getJSONObject(index)
-                add(ShowdownTeam(value.getString("id"), value.getString("name"), value.getString("format"), value.getString("packed")))
+                add(
+                    ShowdownTeam(
+                        value.getString("id"),
+                        value.getString("name"),
+                        value.getString("format"),
+                        value.getString("packed"),
+                        value.optString("remoteId").takeIf(String::isNotBlank),
+                        value.optString("remotePrivateKey").takeIf(String::isNotBlank),
+                        value.optString("uploadedPacked").takeIf(String::isNotBlank),
+                        value.optString("uploadedName").takeIf(String::isNotBlank),
+                        value.optString("uploadedFormat").takeIf(String::isNotBlank)
+                    )
+                )
             }
         }
     }.getOrDefault(emptyList())
 
     fun save(name: String, format: String, packed: String, id: String = UUID.randomUUID().toString()): ShowdownTeam {
-        val team = ShowdownTeam(id, name.trim().ifBlank { "Untitled team" }, format, packed.trim())
+        val previous = teams().firstOrNull { it.id == id }
+        val team = ShowdownTeam(
+            id,
+            name.trim().ifBlank { "Untitled team" },
+            format.trim(),
+            packed.trim(),
+            previous?.remoteId,
+            previous?.remotePrivateKey,
+            previous?.uploadedPacked,
+            previous?.uploadedName,
+            previous?.uploadedFormat
+        )
         val updated = teams().filterNot { it.id == team.id } + team
         write(updated)
         return team
+    }
+
+    fun markUploaded(id: String, remoteId: String, privateKey: String?, packed: String) {
+        val updated = teams().map { team ->
+            if (team.id == id) team.copy(
+                remoteId = remoteId,
+                remotePrivateKey = privateKey,
+                uploadedPacked = packed,
+                uploadedName = team.name,
+                uploadedFormat = team.format
+            )
+            else team
+        }
+        write(updated)
+    }
+
+    fun clearRemoteMetadata() {
+        write(teams().map {
+            it.copy(
+                remoteId = null,
+                remotePrivateKey = null,
+                uploadedPacked = null,
+                uploadedName = null,
+                uploadedFormat = null
+            )
+        })
     }
 
     fun remove(id: String) {
@@ -46,7 +112,22 @@ class ShowdownTeamLibrary(context: Context) {
 
     private fun write(values: List<ShowdownTeam>) {
         preferences.edit().putString("teams", JSONArray().apply {
-            values.forEach { value -> put(JSONObject().put("id", value.id).put("name", value.name).put("format", value.format).put("packed", value.packed)) }
+            values.forEach { value ->
+                put(
+                    JSONObject()
+                        .put("id", value.id)
+                        .put("name", value.name)
+                        .put("format", value.format)
+                        .put("packed", value.packed)
+                        .apply {
+                            value.remoteId?.let { put("remoteId", it) }
+                            value.remotePrivateKey?.let { put("remotePrivateKey", it) }
+                            value.uploadedPacked?.let { put("uploadedPacked", it) }
+                            value.uploadedName?.let { put("uploadedName", it) }
+                            value.uploadedFormat?.let { put("uploadedFormat", it) }
+                        }
+                )
+            }
         }.toString()).apply()
     }
 }

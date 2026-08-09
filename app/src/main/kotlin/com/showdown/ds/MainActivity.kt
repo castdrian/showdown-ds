@@ -42,6 +42,8 @@ class MainActivity : Activity() {
         val roomId: String?,
         val lines: List<String>
     )
+    private data class PendingTeamUpload(val localId: String, val packed: String)
+    private data class TeamDraft(val packed: String, val error: String?)
 
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
@@ -58,6 +60,10 @@ class MainActivity : Activity() {
     private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
     private lateinit var replayFetcher: ShowdownReplayFetcher
     private var showdownConnection: ShowdownConnection? = null
+    private var pendingTeamUpload: PendingTeamUpload? = null
+    private var teamUploadButtons: List<Button> = emptyList()
+    private var teamEditorDialog: ShowdownDialog? = null
+    private var teamEditorShareView: TextView? = null
     private val pokedex = ShowdownPokedex()
     private val lobbyState = ShowdownLobbyState()
     private val friendsState = ShowdownFriendsState()
@@ -262,7 +268,6 @@ class MainActivity : Activity() {
         }
         battleAudio = BattleAudio(this, spriteCache, session)
         battleAudio.updateOptions(session)
-        battleAudio.preloadMoves(session.moves().map { it.name })
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         setContentView(createPrimaryScreen())
         displayManager?.registerDisplayListener(displayListener, null)
@@ -331,6 +336,11 @@ class MainActivity : Activity() {
         privateMessageThreads.clear()
         accountDialog?.dismiss()
         accountDialog = null
+        teamEditorDialog?.dismiss()
+        teamEditorDialog = null
+        teamEditorShareView = null
+        pendingTeamUpload = null
+        teamUploadButtons = emptyList()
         userDetailsDialog?.dismiss()
         userDetailsDialog = null
         pendingUserDetailsId = null
@@ -512,7 +522,6 @@ class MainActivity : Activity() {
     private fun refreshDisplays() {
         if (::battleAudio.isInitialized && ::session.isInitialized) {
             battleAudio.updateOptions(session)
-            battleAudio.preloadMoves(session.moves().map { it.name })
         }
         battleScene?.invalidate()
         commandDeck?.invalidate()
@@ -1843,7 +1852,20 @@ class MainActivity : Activity() {
                         pendingLobbyCommands = null
                         pendingLobbyStatus = null
                         reconnectLobbyCommands = null
+                        pendingTeamUpload = null
+                        teamUploadButtons.forEach { it.isEnabled = true }
+                        teamUploadButtons = emptyList()
                         session.setConnectionStatus(error)
+                    }
+                    lines.mapNotNull(ShowdownTeamRemote::parseUpload).firstOrNull()?.let { upload ->
+                        pendingTeamUpload?.let { pending ->
+                            teamLibrary.markUploaded(pending.localId, upload.remoteId, upload.privateKey, pending.packed)
+                            teamEditorShareView?.text = "Share URL: ${ShowdownTeamRemote.shareUrl(upload.remoteId, upload.privateKey)}"
+                            session.setConnectionStatus("Team uploaded: ${ShowdownTeamRemote.shareUrl(upload.remoteId, upload.privateKey)}")
+                            pendingTeamUpload = null
+                            teamUploadButtons.forEach { it.isEnabled = true }
+                            teamUploadButtons = emptyList()
+                        }
                     }
                     if (roomId == null || roomId == "lobby") {
                         if (lobbyChatState.applyProtocol("lobby", lines) && lobbyChatDialog != null) updateLobbyChatDialog()
@@ -2578,6 +2600,10 @@ class MainActivity : Activity() {
         reconnectLobbyCommands = null
         activeSearchFormat = null
         serverUserNamed = false
+        pendingTeamUpload = null
+        teamLibrary.clearRemoteMetadata()
+        teamUploadButtons.forEach { it.isEnabled = true }
+        teamUploadButtons = emptyList()
         activeBattleRoomId = null
         pendingDecisionCommand = null
         displayedOutgoingChallenge = null
@@ -2600,7 +2626,14 @@ class MainActivity : Activity() {
 
     private fun showTeamLibrary() {
         val teams = teamLibrary.teams()
-        val labels = teams.map { "${it.name} · ${it.format}" } + "Add team"
+        val labels = teams.map {
+            val remoteState = when {
+                it.remoteNeedsUpload -> " · Upload needed"
+                it.remoteId != null -> " · Uploaded"
+                else -> ""
+            }
+            "${it.name} · ${it.format}$remoteState"
+        } + "Add team"
         ShowdownDialogBuilder(this)
             .setTitle("Team library")
             .setItems(labels.toTypedArray()) { _, selected ->
@@ -2666,6 +2699,7 @@ class MainActivity : Activity() {
         contains("\n-") || contains("Ability:", true) || contains(" @ ")
 
     private fun showTeamEditor(existing: ShowdownTeam? = null) {
+        val localId = existing?.id ?: java.util.UUID.randomUUID().toString()
         val name = EditText(this).apply {
             hint = "Team name"
             setSingleLine(true)
@@ -2686,6 +2720,32 @@ class MainActivity : Activity() {
             setMinLines(2)
             setText(existing?.packed.orEmpty())
         }
+        val shareView = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffa9e8e2.toInt())
+            setTextIsSelectable(true)
+            text = existing?.let { team ->
+                team.remoteId?.let {
+                    buildString {
+                        append("Share URL: ${ShowdownTeamRemote.shareUrl(it, team.remotePrivateKey)}")
+                        if (team.remoteNeedsUpload) append("\nLocal edits not uploaded.")
+                    }
+                }
+            }.orEmpty()
+        }
+        val copyShareButton = existing?.let { team ->
+            team.remoteId?.let { remoteId ->
+                Button(this).apply {
+                    text = "Copy share URL"
+                    setOnClickListener {
+                        val url = ShowdownTeamRemote.shareUrl(remoteId, team.remotePrivateKey)
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team share URL", url))
+                        session.setConnectionStatus("Share URL copied to the clipboard.")
+                    }
+                }
+            }
+        }
         val sets = existing?.let { ShowdownTeamCodec.unpack(it.packed) }.orEmpty().ifEmpty { listOf(ShowdownTeamSet()) }
         val setEditors = mutableListOf<TeamSetEditor>()
         val setFields = LinearLayout(this).apply {
@@ -2693,6 +2753,52 @@ class MainActivity : Activity() {
             setPadding(24, 8, 24, 0)
             for (index in 0 until 6) {
                 setEditors += createTeamSetEditor(this, index, sets.getOrNull(index) ?: ShowdownTeamSet())
+            }
+        }
+        fun readTeamDraft(): TeamDraft {
+            val editedSets = setEditors.map(::readTeamSetEditor)
+            val editedPacked = ShowdownTeamCodec.pack(editedSets)
+            val importedSets = ShowdownTeamCodec.parse(packed.text.toString())
+            val teamPacked = editedPacked.ifBlank { ShowdownTeamCodec.pack(importedSets) }
+            val validation = if (editedPacked.isNotBlank()) {
+                ShowdownTeamCodec.validate(editedSets)
+            } else {
+                ShowdownTeamCodec.validate(importedSets)
+            }
+            return TeamDraft(teamPacked, validation.firstOrNull())
+        }
+        fun uploadDraft(privateTeam: Boolean) {
+            if (pendingTeamUpload != null) {
+                session.setConnectionStatus("Finish the current team upload first.")
+                return
+            }
+            if (!authenticated || !serverUserNamed || showdownConnection == null) {
+                session.setConnectionStatus("Sign in to Showdown before uploading a team.")
+                return
+            }
+            if (format.text.toString().trim().isBlank()) {
+                session.setConnectionStatus("Enter a format ID before uploading the team.")
+                return
+            }
+            val draft = readTeamDraft()
+            if (draft.packed.isBlank()) {
+                session.setConnectionStatus("Add at least one Pokémon before uploading the team.")
+                return
+            }
+            if (draft.error != null) {
+                session.setConnectionStatus(draft.error)
+                return
+            }
+            val saved = teamLibrary.save(name.text.toString(), format.text.toString(), draft.packed, localId)
+            val action = if (saved.remoteId == null) "save" else "update"
+            val command = ShowdownTeamRemote.command(action, saved.remoteId, saved.name, saved.format, privateTeam, saved.packed)
+            pendingTeamUpload = PendingTeamUpload(localId, saved.packed)
+            if (showdownConnection?.sendGlobal(command) != true) {
+                pendingTeamUpload = null
+                session.setConnectionStatus("The team upload could not reach Showdown.")
+            } else {
+                teamUploadButtons.forEach { it.isEnabled = false }
+                session.setConnectionStatus("Uploading ${saved.name}…")
             }
         }
         moveDex.load {
@@ -2769,6 +2875,16 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val uploadPrivateButton = Button(this).apply {
+            text = "Upload private team"
+            setOnClickListener { uploadDraft(true) }
+        }
+        val uploadPublicButton = Button(this).apply {
+            text = "Upload public team"
+            setOnClickListener { uploadDraft(false) }
+        }
+        teamUploadButtons = listOf(uploadPrivateButton, uploadPublicButton)
+        teamUploadButtons.forEach { it.isEnabled = pendingTeamUpload == null }
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(name)
@@ -2778,6 +2894,10 @@ class MainActivity : Activity() {
             addView(copyButton)
             addView(copyTextButton)
             addView(copyJsonButton)
+            addView(uploadPrivateButton)
+            addView(uploadPublicButton)
+            addView(shareView)
+            copyShareButton?.let(::addView)
             addView(packed)
             addView(setFields)
         }
@@ -2812,11 +2932,20 @@ class MainActivity : Activity() {
                     teamFormat.isBlank() || teamPacked.isBlank() -> session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
                     validation.isNotEmpty() -> session.setConnectionStatus(validation.first())
                     else -> {
-                        teamLibrary.save(name.text.toString(), teamFormat, teamPacked, existing?.id ?: java.util.UUID.randomUUID().toString())
+                        teamLibrary.save(name.text.toString(), teamFormat, teamPacked, localId)
                         session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
                         dialog.dismiss()
                     }
                 }
+            }
+        }
+        teamEditorDialog = dialog
+        teamEditorShareView = shareView
+        dialog.setOnDismissListener {
+            if (teamEditorDialog === dialog) {
+                teamEditorDialog = null
+                teamEditorShareView = null
+                if (pendingTeamUpload == null) teamUploadButtons = emptyList()
             }
         }
         dialog.show()

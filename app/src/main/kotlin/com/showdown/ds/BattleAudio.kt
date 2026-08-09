@@ -71,8 +71,6 @@ class BattleAudio(
 
     fun playCancel() = playNotification(0.25f)
 
-    fun preloadMoves(moves: List<String>) = Unit
-
     fun playBattleCues(lines: List<String>) {
         if (!soundEffectsEnabled) return
         lines.mapNotNull(BattleAudioCueResolver::cueForProtocolLine).forEach(::playCue)
