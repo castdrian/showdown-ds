@@ -446,7 +446,7 @@ class CommandDeckView(
         canvas.drawText(metrics, detailContent.left, bounds.top + 132f * scale, paint)
         paint.textSize = readableTextSize(28f, scale, 24f)
         canvas.drawText("PP ${move.pp} / ${move.maxPp}", detailContent.left, bounds.top + 174f * scale, paint)
-        drawFieldSummary(canvas, bounds, scale)
+        drawFieldSummary(canvas, bounds, detailContent, scale)
         if (move.disabled) {
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(23f, scale, 20f)
@@ -455,12 +455,18 @@ class CommandDeckView(
         }
     }
 
-    private fun drawFieldSummary(canvas: Canvas, bounds: RectF, scale: Float) {
+    private fun drawFieldSummary(canvas: Canvas, bounds: RectF, detailContent: RectF, scale: Float) {
         val summaryTop = bounds.top + 220f * scale
         val summaryBottom = bounds.bottom - 18f * scale
         if (summaryBottom <= summaryTop + 56f * scale) return
         val info = session.battleInfo()
-        val summary = RectF(bounds.left + 28f * scale, summaryTop, bounds.right - 28f * scale, summaryBottom)
+        val summaryInset = 14f * scale
+        val summary = RectF(
+            detailContent.left - summaryInset,
+            summaryTop,
+            detailContent.right + summaryInset,
+            summaryBottom
+        )
         paint.color = Color.argb(72, 3, 14, 24)
         canvas.drawRoundRect(summary, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.STROKE
@@ -471,7 +477,7 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(20f, scale, 18f)
         paint.color = Color.rgb(153, 224, 220)
-        canvas.drawText("FIELD STATUS", summary.left + 16f * scale, summary.top + 31f * scale, paint)
+        canvas.drawText("FIELD STATUS", detailContent.left, summary.top + 31f * scale, paint)
         val lines = mutableListOf<String>()
         info.weather.takeIf { it.isNotBlank() }?.let { lines += "Weather  $it" }
         info.terrain.takeIf { it.isNotBlank() }?.let { lines += "Terrain  $it" }
@@ -494,7 +500,7 @@ class CommandDeckView(
         }
         visibleLines.forEach { line ->
             if (baseline <= summary.bottom - 16f * scale) {
-                canvas.drawText(fitTextToWidth(line, summary.width() - 32f * scale), summary.left + 16f * scale, baseline, paint)
+                canvas.drawText(fitTextToWidth(line, detailContent.width()), detailContent.left, baseline, paint)
                 baseline += lineHeight
             }
         }
