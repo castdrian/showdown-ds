@@ -41,6 +41,27 @@ class ShowdownTeamRemoteTest {
     }
 
     @Test
+    fun buildsPrivacyAndDeleteCommands() {
+        assertEquals("/teams setprivacy 42,yes", ShowdownTeamRemote.privacyCommand("42", true))
+        assertEquals("/teams setprivacy 42,no", ShowdownTeamRemote.privacyCommand("42", false))
+        assertEquals("/teams delete 42", ShowdownTeamRemote.deleteCommand("42"))
+    }
+
+    @Test
+    fun parsesPrivacyUpdatesAndDeletes() {
+        assertEquals(
+            ShowdownTeamPrivacyUpdate("42", "secret"),
+            ShowdownTeamRemote.parsePrivacyUpdate("|queryresponse|teamupdate|{\"teamid\":42,\"privacy\":\"secret\"}")
+        )
+        assertEquals(
+            ShowdownTeamPrivacyUpdate("42", null),
+            ShowdownTeamRemote.parsePrivacyUpdate("|queryresponse|teamupdate|{\"teamid\":42,\"privacy\":null}")
+        )
+        assertEquals("42", ShowdownTeamRemote.parseDeleted("|popup|Team 42 deleted."))
+        assertNull(ShowdownTeamRemote.parseDeleted("|popup|Team 42 not found."))
+    }
+
+    @Test
     fun detectsLocalEditsAfterUpload() {
         val uploaded = ShowdownTeam(
             "local",

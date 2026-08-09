@@ -43,6 +43,8 @@ class MainActivity : Activity() {
         val lines: List<String>
     )
     private data class PendingTeamUpload(val localId: String, val packed: String)
+    private data class PendingTeamPrivacy(val localId: String, val remoteId: String)
+    private data class PendingTeamDelete(val localId: String, val remoteId: String)
     private data class TeamDraft(val packed: String, val error: String?)
 
     private var displayManager: DisplayManager? = null
@@ -61,7 +63,10 @@ class MainActivity : Activity() {
     private lateinit var replayFetcher: ShowdownReplayFetcher
     private var showdownConnection: ShowdownConnection? = null
     private var pendingTeamUpload: PendingTeamUpload? = null
+    private var pendingTeamPrivacy: PendingTeamPrivacy? = null
+    private var pendingTeamDelete: PendingTeamDelete? = null
     private var teamUploadButtons: List<Button> = emptyList()
+    private var teamPrivacyButton: Button? = null
     private var teamEditorDialog: ShowdownDialog? = null
     private var teamEditorShareView: TextView? = null
     private val pokedex = ShowdownPokedex()
@@ -340,7 +345,10 @@ class MainActivity : Activity() {
         teamEditorDialog = null
         teamEditorShareView = null
         pendingTeamUpload = null
+        pendingTeamPrivacy = null
+        pendingTeamDelete = null
         teamUploadButtons = emptyList()
+        teamPrivacyButton = null
         userDetailsDialog?.dismiss()
         userDetailsDialog = null
         pendingUserDetailsId = null
@@ -1846,27 +1854,56 @@ class MainActivity : Activity() {
                             }
                         }
                     }
-                    lines.mapNotNull(ShowdownAuthentication::serverError).firstOrNull()?.let { error ->
-                        loginInFlight = false
-                        pendingSearch = false
-                        pendingLobbyCommands = null
-                        pendingLobbyStatus = null
-                        reconnectLobbyCommands = null
-                        pendingTeamUpload = null
-                        teamUploadButtons.forEach { it.isEnabled = true }
-                        teamUploadButtons = emptyList()
-                        session.setConnectionStatus(error)
+                    val deletedTeamId = lines.mapNotNull(ShowdownTeamRemote::parseDeleted).firstOrNull()
+                    val privacyUpdate = lines.mapNotNull(ShowdownTeamRemote::parsePrivacyUpdate).firstOrNull()
+                    val upload = lines.mapNotNull(ShowdownTeamRemote::parseUpload).firstOrNull()
+                    val teamResponseHandled = deletedTeamId != null || privacyUpdate != null || upload != null
+                    deletedTeamId?.let { remoteId ->
+                        pendingTeamDelete?.takeIf { it.remoteId == remoteId }?.let { pending ->
+                            teamLibrary.remove(pending.localId)
+                            pendingTeamDelete = null
+                            teamEditorDialog?.dismiss()
+                            session.setConnectionStatus("Remote team deleted.")
+                        }
                     }
-                    lines.mapNotNull(ShowdownTeamRemote::parseUpload).firstOrNull()?.let { upload ->
+                    privacyUpdate?.let { update ->
+                        pendingTeamPrivacy?.takeIf { it.remoteId == update.remoteId }?.let { pending ->
+                            teamLibrary.markPrivacy(update.remoteId, update.privateKey)
+                            teamEditorShareView?.text = "Share URL: ${ShowdownTeamRemote.shareUrl(update.remoteId, update.privateKey)}"
+                            teamPrivacyButton?.text = if (update.privateKey == null) "Make private" else "Make public"
+                            teamPrivacyButton?.isEnabled = true
+                            teamPrivacyButton = null
+                            pendingTeamPrivacy = null
+                            session.setConnectionStatus("Team privacy updated.")
+                        }
+                    }
+                    upload?.let { result ->
                         pendingTeamUpload?.let { pending ->
-                            teamLibrary.markUploaded(pending.localId, upload.remoteId, upload.privateKey, pending.packed)
-                            teamEditorShareView?.text = "Share URL: ${ShowdownTeamRemote.shareUrl(upload.remoteId, upload.privateKey)}"
-                            session.setConnectionStatus("Team uploaded: ${ShowdownTeamRemote.shareUrl(upload.remoteId, upload.privateKey)}")
+                            teamLibrary.markUploaded(pending.localId, result.remoteId, result.privateKey, pending.packed)
+                            teamEditorShareView?.text = "Share URL: ${ShowdownTeamRemote.shareUrl(result.remoteId, result.privateKey)}"
+                            session.setConnectionStatus("Team uploaded: ${ShowdownTeamRemote.shareUrl(result.remoteId, result.privateKey)}")
                             pendingTeamUpload = null
                             teamUploadButtons.forEach { it.isEnabled = true }
                             teamUploadButtons = emptyList()
                         }
                     }
+                    lines.mapNotNull(ShowdownAuthentication::serverError).firstOrNull()
+                        ?.takeUnless { teamResponseHandled }
+                        ?.let { error ->
+                            loginInFlight = false
+                            pendingSearch = false
+                            pendingLobbyCommands = null
+                            pendingLobbyStatus = null
+                            reconnectLobbyCommands = null
+                            pendingTeamUpload = null
+                            pendingTeamPrivacy = null
+                            pendingTeamDelete = null
+                            teamUploadButtons.forEach { it.isEnabled = true }
+                            teamUploadButtons = emptyList()
+                            teamPrivacyButton?.isEnabled = true
+                            teamPrivacyButton = null
+                            session.setConnectionStatus(error)
+                        }
                     if (roomId == null || roomId == "lobby") {
                         if (lobbyChatState.applyProtocol("lobby", lines) && lobbyChatDialog != null) updateLobbyChatDialog()
                         session.applyLobbyChat(lines)
@@ -2601,9 +2638,13 @@ class MainActivity : Activity() {
         activeSearchFormat = null
         serverUserNamed = false
         pendingTeamUpload = null
+        pendingTeamPrivacy = null
+        pendingTeamDelete = null
         teamLibrary.clearRemoteMetadata()
         teamUploadButtons.forEach { it.isEnabled = true }
         teamUploadButtons = emptyList()
+        teamPrivacyButton?.isEnabled = true
+        teamPrivacyButton = null
         activeBattleRoomId = null
         pendingDecisionCommand = null
         displayedOutgoingChallenge = null
@@ -2746,6 +2787,33 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val privacyButton = existing?.let { team ->
+            team.remoteId?.let { remoteId ->
+                Button(this).apply {
+                    text = if (team.remotePrivateKey == null) "Make private" else "Make public"
+                    setOnClickListener {
+                        if (pendingTeamPrivacy != null) {
+                            session.setConnectionStatus("Finish the current privacy update first.")
+                            return@setOnClickListener
+                        }
+                        if (!authenticated || !serverUserNamed || showdownConnection == null) {
+                            session.setConnectionStatus("Sign in to Showdown before changing team privacy.")
+                            return@setOnClickListener
+                        }
+                        pendingTeamPrivacy = PendingTeamPrivacy(localId, remoteId)
+                        val makePrivate = team.remotePrivateKey == null
+                        if (showdownConnection?.sendGlobal(ShowdownTeamRemote.privacyCommand(remoteId, makePrivate)) != true) {
+                            pendingTeamPrivacy = null
+                            session.setConnectionStatus("The team privacy update could not reach Showdown.")
+                        } else {
+                            teamPrivacyButton = this
+                            isEnabled = false
+                            session.setConnectionStatus("Updating team privacy…")
+                        }
+                    }
+                }
+            }
+        }
         val sets = existing?.let { ShowdownTeamCodec.unpack(it.packed) }.orEmpty().ifEmpty { listOf(ShowdownTeamSet()) }
         val setEditors = mutableListOf<TeamSetEditor>()
         val setFields = LinearLayout(this).apply {
@@ -2766,6 +2834,27 @@ class MainActivity : Activity() {
                 ShowdownTeamCodec.validate(importedSets)
             }
             return TeamDraft(teamPacked, validation.firstOrNull())
+        }
+        val revertButton = existing?.takeIf { it.remoteNeedsUpload && it.uploadedPacked != null }?.let { team ->
+            Button(this).apply {
+                text = "Revert local edits"
+                setOnClickListener {
+                    val reverted = teamLibrary.revertToUploaded(localId)
+                    if (reverted == null) {
+                        session.setConnectionStatus("The uploaded team version is unavailable.")
+                    } else {
+                        name.setText(reverted.name)
+                        format.setText(reverted.format)
+                        packed.setText(reverted.packed)
+                        val revertedSets = ShowdownTeamCodec.unpack(reverted.packed)
+                        setEditors.forEachIndexed { index, editor ->
+                            populateTeamSetEditor(editor, revertedSets.getOrNull(index) ?: ShowdownTeamSet())
+                        }
+                        shareView.text = "Share URL: ${ShowdownTeamRemote.shareUrl(reverted.remoteId.orEmpty(), reverted.remotePrivateKey)}"
+                        session.setConnectionStatus("Reverted ${team.name} to the uploaded version.")
+                    }
+                }
+            }
         }
         fun uploadDraft(privateTeam: Boolean) {
             if (pendingTeamUpload != null) {
@@ -2898,6 +2987,8 @@ class MainActivity : Activity() {
             addView(uploadPublicButton)
             addView(shareView)
             copyShareButton?.let(::addView)
+            privacyButton?.let(::addView)
+            revertButton?.let(::addView)
             addView(packed)
             addView(setFields)
         }
@@ -2911,8 +3002,24 @@ class MainActivity : Activity() {
             .setPositiveButton("Save", null)
         if (existing != null) {
             builder.setNeutralButton("Delete") { _, _ ->
-                teamLibrary.remove(existing.id)
-                session.setConnectionStatus("Deleted ${existing.name}.")
+                val remoteId = existing.remoteId
+                if (remoteId == null) {
+                    teamLibrary.remove(existing.id)
+                    session.setConnectionStatus("Deleted ${existing.name}.")
+                } else if (!authenticated || !serverUserNamed || showdownConnection == null) {
+                    session.setConnectionStatus("Sign in to Showdown before deleting the uploaded team.")
+                } else if (pendingTeamDelete != null) {
+                    session.setConnectionStatus("Finish the current team deletion first.")
+                } else {
+                    pendingTeamDelete = PendingTeamDelete(existing.id, remoteId)
+                    if (showdownConnection?.sendGlobal(ShowdownTeamRemote.deleteCommand(remoteId)) == true) {
+                        session.setConnectionStatus("Deleting ${existing.name}…")
+                        teamEditorDialog?.dismiss()
+                    } else {
+                        pendingTeamDelete = null
+                        session.setConnectionStatus("The uploaded team could not be deleted.")
+                    }
+                }
             }
         }
         val dialog = builder.create()
@@ -2946,6 +3053,7 @@ class MainActivity : Activity() {
                 teamEditorDialog = null
                 teamEditorShareView = null
                 if (pendingTeamUpload == null) teamUploadButtons = emptyList()
+                if (pendingTeamPrivacy == null) teamPrivacyButton = null
             }
         }
         dialog.show()

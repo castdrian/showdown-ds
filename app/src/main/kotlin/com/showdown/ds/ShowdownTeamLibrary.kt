@@ -81,6 +81,24 @@ class ShowdownTeamLibrary(context: Context) {
         write(updated)
     }
 
+    fun markPrivacy(remoteId: String, privateKey: String?) {
+        write(teams().map { team ->
+            if (team.remoteId == remoteId) team.copy(remotePrivateKey = privateKey) else team
+        })
+    }
+
+    fun revertToUploaded(id: String): ShowdownTeam? {
+        val current = teams().firstOrNull { it.id == id } ?: return null
+        val uploadedPacked = current.uploadedPacked ?: return null
+        val reverted = current.copy(
+            name = current.uploadedName ?: current.name,
+            format = current.uploadedFormat ?: current.format,
+            packed = uploadedPacked
+        )
+        write(teams().map { if (it.id == id) reverted else it })
+        return reverted
+    }
+
     fun clearRemoteMetadata() {
         write(teams().map {
             it.copy(
