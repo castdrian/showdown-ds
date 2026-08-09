@@ -1,5 +1,7 @@
 package com.showdown.ds
 
+import java.net.URLDecoder
+
 class ShowdownTeamRemoteState {
     data class RemoteTeam(
         val remoteId: String,
@@ -98,6 +100,7 @@ class ShowdownTeamRemoteState {
         .replace(Regex("\\n[ \\t]+"), "\n")
         .replace(Regex("\\n{3,}"), "\n\n")
         .trim()
+        .let { value -> runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value) }
 
     companion object {
         fun ownTeamsCommand() = "/join view-teams-all"

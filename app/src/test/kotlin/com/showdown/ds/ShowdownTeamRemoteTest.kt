@@ -110,4 +110,17 @@ class ShowdownTeamRemoteTest {
         assertTrue(state.applyProtocol("view-teams-all", listOf("|popup|Teams are unavailable.")))
         assertEquals("Teams are unavailable.", state.snapshot.error)
     }
+
+    @Test
+    fun decodesUrlEncodedRemoteTeamLabels() {
+        val state = ShowdownTeamRemoteState()
+        val html = "<strong>Demo%20team</strong><small>Uploaded by: <strong>adrian%20test</strong></small><small>Format: [Gen%209]%20OU</small><a class=\"subtle\" href=\"/view-team-42\">Team</a>"
+
+        assertTrue(state.applyProtocol("view-teams-all", listOf("|pagehtml|$html")))
+
+        val team = state.snapshot.teams.single()
+        assertEquals("Demo team", team.name)
+        assertEquals("[Gen 9] OU", team.formatLabel)
+        assertEquals("adrian test", team.owner)
+    }
 }

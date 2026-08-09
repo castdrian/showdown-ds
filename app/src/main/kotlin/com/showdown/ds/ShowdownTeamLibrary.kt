@@ -3,6 +3,7 @@ package com.showdown.ds
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLDecoder
 import java.util.UUID
 
 data class ShowdownTeam(
@@ -35,14 +36,14 @@ class ShowdownTeamLibrary(context: Context) {
                 add(
                     ShowdownTeam(
                         value.getString("id"),
-                        value.getString("name"),
-                        value.getString("format"),
+                        value.getString("name").decodeTeamText(),
+                        value.getString("format").decodeTeamText(),
                         value.getString("packed"),
                         value.optString("remoteId").takeIf(String::isNotBlank),
                         value.optString("remotePrivateKey").takeIf(String::isNotBlank),
                         value.optString("uploadedPacked").takeIf(String::isNotBlank),
-                        value.optString("uploadedName").takeIf(String::isNotBlank),
-                        value.optString("uploadedFormat").takeIf(String::isNotBlank)
+                        value.optString("uploadedName").takeIf(String::isNotBlank)?.decodeTeamText(),
+                        value.optString("uploadedFormat").takeIf(String::isNotBlank)?.decodeTeamText()
                     )
                 )
             }
@@ -168,4 +169,6 @@ class ShowdownTeamLibrary(context: Context) {
             }
         }.toString()).apply()
     }
+
+    private fun String.decodeTeamText() = runCatching { URLDecoder.decode(this, "UTF-8") }.getOrDefault(this)
 }
