@@ -129,19 +129,10 @@ class MainActivity : Activity() {
     private val reconnectHandler = Handler(Looper.getMainLooper())
     private val battleRejoinTimeout = Runnable {
         if (activeBattleRoomId != null && !battleProtocolReady && shouldMaintainConnection) {
-            activeBattleRoomId = null
-            pendingDecisionCommand = null
-            pendingLobbyCommands = null
-            pendingLobbyStatus = null
-            reconnectLobbyCommands = null
-            activeSearchFormat = null
-            pendingSearch = false
-            pendingSearchTeamPacked = null
             shouldMaintainConnection = false
             showdownConnection?.close()
             showdownConnection = null
-            clearPersistedLobbyState()
-            session.prepareForLobby()
+            clearBattleRoomState()
             session.setConnectionStatus("That battle room is no longer available. Find another battle.")
         }
     }
@@ -1692,6 +1683,22 @@ class MainActivity : Activity() {
         getSharedPreferences("showdown_live", MODE_PRIVATE).edit().clear().apply()
     }
 
+    private fun clearBattleRoomState() {
+        activeBattleRoomId = null
+        pendingBattleJoinRoomId = null
+        battleProtocolReady = false
+        pendingDecisionCommand = null
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingSearchTeamPacked = null
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        clearPersistedLobbyState()
+        clearBattlePlayback()
+        session.prepareForLobby()
+    }
+
     private fun encodeLobbyCommands(commands: List<String>?) = commands?.joinToString("\u0000")
 
     private fun decodeLobbyCommands(commands: String?) = commands?.split('\u0000')?.filter(String::isNotBlank)?.takeIf { it.isNotEmpty() }
@@ -1841,6 +1848,19 @@ class MainActivity : Activity() {
                         }
                     }
                     if (roomId?.startsWith("battle-") == true) {
+                        val noInitMessage = lines.firstOrNull { it.startsWith("|noinit|") }
+                            ?.removePrefix("|noinit|")
+                            ?.trim()
+                            ?.ifBlank { "That battle room is no longer available." }
+                        if (noInitMessage != null && roomId != leftBattleRoomId &&
+                            (roomId == activeBattleRoomId || roomId == pendingBattleJoinRoomId)
+                        ) {
+                            reconnectHandler.removeCallbacks(battleRejoinTimeout)
+                            leftBattleRoomId = roomId
+                            clearBattleRoomState()
+                            session.setConnectionStatus(noInitMessage)
+                            return@runOnUiThread
+                        }
                         val startsBattle = lines.any { it.startsWith("|init|battle") }
                         val rejectedJoin = lines.any { it.startsWith("|noinit|") }
                         if (rejectedJoin && pendingBattleJoinRoomId == roomId) pendingBattleJoinRoomId = null
@@ -3121,19 +3141,8 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Unable to leave the battle room.")
             return
         }
-        pendingBattleJoinRoomId = null
         leftBattleRoomId = roomId
-        activeBattleRoomId = null
-        battleProtocolReady = false
-        pendingDecisionCommand = null
-        activeSearchFormat = null
-        pendingSearch = false
-        pendingLobbyCommands = null
-        pendingLobbyStatus = null
-        reconnectLobbyCommands = null
-        clearPersistedLobbyState()
-        clearBattlePlayback()
-        session.prepareForLobby()
+        clearBattleRoomState()
         session.setConnectionStatus("Left the battle room.")
     }
 
