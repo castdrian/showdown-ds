@@ -861,7 +861,7 @@ class BattleSession {
 
     fun goBack() {
         if (panel == Panel.TEAM && decisionAvailable && decisionKind == DecisionKind.TEAM_PREVIEW && teamPreviewOrder.isNotEmpty()) {
-            val removed = teamPreviewOrder.removeLast()
+            val removed = teamPreviewOrder.removeAt(teamPreviewOrder.lastIndex)
             status = "Removed ${team[removed]} from the order."
             notifyListeners()
             return

@@ -40,7 +40,7 @@ jobs:
 
       - name: Install Android build dependencies
         run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.3.13750724"
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.3.13750724"
 
       - name: Install Gradle
         run: |
