@@ -97,19 +97,19 @@ std::string apiVersion() {
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_showdown_ds_MainActivity_nativeInitializeVulkan(JNIEnv*, jclass) {
+Java_dev_adrian_showdown_MainActivity_nativeInitializeVulkan(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(stateMutex);
     return createInstance() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_showdown_ds_MainActivity_nativeReleaseVulkan(JNIEnv*, jclass) {
+Java_dev_adrian_showdown_MainActivity_nativeReleaseVulkan(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(stateMutex);
     destroyInstance();
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_showdown_ds_MainActivity_nativeAttachSurface(JNIEnv* env, jclass, jobject javaSurface) {
+Java_dev_adrian_showdown_MainActivity_nativeAttachSurface(JNIEnv* env, jclass, jobject javaSurface) {
     std::lock_guard<std::mutex> lock(stateMutex);
     if (instance == VK_NULL_HANDLE || javaSurface == nullptr) {
         return 0;
@@ -143,7 +143,7 @@ Java_com_showdown_ds_MainActivity_nativeAttachSurface(JNIEnv* env, jclass, jobje
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_showdown_ds_MainActivity_nativeDetachSurface(JNIEnv*, jclass, jlong surfaceId) {
+Java_dev_adrian_showdown_MainActivity_nativeDetachSurface(JNIEnv*, jclass, jlong surfaceId) {
     std::lock_guard<std::mutex> lock(stateMutex);
     const auto entry = surfaces.find(surfaceId);
     if (entry == surfaces.end()) {
@@ -155,13 +155,13 @@ Java_com_showdown_ds_MainActivity_nativeDetachSurface(JNIEnv*, jclass, jlong sur
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_showdown_ds_MainActivity_nativeGetVulkanApiVersion(JNIEnv* env, jclass) {
+Java_dev_adrian_showdown_MainActivity_nativeGetVulkanApiVersion(JNIEnv* env, jclass) {
     std::lock_guard<std::mutex> lock(stateMutex);
     return env->NewStringUTF(instance == VK_NULL_HANDLE ? "Unavailable" : apiVersion().c_str());
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_showdown_ds_MainActivity_nativeGetSurfaceCount(JNIEnv*, jclass) {
+Java_dev_adrian_showdown_MainActivity_nativeGetSurfaceCount(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(stateMutex);
     return static_cast<jint>(surfaces.size());
 }

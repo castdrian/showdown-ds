@@ -52,11 +52,11 @@ jobs:
       - name: Validate Showdown protocol contracts
         run: |
           gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest \
-            --tests com.showdown.ds.OfficialBattleTranscriptTest \
-            --tests com.showdown.ds.ShowdownProtocolContractTest \
-            --tests com.showdown.ds.ShowdownSocketFramesTest \
-            --tests com.showdown.ds.ShowdownServerEndpointTest \
-            --tests com.showdown.ds.ShowdownAssetPathsTest
+            --tests dev.adrian.showdown.OfficialBattleTranscriptTest \
+            --tests dev.adrian.showdown.ShowdownProtocolContractTest \
+            --tests dev.adrian.showdown.ShowdownSocketFramesTest \
+            --tests dev.adrian.showdown.ShowdownServerEndpointTest \
+            --tests dev.adrian.showdown.ShowdownAssetPathsTest
 
       - name: Run full unit suite and build debug APK
         run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest :app:assembleDebug

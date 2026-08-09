@@ -18,7 +18,7 @@
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="true">
         <activity
-            android:name="com.showdown.ds.MainActivity"
+            android:name="dev.adrian.showdown.MainActivity"
             android:configChanges="density|orientation|screenLayout|screenSize|smallestScreenSize"
             android:exported="true"
             android:launchMode="singleTop"

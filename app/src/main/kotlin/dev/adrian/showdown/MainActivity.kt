@@ -1,0 +1,3862 @@
+package dev.adrian.showdown
+
+import android.app.Activity
+import android.app.Presentation
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.hardware.display.DisplayManager
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.Display
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.Surface
+import android.view.View
+import android.view.Window
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.AutoCompleteTextView
+import android.widget.MultiAutoCompleteTextView
+import android.widget.ScrollView
+import android.widget.TextView
+import android.view.inputmethod.EditorInfo
+import java.util.ArrayDeque
+import java.util.Locale
+
+class MainActivity : Activity() {
+    private data class RoomSelection(val id: String, val title: String, val subtitle: String, val chatRoom: Boolean)
+    private data class PendingBattlePacket(
+        val connection: ShowdownConnection?,
+        val roomId: String?,
+        val lines: List<String>
+    )
+    private data class PendingTeamUpload(val localId: String, val packed: String)
+    private data class PendingTeamPrivacy(val localId: String, val remoteId: String)
+    private data class PendingTeamDelete(val localId: String, val remoteId: String)
+    private data class TeamDraft(val packed: String, val error: String?)
+
+    private var displayManager: DisplayManager? = null
+    private var secondaryPresentation: ThorPresentation? = null
+    private var battleScene: BattleSceneView? = null
+    private var showdownMoveEffects: ShowdownMoveEffectsView? = null
+    private var commandDeck: CommandDeckView? = null
+    private lateinit var session: BattleSession
+    private lateinit var battleAudio: BattleAudio
+    private lateinit var spriteCache: ShowdownSpriteCache
+    private lateinit var moveDex: ShowdownMoveDex
+    private lateinit var serverEndpoint: ShowdownServerEndpoint
+    private lateinit var credentialsStore: ShowdownCredentialsStore
+    private lateinit var teamLibrary: ShowdownTeamLibrary
+    private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
+    private lateinit var replayFetcher: ShowdownReplayFetcher
+    private var showdownConnection: ShowdownConnection? = null
+    private var pendingTeamUpload: PendingTeamUpload? = null
+    private var pendingTeamPrivacy: PendingTeamPrivacy? = null
+    private var pendingTeamDelete: PendingTeamDelete? = null
+    private var teamUploadButtons: List<Button> = emptyList()
+    private var teamPrivacyButton: Button? = null
+    private var teamEditorDialog: ShowdownDialog? = null
+    private var teamEditorShareView: TextView? = null
+    private val pokedex = ShowdownPokedex()
+    private val lobbyState = ShowdownLobbyState()
+    private val friendsState = ShowdownFriendsState()
+    private val teamRemoteState = ShowdownTeamRemoteState()
+    private val chatRoomState = ShowdownChatRoomState()
+    private val loginClient = ShowdownLoginClient()
+    private var pendingSearch = false
+    private var pendingSearchTeamPacked: String? = null
+    private var pendingLobbyCommands: List<String>? = null
+    private var pendingLobbyStatus: String? = null
+    private var reconnectLobbyCommands: List<String>? = null
+    private var activeSearchFormat: String? = null
+    private var loginInFlight = false
+    private var authenticated = false
+    private var serverUserNamed = false
+    private var activeBattleRoomId: String? = null
+    private var completedBattleRoomId: String? = null
+    private var leftBattleRoomId: String? = null
+    private var pendingBattleJoinRoomId: String? = null
+    private var battleProtocolReady = false
+    private var pendingDecisionCommand: String? = null
+    private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
+    private var roomListDialog: ShowdownDialog? = null
+    private var roomListPending = false
+    private val tournamentDirectoryState = ShowdownTournamentDirectoryState()
+    private var tournamentDirectoryDialog: ShowdownDialog? = null
+    private var tournamentDirectoryContentView: TextView? = null
+    private var tournamentDirectoryLinks: LinearLayout? = null
+    private var chatRoomDialog: ShowdownDialog? = null
+    private var tournamentDialog: ShowdownDialog? = null
+    private var ladderDialog: ShowdownDialog? = null
+    private var ladderFormatId: String? = null
+    private var chatRoomMessagesView: TextView? = null
+    private var chatRoomInput: EditText? = null
+    private var chatRoomScroll: ScrollView? = null
+    private val lobbyChatState = ShowdownChatRoomState()
+    private var lobbyChatDialog: ShowdownDialog? = null
+    private var lobbyChatMessagesView: TextView? = null
+    private var lobbyChatInput: EditText? = null
+    private var lobbyChatScroll: ScrollView? = null
+    private var pendingChatRoomId: String? = null
+    private var tournamentStatusView: TextView? = null
+    private var tournamentDetailsView: TextView? = null
+    private var tournamentJoinButton: Button? = null
+    private var tournamentLeaveButton: Button? = null
+    private var tournamentValidateButton: Button? = null
+    private var tournamentReadyButton: Button? = null
+    private var tournamentAcceptButton: Button? = null
+    private var tournamentCancelButton: Button? = null
+    private var pokedexDialog: ShowdownDialog? = null
+    private var pokedexSearchInput: EditText? = null
+    private var pokedexResults: LinearLayout? = null
+    private var pokedexDetails: TextView? = null
+    private var pokedexSprite: ShowdownPokedexSpriteView? = null
+    private var selectedPokedexEntry: ShowdownPokedex.Entry? = null
+    private var pokedexLoading = false
+    private var privateMessageDialog: ShowdownDialog? = null
+    private var privateMessageTarget: String? = null
+    private var privateMessageMessagesView: TextView? = null
+    private var privateMessageInput: EditText? = null
+    private var privateMessageScroll: ScrollView? = null
+    private val privateMessageThreads = linkedMapOf<String, MutableList<String>>()
+    private var accountDialog: ShowdownDialog? = null
+    private var userDetailsDialog: ShowdownDialog? = null
+    private var pendingUserDetailsId: String? = null
+    private var friendsDialog: ShowdownDialog? = null
+    private var friendsContentView: TextView? = null
+    private var friendsInput: EditText? = null
+    private var teamRemoteDialog: ShowdownDialog? = null
+    private var teamRemoteContentView: TextView? = null
+    private var teamRemoteLinks: LinearLayout? = null
+    private val battleAudioHandler = Handler(Looper.getMainLooper())
+    private val battleEventHandler = Handler(Looper.getMainLooper())
+    private val reconnectHandler = Handler(Looper.getMainLooper())
+    private val battleRejoinTimeout = Runnable {
+        if (activeBattleRoomId != null && !battleProtocolReady && shouldMaintainConnection) {
+            shouldMaintainConnection = false
+            showdownConnection?.close()
+            showdownConnection = null
+            clearBattleRoomState()
+            session.setConnectionStatus("That battle room is no longer available. Find another battle.")
+        }
+    }
+    private val pendingBattlePackets = ArrayDeque<PendingBattlePacket>()
+    private var battlePacketPlaybackScheduled = false
+    private var replayStatus: String? = null
+    private var replayPaused = false
+    private var replayPausedForLifecycle = false
+    private var replaySpeed = DEFAULT_BATTLE_SPEED
+    private var restoredReplayPaused = false
+    private var restoredReplaySpeed = DEFAULT_BATTLE_SPEED
+    private var activeReplayLink: String? = null
+    private var replayLoadRequest: String? = null
+    private var playbackScheduledPauseMillis = 0L
+    private var playbackScheduledAtMillis = 0L
+    private var playbackScheduledSpeed = 1f
+    private var playbackPausedRemainingMillis: Long? = null
+    private val playbackAdvanceRunnable = Runnable {
+        battlePacketPlaybackScheduled = false
+        flushBattlePlayback()
+    }
+    private var shouldMaintainConnection = false
+    private var reconnectAttempt = 0
+    private var reconnectScheduled = false
+    private var controllerHorizontal = 0
+    private var controllerVertical = 0
+    private val sessionListener = BattleSession.Listener { refreshDisplays() }
+    private val protocolListener = BattleSession.ProtocolListener { lines ->
+        runOnUiThread {
+            showdownMoveEffects?.applyProtocol(lines)
+        }
+    }
+    private val decisionListener = BattleSession.DecisionListener { command ->
+        if (session.isReplayMode()) {
+            session.setConnectionStatus("Replays are read-only.")
+            return@DecisionListener
+        }
+        clearBattlePlayback()
+        val roomId = activeBattleRoomId
+        if (roomId != null) {
+            if (showdownConnection?.send(roomId, command) == true) {
+                pendingDecisionCommand = null
+            } else {
+                pendingDecisionCommand = command
+                session.handleDecisionSendFailure()
+            }
+        } else {
+            pendingDecisionCommand = null
+            session.handleDecisionSendFailure()
+        }
+    }
+    private val chatListener = BattleSession.ChatListener { message ->
+        val roomId = activeBattleRoomId ?: "lobby"
+        if (showdownConnection?.send(roomId, message) != true) {
+            session.removeLocalChat(message)
+            session.setConnectionStatus("Connect to Showdown before sending chat.")
+        }
+    }
+    private val feedbackListener = BattleSession.FeedbackListener { feedback ->
+        runOnUiThread { handleBattleFeedback(feedback) }
+    }
+    private val clientActionListener = BattleSession.ClientActionListener { action ->
+        runOnUiThread {
+            when (action) {
+                BattleSession.ClientAction.FIND_BATTLE -> findBattle()
+                BattleSession.ClientAction.CONFIGURE_SERVER -> showServerSettings()
+                BattleSession.ClientAction.CONFIGURE_ACCOUNT -> showAccountSettings()
+                BattleSession.ClientAction.CONFIGURE_TEAM -> showTeamLibrary()
+                BattleSession.ClientAction.OPEN_ROOMS -> showRoomList()
+                BattleSession.ClientAction.CHOOSE_FORMAT -> showFormatPicker()
+                BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
+                BattleSession.ClientAction.FORFEIT -> confirmForfeit()
+                BattleSession.ClientAction.LEAVE_BATTLE -> leaveBattle()
+                BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
+                BattleSession.ClientAction.EXPORT_REPLAY -> showReplayActions()
+                BattleSession.ClientAction.SAVE_REPLAY -> saveBattleReplay()
+                BattleSession.ClientAction.OPEN_REPLAY_CONTROLS -> showReplayControls()
+                BattleSession.ClientAction.TOGGLE_BATTLE_TIMER -> toggleBattleTimer()
+                BattleSession.ClientAction.CANCEL_CHOICE -> cancelChoice()
+                BattleSession.ClientAction.SETTINGS_CHANGED -> {
+                    persistUserPreferences()
+                    battleAudio.updateOptions(session)
+                }
+            }
+        }
+    }
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {
+            showSecondaryDisplay()
+        }
+
+        override fun onDisplayRemoved(displayId: Int) {
+            if (secondaryPresentation?.display?.displayId == displayId) dismissSecondaryDisplay()
+        }
+
+        override fun onDisplayChanged(displayId: Int) {
+            refreshDisplays()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        configureWindow()
+        nativeInitializeVulkan()
+        serverEndpoint = loadServerEndpoint()
+        credentialsStore = ShowdownCredentialsStore(this)
+        teamLibrary = ShowdownTeamLibrary(this)
+        teamUrlFetcher = ShowdownTeamUrlFetcher()
+        replayFetcher = ShowdownReplayFetcher()
+        session = BattleSession().apply { prepareForLobby() }
+        session.setMatchFormat(loadMatchFormat())
+        loadUserPreferences()
+        restoredReplayPaused = savedInstanceState?.getBoolean("replay_paused") == true
+        restoredReplaySpeed = savedInstanceState?.getFloat("replay_speed", replaySpeed) ?: replaySpeed
+        savedInstanceState?.getString("pending_team_upload_local_id")?.let { localId ->
+            pendingTeamUpload = PendingTeamUpload(localId, savedInstanceState.getString("pending_team_upload_packed").orEmpty())
+        }
+        savedInstanceState?.getString("pending_team_privacy_local_id")?.let { localId ->
+            pendingTeamPrivacy = PendingTeamPrivacy(localId, savedInstanceState.getString("pending_team_privacy_remote_id").orEmpty())
+        }
+        savedInstanceState?.getString("pending_team_delete_local_id")?.let { localId ->
+            pendingTeamDelete = PendingTeamDelete(localId, savedInstanceState.getString("pending_team_delete_remote_id").orEmpty())
+        }
+        session.addListener(sessionListener)
+        session.addProtocolListener(protocolListener)
+        session.addDecisionListener(decisionListener)
+        session.addChatListener(chatListener)
+        session.addFeedbackListener(feedbackListener)
+        session.addClientActionListener(clientActionListener)
+        spriteCache = ShowdownSpriteCache(this)
+        moveDex = ShowdownMoveDex(spriteCache)
+        session.setMoveTypeResolver(moveDex::typeFor)
+        session.setMoveInfoResolver(moveDex::infoFor)
+        session.setPokemonTypeResolver(moveDex::typesFor)
+        moveDex.load {
+            session.setMoveTypeResolver(moveDex::typeFor)
+            session.setMoveInfoResolver(moveDex::infoFor)
+            session.setPokemonTypeResolver(moveDex::typesFor)
+        }
+        battleAudio = BattleAudio(this, spriteCache, session)
+        battleAudio.updateOptions(session)
+        displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        setContentView(createPrimaryScreen())
+        displayManager?.registerDisplayListener(displayListener, null)
+        showSecondaryDisplay()
+        restoreLobbyConnection(savedInstanceState)
+        if (!handleIncomingIntent(intent)) {
+            savedInstanceState?.getString("active_replay_source")?.let(::loadReplay)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("maintain_connection", shouldMaintainConnection)
+        outState.putBoolean("pending_search", pendingSearch)
+        outState.putString("pending_search_team", pendingSearchTeamPacked)
+        outState.putString("pending_lobby_status", pendingLobbyStatus)
+        outState.putStringArrayList("pending_lobby_commands", ArrayList(pendingLobbyCommands.orEmpty()))
+        outState.putStringArrayList("reconnect_lobby_commands", ArrayList(reconnectLobbyCommands.orEmpty()))
+        outState.putString("active_search_format", activeSearchFormat)
+        outState.putString("active_battle_room", activeBattleRoomId)
+        outState.putString("completed_battle_room", completedBattleRoomId)
+        outState.putString("pending_decision_command", pendingDecisionCommand)
+        outState.putString("pending_team_upload_local_id", pendingTeamUpload?.localId)
+        outState.putString("pending_team_upload_packed", pendingTeamUpload?.packed)
+        outState.putString("pending_team_privacy_local_id", pendingTeamPrivacy?.localId)
+        outState.putString("pending_team_privacy_remote_id", pendingTeamPrivacy?.remoteId)
+        outState.putString("pending_team_delete_local_id", pendingTeamDelete?.localId)
+        outState.putString("pending_team_delete_remote_id", pendingTeamDelete?.remoteId)
+        outState.putString("active_replay_source", replayLoadRequest ?: activeReplayLink)
+        outState.putBoolean("replay_paused", replayPaused || replayPausedForLifecycle)
+        outState.putFloat("replay_speed", replaySpeed)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroy() {
+        dismissSecondaryDisplay()
+        roomListDialog?.dismiss()
+        roomListDialog = null
+        roomListPending = false
+        tournamentDirectoryDialog?.dismiss()
+        tournamentDirectoryDialog = null
+        tournamentDirectoryContentView = null
+        tournamentDirectoryLinks = null
+        tournamentDirectoryState.clear()
+        chatRoomDialog?.dismiss()
+        chatRoomDialog = null
+        tournamentDialog?.dismiss()
+        tournamentDialog = null
+        ladderDialog?.dismiss()
+        ladderDialog = null
+        chatRoomMessagesView = null
+        chatRoomInput = null
+        chatRoomScroll = null
+        pendingChatRoomId = null
+        chatRoomState.clear()
+        lobbyChatDialog?.dismiss()
+        lobbyChatDialog = null
+        lobbyChatMessagesView = null
+        lobbyChatInput = null
+        lobbyChatScroll = null
+        lobbyChatState.clear()
+        privateMessageDialog?.dismiss()
+        privateMessageDialog = null
+        privateMessageTarget = null
+        privateMessageMessagesView = null
+        privateMessageInput = null
+        privateMessageScroll = null
+        privateMessageThreads.clear()
+        accountDialog?.dismiss()
+        accountDialog = null
+        teamEditorDialog?.dismiss()
+        teamEditorDialog = null
+        teamEditorShareView = null
+        pendingTeamUpload = null
+        pendingTeamPrivacy = null
+        pendingTeamDelete = null
+        teamUploadButtons = emptyList()
+        teamPrivacyButton = null
+        userDetailsDialog?.dismiss()
+        userDetailsDialog = null
+        pendingUserDetailsId = null
+        friendsDialog?.dismiss()
+        friendsDialog = null
+        friendsContentView = null
+        friendsInput = null
+        friendsState.clear()
+        teamRemoteDialog?.dismiss()
+        teamRemoteDialog = null
+        teamRemoteContentView = null
+        teamRemoteLinks = null
+        teamRemoteState.clear()
+        pokedexDialog?.dismiss()
+        pokedexDialog = null
+        pokedexSearchInput = null
+        pokedexResults = null
+        pokedexDetails = null
+        pokedexSprite = null
+        selectedPokedexEntry = null
+        displayManager?.unregisterDisplayListener(displayListener)
+        if (::session.isInitialized) session.removeListener(sessionListener)
+        if (::session.isInitialized) session.removeProtocolListener(protocolListener)
+        if (::session.isInitialized) session.removeDecisionListener(decisionListener)
+        if (::session.isInitialized) session.removeChatListener(chatListener)
+        if (::session.isInitialized) session.removeFeedbackListener(feedbackListener)
+        if (::session.isInitialized) session.removeClientActionListener(clientActionListener)
+        battleAudioHandler.removeCallbacksAndMessages(null)
+        reconnectHandler.removeCallbacksAndMessages(null)
+        shouldMaintainConnection = false
+        clearBattlePlayback()
+        showdownConnection?.close()
+        showdownConnection = null
+        if (::battleAudio.isInitialized) battleAudio.release()
+        if (::moveDex.isInitialized) moveDex.close()
+        pokedex.close()
+        if (::spriteCache.isInitialized) spriteCache.close()
+        if (::teamUrlFetcher.isInitialized) teamUrlFetcher.close()
+        if (::replayFetcher.isInitialized) replayFetcher.close()
+        showdownMoveEffects?.release()
+        showdownMoveEffects = null
+        nativeReleaseVulkan()
+        super.onDestroy()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (event.repeatCount > 0 && isConfirmButton(keyCode)) return true
+        return if (handleControllerKey(keyCode)) true else super.onKeyDown(keyCode, event)
+    }
+
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK && event.action == MotionEvent.ACTION_MOVE) {
+            val horizontal = axisDirection(event, MotionEvent.AXIS_X, MotionEvent.AXIS_HAT_X)
+            val vertical = axisDirection(event, MotionEvent.AXIS_Y, MotionEvent.AXIS_HAT_Y)
+            if (horizontal != controllerHorizontal || vertical != controllerVertical) {
+                controllerHorizontal = horizontal
+                controllerVertical = vertical
+                if (horizontal != 0 || vertical != 0) navigateController(horizontal, vertical)
+            }
+            return true
+        }
+        return super.onGenericMotionEvent(event)
+    }
+
+    override fun onPause() {
+        pauseReplayForLifecycle()
+        if (::battleAudio.isInitialized) battleAudio.pauseMusic()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        pauseReplayForLifecycle()
+        super.onStop()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        resumeReplayForLifecycle()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
+        resumeReplayForLifecycle()
+        if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
+    }
+
+    override fun onBackPressed() {
+        if (::session.isInitialized && (session.panel != BattleSession.Panel.MOVES || session.selectedGimmick != null || session.targetOptions().isNotEmpty())) {
+            cancelController()
+            return
+        }
+        super.onBackPressed()
+    }
+
+    private fun configureWindow() {
+        window.statusBarColor = 0xFF071329.toInt()
+        window.navigationBarColor = 0xFF071329.toInt()
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }
+
+    private fun createPrimaryScreen(): View {
+        val frame = FrameLayout(this)
+        val surfaceView = VulkanSurfaceView(this)
+        surfaceView.setZOrderOnTop(false)
+        frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
+        battleScene = BattleSceneView(this, session, spriteCache)
+        frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
+        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue).also { effects ->
+            frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
+            effects.setPlaybackSpeed(replaySpeed)
+            effects.seed(session.protocolHistory())
+        }
+        return frame
+    }
+
+    private fun showSecondaryDisplay() {
+        if (isFinishing || displayManager == null || secondaryPresentation != null) return
+        findThorDisplay()?.let { display ->
+            secondaryPresentation = ThorPresentation(this, display).also { presentation ->
+                presentation.setOnDismissListener {
+                    secondaryPresentation = null
+                    if (!isFinishing) window.decorView.post { showSecondaryDisplay() }
+                }
+                presentation.show()
+            }
+        }
+    }
+
+    private fun findThorDisplay(): Display? {
+        var fallback: Display? = null
+        displayManager?.displays?.forEach { display ->
+            if (display.displayId == Display.DEFAULT_DISPLAY) return@forEach
+            if (display.mode.physicalWidth == 1240 && display.mode.physicalHeight == 1080) return display
+            if (fallback == null) fallback = display
+        }
+        return fallback
+    }
+
+    private fun dismissSecondaryDisplay() {
+        secondaryPresentation?.dismiss()
+        secondaryPresentation = null
+    }
+
+    private fun handleControllerKey(keyCode: Int): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> navigateController(-1, 0)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> navigateController(1, 0)
+            KeyEvent.KEYCODE_DPAD_UP -> navigateController(0, -1)
+            KeyEvent.KEYCODE_DPAD_DOWN -> navigateController(0, 1)
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> confirmController()
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> cancelController()
+            KeyEvent.KEYCODE_BUTTON_L1 -> cycleController(-1)
+            KeyEvent.KEYCODE_BUTTON_R1 -> cycleController(1)
+            KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_START -> openPanel(BattleSession.Panel.MENU)
+            KeyEvent.KEYCODE_BUTTON_Y -> openPanel(BattleSession.Panel.TEAM)
+            KeyEvent.KEYCODE_BUTTON_L2 -> openPanel(BattleSession.Panel.ACTIVITY)
+            KeyEvent.KEYCODE_BUTTON_R2, KeyEvent.KEYCODE_BUTTON_SELECT -> openPanel(BattleSession.Panel.MENU)
+            KeyEvent.KEYCODE_BUTTON_THUMBR -> cycleGimmick()
+            else -> return false
+        }
+        return true
+    }
+
+    private fun isConfirmButton(keyCode: Int) = keyCode == KeyEvent.KEYCODE_BUTTON_A ||
+        keyCode == KeyEvent.KEYCODE_ENTER ||
+        keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+
+    private fun axisDirection(event: MotionEvent, primaryAxis: Int, fallbackAxis: Int): Int {
+        var value = event.getAxisValue(primaryAxis)
+        if (kotlin.math.abs(value) < 0.45f) value = event.getAxisValue(fallbackAxis)
+        return when {
+            value > 0.45f -> 1
+            value < -0.45f -> -1
+            else -> 0
+        }
+    }
+
+    private fun refreshDisplays() {
+        if (::battleAudio.isInitialized && ::session.isInitialized) {
+            battleAudio.updateOptions(session)
+        }
+        battleScene?.invalidate()
+        commandDeck?.invalidate()
+    }
+
+    private fun flushBattlePlayback() {
+        if (replayPaused && session.isReplayMode()) return
+        if (battlePacketPlaybackScheduled || pendingBattlePackets.isEmpty()) {
+            if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty()) {
+                replayStatus?.let {
+                    replayStatus = null
+                    session.setConnectionStatus(it)
+                }
+            }
+            return
+        }
+        val packet = pendingBattlePackets.removeFirst()
+        if (packet.connection != null && showdownConnection !== packet.connection) {
+            flushBattlePlayback()
+            return
+        }
+        session.applyProtocolPacket(packet.lines)
+        handleAppliedBattlePacket(packet)
+        scheduleBattlePlayback(BattlePlaybackTiming.pauseAfter(packet.lines))
+    }
+
+    private fun scheduleBattlePlayback(pauseMillis: Long) {
+        battlePacketPlaybackScheduled = true
+        playbackScheduledPauseMillis = pauseMillis
+        playbackScheduledAtMillis = SystemClock.elapsedRealtime()
+        playbackScheduledSpeed = replaySpeed
+        battleEventHandler.postDelayed(
+            playbackAdvanceRunnable,
+            BattlePlaybackTiming.scaledPause(pauseMillis, playbackScheduledSpeed)
+        )
+    }
+
+    private fun setReplayPaused(value: Boolean) {
+        if (!session.isReplayMode() || replayPaused == value) return
+        replayPaused = value
+        showdownMoveEffects?.setPlaybackPaused(value)
+        if (value) {
+            if (battlePacketPlaybackScheduled) {
+                val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
+                val consumedMillis = (elapsedMillis * playbackScheduledSpeed).toLong()
+                playbackPausedRemainingMillis = (playbackScheduledPauseMillis - consumedMillis).coerceAtLeast(0L)
+            }
+            battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
+            battlePacketPlaybackScheduled = false
+        } else {
+            playbackPausedRemainingMillis?.let { remainingMillis ->
+                playbackPausedRemainingMillis = null
+                scheduleBattlePlayback(remainingMillis)
+            } ?: flushBattlePlayback()
+        }
+        updateReplayStatus()
+    }
+
+    private fun setReplaySpeed(value: Float) {
+        val nextSpeed = value.coerceIn(0.25f, 4f)
+        if (nextSpeed == replaySpeed) return
+        if (battlePacketPlaybackScheduled && !replayPaused) {
+            val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
+            val consumedMillis = (elapsedMillis * playbackScheduledSpeed).toLong()
+            val remainingMillis = (playbackScheduledPauseMillis - consumedMillis).coerceAtLeast(0L)
+            battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
+            replaySpeed = nextSpeed
+            scheduleBattlePlayback(remainingMillis)
+        } else {
+            replaySpeed = nextSpeed
+        }
+        showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
+        getSharedPreferences("showdown", MODE_PRIVATE).edit().putFloat("battle_speed", replaySpeed).apply()
+        if (session.isReplayMode()) updateReplayStatus() else session.setConnectionStatus("Battle playback speed: ${replaySpeed.trimTrailingZero()}×")
+    }
+
+    private fun updateReplayStatus() {
+        val title = replayStatus ?: return
+        val state = if (replayPaused) "Paused" else "${replaySpeed.trimTrailingZero()}×"
+        session.setConnectionStatus("$title · $state")
+    }
+
+    private fun Float.trimTrailingZero(): String = if (this % 1f == 0f) toInt().toString() else toString()
+
+    private fun enqueueBattlePlayback(connection: ShowdownConnection?, roomId: String?, lines: List<String>, resetOnBattleInit: Boolean = true) {
+        if (lines.isEmpty()) return
+        if (resetOnBattleInit && lines.any { it.startsWith("|init|battle") }) clearBattlePlayback()
+        BattlePlaybackTiming.chunks(lines).forEach { chunk ->
+            if (chunk.isNotEmpty()) pendingBattlePackets.addLast(PendingBattlePacket(connection, roomId, chunk))
+        }
+        flushBattlePlayback()
+    }
+
+    private fun clearBattlePlayback() {
+        battleEventHandler.removeCallbacksAndMessages(null)
+        pendingBattlePackets.clear()
+        battlePacketPlaybackScheduled = false
+        showdownMoveEffects?.setPlaybackPaused(false)
+        replayPaused = false
+        replayPausedForLifecycle = false
+        showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
+        playbackScheduledPauseMillis = 0L
+        playbackScheduledAtMillis = 0L
+        playbackScheduledSpeed = 1f
+        playbackPausedRemainingMillis = null
+        replayStatus = null
+    }
+
+    private fun pauseReplayForLifecycle() {
+        if (::session.isInitialized && session.isReplayMode() && !replayPaused) {
+            replayPausedForLifecycle = true
+            setReplayPaused(true)
+        }
+    }
+
+    private fun resumeReplayForLifecycle() {
+        if (::session.isInitialized && session.isReplayMode() && replayPausedForLifecycle) {
+            replayPausedForLifecycle = false
+            setReplayPaused(false)
+        }
+    }
+
+    private fun handleAppliedBattlePacket(packet: PendingBattlePacket) {
+        val roomId = packet.roomId ?: return
+        if (packet.connection == null || showdownConnection !== packet.connection) return
+        if (session.isBattleFinished()) {
+            lobbyState.clearBattle(roomId)
+            completedBattleRoomId = roomId
+            activeBattleRoomId = null
+            battleProtocolReady = false
+            pendingDecisionCommand = null
+            clearPersistedLobbyState()
+            session.setLiveBattleActive(false)
+            return
+        }
+        if (activeBattleRoomId == roomId && battleProtocolReady && session.decisionAvailable) {
+            pendingDecisionCommand?.let { command ->
+                if (packet.connection.send(roomId, command)) pendingDecisionCommand = null
+            }
+        }
+    }
+
+    private fun findBattle() {
+        if (activeSearchFormat != null || pendingSearch) {
+            cancelActiveSearch()
+            return
+        }
+        if (authenticated && lobbyState.battles.isNotEmpty()) {
+            showBattleRoomPicker()
+            return
+        }
+        beginBattleSearch()
+    }
+
+    private fun beginBattleSearch() {
+        val teamOptions = teamLibrary.teams().filter { it.format.equals(session.matchFormat.id, true) }
+        if (!session.matchFormat.usesRandomTeams && teamOptions.isEmpty()) {
+            session.setConnectionStatus("Save a ${session.matchFormat.label} team before searching.")
+            showTeamLibrary()
+            return
+        }
+        if (!session.matchFormat.usesRandomTeams && teamOptions.size > 1) {
+            showTeamPicker(teamOptions) {
+                pendingSearchTeamPacked = it.packed
+                startLobbyConnection()
+            }
+            return
+        }
+        pendingSearchTeamPacked = teamOptions.firstOrNull()?.packed?.takeUnless { session.matchFormat.usesRandomTeams }
+        startLobbyConnection()
+    }
+
+    private fun showBattleRoomPicker() {
+        val battles = lobbyState.battles.entries.toList()
+        val labels = listOf("Find a new battle") + battles.map { (roomId, description) -> "$description\n$roomId" }
+        ShowdownDialogBuilder(this)
+            .setTitle("Showdown rooms")
+            .setItems(labels.toTypedArray()) { _, selected ->
+                if (selected == 0) {
+                    beginBattleSearch()
+                } else {
+                    val roomId = battles[selected - 1].key
+                    startLobbyConnection(
+                        listOf(ShowdownLobbyState.joinBattleCommand(roomId)),
+                        "Joining battle room…"
+                    )
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showRoomList() {
+        if (!authenticated) {
+            session.setConnectionStatus("Connect to Showdown to browse public rooms.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before browsing rooms.")
+            return
+        }
+        roomListPending = true
+        renderRoomListDialog()
+        val sent = showdownConnection?.sendGlobal("/cmd rooms") == true && showdownConnection?.sendGlobal("/cmd roomlist") == true
+        if (!sent) {
+            roomListPending = false
+            roomListDialog?.dismiss()
+            roomListDialog = null
+            session.setConnectionStatus("Showdown connection is not ready yet.")
+        }
+    }
+
+    private fun renderRoomListDialog() {
+        val rooms = lobbyState.rooms
+        val selections = lobbyState.battleRooms.take(32).map { battle ->
+            RoomSelection(
+                battle.id,
+                "Watch ${battle.playerOne} vs ${battle.playerTwo}",
+                battle.minimumElo.takeIf { it.isNotBlank() }?.let { "Rated · $it+ Elo" } ?: "Live battle",
+                false
+            )
+        } + rooms.map { room ->
+            val users = room.userCount.takeIf { it >= 0 }?.let { " · $it online" }.orEmpty()
+            RoomSelection(room.id, "${room.title}$users", room.description.ifBlank { room.section }, true)
+        }
+        val previous = roomListDialog
+        roomListDialog = null
+        previous?.dismiss()
+        val density = resources.displayMetrics.density
+        val roomRows = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        if (selections.isEmpty()) {
+            roomRows.addView(TextView(this).apply {
+                text = "Loading public rooms…"
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((16f * density).toInt(), (18f * density).toInt(), (16f * density).toInt(), (18f * density).toInt())
+            }, LinearLayout.LayoutParams(-1, -2))
+        } else {
+            selections.forEach { room ->
+                roomRows.addView(Button(this).apply {
+                    text = "${room.title}\n${room.subtitle}"
+                    isAllCaps = false
+                    setOnClickListener {
+                        roomListPending = false
+                        roomListDialog?.dismiss()
+                        roomListDialog = null
+                        pendingChatRoomId = room.id.takeIf { room.chatRoom }
+                        if (showdownConnection?.sendGlobal(ShowdownLobbyState.joinBattleCommand(room.id)) == true) {
+                            pendingBattleJoinRoomId = room.id.takeUnless { room.chatRoom }
+                            session.setConnectionStatus("Joining ${room.title}…")
+                        } else {
+                            pendingChatRoomId = null
+                            session.setConnectionStatus("Could not join ${room.title}.")
+                        }
+                    }
+                }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (8f * density).toInt()) })
+            }
+        }
+        val roomScroll = ScrollView(this).apply {
+            addView(roomRows, -1, -2)
+        }
+        val dialogViewport = minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+        val roomScrollHeight = (dialogViewport * 0.42f).toInt()
+        val tools = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val tournaments = Button(this@MainActivity).apply {
+                text = "Tournaments"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showTournamentDirectory()
+                }
+            }
+            val ladder = Button(this@MainActivity).apply {
+                text = "Ladder"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showLadderDialog()
+                }
+            }
+            val message = Button(this@MainActivity).apply {
+                text = "Message"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showPrivateMessageComposer()
+                }
+            }
+            val lobby = Button(this@MainActivity).apply {
+                text = "Lobby"
+                setOnClickListener {
+                    roomListPending = false
+                    roomListDialog?.dismiss()
+                    showLobbyChatDialog()
+                }
+            }
+            listOf(tournaments, ladder, message, lobby).forEach { button ->
+                addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins((3f * density).toInt(), 0, (3f * density).toInt(), 0) })
+            }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(roomScroll, LinearLayout.LayoutParams(-1, roomScrollHeight))
+            addView(tools, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Showdown rooms")
+            .setView(root)
+            .setNegativeButton("Close") { _, _ -> roomListPending = false }
+            .create()
+        dialog.setOnDismissListener {
+            if (roomListDialog === dialog) {
+                roomListDialog = null
+                roomListPending = false
+            }
+        }
+        roomListDialog = dialog
+        dialog.show()
+    }
+
+    private fun showTournamentDirectory() {
+        if (!authenticated) {
+            session.setConnectionStatus("Connect to Showdown to browse tournaments.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before browsing tournaments.")
+            return
+        }
+        tournamentDirectoryState.clear()
+        val density = resources.displayMetrics.density
+        val content = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+        }
+        val links = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val refresh = Button(this).apply {
+            text = "Refresh"
+            setOnClickListener { requestTournamentDirectory() }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(refresh, LinearLayout.LayoutParams(-1, -2))
+            addView(content, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+        }
+        tournamentDirectoryDialog?.dismiss()
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Tournaments")
+            .setView(ScrollView(this).apply { addView(root, -1, -2) })
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (tournamentDirectoryDialog === dialog) {
+                tournamentDirectoryDialog = null
+                tournamentDirectoryContentView = null
+                tournamentDirectoryLinks = null
+                tournamentDirectoryState.clear()
+            }
+        }
+        tournamentDirectoryDialog = dialog
+        tournamentDirectoryContentView = content
+        tournamentDirectoryLinks = links
+        dialog.show()
+        requestTournamentDirectory()
+    }
+
+    private fun requestTournamentDirectory() {
+        if (showdownConnection?.sendGlobal(ShowdownTournamentDirectoryState.pageCommand()) != true) {
+            session.setConnectionStatus("Tournament connection is not ready yet.")
+        }
+    }
+
+    private fun updateTournamentDirectoryDialog() {
+        val snapshot = tournamentDirectoryState.snapshot
+        tournamentDirectoryDialog?.setTitle(snapshot.title)
+        tournamentDirectoryContentView?.text = snapshot.error ?: snapshot.text
+        val links = tournamentDirectoryLinks ?: return
+        links.removeAllViews()
+        val density = resources.displayMetrics.density
+        snapshot.tournaments.forEach { tournament ->
+            val button = Button(this).apply {
+                text = buildString {
+                    append(tournament.roomName)
+                    append("\n")
+                    append(tournament.format)
+                    if (tournament.generator.isNotBlank()) append(" · ${tournament.generator}")
+                    if (tournament.started) append(" · Started")
+                    tournament.playerCount?.let { append(" · $it players") }
+                }
+                isAllCaps = false
+                setOnClickListener {
+                    tournamentDirectoryDialog?.dismiss()
+                    pendingChatRoomId = tournament.roomId
+                    if (showdownConnection?.sendGlobal(ShowdownTournamentDirectoryState.joinCommand(tournament.roomId)) == true) {
+                        session.setConnectionStatus("Joining ${tournament.roomName}…")
+                    } else {
+                        pendingChatRoomId = null
+                        session.setConnectionStatus("Could not join ${tournament.roomName}.")
+                    }
+                }
+            }
+            styleDynamicDialogButton(button)
+            links.addView(button, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, (6f * density).toInt(), 0, 0) })
+        }
+    }
+
+    private fun styleDynamicDialogButton(button: Button) {
+        val density = resources.displayMetrics.density
+        button.isAllCaps = false
+        button.setTextColor(0xffe5fcf8.toInt())
+        button.setTextSize(15f)
+        button.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        button.minHeight = (50f * density).toInt()
+        button.minimumHeight = (50f * density).toInt()
+        button.setPadding((14f * density).toInt(), 0, (14f * density).toInt(), 0)
+        button.background = GradientDrawable().apply {
+            setColor(0xff187c81.toInt())
+            setStroke((1f * density).toInt(), 0xff79dad3.toInt())
+            cornerRadius = 14f * density
+        }
+    }
+
+    private fun showLadderDialog(format: BattleSession.MatchFormat = session.matchFormat) {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to view the ladder.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before viewing the ladder.")
+            return
+        }
+        ladderFormatId = format.id
+        lobbyState.clearLadder()
+        renderLadderDialog()
+        requestLadder(format)
+    }
+
+    private fun renderLadderDialog() {
+        val format = session.availableMatchFormats().firstOrNull { it.id.equals(ladderFormatId, true) }
+            ?: ladderFormatId?.let { BattleSession.MatchFormat(it, it) }
+            ?: session.matchFormat
+        val entries = lobbyState.ladder
+        val labels = if (entries.isEmpty()) {
+            arrayOf("Loading ${format.menuLabel} ladder…")
+        } else {
+            entries.mapIndexed { index, entry ->
+                val glicko = "${entry.rpr.toInt()} ± ${entry.rprd.toInt()}"
+                "${index + 1}. ${entry.username}\nElo ${entry.elo.toInt()} · GXE ${entry.gxe.toInt()}% · Glicko $glicko"
+            }.toTypedArray()
+        }
+        val previous = ladderDialog
+        ladderDialog = null
+        previous?.dismiss()
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Ladder · ${format.menuLabel}")
+            .setItems(labels) { _, _ -> }
+            .setNegativeButton("Close") { _, _ -> ladderFormatId = null }
+            .setNeutralButton("Format") { _, _ -> showLadderFormatPicker() }
+            .setPositiveButton("Refresh") { _, _ -> requestLadder(format) }
+            .create()
+        dialog.setOnDismissListener {
+            if (ladderDialog === dialog) {
+                ladderDialog = null
+                ladderFormatId = null
+            }
+        }
+        ladderDialog = dialog
+        dialog.show()
+    }
+
+    private fun requestLadder(format: BattleSession.MatchFormat) {
+        ladderFormatId = format.id
+        if (showdownConnection?.sendGlobal("/cmd laddertop ${format.id}") == true) {
+            session.setConnectionStatus("Loading ${format.menuLabel} ladder…")
+        } else {
+            session.setConnectionStatus("Could not request the Showdown ladder.")
+        }
+    }
+
+    private fun showLadderFormatPicker() {
+        val formats = session.availableMatchFormats()
+        ShowdownDialogBuilder(this)
+            .setTitle("Ladder format")
+            .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOfFirst { it.id.equals(ladderFormatId, true) }) { _, selected ->
+                val format = formats[selected]
+                showLadderDialog(format)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showPrivateMessageComposer() {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to message another player.")
+            return
+        }
+        val targetInput = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Message player")
+            .setView(targetInput)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Open") { dialog, _ ->
+                val target = targetInput.text.toString().trim()
+                if (target.isBlank()) {
+                    session.setConnectionStatus("Enter a username to message.")
+                } else {
+                    dialog.dismiss()
+                    showPrivateMessageDialog(target)
+                }
+            }
+            .show()
+    }
+
+    private fun showFindUserComposer() {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to look up another player.")
+            return
+        }
+        val targetInput = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Find a user")
+            .setView(targetInput)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Find") { dialog, _ ->
+                val target = targetInput.text.toString().trim()
+                if (target.isBlank()) {
+                    session.setConnectionStatus("Enter a username to find.")
+                } else {
+                    dialog.dismiss()
+                    requestUserDetails(target)
+                }
+            }
+            .show()
+    }
+
+    private fun requestUserDetails(target: String) {
+        pendingUserDetailsId = normalizeShowdownId(target)
+        userDetailsDialog?.dismiss()
+        val loading = TextView(this).apply {
+            text = "Loading ${target.trim()}…"
+            setTextSize(18f)
+            setTextColor(0xffd5e9ed.toInt())
+            setPadding(24, 22, 24, 22)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Player profile")
+            .setView(loading)
+            .setNegativeButton("Close") { _, _ -> pendingUserDetailsId = null }
+            .create()
+        dialog.setOnDismissListener {
+            if (userDetailsDialog === dialog) {
+                userDetailsDialog = null
+                pendingUserDetailsId = null
+            }
+        }
+        userDetailsDialog = dialog
+        dialog.show()
+        if (showdownConnection?.sendGlobal(ShowdownUserDetails.queryCommand(target)) != true) {
+            dialog.dismiss()
+            session.setConnectionStatus("Showdown connection is not ready yet.")
+        }
+    }
+
+    private fun renderUserDetails(profile: ShowdownUserDetails.Profile) {
+        userDetailsDialog?.dismiss()
+        val density = resources.displayMetrics.density
+        val summary = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+            text = buildUserDetailsSummary(profile)
+        }
+        val addFriend = Button(this).apply {
+            text = if (profile.friended) "Already friends" else "Add friend"
+            isEnabled = !profile.friended
+            setOnClickListener {
+                if (showdownConnection?.sendGlobal(ShowdownUserDetails.addFriendCommand(profile.name)) == true) {
+                    session.setConnectionStatus("Friend request sent to ${profile.name}.")
+                    isEnabled = false
+                    text = "Request sent"
+                } else {
+                    session.setConnectionStatus("Showdown connection is not ready yet.")
+                }
+            }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(ScrollView(this@MainActivity).apply {
+                addView(summary, -1, -2)
+            }, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(addFriend, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle(profile.name)
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Message") { _, _ -> showPrivateMessageDialog(profile.name) }
+            .setPositiveButton("Challenge") { _, _ -> showChallengeComposer(profile.name) }
+            .create()
+        dialog.setOnDismissListener {
+            if (userDetailsDialog === dialog) {
+                userDetailsDialog = null
+                pendingUserDetailsId = null
+            }
+        }
+        userDetailsDialog = dialog
+        dialog.show()
+    }
+
+    private fun buildUserDetailsSummary(profile: ShowdownUserDetails.Profile): String = buildList {
+        add(if (profile.online) "Online" else "Offline")
+        profile.status.takeIf { it.isNotBlank() }?.let { add("Status: $it") }
+        profile.group.takeIf { it.isNotBlank() }?.let { add("Role: $it") }
+        profile.customGroup.takeIf { it.isNotBlank() }?.let { add(it) }
+        if (profile.autoconfirmed) add("Autoconfirmed account")
+        profile.avatar?.let { add("Avatar: $it") }
+        if (profile.rooms.isNotEmpty()) {
+            add("")
+            add("Active rooms")
+            profile.rooms.take(16).forEach { room ->
+                val battle = listOf(room.playerOne, room.playerTwo).filter { it.isNotBlank() }.joinToString(" vs ")
+                add(if (battle.isBlank()) room.id else "${room.id}: $battle")
+            }
+            if (profile.rooms.size > 16) add("…and ${profile.rooms.size - 16} more")
+        }
+    }.joinToString("\n")
+
+    private fun normalizeShowdownId(value: String) = value.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
+
+    private fun showPrivateMessageDialog(target: String) {
+        privateMessageDialog?.dismiss()
+        privateMessageTarget = target
+        val density = resources.displayMetrics.density
+        val messages = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffe1f0f3.toInt())
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(messages, -1, -2)
+        }
+        val input = EditText(this).apply {
+            hint = "Message $target"
+            setSingleLine(true)
+            setTextSize(17f)
+        }
+        val send = Button(this).apply {
+            text = "Send"
+            setOnClickListener { sendPrivateMessage() }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(send, LinearLayout.LayoutParams(-2, -2))
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((12f * density).toInt(), (8f * density).toInt(), (12f * density).toInt(), 0)
+            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(controls, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Message · $target")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (privateMessageDialog === dialog) {
+                privateMessageDialog = null
+                privateMessageTarget = null
+                privateMessageMessagesView = null
+                privateMessageInput = null
+                privateMessageScroll = null
+            }
+        }
+        privateMessageDialog = dialog
+        privateMessageMessagesView = messages
+        privateMessageInput = input
+        privateMessageScroll = scroll
+        dialog.show()
+        updatePrivateMessageDialog()
+    }
+
+    private fun updatePrivateMessageDialog() {
+        val target = privateMessageTarget ?: return
+        val content = privateMessageThreads[target].orEmpty().joinToString("\n\n").ifBlank { "No messages yet." }
+        privateMessageMessagesView?.text = content
+        privateMessageScroll?.post { privateMessageScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun sendPrivateMessage() {
+        val target = privateMessageTarget ?: return
+        val text = privateMessageInput?.text?.toString()?.trim().orEmpty()
+        if (text.isBlank()) return
+        if (showdownConnection?.sendGlobal(ShowdownPrivateMessages.command(target, text)) == true) {
+            privateMessageThreads.getOrPut(target) { mutableListOf() } += "You: $text"
+            privateMessageInput?.setText("")
+            updatePrivateMessageDialog()
+        } else {
+            session.setConnectionStatus("Private message connection is not ready.")
+        }
+    }
+
+    private fun handlePrivateMessages(lines: List<String>) {
+        val local = session.localUsername()
+        if (local.isBlank()) return
+        lines.mapNotNull(ShowdownPrivateMessages::parse).forEach { message ->
+            if (message.sender.equals(local, true) || !message.recipient.equals(local, true)) return@forEach
+            val target = message.sender
+            privateMessageThreads.getOrPut(target) { mutableListOf() } += "${message.sender}: ${message.text}"
+            if (privateMessageDialog != null && privateMessageTarget.equals(target, true)) {
+                updatePrivateMessageDialog()
+            } else {
+                showPrivateMessageDialog(target)
+            }
+        }
+    }
+
+    private fun showChatRoomDialog() {
+        val existing = chatRoomDialog
+        if (existing != null) {
+            updateChatRoomDialog()
+            return
+        }
+        val density = resources.displayMetrics.density
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24f * density).toInt(), (8f * density).toInt(), (24f * density).toInt(), 0)
+        }
+        val messages = TextView(this).apply {
+            setTextSize(18f)
+            setTextColor(0xfff2f6ff.toInt())
+            setPadding(0, (8f * density).toInt(), 0, (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(messages, -1, -2)
+        }
+        val input = EditText(this).apply {
+            hint = "Message room"
+            setSingleLine(true)
+            setTextSize(18f)
+        }
+        val send = Button(this).apply {
+            text = "Send"
+            setOnClickListener { sendChatRoomMessage() }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(send, LinearLayout.LayoutParams(-2, -2))
+        }
+        val tournament = Button(this).apply {
+            text = "Tournament"
+            setOnClickListener { showTournamentDialog() }
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(controls, LinearLayout.LayoutParams(-1, -2))
+        root.addView(tournament, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle(chatRoomState.title)
+            .setView(root)
+            .setNegativeButton("Leave", null)
+            .create()
+        dialog.setOnDismissListener {
+            tournamentDialog?.dismiss()
+            tournamentDialog = null
+            val roomId = chatRoomState.roomId
+            if (roomId != null && !isFinishing) showdownConnection?.send(roomId, "/leave")
+            if (chatRoomDialog === dialog) {
+                chatRoomDialog = null
+                chatRoomMessagesView = null
+                chatRoomInput = null
+                chatRoomScroll = null
+                pendingChatRoomId = null
+                chatRoomState.clear()
+            }
+        }
+        chatRoomDialog = dialog
+        chatRoomMessagesView = messages
+        chatRoomInput = input
+        chatRoomScroll = scroll
+        dialog.show()
+        updateChatRoomDialog()
+    }
+
+    private fun updateChatRoomDialog() {
+        val dialog = chatRoomDialog ?: return
+        dialog.setTitle("${chatRoomState.title} · ${chatRoomState.users.size} online")
+        val content = chatRoomState.messages.joinToString("\n") { message ->
+            if (message.system) message.text else "${message.speaker}: ${message.text}"
+        }.ifBlank { "No messages yet." }
+        chatRoomMessagesView?.text = content
+        chatRoomScroll?.post { chatRoomScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun showLobbyChatDialog() {
+        val existing = lobbyChatDialog
+        if (existing != null) {
+            updateLobbyChatDialog()
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before opening lobby chat.")
+            return
+        }
+        val density = resources.displayMetrics.density
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24f * density).toInt(), (8f * density).toInt(), (24f * density).toInt(), 0)
+        }
+        val messages = TextView(this).apply {
+            setTextSize(18f)
+            setTextColor(0xfff2f6ff.toInt())
+            setPadding(0, (8f * density).toInt(), 0, (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(messages, -1, -2)
+        }
+        val input = EditText(this).apply {
+            hint = "Message lobby"
+            setSingleLine(true)
+            setTextSize(18f)
+            imeOptions = EditorInfo.IME_ACTION_SEND
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_SEND) {
+                    sendLobbyChatMessage()
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        val send = Button(this).apply {
+            text = "Send"
+            setOnClickListener { sendLobbyChatMessage() }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(send, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = (8f * density).toInt() })
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(controls, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Lobby chat")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (lobbyChatDialog === dialog) {
+                lobbyChatDialog = null
+                lobbyChatMessagesView = null
+                lobbyChatInput = null
+                lobbyChatScroll = null
+            }
+        }
+        lobbyChatDialog = dialog
+        lobbyChatMessagesView = messages
+        lobbyChatInput = input
+        lobbyChatScroll = scroll
+        dialog.show()
+        showdownConnection?.sendGlobal("/join lobby")
+        updateLobbyChatDialog()
+    }
+
+    private fun updateLobbyChatDialog() {
+        lobbyChatMessagesView?.text = lobbyChatState.messages.joinToString("\n") { message ->
+            if (message.system) message.text else "${message.speaker}: ${message.text}"
+        }.ifBlank { "No lobby messages yet." }
+        lobbyChatScroll?.post { lobbyChatScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun sendLobbyChatMessage() {
+        val text = lobbyChatInput?.text?.toString()?.trim().orEmpty()
+        if (text.isBlank()) return
+        if (showdownConnection?.send("lobby", text) == true) {
+            lobbyChatInput?.setText("")
+        } else {
+            session.setConnectionStatus("Lobby chat connection is not ready.")
+        }
+    }
+
+    private fun showTournamentDialog() {
+        tournamentDialog?.let {
+            updateTournamentDialog()
+            return
+        }
+        val density = resources.displayMetrics.density
+        val status = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffc7e8e8.toInt())
+            setPadding((8f * density).toInt(), (6f * density).toInt(), (8f * density).toInt(), (10f * density).toInt())
+        }
+        val details = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffe1f0f3.toInt())
+            setPadding((8f * density).toInt(), (8f * density).toInt(), (8f * density).toInt(), (8f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(details, -1, -2)
+        }
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((8f * density).toInt(), (8f * density).toInt(), (8f * density).toInt(), 0)
+        }
+        val join = Button(this).apply {
+            text = "Join tournament"
+            setOnClickListener { sendTournamentCommand(ShowdownTournamentState.joinCommand()) }
+        }
+        val leave = Button(this).apply {
+            text = "Leave tournament"
+            setOnClickListener { sendTournamentCommand(ShowdownTournamentState.leaveCommand()) }
+        }
+        val validate = Button(this).apply {
+            text = "Validate team"
+            setOnClickListener { validateTournamentTeam() }
+        }
+        val ready = Button(this).apply {
+            text = "Ready for opponent"
+            setOnClickListener { challengeTournamentOpponent() }
+        }
+        val accept = Button(this).apply {
+            text = "Accept challenge"
+            setOnClickListener { acceptTournamentChallenge() }
+        }
+        val cancel = Button(this).apply {
+            text = "Cancel challenge"
+            setOnClickListener { sendTournamentCommand(ShowdownTournamentState.cancelChallengeCommand()) }
+        }
+        listOf(join, leave, validate, ready, accept, cancel).forEach { button ->
+            actions.addView(button, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (6f * density).toInt() })
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((12f * density).toInt(), (4f * density).toInt(), (12f * density).toInt(), 0)
+            addView(status, LinearLayout.LayoutParams(-1, -2))
+            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(actions, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle(chatRoomState.tournament.title())
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (tournamentDialog === dialog) {
+                tournamentDialog = null
+                tournamentStatusView = null
+                tournamentDetailsView = null
+                tournamentJoinButton = null
+                tournamentLeaveButton = null
+                tournamentValidateButton = null
+                tournamentReadyButton = null
+                tournamentAcceptButton = null
+                tournamentCancelButton = null
+            }
+        }
+        tournamentDialog = dialog
+        tournamentStatusView = status
+        tournamentDetailsView = details
+        tournamentJoinButton = join
+        tournamentLeaveButton = leave
+        tournamentValidateButton = validate
+        tournamentReadyButton = ready
+        tournamentAcceptButton = accept
+        tournamentCancelButton = cancel
+        dialog.show()
+        updateTournamentDialog()
+    }
+
+    private fun updateTournamentDialog() {
+        if (tournamentDialog == null) return
+        val state = chatRoomState.tournament.snapshot
+        val format = state.format.ifBlank { "Showdown" }
+        val cap = state.playerCap.takeIf { it > 0 }?.let { " · cap $it" }.orEmpty()
+        val generator = state.generator.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+        tournamentDialog?.setTitle(chatRoomState.tournament.title())
+        tournamentStatusView?.text = "${chatRoomState.tournament.status()} · $format$generator$cap"
+        val lines = buildList {
+            if (state.isJoined) add("You are in this tournament.")
+            if (state.challenges.isNotEmpty()) add("Available opponents: ${state.challenges.joinToString(", ")}")
+            if (state.challengeBys.isNotEmpty()) add("Waiting for: ${state.challengeBys.joinToString(", ")}")
+            state.challenged?.let { add("Challenge received from $it.") }
+            state.challenging?.let { add("Challenge sent to $it.") }
+            val bracket = chatRoomState.tournament.bracketLines()
+            if (bracket.isNotEmpty()) {
+                add("Bracket")
+                addAll(bracket)
+            }
+            if (state.events.isNotEmpty()) {
+                add("Updates")
+                addAll(state.events.asReversed())
+            }
+        }
+        tournamentDetailsView?.text = lines.joinToString("\n").ifBlank { "No tournament details yet." }
+        tournamentJoinButton?.visibility = if (state.isActive && !state.isStarted && !state.isJoined) View.VISIBLE else View.GONE
+        tournamentLeaveButton?.visibility = if (state.isActive && !state.isStarted && state.isJoined) View.VISIBLE else View.GONE
+        tournamentValidateButton?.visibility = if (state.isActive && state.isStarted && state.isJoined) View.VISIBLE else View.GONE
+        tournamentReadyButton?.visibility = if (state.isActive && state.isStarted && state.isJoined && state.challenges.isNotEmpty() && state.challenged == null) View.VISIBLE else View.GONE
+        tournamentAcceptButton?.visibility = if (state.isActive && state.isStarted && state.isJoined && state.challenged != null) View.VISIBLE else View.GONE
+        tournamentCancelButton?.visibility = if (state.isActive && state.isStarted && state.isJoined && state.challenging != null) View.VISIBLE else View.GONE
+        tournamentReadyButton?.text = state.challenges.firstOrNull()?.let { "Ready vs $it" } ?: "Ready for opponent"
+    }
+
+    private fun sendTournamentCommand(command: String) {
+        val roomId = chatRoomState.roomId
+        if (roomId == null || showdownConnection?.send(roomId, command) != true) {
+            session.setConnectionStatus("Tournament connection is not ready.")
+            return
+        }
+        session.setConnectionStatus("Sent tournament action.")
+    }
+
+    private fun challengeTournamentOpponent() {
+        val opponents = chatRoomState.tournament.snapshot.challenges
+        if (opponents.isEmpty()) return
+        if (opponents.size == 1) {
+            sendTournamentTeam(ShowdownTournamentState.challengeCommand(opponents.single()))
+            return
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Choose tournament opponent")
+            .setItems(opponents.toTypedArray()) { _, selected ->
+                sendTournamentTeam(ShowdownTournamentState.challengeCommand(opponents[selected]))
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun acceptTournamentChallenge() {
+        if (chatRoomState.tournament.snapshot.challenged.isNullOrBlank()) return
+        sendTournamentTeam(ShowdownTournamentState.acceptChallengeCommand())
+    }
+
+    private fun validateTournamentTeam() {
+        sendTournamentTeam(ShowdownTournamentState.validateTeamCommand())
+    }
+
+    private fun sendTournamentTeam(command: String) {
+        val tournament = chatRoomState.tournament.snapshot
+        val formatId = tournament.teambuilderFormat.ifBlank { tournament.format }
+        val format = session.availableMatchFormats().firstOrNull { it.id.equals(formatId, true) }
+        if (format?.usesRandomTeams == true || formatId.contains("randombattle", true) || formatId.contains("battlefactory", true)) {
+            sendTournamentTeamCommand(null, command)
+            return
+        }
+        val teams = teamLibrary.teams().filter { it.format.equals(formatId, true) }
+        if (teams.isEmpty()) {
+            session.setConnectionStatus("Save a $formatId team before entering this tournament.")
+            showTeamLibrary()
+            return
+        }
+        if (teams.size == 1) {
+            sendTournamentTeamCommand(teams.single().packed, command)
+        } else {
+            showTeamPicker(teams) { team -> sendTournamentTeamCommand(team.packed, command) }
+        }
+    }
+
+    private fun sendTournamentTeamCommand(packedTeam: String?, command: String) {
+        val roomId = chatRoomState.roomId
+        val teamSent = showdownConnection?.sendGlobal("/utm ${packedTeam?.takeIf { it.isNotBlank() } ?: "null"}") == true
+        if (roomId == null || !teamSent || showdownConnection?.send(roomId, command) != true) {
+            session.setConnectionStatus("Could not send the tournament team.")
+            return
+        }
+        session.setConnectionStatus("Tournament action sent.")
+    }
+
+    private fun sendChatRoomMessage() {
+        val roomId = chatRoomState.roomId ?: return
+        val message = chatRoomInput?.text?.toString()?.trim().orEmpty()
+        if (message.isBlank()) return
+        if (showdownConnection?.send(roomId, message) == true) {
+            chatRoomInput?.setText("")
+        } else {
+            session.setConnectionStatus("Chat room connection is not ready.")
+        }
+    }
+
+    private fun showTeamPicker(teams: List<ShowdownTeam>, onSelected: (ShowdownTeam) -> Unit) {
+        ShowdownDialogBuilder(this)
+            .setTitle("Choose a team")
+            .setSingleChoiceItems(teams.map { "${it.name} · ${it.format}" }.toTypedArray(), -1) { dialog, selected ->
+                dialog.dismiss()
+                onSelected(teams[selected])
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun cancelActiveSearch() {
+        activeSearchFormat?.let { format ->
+            if (lobbyState.isSearching(format)) showdownConnection?.sendGlobal(ShowdownLobbyState.cancelSearchCommand())
+            lobbyState.clearSearch(format)
+        }
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingSearchTeamPacked = null
+        reconnectLobbyCommands = null
+        shouldMaintainConnection = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectHandler.removeCallbacks(battleRejoinTimeout)
+        reconnectScheduled = false
+        showdownConnection?.close()
+        showdownConnection = null
+        authenticated = false
+        serverUserNamed = false
+        clearPersistedLobbyState()
+        session.setConnectionStatus("Battle search cancelled.")
+    }
+
+    private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
+        replayLoadRequest = null
+        activeReplayLink = null
+        pendingBattleJoinRoomId = null
+        chatRoomDialog?.dismiss()
+        tournamentDialog?.dismiss()
+        tournamentDialog = null
+        chatRoomState.clear()
+        pendingChatRoomId = null
+        session.setReplayMode(false)
+        session.prepareForLobby()
+        activeBattleRoomId = null
+        completedBattleRoomId = null
+        battleProtocolReady = false
+        pendingDecisionCommand = null
+        clearBattlePlayback()
+        shouldMaintainConnection = true
+        reconnectAttempt = 0
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectScheduled = false
+        session.setLiveBattleActive(false)
+        showdownConnection?.close()
+        pendingSearch = lobbyCommands == null
+        pendingLobbyCommands = lobbyCommands
+        pendingLobbyStatus = lobbyStatus
+        reconnectLobbyCommands = lobbyCommands
+        loginInFlight = false
+        authenticated = false
+        serverUserNamed = false
+        persistLobbyState()
+        connectLobbySocket()
+    }
+
+    private fun restoreLobbyConnection(savedInstanceState: Bundle?) {
+        val preferences = getSharedPreferences("showdown_live", MODE_PRIVATE)
+        val hasSavedInstance = savedInstanceState?.containsKey("maintain_connection") == true
+        val maintain = if (hasSavedInstance) {
+            savedInstanceState?.getBoolean("maintain_connection") == true
+        } else {
+            preferences.getBoolean("maintain_connection", false)
+        }
+        if (!maintain) return
+        shouldMaintainConnection = true
+        reconnectAttempt = 0
+        pendingSearch = savedInstanceState?.getBoolean("pending_search") ?: preferences.getBoolean("pending_search", false)
+        pendingSearchTeamPacked = savedInstanceState?.getString("pending_search_team") ?: preferences.getString("pending_search_team", null)
+        pendingLobbyStatus = savedInstanceState?.getString("pending_lobby_status") ?: preferences.getString("pending_lobby_status", null)
+        pendingLobbyCommands = savedInstanceState?.getStringArrayList("pending_lobby_commands")?.takeIf { it.isNotEmpty() }
+            ?: decodeLobbyCommands(preferences.getString("pending_lobby_commands", null))
+        reconnectLobbyCommands = savedInstanceState?.getStringArrayList("reconnect_lobby_commands")?.takeIf { it.isNotEmpty() }
+            ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
+        activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
+        activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
+        completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
+        pendingDecisionCommand = savedInstanceState?.getString("pending_decision_command")
+        battleProtocolReady = false
+        session.setLiveBattleActive(false)
+        connectLobbySocket()
+    }
+
+    private fun persistLobbyState() {
+        getSharedPreferences("showdown_live", MODE_PRIVATE).edit()
+            .putBoolean("maintain_connection", shouldMaintainConnection)
+            .putBoolean("pending_search", pendingSearch)
+            .putString("pending_search_team", pendingSearchTeamPacked)
+            .putString("pending_lobby_status", pendingLobbyStatus)
+            .putString("pending_lobby_commands", encodeLobbyCommands(pendingLobbyCommands))
+            .putString("reconnect_lobby_commands", encodeLobbyCommands(reconnectLobbyCommands))
+            .putString("active_search_format", activeSearchFormat)
+            .putString("active_battle_room", activeBattleRoomId)
+            .apply()
+    }
+
+    private fun clearPersistedLobbyState() {
+        getSharedPreferences("showdown_live", MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun clearBattleRoomState() {
+        activeBattleRoomId = null
+        completedBattleRoomId = null
+        pendingBattleJoinRoomId = null
+        battleProtocolReady = false
+        pendingDecisionCommand = null
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingSearchTeamPacked = null
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        clearPersistedLobbyState()
+        clearBattlePlayback()
+        session.prepareForLobby()
+    }
+
+    private fun encodeLobbyCommands(commands: List<String>?) = commands?.joinToString("\u0000")
+
+    private fun decodeLobbyCommands(commands: String?) = commands?.split('\u0000')?.filter(String::isNotBlank)?.takeIf { it.isNotEmpty() }
+
+    private fun connectLobbySocket() {
+        val previousConnection = showdownConnection
+        showdownConnection = null
+        previousConnection?.close()
+        lateinit var connection: ShowdownConnection
+        connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
+            override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
+                runOnUiThread {
+                    if (showdownConnection !== connection) return@runOnUiThread
+                    if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
+                        val preserveBattleSurface = activeBattleRoomId != null && session.isLiveBattleActive() && !session.isBattleFinished()
+                        battleProtocolReady = false
+                        if (!preserveBattleSurface) {
+                            pendingDecisionCommand = null
+                            session.setLiveBattleActive(false)
+                        }
+                        serverUserNamed = false
+                        chatRoomDialog?.dismiss()
+                        chatRoomState.clear()
+                        pendingChatRoomId = null
+                        lobbyChatDialog?.dismiss()
+                        lobbyChatState.clear()
+                    }
+                    val status = when (state) {
+                        ShowdownConnection.State.CONNECTING -> "Connecting to ${serverEndpoint.displayName}…"
+                        ShowdownConnection.State.CONNECTED -> {
+                            reconnectAttempt = 0
+                            reconnectScheduled = false
+                            if (credentialsStore.load() == null) "Joining ${serverEndpoint.displayName}…"
+                            else "Signing in to ${serverEndpoint.displayName}…"
+                        }
+                        ShowdownConnection.State.DISCONNECTED -> {
+                            loginInFlight = false
+                            authenticated = false
+                            if (shouldMaintainConnection) {
+                                scheduleReconnect()
+                                "Connection lost. Reconnecting to ${serverEndpoint.displayName}…"
+                            } else {
+                                pendingSearch = false
+                                pendingLobbyCommands = null
+                                pendingLobbyStatus = null
+                                activeSearchFormat = null
+                                detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
+                            }
+                        }
+                        ShowdownConnection.State.FAILED -> {
+                            loginInFlight = false
+                            authenticated = false
+                            if (shouldMaintainConnection) {
+                                scheduleReconnect()
+                                "Could not reach ${serverEndpoint.displayName}. Retrying…"
+                            } else {
+                                detail.ifBlank { "Could not reach ${serverEndpoint.displayName}." }
+                            }
+                        }
+                    }
+                    session.setConnectionStatus(status)
+                }
+            }
+
+            override fun onProtocol(roomId: String?, lines: List<String>) {
+                runOnUiThread {
+                    if (showdownConnection !== connection) return@runOnUiThread
+                    if (tournamentDirectoryState.applyProtocol(roomId, lines)) updateTournamentDirectoryDialog()
+                    if (friendsState.applyProtocol(roomId, lines)) updateFriendsDialog()
+                    if (teamRemoteState.applyProtocol(roomId, lines) && teamRemoteDialog != null) updateTeamRemoteDialog()
+                    lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
+                        session.setLocalUsername(update.username)
+                        serverUserNamed = update.named
+                        if (credentialsStore.load() == null || update.named) {
+                            authenticated = true
+                            sendPendingLobbyCommands(connection)
+                        }
+                    }
+                    lines.mapNotNull(ShowdownAuthentication::challenge).firstOrNull()?.let { challenge ->
+                        credentialsStore.load()?.takeUnless { loginInFlight }?.let { credentials ->
+                            loginInFlight = true
+                            loginClient.login(serverEndpoint, credentials, challenge) { result ->
+                                runOnUiThread {
+                                    if (showdownConnection !== connection) return@runOnUiThread
+                                    loginInFlight = false
+                                    result.onSuccess {
+                                        if (connection.sendGlobal(ShowdownAuthentication.renameCommand(credentials.username, it))) {
+                                            session.setConnectionStatus("Finishing sign-in as ${credentials.username}…")
+                                        } else {
+                                            pendingSearch = false
+                                            session.setConnectionStatus("Showdown sign-in could not reach the server.")
+                                        }
+                                    }
+                                    result.onFailure { error ->
+                                        pendingSearch = false
+                                        session.setConnectionStatus(error.message ?: "Showdown sign-in failed.")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    val deletedTeamId = lines.mapNotNull(ShowdownTeamRemote::parseDeleted).firstOrNull()
+                    val privacyUpdate = lines.mapNotNull(ShowdownTeamRemote::parsePrivacyUpdate).firstOrNull()
+                    val upload = lines.mapNotNull(ShowdownTeamRemote::parseUpload).firstOrNull()
+                    val teamResponseHandled = deletedTeamId != null || privacyUpdate != null || upload != null
+                    deletedTeamId?.let { remoteId ->
+                        pendingTeamDelete?.takeIf { it.remoteId == remoteId }?.let { pending ->
+                            teamLibrary.remove(pending.localId)
+                            pendingTeamDelete = null
+                            teamEditorDialog?.dismiss()
+                            session.setConnectionStatus("Remote team deleted.")
+                        }
+                    }
+                    privacyUpdate?.let { update ->
+                        pendingTeamPrivacy?.takeIf { it.remoteId == update.remoteId }?.let { pending ->
+                            teamLibrary.markPrivacy(update.remoteId, update.privateKey)
+                            teamEditorShareView?.text = "Share URL: ${ShowdownTeamRemote.shareUrl(update.remoteId, update.privateKey)}"
+                            teamPrivacyButton?.text = if (update.privateKey == null) "Make private" else "Make public"
+                            teamPrivacyButton?.isEnabled = true
+                            teamPrivacyButton = null
+                            pendingTeamPrivacy = null
+                            session.setConnectionStatus("Team privacy updated.")
+                        }
+                    }
+                    upload?.let { result ->
+                        pendingTeamUpload?.let { pending ->
+                            teamLibrary.markUploaded(pending.localId, result.remoteId, result.privateKey, pending.packed)
+                            teamEditorShareView?.text = "Share URL: ${ShowdownTeamRemote.shareUrl(result.remoteId, result.privateKey)}"
+                            session.setConnectionStatus("Team uploaded: ${ShowdownTeamRemote.shareUrl(result.remoteId, result.privateKey)}")
+                            pendingTeamUpload = null
+                            teamUploadButtons.forEach { it.isEnabled = true }
+                            teamUploadButtons = emptyList()
+                        }
+                    }
+                    lines.mapNotNull(ShowdownAuthentication::serverError).firstOrNull()
+                        ?.takeUnless { teamResponseHandled }
+                        ?.let { error ->
+                            loginInFlight = false
+                            pendingSearch = false
+                            pendingLobbyCommands = null
+                            pendingLobbyStatus = null
+                            reconnectLobbyCommands = null
+                            pendingTeamUpload = null
+                            pendingTeamPrivacy = null
+                            pendingTeamDelete = null
+                            teamUploadButtons.forEach { it.isEnabled = true }
+                            teamUploadButtons = emptyList()
+                            teamPrivacyButton?.isEnabled = true
+                            teamPrivacyButton = null
+                            session.setConnectionStatus(error)
+                        }
+                    if (roomId == null || roomId == "lobby") {
+                        if (lobbyChatState.applyProtocol("lobby", lines) && lobbyChatDialog != null) updateLobbyChatDialog()
+                        session.applyLobbyChat(lines)
+                        session.applyServerFormats(lines)
+                        getSharedPreferences("showdown", MODE_PRIVATE).edit()
+                            .putString("match_format", session.matchFormat.id)
+                            .putString("match_format_label", session.matchFormat.label)
+                            .apply()
+                        val previousChallenges = lobbyState.incomingChallenges
+                        val previousBattleRoomIds = lobbyState.battles.keys
+                        lobbyState.applyProtocol(lines)
+                        handlePrivateMessages(lines)
+                        lines.mapNotNull(ShowdownUserDetails::parse).firstOrNull()?.let { profile ->
+                            val requested = pendingUserDetailsId
+                            if (requested != null && (normalizeShowdownId(profile.userid) == requested || normalizeShowdownId(profile.name) == requested)) {
+                                pendingUserDetailsId = null
+                                renderUserDetails(profile)
+                            }
+                        }
+                        if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") || it.startsWith("|queryresponse|roomlist|") }) renderRoomListDialog()
+                        if (ladderDialog != null && lines.any { it.startsWith("|queryresponse|laddertop|") }) renderLadderDialog()
+                        if (activeSearchFormat != null) {
+                            lobbyState.firstNewBattle(previousBattleRoomIds)?.let { matchedRoomId ->
+                                joinMatchedBattle(connection, matchedRoomId)
+                            }
+                        }
+                        lobbyState.incomingChallenges.keys.firstOrNull { it !in previousChallenges }?.let { username ->
+                            showIncomingChallenge(username, lobbyState.incomingChallenges[username].orEmpty())
+                        }
+                        val outgoingChallenge = lobbyState.outgoingChallenge
+                        if (outgoingChallenge != null && outgoingChallenge != displayedOutgoingChallenge) {
+                            displayedOutgoingChallenge = outgoingChallenge
+                            showOutgoingChallenge(outgoingChallenge)
+                        } else if (outgoingChallenge == null) {
+                            displayedOutgoingChallenge = null
+                        }
+                        if (lobbyState.isSearching(session.matchFormat.id)) {
+                            session.setConnectionStatus("Searching ${session.matchFormat.label}…")
+                        }
+                    }
+                    if (roomId?.startsWith("battle-") == true) {
+                        val noInitMessage = ShowdownLobbyState.noInitReason(lines)
+                        if (noInitMessage != null && roomId != leftBattleRoomId &&
+                            (roomId == activeBattleRoomId || roomId == pendingBattleJoinRoomId)
+                        ) {
+                            val wasPendingJoin = pendingBattleJoinRoomId == roomId && activeBattleRoomId != roomId
+                            reconnectHandler.removeCallbacks(battleRejoinTimeout)
+                            lobbyState.clearBattle(roomId)
+                            leftBattleRoomId = roomId
+                            clearBattleRoomState()
+                            if (wasPendingJoin) {
+                                session.setConnectionStatus("That battle ended before you could join. Finding another battle…")
+                                beginBattleSearch()
+                            } else {
+                                session.setConnectionStatus(noInitMessage)
+                            }
+                            return@runOnUiThread
+                        }
+                        val startsBattle = lines.any { it.startsWith("|init|battle") }
+                        val rejectedJoin = lines.any { it.startsWith("|noinit|") }
+                        if (rejectedJoin && pendingBattleJoinRoomId == roomId) pendingBattleJoinRoomId = null
+                        val confirmedJoin = startsBattle && pendingBattleJoinRoomId == roomId
+                        if (roomId == leftBattleRoomId) {
+                            if (!confirmedJoin) return@runOnUiThread
+                            leftBattleRoomId = null
+                        }
+                        if (confirmedJoin) pendingBattleJoinRoomId = null
+                        if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
+                        if (lines.any { it.startsWith("|sentchoice|") }) pendingDecisionCommand = null
+                        activeBattleRoomId = roomId
+                        activeSearchFormat = null
+                        reconnectLobbyCommands = null
+                        if (startsBattle) battleProtocolReady = true
+                        persistLobbyState()
+                        session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
+                        enqueueBattlePlayback(connection, roomId, lines)
+                    }
+                    if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && !roomId.startsWith("view-tournaments") && !roomId.startsWith("view-teams-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
+                        val changed = chatRoomState.applyProtocol(roomId, lines)
+                        if (changed && pendingChatRoomId == roomId) {
+                            pendingChatRoomId = null
+                            showChatRoomDialog()
+                        } else if (changed && chatRoomDialog != null && chatRoomState.roomId == roomId) {
+                            updateChatRoomDialog()
+                        }
+                        if (changed && tournamentDialog != null && chatRoomState.roomId == roomId) updateTournamentDialog()
+                    }
+                }
+            }
+        })
+        showdownConnection = connection
+        connection.connect()
+    }
+
+    private fun joinMatchedBattle(connection: ShowdownConnection, roomId: String) {
+        if (activeBattleRoomId != null || !connection.sendGlobal(ShowdownLobbyState.joinBattleCommand(roomId))) return
+        pendingBattleJoinRoomId = roomId
+        activeSearchFormat?.let(lobbyState::clearSearch)
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingSearchTeamPacked = null
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        activeBattleRoomId = roomId
+        battleProtocolReady = false
+        pendingDecisionCommand = null
+        session.setLiveBattleActive(false)
+        session.setConnectionStatus("Joining battle…")
+        persistLobbyState()
+    }
+
+    private fun scheduleReconnect() {
+        if (!shouldMaintainConnection || reconnectScheduled) return
+        reconnectScheduled = true
+        val delayMillis = (1_000L shl reconnectAttempt.coerceAtMost(4)).coerceAtMost(16_000L)
+        reconnectAttempt += 1
+        reconnectHandler.postDelayed({
+            reconnectScheduled = false
+            if (shouldMaintainConnection) connectLobbySocket()
+        }, delayMillis)
+    }
+
+    private fun sendPendingLobbyCommands(connection: ShowdownConnection) {
+        if (!authenticated || showdownConnection !== connection) return
+        val commands = pendingLobbyCommands ?: when {
+            pendingSearch -> {
+                if (!session.matchFormat.usesRandomTeams && pendingSearchTeamPacked.isNullOrBlank()) {
+                    pendingSearch = false
+                    session.setConnectionStatus("Save a team for ${session.matchFormat.label} before searching.")
+                    return
+                }
+                ShowdownLobbyState.searchCommands(session.matchFormat.id, pendingSearchTeamPacked)
+            }
+            activeSearchFormat != null -> ShowdownLobbyState.searchCommands(activeSearchFormat!!, pendingSearchTeamPacked)
+            activeBattleRoomId != null -> listOf(ShowdownLobbyState.joinBattleCommand(activeBattleRoomId!!))
+            reconnectLobbyCommands != null -> reconnectLobbyCommands!!
+            else -> return
+        }
+        val rejoiningBattle = activeBattleRoomId != null && commands == listOf(ShowdownLobbyState.joinBattleCommand(activeBattleRoomId!!))
+        val searching = commands.any { it.startsWith("/search ") }
+        val sent = commands.all(connection::sendGlobal)
+        if (!sent) {
+            session.setConnectionStatus("Could not send the Showdown lobby command.")
+            return
+        }
+        pendingLobbyCommands = null
+        pendingBattleJoinRoomId = commands.firstOrNull { it.startsWith("/join battle-") }?.removePrefix("/join ")
+        val status = pendingLobbyStatus
+        pendingSearch = false
+        pendingLobbyStatus = null
+        if (status != null) {
+            session.setConnectionStatus(status)
+        } else if (searching) {
+            activeSearchFormat = commands.first { it.startsWith("/search ") }.removePrefix("/search ")
+            session.setConnectionStatus("Searching ${session.matchFormat.label}…")
+        } else if (rejoiningBattle) {
+            session.setConnectionStatus("Rejoining battle…")
+            reconnectHandler.removeCallbacks(battleRejoinTimeout)
+            reconnectHandler.postDelayed(battleRejoinTimeout, BATTLE_REJOIN_TIMEOUT_MILLIS)
+        } else if (reconnectLobbyCommands != null) {
+            session.setConnectionStatus("Restoring challenge…")
+        }
+        persistLobbyState()
+    }
+
+    private fun showChallengeComposer(prefilledUsername: String? = null) {
+        val username = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+            setText(prefilledUsername.orEmpty())
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Challenge player")
+            .setView(username)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Challenge") { _, _ -> beginChallenge(username.text.toString()) }
+            .show()
+    }
+
+    private fun beginChallenge(username: String) {
+        val target = username.trim()
+        if (target.isBlank()) {
+            session.setConnectionStatus("Enter a username to challenge.")
+            return
+        }
+        val teams = teamLibrary.teams().filter { it.format.equals(session.matchFormat.id, true) }
+        if (session.matchFormat.usesRandomTeams) {
+            startChallenge(target, null)
+        } else if (teams.isEmpty()) {
+            session.setConnectionStatus("Save a ${session.matchFormat.label} team before challenging.")
+            showTeamLibrary()
+        } else if (teams.size == 1) {
+            startChallenge(target, teams.single().packed)
+        } else {
+            showTeamPicker(teams) { startChallenge(target, it.packed) }
+        }
+    }
+
+    private fun startChallenge(username: String, packedTeam: String?) {
+        startLobbyConnection(
+            ShowdownLobbyState.challengeCommands(username, session.matchFormat.id, packedTeam),
+            "Challenge sent to $username."
+        )
+    }
+
+    private fun showIncomingChallenge(username: String, format: String) {
+        ShowdownDialogBuilder(this)
+            .setTitle("Battle challenge")
+            .setMessage("$username challenged you to $format.")
+            .setNegativeButton("Reject") { _, _ -> sendLobbyCommand(ShowdownLobbyState.rejectChallengeCommand(username), "Challenge rejected.") }
+            .setNeutralButton("Ignore", null)
+            .setPositiveButton("Accept") { _, _ -> beginAcceptChallenge(username, format) }
+            .show()
+    }
+
+    private fun showOutgoingChallenge(challenge: ShowdownLobbyState.OutgoingChallenge) {
+        ShowdownDialogBuilder(this)
+            .setTitle("Challenge pending")
+            .setMessage("Waiting for ${challenge.username} to accept your ${challenge.format} challenge.")
+            .setNegativeButton("Close", null)
+            .setPositiveButton("Cancel challenge") { _, _ ->
+                sendLobbyCommand(ShowdownLobbyState.cancelChallengeCommand(challenge.username), "Challenge cancelled.")
+            }
+            .show()
+    }
+
+    private fun beginAcceptChallenge(username: String, format: String) {
+        val matchFormat = BattleSession.MatchFormat(format, format)
+        val teams = teamLibrary.teams().filter { it.format.equals(format, true) }
+        if (matchFormat.usesRandomTeams) {
+            sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, null), "Challenge accepted.")
+        } else if (teams.isEmpty()) {
+            session.setConnectionStatus("Save a $format team before accepting.")
+            showTeamLibrary()
+        } else if (teams.size == 1) {
+            sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, teams.single().packed), "Challenge accepted.")
+        } else {
+            showTeamPicker(teams) { team ->
+                sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, team.packed), "Challenge accepted.")
+            }
+        }
+    }
+
+    private fun sendLobbyCommand(command: String, status: String) {
+        sendLobbyCommands(listOf(command), status)
+    }
+
+    private fun sendLobbyCommands(commands: List<String>, status: String) {
+        val connection = showdownConnection
+        if (!authenticated || connection == null || !commands.all(connection::sendGlobal)) {
+            session.setConnectionStatus("Connect to Showdown before using lobby challenges.")
+            return
+        }
+        when {
+            commands.any { it.startsWith("/accept ") || it.startsWith("/challenge ") } -> reconnectLobbyCommands = commands
+            commands.any { it.startsWith("/cancelchallenge ") || it.startsWith("/reject ") } -> reconnectLobbyCommands = null
+        }
+        persistLobbyState()
+        session.setConnectionStatus(status)
+    }
+
+    private fun showServerSettings() {
+        val input = EditText(this).apply {
+            setSingleLine(true)
+            setText(serverEndpoint.webSocketUrl)
+            selectAll()
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Pokémon Showdown server")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Use") { _, _ ->
+                val endpoint = ShowdownServerEndpoint.fromInput(input.text.toString())
+                if (endpoint == null) {
+                    session.setConnectionStatus("Enter a valid ws://, wss://, http://, or https:// server address.")
+                } else {
+                    serverEndpoint = endpoint
+                    getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("server_endpoint", endpoint.webSocketUrl).apply()
+                    if (shouldMaintainConnection && activeBattleRoomId == null) {
+                        session.setConnectionStatus("Server set to ${endpoint.displayName}. Reconnecting…")
+                        reconnectHandler.removeCallbacksAndMessages(null)
+                        reconnectScheduled = false
+                        connectLobbySocket()
+                    } else {
+                        session.setConnectionStatus("Server set to ${endpoint.displayName}. It will be used next time you connect.")
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun showAccountSettings() {
+        val credentials = credentialsStore.load()
+        val username = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+            setText(credentials?.username.orEmpty())
+        }
+        val password = EditText(this).apply {
+            hint = "Password"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(credentials?.password.orEmpty())
+        }
+        val fields = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(56, 8, 56, 0)
+            addView(username)
+            addView(password)
+        }
+        val findUser = Button(this).apply {
+            text = "Find a user"
+            setOnClickListener {
+                if (!authenticated || !serverUserNamed) {
+                    session.setConnectionStatus("Sign in to look up another player.")
+                } else {
+                    accountDialog?.dismiss()
+                    showFindUserComposer()
+                }
+            }
+        }
+        val resources = Button(this).apply {
+            text = "Info & resources"
+            setOnClickListener { accountDialog?.dismiss(); showResourcesDialog() }
+        }
+        val friends = Button(this).apply {
+            text = "Friends"
+            setOnClickListener {
+                if (!authenticated || !serverUserNamed) {
+                    session.setConnectionStatus("Sign in to use Friends.")
+                } else {
+                    accountDialog?.dismiss()
+                    showFriendsDialog()
+                }
+            }
+        }
+        val accountTools = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(56, 12, 56, 0)
+            addView(findUser)
+            addView(resources)
+            addView(friends)
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(fields)
+            addView(accountTools)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, -1, -2)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Showdown account")
+            .setView(scroll)
+            .setNeutralButton("Sign out") { _, _ -> signOut() }
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val value = ShowdownCredentials(username.text.toString().trim(), password.text.toString())
+                if (value.username.isBlank() || value.password.isBlank()) {
+                    session.setConnectionStatus("Enter both a username and password.")
+                } else {
+                    credentialsStore.save(value)
+                    session.setConnectionStatus("Showdown account saved. It will sign in when you connect.")
+                }
+            }
+            .create()
+        accountDialog = dialog
+        dialog.setOnDismissListener {
+            if (accountDialog === dialog) accountDialog = null
+        }
+        dialog.show()
+    }
+
+    private fun showResourcesDialog() {
+        val density = resources.displayMetrics.density
+        val resources = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            text = listOf(
+                "Pokémon Showdown is a competitive battle simulator.",
+                "",
+                "Battle help",
+                "Use Find battle to enter matchmaking, or Challenge to play a named player.",
+                "Team builder supports packed, readable, JSON, and backup imports.",
+                "",
+                "Useful commands",
+                "/help for server commands",
+                "/rules for room rules",
+                "/data for Pokémon, move, item, and ability data",
+                "/calc for damage calculations in supported rooms",
+                "",
+                "Community resources",
+                "smogon.com/forums · smogon.com/dex · pokemonshowdown.com"
+            ).joinToString("\n")
+            setPadding((12f * density).toInt(), (8f * density).toInt(), (12f * density).toInt(), (8f * density).toInt())
+        }
+        val pokedexButton = Button(this).apply {
+            text = "Open Pokédex"
+            styleDynamicDialogButton(this)
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(ScrollView(this@MainActivity).apply { addView(resources, -1, -2) }, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(pokedexButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Info & resources")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        pokedexButton.setOnClickListener {
+            dialog.dismiss()
+            showPokedexDialog()
+        }
+        dialog.show()
+    }
+
+    private fun showPokedexDialog() {
+        pokedexDialog?.let {
+            renderPokedexResults()
+            return
+        }
+        val density = resources.displayMetrics.density
+        val search = EditText(this).apply {
+            hint = "Search Pokémon by name"
+            setSingleLine(true)
+            setTextSize(18f)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                    renderPokedexResults()
+                }
+
+                override fun afterTextChanged(editable: Editable?) = Unit
+            })
+        }
+        val results = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val resultScroll = ScrollView(this).apply {
+            addView(results, -1, -2)
+        }
+        val sprite = ShowdownPokedexSpriteView(this)
+        val details = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffe1f0f3.toInt())
+            setLineSpacing(5f, 1f)
+            setPadding((12f * density).toInt(), (10f * density).toInt(), (12f * density).toInt(), (10f * density).toInt())
+            setTextIsSelectable(true)
+        }
+        val detailRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(sprite, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.13f).toInt()))
+            addView(details, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+        }
+        val detailScroll = ScrollView(this).apply {
+            addView(detailRoot, -1, -2)
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(search, LinearLayout.LayoutParams(-1, -2))
+            addView(resultScroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.22f).toInt()).apply { topMargin = (8f * density).toInt() })
+            addView(detailScroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.30f).toInt()).apply { topMargin = (8f * density).toInt() })
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Pokédex")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (pokedexDialog === dialog) {
+                pokedexDialog = null
+                pokedexSearchInput = null
+                pokedexResults = null
+                pokedexDetails = null
+                pokedexSprite = null
+                selectedPokedexEntry = null
+            }
+        }
+        pokedexDialog = dialog
+        pokedexSearchInput = search
+        pokedexResults = results
+        pokedexDetails = details
+        pokedexSprite = sprite
+        details.text = "Search the live Showdown Pokédex by name."
+        dialog.show()
+        renderPokedexResults()
+        loadPokedexData()
+    }
+
+    private fun loadPokedexData() {
+        if (pokedex.isLoaded || pokedexLoading) return
+        pokedexLoading = true
+        renderPokedexResults()
+        spriteCache.requestPokedex { file ->
+            pokedex.load(file?.readText().orEmpty()) {
+                pokedexLoading = false
+                renderPokedexResults()
+            }
+        }
+    }
+
+    private fun renderPokedexResults() {
+        val results = pokedexResults ?: return
+        results.removeAllViews()
+        val query = pokedexSearchInput?.text?.toString().orEmpty()
+        if (!pokedex.isLoaded) {
+            results.addView(TextView(this).apply {
+                text = if (pokedexLoading) "Loading the live Pokédex…" else "Pokédex data is unavailable."
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt(), (12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt())
+            })
+            return
+        }
+        if (query.isBlank()) {
+            results.addView(TextView(this).apply {
+                text = "Type a Pokémon name to search."
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt(), (12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt())
+            })
+            return
+        }
+        val density = resources.displayMetrics.density
+        val matches = pokedex.search(query)
+        if (matches.isEmpty()) {
+            results.addView(TextView(this).apply {
+                text = "No Pokémon matched “$query”."
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((12f * density).toInt(), (14f * density).toInt(), (12f * density).toInt(), (14f * density).toInt())
+            })
+            return
+        }
+        matches.forEach { entry ->
+            val button = Button(this).apply {
+                text = buildString {
+                    append(entry.name)
+                    if (entry.types.isNotEmpty()) append("\n${entry.types.joinToString(" · ")}")
+                }
+                isAllCaps = false
+                setOnClickListener { selectPokedexEntry(entry) }
+            }
+            styleDynamicDialogButton(button)
+            results.addView(button, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (6f * density).toInt()) })
+        }
+    }
+
+    private fun selectPokedexEntry(entry: ShowdownPokedex.Entry) {
+        selectedPokedexEntry = entry
+        pokedexDetails?.text = formatPokedexEntry(entry)
+        pokedexSprite?.setSprite(null)
+        spriteCache.requestDexSprite(entry.name) { asset ->
+            if (selectedPokedexEntry?.id == entry.id) pokedexSprite?.setSprite(asset)
+        }
+    }
+
+    private fun formatPokedexEntry(entry: ShowdownPokedex.Entry): String = buildString {
+        entry.number?.let { append(String.format(Locale.ROOT, "#%03d  ", it)) }
+        append(entry.name)
+        if (entry.types.isNotEmpty()) append("\n${entry.types.joinToString(" · ")}")
+        entry.tier.takeIf { it.isNotBlank() }?.let { append("\nTier: $it") }
+        entry.generation?.let { append("\nGeneration: $it") }
+        entry.abilities.takeIf { it.isNotEmpty() }?.let { append("\nAbilities: ${it.joinToString(", ")}") }
+        if (entry.baseStats.isNotEmpty()) {
+            val labels = linkedMapOf("hp" to "HP", "atk" to "Atk", "def" to "Def", "spa" to "SpA", "spd" to "SpD", "spe" to "Spe")
+            val stats = labels.mapNotNull { (id, label) -> entry.baseStats[id]?.let { "$label $it" } }
+            if (stats.isNotEmpty()) append("\nBase stats: ${stats.joinToString(" · ")}")
+        }
+        if (entry.heightMeters != null || entry.weightKg != null) {
+            append("\n")
+            entry.heightMeters?.let { append(String.format(Locale.ROOT, "Height %.1f m", it)) }
+            if (entry.heightMeters != null && entry.weightKg != null) append(" · ")
+            entry.weightKg?.let { append(String.format(Locale.ROOT, "Weight %.1f kg", it)) }
+        }
+        entry.eggGroups.takeIf { it.isNotEmpty() }?.let { append("\nEgg groups: ${it.joinToString(" · ")}") }
+        entry.preEvolution?.let { append("\nEvolves from: $it") }
+        entry.evolutions.takeIf { it.isNotEmpty() }?.let { append("\nEvolves into: ${it.joinToString(" · ")}") }
+    }
+
+    private fun showFriendsDialog() {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to use Friends.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before opening Friends.")
+            return
+        }
+        friendsDialog?.dismiss()
+        friendsState.clear()
+        val density = resources.displayMetrics.density
+        val content = TextView(this).apply {
+            setTextSize(17f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+        }
+        val input = EditText(this).apply {
+            hint = "Username for friend actions"
+            setSingleLine(true)
+        }
+        val refresh = Button(this).apply {
+            text = "Refresh"
+            setOnClickListener { requestFriendsPage() }
+        }
+        fun pageButton(label: String, page: String) = Button(this).apply {
+            text = label
+            setOnClickListener { requestFriendsPage(page) }
+        }
+        val all = pageButton("All", "all")
+        val sent = pageButton("Sent", "sent")
+        val received = pageButton("Received", "received")
+        val settings = pageButton("Settings", "settings")
+        val spectate = pageButton("Spectate", "spectate")
+        val help = pageButton("Help", "help")
+        val add = Button(this).apply {
+            text = "Add"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.addCommand(input.text.toString())) }
+        }
+        val remove = Button(this).apply {
+            text = "Remove"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.removeCommand(input.text.toString())) }
+        }
+        val accept = Button(this).apply {
+            text = "Accept"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.acceptCommand(input.text.toString())) }
+        }
+        val reject = Button(this).apply {
+            text = "Reject"
+            setOnClickListener { sendFriendCommand(ShowdownFriendsState.rejectCommand(input.text.toString())) }
+        }
+        val viewList = Button(this).apply {
+            text = "View public list"
+            setOnClickListener { requestPublicFriendsList() }
+        }
+        fun buttonRow(vararg buttons: Button) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            buttons.forEach { button ->
+                addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins((3f * density).toInt(), 0, (3f * density).toInt(), 0) })
+            }
+        }
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(refresh, LinearLayout.LayoutParams(-1, -2))
+            addView(buttonRow(all, sent, received), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(buttonRow(settings, spectate, help), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(input, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+            addView(buttonRow(add, remove), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(buttonRow(accept, reject), LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(viewList, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+        }
+        val contentRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(content, LinearLayout.LayoutParams(-1, -2))
+            addView(actions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val root = ScrollView(this).apply {
+            isFillViewport = true
+            addView(contentRoot, -1, -2)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Friends")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (friendsDialog === dialog) {
+                friendsDialog = null
+                friendsContentView = null
+                friendsInput = null
+                friendsState.clear()
+            }
+        }
+        friendsDialog = dialog
+        friendsContentView = content
+        friendsInput = input
+        dialog.show()
+        updateFriendsDialog()
+        requestFriendsPage()
+    }
+
+    private fun updateFriendsDialog() {
+        val snapshot = friendsState.snapshot
+        friendsDialog?.setTitle(snapshot.title)
+        friendsContentView?.text = snapshot.error ?: snapshot.text
+    }
+
+    private fun requestFriendsPage(page: String = "all") {
+        if (showdownConnection?.sendGlobal(ShowdownFriendsState.pageCommand(page)) != true) {
+            session.setConnectionStatus("Friends connection is not ready yet.")
+        }
+    }
+
+    private fun requestPublicFriendsList() {
+        val username = friendsInput?.text?.toString()?.trim().orEmpty()
+        if (username.isBlank()) {
+            session.setConnectionStatus("Enter a username first.")
+            return
+        }
+        if (showdownConnection?.sendGlobal(ShowdownFriendsState.publicListCommand(username)) != true) {
+            session.setConnectionStatus("Friends connection is not ready yet.")
+        }
+    }
+
+    private fun sendFriendCommand(command: String) {
+        val username = friendsInput?.text?.toString()?.trim().orEmpty()
+        if (username.isBlank()) {
+            session.setConnectionStatus("Enter a username first.")
+            return
+        }
+        if (showdownConnection?.sendGlobal(command) == true) {
+            friendsInput?.setText("")
+            session.setConnectionStatus("Sent Friends action for $username.")
+        } else {
+            session.setConnectionStatus("Friends connection is not ready yet.")
+        }
+    }
+
+    private fun signOut() {
+        credentialsStore.clear()
+        lobbyState.clear()
+        shouldMaintainConnection = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectScheduled = false
+        showdownConnection?.close()
+        showdownConnection = null
+        pendingSearch = false
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        activeSearchFormat = null
+        serverUserNamed = false
+        pendingTeamUpload = null
+        pendingTeamPrivacy = null
+        pendingTeamDelete = null
+        teamLibrary.clearRemoteMetadata()
+        teamUploadButtons.forEach { it.isEnabled = true }
+        teamUploadButtons = emptyList()
+        teamPrivacyButton?.isEnabled = true
+        teamPrivacyButton = null
+        activeBattleRoomId = null
+        completedBattleRoomId = null
+        pendingDecisionCommand = null
+        displayedOutgoingChallenge = null
+        privateMessageDialog?.dismiss()
+        privateMessageDialog = null
+        privateMessageTarget = null
+        privateMessageThreads.clear()
+        userDetailsDialog?.dismiss()
+        userDetailsDialog = null
+        pendingUserDetailsId = null
+        friendsDialog?.dismiss()
+        friendsDialog = null
+        friendsContentView = null
+        friendsInput = null
+        friendsState.clear()
+        teamRemoteDialog?.dismiss()
+        teamRemoteDialog = null
+        teamRemoteContentView = null
+        teamRemoteLinks = null
+        teamRemoteState.clear()
+        clearPersistedLobbyState()
+        session.prepareForLobby()
+        session.setConnectionStatus("Signed out of Showdown.")
+    }
+
+    private fun showTeamLibrary() {
+        val teams = teamLibrary.teams()
+        val labels = listOf("Browse remote teams") + teams.map {
+            val remoteState = when {
+                it.remoteNeedsUpload -> " · Upload needed"
+                it.remoteId != null -> " · Uploaded"
+                else -> ""
+            }
+            "${it.name} · ${it.format}$remoteState"
+        } + "Add team"
+        ShowdownDialogBuilder(this)
+            .setTitle("Team library")
+            .setItems(labels.toTypedArray()) { _, selected ->
+                when {
+                    selected == 0 -> showTeamRemoteLibrary()
+                    selected == teams.size + 1 -> showTeamEditor()
+                    else -> showTeamEditor(teams[selected - 1])
+                }
+            }
+            .setNeutralButton("Export backup") { _, _ -> copyTeamBackup() }
+            .setPositiveButton("Import backup") { _, _ -> showTeamBackupImport() }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showTeamRemoteLibrary(initialCommand: String = ShowdownTeamRemoteState.ownTeamsCommand()) {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to Showdown to browse remote teams.")
+            return
+        }
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before browsing remote teams.")
+            return
+        }
+        teamRemoteDialog?.dismiss()
+        teamRemoteState.clear()
+        val density = resources.displayMetrics.density
+        val content = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffdceff2.toInt())
+            setTextIsSelectable(true)
+            setPadding((10f * density).toInt(), (8f * density).toInt(), (10f * density).toInt(), (8f * density).toInt())
+        }
+        val own = Button(this).apply {
+            text = "My uploaded teams"
+            setOnClickListener { requestTeamRemotePage(ShowdownTeamRemoteState.ownTeamsCommand()) }
+        }
+        val browse = Button(this).apply {
+            text = "Browse public teams"
+            setOnClickListener { requestTeamRemotePage(ShowdownTeamRemoteState.browseCommand()) }
+        }
+        val search = Button(this).apply {
+            text = "Search public teams"
+            setOnClickListener { showRemoteTeamSearch() }
+        }
+        val links = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(own)
+            addView(browse, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(search, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+        }
+        val root = ScrollView(this).apply {
+            isFillViewport = true
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(content, LinearLayout.LayoutParams(-1, -2))
+                addView(actions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+            }, -1, -2)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Remote teams")
+            .setView(root)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnDismissListener {
+            if (teamRemoteDialog === dialog) {
+                teamRemoteDialog = null
+                teamRemoteContentView = null
+                teamRemoteLinks = null
+                teamRemoteState.clear()
+            }
+        }
+        teamRemoteDialog = dialog
+        teamRemoteContentView = content
+        teamRemoteLinks = links
+        dialog.show()
+        updateTeamRemoteDialog()
+        requestTeamRemotePage(initialCommand)
+    }
+
+    private fun showRemoteTeamSearch() {
+        val format = EditText(this).apply {
+            hint = "Format ID, for example gen9ou"
+            setSingleLine(true)
+            setText(session.matchFormat.id)
+        }
+        val pokemon = EditText(this).apply {
+            hint = "Pokémon, comma separated"
+            setSingleLine(true)
+        }
+        val moves = EditText(this).apply {
+            hint = "Moves, comma separated"
+            setSingleLine(true)
+        }
+        val ability = EditText(this).apply {
+            hint = "Ability"
+            setSingleLine(true)
+        }
+        val generation = EditText(this).apply {
+            hint = "Generation, for example 9"
+            setSingleLine(true)
+        }
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(format)
+            addView(pokemon)
+            addView(moves)
+            addView(ability)
+            addView(generation)
+        }
+        val dialog = ShowdownDialogBuilder(this)
+            .setTitle("Search public teams")
+            .setView(fields)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Search") { _, _ ->
+                val command = ShowdownTeamRemoteState.searchCommand(
+                    format.text.toString(),
+                    pokemon.text.toString(),
+                    moves.text.toString(),
+                    ability.text.toString(),
+                    generation.text.toString()
+                )
+                teamRemoteDialog?.dismiss()
+                showTeamRemoteLibrary(command)
+            }
+            .create()
+        dialog.show()
+    }
+
+    private fun requestTeamRemotePage(command: String) {
+        if (showdownConnection?.sendGlobal(command) != true) {
+            session.setConnectionStatus("Remote team connection is not ready.")
+        }
+    }
+
+    private fun updateTeamRemoteDialog() {
+        val snapshot = teamRemoteState.snapshot
+        teamRemoteDialog?.setTitle(snapshot.title)
+        val summary = when {
+            snapshot.error != null -> snapshot.error
+            snapshot.selectedTeam != null && !snapshot.packed.isNullOrBlank() -> "${snapshot.selectedTeam.name}\n${snapshot.selectedTeam.formatLabel} · ${snapshot.selectedTeam.owner}\n\nReady to import this team."
+            snapshot.teams.isNotEmpty() -> "Choose a team below to view its full export."
+            else -> snapshot.text.ifBlank { "Choose a remote team list." }
+        }
+        teamRemoteContentView?.text = summary
+        val links = teamRemoteLinks ?: return
+        links.removeAllViews()
+        snapshot.teams.forEach { team ->
+            links.addView(Button(this).apply {
+                text = "${team.name}\n${team.formatLabel} · ${team.owner}"
+                setOnClickListener {
+                    requestTeamRemotePage(ShowdownTeamRemoteState.viewCommand(team))
+                    session.setConnectionStatus("Loading ${team.name}…")
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (6f * resources.displayMetrics.density).toInt()) })
+        }
+        val selectedTeam = snapshot.selectedTeam
+        val packed = snapshot.packed
+        if (selectedTeam != null && !packed.isNullOrBlank()) {
+            links.addView(Button(this).apply {
+                text = "Import ${selectedTeam.name}"
+                setOnClickListener {
+                    val format = session.availableMatchFormats().firstOrNull { it.label.equals(selectedTeam.formatLabel, true) }?.id
+                        ?: session.matchFormat.id
+                    teamLibrary.save(selectedTeam.name, format, packed)
+                    session.setConnectionStatus("Imported ${selectedTeam.name} into the team library.")
+                    teamRemoteDialog?.dismiss()
+                    showTeamLibrary()
+                }
+            })
+        }
+    }
+
+    private fun copyTeamBackup() {
+        val value = teamLibrary.exportBackup(readable = true)
+        if (value.isBlank()) {
+            session.setConnectionStatus("There are no teams to export.")
+            return
+        }
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team backup", value))
+        session.setConnectionStatus("Team backup copied to the clipboard.")
+    }
+
+    private fun showTeamBackupImport() {
+        val input = EditText(this).apply {
+            hint = "Paste exported teams, a PokePaste URL, or a Gist URL"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setMinLines(8)
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clipboardValue = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString().orEmpty()
+            if (clipboardValue.isLikelyTeamBackup()) {
+                setText(clipboardValue)
+            }
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Import team backup")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Import") { _, _ ->
+                val source = input.text.toString().trim()
+                if (ShowdownTeamUrlImporter.normalize(source) != null) {
+                    session.setConnectionStatus("Fetching team from URL…")
+                    teamUrlFetcher.fetch(source) { result ->
+                        result.onSuccess { payload -> importTeamBackup(payload.text, payload.name, payload.format) }
+                            .onFailure { session.setConnectionStatus("Could not fetch that team URL. Paste the team export instead.") }
+                    }
+                } else {
+                    importTeamBackup(source)
+                }
+            }
+            .show()
+    }
+
+    private fun importTeamBackup(value: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9") {
+        val payload = ShowdownTeamUrlImporter.payload(value, fallbackName, fallbackFormat)
+        val imported = teamLibrary.importBackup(payload.text, payload.name.ifBlank { fallbackName }, payload.format.ifBlank { fallbackFormat })
+        session.setConnectionStatus(
+            if (imported.isEmpty()) "No valid Showdown teams were found in that backup."
+            else "Imported ${imported.size} team${if (imported.size == 1) "" else "s"}."
+        )
+    }
+
+    private fun String.isLikelyTeamBackup() = ShowdownTeamUrlImporter.normalize(this) != null || contains("===") || contains("]") && contains("|") ||
+        contains("\n-") || contains("Ability:", true) || contains(" @ ")
+
+    private fun showTeamEditor(existing: ShowdownTeam? = null) {
+        val localId = existing?.id ?: java.util.UUID.randomUUID().toString()
+        val name = EditText(this).apply {
+            hint = "Team name"
+            setSingleLine(true)
+            setText(existing?.name.orEmpty())
+        }
+        val format = EditText(this).apply {
+            hint = "Format ID, for example gen9ou"
+            setSingleLine(true)
+            setText(existing?.format ?: session.matchFormat.id)
+        }
+        val formatPicker = Button(this).apply {
+            text = "Choose format from Showdown"
+            setOnClickListener { showTeamFormatPicker(format) }
+        }
+        val packed = EditText(this).apply {
+            hint = "Packed or Showdown export"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setMinLines(2)
+            setText(existing?.packed.orEmpty())
+        }
+        val shareView = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffa9e8e2.toInt())
+            setTextIsSelectable(true)
+            text = existing?.let { team ->
+                team.remoteId?.let {
+                    buildString {
+                        append("Share URL: ${ShowdownTeamRemote.shareUrl(it, team.remotePrivateKey)}")
+                        if (team.remoteNeedsUpload) append("\nLocal edits not uploaded.")
+                    }
+                }
+            }.orEmpty()
+        }
+        val copyShareButton = existing?.let { team ->
+            team.remoteId?.let { remoteId ->
+                Button(this).apply {
+                    text = "Copy share URL"
+                    setOnClickListener {
+                        val url = ShowdownTeamRemote.shareUrl(remoteId, team.remotePrivateKey)
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team share URL", url))
+                        session.setConnectionStatus("Share URL copied to the clipboard.")
+                    }
+                }
+            }
+        }
+        val privacyButton = existing?.let { team ->
+            team.remoteId?.let { remoteId ->
+                Button(this).apply {
+                    text = if (team.remotePrivateKey == null) "Make private" else "Make public"
+                    setOnClickListener {
+                        if (pendingTeamPrivacy != null) {
+                            session.setConnectionStatus("Finish the current privacy update first.")
+                            return@setOnClickListener
+                        }
+                        if (!authenticated || !serverUserNamed || showdownConnection == null) {
+                            session.setConnectionStatus("Sign in to Showdown before changing team privacy.")
+                            return@setOnClickListener
+                        }
+                        pendingTeamPrivacy = PendingTeamPrivacy(localId, remoteId)
+                        val makePrivate = team.remotePrivateKey == null
+                        if (showdownConnection?.sendGlobal(ShowdownTeamRemote.privacyCommand(remoteId, makePrivate)) != true) {
+                            pendingTeamPrivacy = null
+                            session.setConnectionStatus("The team privacy update could not reach Showdown.")
+                        } else {
+                            teamPrivacyButton = this
+                            isEnabled = false
+                            session.setConnectionStatus("Updating team privacy…")
+                        }
+                    }
+                }
+            }
+        }
+        val sets = existing?.let { ShowdownTeamCodec.unpack(it.packed) }.orEmpty().ifEmpty { listOf(ShowdownTeamSet()) }
+        val setEditors = mutableListOf<TeamSetEditor>()
+        val setFields = LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(24, 8, 24, 0)
+            for (index in 0 until 6) {
+                setEditors += createTeamSetEditor(this, index, sets.getOrNull(index) ?: ShowdownTeamSet())
+            }
+        }
+        fun readTeamDraft(): TeamDraft {
+            val editedSets = setEditors.map(::readTeamSetEditor)
+            val editedPacked = ShowdownTeamCodec.pack(editedSets)
+            val importedSets = ShowdownTeamCodec.parse(packed.text.toString())
+            val teamPacked = editedPacked.ifBlank { ShowdownTeamCodec.pack(importedSets) }
+            val validation = if (editedPacked.isNotBlank()) {
+                ShowdownTeamCodec.validate(editedSets)
+            } else {
+                ShowdownTeamCodec.validate(importedSets)
+            }
+            return TeamDraft(teamPacked, validation.firstOrNull())
+        }
+        val revertButton = existing?.takeIf { it.remoteNeedsUpload && it.uploadedPacked != null }?.let { team ->
+            Button(this).apply {
+                text = "Revert local edits"
+                setOnClickListener {
+                    val reverted = teamLibrary.revertToUploaded(localId)
+                    if (reverted == null) {
+                        session.setConnectionStatus("The uploaded team version is unavailable.")
+                    } else {
+                        name.setText(reverted.name)
+                        format.setText(reverted.format)
+                        packed.setText(reverted.packed)
+                        val revertedSets = ShowdownTeamCodec.unpack(reverted.packed)
+                        setEditors.forEachIndexed { index, editor ->
+                            populateTeamSetEditor(editor, revertedSets.getOrNull(index) ?: ShowdownTeamSet())
+                        }
+                        shareView.text = "Share URL: ${ShowdownTeamRemote.shareUrl(reverted.remoteId.orEmpty(), reverted.remotePrivateKey)}"
+                        session.setConnectionStatus("Reverted ${team.name} to the uploaded version.")
+                    }
+                }
+            }
+        }
+        fun uploadDraft(privateTeam: Boolean) {
+            if (pendingTeamUpload != null) {
+                session.setConnectionStatus("Finish the current team upload first.")
+                return
+            }
+            if (!authenticated || !serverUserNamed || showdownConnection == null) {
+                session.setConnectionStatus("Sign in to Showdown before uploading a team.")
+                return
+            }
+            if (format.text.toString().trim().isBlank()) {
+                session.setConnectionStatus("Enter a format ID before uploading the team.")
+                return
+            }
+            val draft = readTeamDraft()
+            if (draft.packed.isBlank()) {
+                session.setConnectionStatus("Add at least one Pokémon before uploading the team.")
+                return
+            }
+            if (draft.error != null) {
+                session.setConnectionStatus(draft.error)
+                return
+            }
+            val saved = teamLibrary.save(name.text.toString(), format.text.toString(), draft.packed, localId)
+            val action = if (saved.remoteId == null) "save" else "update"
+            val command = ShowdownTeamRemote.command(action, saved.remoteId, saved.name, saved.format, privateTeam, saved.packed)
+            pendingTeamUpload = PendingTeamUpload(localId, saved.packed)
+            if (showdownConnection?.sendGlobal(command) != true) {
+                pendingTeamUpload = null
+                session.setConnectionStatus("The team upload could not reach Showdown.")
+            } else {
+                teamUploadButtons.forEach { it.isEnabled = false }
+                session.setConnectionStatus("Uploading ${saved.name}…")
+            }
+        }
+        moveDex.load {
+            val pokemonNames = moveDex.pokemonNames()
+            val moveNames = moveDex.moveNames()
+            val itemNames = moveDex.itemNames()
+            val abilityNames = moveDex.abilityNames()
+            val natureNames = moveDex.natureNames()
+            val typeNames = moveDex.typeNames()
+            setEditors.forEach { editor ->
+                updateTeamSuggestions(editor.species, pokemonNames)
+                updateTeamSuggestions(editor.item, itemNames)
+                updateTeamSuggestions(editor.ability, abilityNames)
+                updateTeamSuggestions(editor.moves, moveNames)
+                updateTeamSuggestions(editor.nature, natureNames)
+                updateTeamSuggestions(editor.hiddenPowerType, typeNames)
+                updateTeamSuggestions(editor.teraType, typeNames)
+            }
+        }
+        val importButton = Button(this).apply {
+            text = "Load Showdown export into editor"
+            setOnClickListener {
+                val imported = ShowdownTeamCodec.parse(packed.text.toString())
+                if (imported.isEmpty()) {
+                    session.setConnectionStatus("Enter a valid packed team or Showdown export before loading it.")
+                } else {
+                    setEditors.forEachIndexed { index, editor -> populateTeamSetEditor(editor, imported.getOrNull(index) ?: ShowdownTeamSet()) }
+                    session.setConnectionStatus("Loaded ${imported.size} Pokémon into the editor.")
+                }
+            }
+        }
+        val copyButton = Button(this).apply {
+            text = "Copy packed team"
+            setOnClickListener {
+                val value = ShowdownTeamCodec.pack(setEditors.map(::readTeamSetEditor)).ifBlank {
+                    ShowdownTeamCodec.pack(ShowdownTeamCodec.parse(packed.text.toString()))
+                }
+                if (value.isBlank()) {
+                    session.setConnectionStatus("Add at least one Pokémon before copying the team.")
+                } else {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown packed team", value))
+                    session.setConnectionStatus("Packed team copied to the clipboard.")
+                }
+            }
+        }
+        val copyTextButton = Button(this).apply {
+            text = "Copy Showdown export"
+            setOnClickListener {
+                val value = ShowdownTeamCodec.toText(setEditors.map(::readTeamSetEditor)).ifBlank {
+                    ShowdownTeamCodec.toText(ShowdownTeamCodec.parse(packed.text.toString()))
+                }
+                if (value.isBlank()) {
+                    session.setConnectionStatus("Add at least one Pokémon before copying the export.")
+                } else {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team export", value))
+                    session.setConnectionStatus("Showdown export copied to the clipboard.")
+                }
+            }
+        }
+        val copyJsonButton = Button(this).apply {
+            text = "Copy JSON team"
+            setOnClickListener {
+                val editedJson = ShowdownTeamCodec.toJson(setEditors.map(::readTeamSetEditor))
+                val value = editedJson.takeUnless { it == "[]" }
+                    ?: ShowdownTeamCodec.toJson(ShowdownTeamCodec.parse(packed.text.toString()))
+                if (value == "[]") {
+                    session.setConnectionStatus("Add at least one Pokémon before copying the JSON team.")
+                } else {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown JSON team", value))
+                    session.setConnectionStatus("JSON team copied to the clipboard.")
+                }
+            }
+        }
+        val uploadPrivateButton = Button(this).apply {
+            text = "Upload private team"
+            setOnClickListener { uploadDraft(true) }
+        }
+        val uploadPublicButton = Button(this).apply {
+            text = "Upload public team"
+            setOnClickListener { uploadDraft(false) }
+        }
+        teamUploadButtons = listOf(uploadPrivateButton, uploadPublicButton)
+        teamUploadButtons.forEach { it.isEnabled = pendingTeamUpload == null }
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(name)
+            addView(format)
+            addView(formatPicker)
+            addView(importButton)
+            addView(copyButton)
+            addView(copyTextButton)
+            addView(copyJsonButton)
+            addView(uploadPrivateButton)
+            addView(uploadPublicButton)
+            addView(shareView)
+            copyShareButton?.let(::addView)
+            privacyButton?.let(::addView)
+            revertButton?.let(::addView)
+            addView(packed)
+            addView(setFields)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(fields)
+        }
+        val builder = ShowdownDialogBuilder(this)
+            .setTitle(if (existing == null) "Add team" else "Edit team")
+            .setView(scroll)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", null)
+        if (existing != null) {
+            builder.setNeutralButton("Delete") { _, _ ->
+                val remoteId = existing.remoteId
+                if (remoteId == null) {
+                    teamLibrary.remove(existing.id)
+                    session.setConnectionStatus("Deleted ${existing.name}.")
+                } else if (!authenticated || !serverUserNamed || showdownConnection == null) {
+                    session.setConnectionStatus("Sign in to Showdown before deleting the uploaded team.")
+                } else if (pendingTeamDelete != null) {
+                    session.setConnectionStatus("Finish the current team deletion first.")
+                } else {
+                    pendingTeamDelete = PendingTeamDelete(existing.id, remoteId)
+                    if (showdownConnection?.sendGlobal(ShowdownTeamRemote.deleteCommand(remoteId)) == true) {
+                        session.setConnectionStatus("Deleting ${existing.name}…")
+                        teamEditorDialog?.dismiss()
+                    } else {
+                        pendingTeamDelete = null
+                        session.setConnectionStatus("The uploaded team could not be deleted.")
+                    }
+                }
+            }
+        }
+        val duplicateButton = existing?.let { team ->
+            Button(this).apply {
+                text = "Duplicate team"
+                setOnClickListener {
+                    teamLibrary.duplicate(team.id)?.let { copy ->
+                        session.setConnectionStatus("Duplicated ${team.name} as ${copy.name}.")
+                        teamEditorDialog?.dismiss()
+                    }
+                }
+            }
+        }
+        duplicateButton?.let(fields::addView)
+        val dialog = builder.create()
+        dialog.setOnShowListener {
+            dialog.getButton(ShowdownDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                val teamFormat = format.text.toString().trim()
+                val editedSets = setEditors.map(::readTeamSetEditor)
+                val editedPacked = ShowdownTeamCodec.pack(editedSets)
+                val importedSets = ShowdownTeamCodec.parse(packed.text.toString())
+                val teamPacked = editedPacked.ifBlank { ShowdownTeamCodec.pack(importedSets) }
+                val validation = if (editedPacked.isNotBlank()) {
+                    ShowdownTeamCodec.validate(editedSets)
+                } else {
+                    ShowdownTeamCodec.validate(importedSets)
+                }
+                when {
+                    teamFormat.isBlank() || teamPacked.isBlank() -> session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
+                    validation.isNotEmpty() -> session.setConnectionStatus(validation.first())
+                    else -> {
+                        teamLibrary.save(name.text.toString(), teamFormat, teamPacked, localId)
+                        session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
+                        dialog.dismiss()
+                    }
+                }
+            }
+        }
+        teamEditorDialog = dialog
+        teamEditorShareView = shareView
+        dialog.setOnDismissListener {
+            if (teamEditorDialog === dialog) {
+                teamEditorDialog = null
+                teamEditorShareView = null
+                if (pendingTeamUpload == null) teamUploadButtons = emptyList()
+                if (pendingTeamPrivacy == null) teamPrivacyButton = null
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showTeamFormatPicker(target: EditText) {
+        val typedFormat = target.text.toString().trim()
+        val formats = (session.availableMatchFormats() + typedFormat.takeIf { it.isNotBlank() }?.let { BattleSession.MatchFormat(it, it) })
+            .filterNotNull()
+            .distinctBy { it.id }
+        ShowdownDialogBuilder(this)
+            .setTitle("Choose team format")
+            .setSingleChoiceItems(formats.map { "${it.label}\n${it.id}" }.toTypedArray(), formats.indexOfFirst { it.id.equals(typedFormat, true) }) { dialog, selected ->
+                target.setText(formats[selected].id)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private data class TeamSetEditor(
+        val nickname: EditText,
+        val species: EditText,
+        val item: EditText,
+        val ability: EditText,
+        val moves: EditText,
+        val nature: EditText,
+        val evs: EditText,
+        val gender: EditText,
+        val ivs: EditText,
+        val shiny: CheckBox,
+        val level: EditText,
+        val happiness: EditText,
+        val pokeBall: EditText,
+        val hiddenPowerType: EditText,
+        val gigantamax: CheckBox,
+        val dynamaxLevel: EditText,
+        val teraType: EditText
+    )
+
+    private fun createTeamSetEditor(parent: LinearLayout, index: Int, set: ShowdownTeamSet): TeamSetEditor {
+        parent.addView(TextView(this).apply {
+            text = "Pokémon ${index + 1}"
+            textSize = 18f
+            setPadding(0, 20, 0, 4)
+        })
+        val editor = TeamSetEditor(
+            nickname = teamField("Nickname", set.nickname),
+            species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames()),
+            item = teamAutocompleteField("Item", set.item, moveDex.itemNames()),
+            ability = teamAutocompleteField("Ability", set.ability, moveDex.abilityNames()),
+            moves = teamMovesField(set.moves.joinToString(","), moveDex.moveNames()),
+            nature = teamAutocompleteField("Nature", set.nature, moveDex.natureNames()),
+            evs = teamField("EVs HP,Atk,Def,SpA,SpD,Spe", set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty()),
+            gender = teamField("Gender M or F", set.gender),
+            ivs = teamField("IVs HP,Atk,Def,SpA,SpD,Spe", set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty()),
+            shiny = CheckBox(this).apply { text = "Shiny"; isChecked = set.shiny },
+            level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty()),
+            happiness = teamField("Happiness", set.happiness.takeUnless { it == 255 }?.toString().orEmpty()),
+            pokeBall = teamField("Poké Ball", set.pokeBall),
+            hiddenPowerType = teamAutocompleteField("Hidden Power type", set.hiddenPowerType, moveDex.typeNames()),
+            gigantamax = CheckBox(this).apply { text = "Gigantamax"; isChecked = set.gigantamax },
+            dynamaxLevel = teamField("Dynamax level", set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty()),
+            teraType = teamAutocompleteField("Tera type", set.teraType, moveDex.typeNames())
+        )
+        listOf(
+            editor.nickname,
+            editor.species,
+            editor.item,
+            editor.ability,
+            editor.moves,
+            editor.nature,
+            editor.evs,
+            editor.gender,
+            editor.ivs,
+            editor.shiny,
+            editor.level,
+            editor.happiness,
+            editor.pokeBall,
+            editor.hiddenPowerType,
+            editor.gigantamax,
+            editor.dynamaxLevel,
+            editor.teraType
+        ).forEach(parent::addView)
+        return editor
+    }
+
+    private fun teamField(hint: String, value: String): EditText = EditText(this).apply {
+        this.hint = hint
+        setSingleLine(true)
+        setText(value)
+    }
+
+    private fun teamAutocompleteField(hint: String, value: String, suggestions: List<String>): AutoCompleteTextView = AutoCompleteTextView(this).apply {
+        this.hint = hint
+        setSingleLine(true)
+        imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        threshold = 1
+        styleTeamSuggestions(this, suggestions)
+        setText(value)
+    }
+
+    private fun teamMovesField(value: String, suggestions: List<String>): MultiAutoCompleteTextView = MultiAutoCompleteTextView(this).apply {
+        hint = "Moves, comma-separated"
+        setSingleLine(true)
+        imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        threshold = 1
+        setTokenizer(MultiAutoCompleteTextView.CommaTokenizer())
+        styleTeamSuggestions(this, suggestions)
+        setText(value)
+    }
+
+    private fun updateTeamSuggestions(field: EditText, suggestions: List<String>) {
+        (field as? AutoCompleteTextView)?.let { styleTeamSuggestions(it, suggestions) }
+    }
+
+    private fun styleTeamSuggestions(field: AutoCompleteTextView, suggestions: List<String>) {
+        field.setAdapter(ShowdownSuggestionAdapter(this, suggestions))
+        field.setDropDownBackgroundDrawable(GradientDrawable().apply {
+            setColor(Color.rgb(9, 29, 44))
+            setStroke((resources.displayMetrics.density).toInt(), Color.rgb(54, 130, 143))
+            cornerRadius = 18f * resources.displayMetrics.density
+        })
+        field.dropDownVerticalOffset = (6f * resources.displayMetrics.density).toInt()
+    }
+
+    private fun populateTeamSetEditor(editor: TeamSetEditor, set: ShowdownTeamSet) {
+        editor.nickname.setText(set.nickname)
+        editor.species.setText(set.species)
+        editor.item.setText(set.item)
+        editor.ability.setText(set.ability)
+        editor.moves.setText(set.moves.joinToString(","))
+        editor.nature.setText(set.nature)
+        editor.evs.setText(set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty())
+        editor.gender.setText(set.gender)
+        editor.ivs.setText(set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty())
+        editor.shiny.isChecked = set.shiny
+        editor.level.setText(set.level.takeUnless { it == 100 }?.toString().orEmpty())
+        editor.happiness.setText(set.happiness.takeUnless { it == 255 }?.toString().orEmpty())
+        editor.pokeBall.setText(set.pokeBall)
+        editor.hiddenPowerType.setText(set.hiddenPowerType)
+        editor.gigantamax.isChecked = set.gigantamax
+        editor.dynamaxLevel.setText(set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty())
+        editor.teraType.setText(set.teraType)
+    }
+
+    private fun readTeamSetEditor(editor: TeamSetEditor): ShowdownTeamSet = ShowdownTeamSet(
+        nickname = editor.nickname.text.toString(),
+        species = editor.species.text.toString(),
+        item = editor.item.text.toString(),
+        ability = editor.ability.text.toString(),
+        moves = editor.moves.text.toString().split(',').map(String::trim).filter(String::isNotBlank),
+        nature = editor.nature.text.toString(),
+        evs = editorValues(editor.evs.text.toString(), 0),
+        gender = editor.gender.text.toString(),
+        ivs = editorValues(editor.ivs.text.toString(), 31),
+        shiny = editor.shiny.isChecked,
+        level = editor.level.text.toString().toIntOrNull() ?: 100,
+        happiness = editor.happiness.text.toString().toIntOrNull() ?: 255,
+        pokeBall = editor.pokeBall.text.toString(),
+        hiddenPowerType = editor.hiddenPowerType.text.toString(),
+        gigantamax = editor.gigantamax.isChecked,
+        dynamaxLevel = editor.dynamaxLevel.text.toString().toIntOrNull() ?: 10,
+        teraType = editor.teraType.text.toString()
+    )
+
+    private fun editorValues(value: String, default: Int): List<Int> {
+        if (value.isBlank()) return List(6) { default }
+        return value.split(',').map { it.trim().toIntOrNull() ?: default }.take(6).let { values ->
+            values + List(6 - values.size) { default }
+        }
+    }
+
+    private fun showChatComposer() {
+        if (showdownConnection == null) {
+            session.setConnectionStatus("Connect to Showdown before opening chat.")
+            return
+        }
+        if (activeBattleRoomId == null) {
+            showLobbyChatDialog()
+            return
+        }
+        val input = EditText(this).apply {
+            hint = "Send a message"
+            setSingleLine(true)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle(if (activeBattleRoomId == null) "Lobby chat" else "Battle chat")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Send") { _, _ -> session.sendChat(input.text.toString()) }
+            .show()
+    }
+
+    private fun copyBattleTranscript() {
+        val transcript = session.protocolHistory().joinToString("\n")
+        if (transcript.isBlank()) {
+            session.setConnectionStatus("No battle transcript is available yet.")
+            return
+        }
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown battle transcript", transcript))
+        session.setConnectionStatus("Battle transcript copied to the clipboard.")
+    }
+
+    private fun showReplayActions() {
+        ShowdownDialogBuilder(this)
+            .setTitle("Battle replay")
+            .setItems(arrayOf("Copy transcript", "Load replay URL")) { _, selected ->
+                if (selected == 0) copyBattleTranscript() else showReplayUrlDialog()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun saveBattleReplay() {
+        val roomId = activeBattleRoomId ?: completedBattleRoomId
+        if (roomId == null) {
+            session.setConnectionStatus("There is no completed battle to save.")
+            return
+        }
+        if (showdownConnection?.send(roomId, "/savereplay") == true) {
+            session.setConnectionStatus("Saving the battle replay…")
+        } else {
+            session.setConnectionStatus("The battle replay could not be saved.")
+        }
+    }
+
+    private fun showReplayControls() {
+        val speeds = listOf(0.5f, 0.75f, 1f, 1.5f)
+        val labels = mutableListOf<String>()
+        if (session.isReplayMode()) labels += if (replayPaused) "Resume replay" else "Pause replay"
+        labels += speeds.map { "Set battle speed to ${it.trimTrailingZero()}×" }
+        ShowdownDialogBuilder(this)
+            .setTitle("Battle controls · ${replaySpeed.trimTrailingZero()}×")
+            .setItems(labels.toTypedArray()) { _, selected ->
+                if (session.isReplayMode() && selected == 0) {
+                    setReplayPaused(!replayPaused)
+                } else {
+                    val speedIndex = selected - if (session.isReplayMode()) 1 else 0
+                    speeds.getOrNull(speedIndex)?.let(::setReplaySpeed)
+                }
+            }
+            .setNeutralButton("More actions") { _, _ -> showReplayActions() }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showReplayUrlDialog() {
+        val input = EditText(this).apply {
+            hint = "https://replay.pokemonshowdown.com/..."
+            setSingleLine(true)
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clipboardValue = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString().orEmpty()
+            if (ShowdownReplayImporter.normalize(clipboardValue) != null) setText(clipboardValue)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Load Showdown replay")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Load") { _, _ ->
+                val source = input.text.toString().trim()
+                val normalized = ShowdownReplayImporter.normalize(source)
+                if (normalized == null) {
+                    session.setConnectionStatus("Paste a replay.pokemonshowdown.com URL.")
+                } else {
+                    loadReplay(normalized)
+                }
+            }
+            .show()
+    }
+
+    private fun handleIncomingIntent(intent: Intent): Boolean {
+        if (intent.action != Intent.ACTION_VIEW) return false
+        val source = intent.dataString ?: return false
+        val normalized = ShowdownReplayImporter.normalize(source) ?: return false
+        loadReplay(normalized)
+        return true
+    }
+
+    private fun loadReplay(normalized: String) {
+        if (replayLoadRequest == normalized) return
+        if (activeReplayLink == normalized && session.isReplayMode()) return
+        replayLoadRequest = normalized
+        session.setConnectionStatus("Loading replay…")
+        replayFetcher.fetch(normalized) { result ->
+            if (replayLoadRequest != normalized) return@fetch
+            replayLoadRequest = null
+            result.onSuccess {
+                activeReplayLink = normalized
+                showReplay(it)
+            }
+                .onFailure {
+                    session.setConnectionStatus("That replay could not be loaded.")
+                }
+        }
+    }
+
+    private fun showReplay(replay: ShowdownReplayPayload) {
+        if (isFinishing) return
+        activeBattleRoomId = null
+        completedBattleRoomId = null
+        battleProtocolReady = false
+        pendingDecisionCommand = null
+        activeSearchFormat = null
+        pendingSearch = false
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        shouldMaintainConnection = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectScheduled = false
+        showdownConnection?.close()
+        showdownConnection = null
+        clearPersistedLobbyState()
+        chatRoomDialog?.dismiss()
+        tournamentDialog?.dismiss()
+        tournamentDialog = null
+        chatRoomState.clear()
+        pendingChatRoomId = null
+        clearBattlePlayback()
+        session.prepareForLobby()
+        replay.players.firstOrNull()?.let(session::setLocalUsername)
+        session.setReplayMode(true)
+        session.setLiveBattleActive(true)
+        replayPaused = restoredReplayPaused
+        replayPausedForLifecycle = false
+        replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
+        showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
+        showdownMoveEffects?.setPlaybackPaused(replayPaused)
+        enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)
+        replayStatus = "Replay: ${replay.title}"
+        if (replayPaused) updateReplayStatus()
+        restoredReplayPaused = false
+        restoredReplaySpeed = 1f
+    }
+
+    private fun showFormatPicker() {
+        val formats = session.availableMatchFormats()
+        ShowdownDialogBuilder(this)
+            .setTitle("Battle format")
+            .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOf(session.matchFormat)) { dialog, selected ->
+                val format = formats[selected]
+                if (activeSearchFormat != null || pendingSearch) cancelActiveSearch()
+                session.setMatchFormat(format)
+                getSharedPreferences("showdown", MODE_PRIVATE).edit()
+                    .putString("match_format", format.id)
+                    .putString("match_format_label", format.label)
+                    .apply()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun confirmForfeit() {
+        val roomId = activeBattleRoomId
+        if (roomId == null) {
+            session.setConnectionStatus("There is no live battle to forfeit.")
+            return
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Forfeit battle?")
+            .setMessage("This will immediately concede the current battle.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Forfeit") { _, _ ->
+                if (showdownConnection?.send(roomId, "/forfeit") == true) {
+                    session.setConnectionStatus("Forfeit requested.")
+                } else {
+                    session.setConnectionStatus("Unable to forfeit the current battle.")
+                }
+            }
+            .show()
+    }
+
+    private fun leaveBattle() {
+        val roomId = activeBattleRoomId
+        if (roomId == null) {
+            session.setConnectionStatus("There is no battle room to leave.")
+            return
+        }
+        if (showdownConnection?.send(roomId, "/leave") != true) {
+            session.setConnectionStatus("Unable to leave the battle room.")
+            return
+        }
+        leftBattleRoomId = roomId
+        clearBattleRoomState()
+        session.setConnectionStatus("Left the battle room.")
+    }
+
+    private fun toggleBattleTimer() {
+        val roomId = activeBattleRoomId
+        if (roomId == null || !session.isLiveBattleActive() || session.isReplayMode()) {
+            session.setConnectionStatus("There is no live battle timer to change.")
+            return
+        }
+        val command = if (session.isBattleTimerEnabled()) "/timer off" else "/timer on"
+        if (showdownConnection?.send(roomId, command) == true) {
+            session.setConnectionStatus(if (command.endsWith("on")) "Starting the battle timer…" else "Stopping the battle timer…")
+        } else {
+            session.setConnectionStatus("Unable to change the battle timer.")
+        }
+    }
+
+    private fun cancelChoice() {
+        val roomId = activeBattleRoomId
+        if (roomId == null || !session.canCancelChoice() || !session.isBattleParticipant() || session.isReplayMode()) {
+            session.setConnectionStatus("There is no cancellable battle choice.")
+            return
+        }
+        if (showdownConnection?.send(roomId, "/undo") == true) {
+            session.setConnectionStatus("Cancelling your last choice…")
+        } else {
+            session.setConnectionStatus("Unable to cancel your last choice.")
+        }
+    }
+
+    private fun loadServerEndpoint(): ShowdownServerEndpoint {
+        val saved = getSharedPreferences("showdown", MODE_PRIVATE).getString("server_endpoint", null)
+        return saved?.let(ShowdownServerEndpoint::fromInput) ?: ShowdownServerEndpoint.playShowdown
+    }
+
+    private fun loadMatchFormat(): BattleSession.MatchFormat {
+        val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
+        val saved = preferences.getString("match_format", null)
+        return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved }
+            ?: saved?.let { BattleSession.MatchFormat(it, preferences.getString("match_format_label", it) ?: it) }
+            ?: BattleSession.MatchFormat.GEN7_RANDOM
+    }
+
+    private fun loadUserPreferences() {
+        val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
+        replaySpeed = preferences.getFloat("battle_speed", DEFAULT_BATTLE_SPEED).coerceIn(0.25f, 4f)
+        session.applyUserPreferences(
+            touchConfirmation = preferences.getBoolean("touch_confirmation", true),
+            soundEffects = preferences.getBoolean("sound_effects", true),
+            music = preferences.getBoolean("music", true),
+            haptics = preferences.getBoolean("haptics", true),
+            spriteStyle = preferences.getString("sprite_style", BattleSession.SpriteStyle.MODERN_3D.name)
+                ?.let { runCatching { BattleSession.SpriteStyle.valueOf(it) }.getOrDefault(BattleSession.SpriteStyle.MODERN_3D) }
+                ?: BattleSession.SpriteStyle.MODERN_3D
+        )
+    }
+
+    private fun persistUserPreferences() {
+        getSharedPreferences("showdown", MODE_PRIVATE).edit()
+            .putBoolean("touch_confirmation", session.touchConfirmationEnabled)
+            .putBoolean("sound_effects", session.soundEffectsEnabled)
+            .putBoolean("music", session.musicEnabled)
+            .putBoolean("haptics", session.hapticsEnabled)
+            .putString("sprite_style", session.spriteStyle.name)
+            .apply()
+    }
+
+    private fun handleBattleFeedback(feedback: BattleSession.BattleFeedback) {
+        when (feedback.type) {
+            BattleSession.FeedbackType.ENTRY -> {
+                if (feedback.delayMillis > 0L) {
+                    battleAudioHandler.postDelayed({ session.presentBattleEvent(feedback.message) }, feedback.delayMillis)
+                } else {
+                    session.presentBattleEvent(feedback.message)
+                }
+            }
+            BattleSession.FeedbackType.POKEMON_CRY -> {
+                if (feedback.delayMillis > 0L) {
+                    battleAudioHandler.postDelayed({ battleAudio.playCry(feedback.actor) }, feedback.delayMillis)
+                } else {
+                    battleAudio.playCry(feedback.actor)
+                }
+            }
+            BattleSession.FeedbackType.MOVE -> Unit
+            BattleSession.FeedbackType.HIT -> {
+                playImpactHaptic(feedback.impact)
+            }
+        }
+    }
+
+    private fun playImpactHaptic(impact: BattleSession.HitImpact) {
+        if (!session.hapticsEnabled) return
+        val vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
+        if (!vibrator.hasVibrator()) return
+        val timings = when (impact) {
+            BattleSession.HitImpact.RESISTED -> longArrayOf(0, 18)
+            BattleSession.HitImpact.NORMAL -> longArrayOf(0, 28)
+            BattleSession.HitImpact.SUPER_EFFECTIVE -> longArrayOf(0, 34, 36, 38)
+            BattleSession.HitImpact.CRITICAL -> longArrayOf(0, 42, 30, 46)
+            BattleSession.HitImpact.SUPER_EFFECTIVE_CRITICAL -> longArrayOf(0, 48, 28, 56, 28, 50)
+        }
+        vibrator.vibrate(VibrationEffect.createWaveform(timings, -1))
+    }
+
+    private fun navigateController(horizontal: Int, vertical: Int) {
+        session.moveFocus(horizontal, vertical)
+        battleAudio.playNavigation()
+    }
+
+    private fun confirmController() {
+        session.confirmSelection()
+        battleAudio.playConfirm()
+    }
+
+    private fun cancelController() {
+        session.goBack()
+        battleAudio.playCancel()
+    }
+
+    private fun cycleController(direction: Int) {
+        if (session.targetOptions().isNotEmpty()) session.cycleTarget(direction) else session.cyclePanel(direction)
+        battleAudio.playNavigation()
+    }
+
+    private fun cycleGimmick() {
+        session.cycleGimmick()
+        battleAudio.playNavigation()
+    }
+
+    private fun openPanel(panel: BattleSession.Panel) {
+        session.selectPanel(panel)
+        battleAudio.playNavigation()
+    }
+
+    private inner class ThorPresentation(context: Context, display: Display) : Presentation(context, display) {
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setCancelable(false)
+            configurePresentationWindow(window)
+            val frame = FrameLayout(context)
+            val surfaceView = VulkanSurfaceView(context)
+            surfaceView.setZOrderOnTop(false)
+            frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
+            commandDeck = CommandDeckView(context, session, spriteCache, object : CommandDeckView.InteractionListener {
+                override fun onNavigation() {
+                    battleAudio.playNavigation()
+                }
+
+                override fun onConfirmation() {
+                    battleAudio.playConfirm()
+                }
+
+                override fun onCancelChoice() {
+                    cancelChoice()
+                    battleAudio.playCancel()
+                }
+            })
+            frame.addView(commandDeck, FrameLayout.LayoutParams(-1, -1))
+            setContentView(frame)
+        }
+    }
+
+    private fun configurePresentationWindow(presentationWindow: Window?) {
+        presentationWindow ?: return
+        presentationWindow.setDimAmount(0f)
+        presentationWindow.statusBarColor = 0xFF071329.toInt()
+        presentationWindow.navigationBarColor = 0xFF071329.toInt()
+        presentationWindow.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }
+
+    companion object {
+        const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
+        const val DEFAULT_BATTLE_SPEED = 0.75f
+
+        init {
+            System.loadLibrary("showdown_vulkan")
+        }
+
+        @JvmStatic
+        private external fun nativeInitializeVulkan(): Boolean
+
+        @JvmStatic
+        private external fun nativeReleaseVulkan()
+
+        @JvmStatic
+        external fun nativeAttachSurface(surface: Surface): Long
+
+        @JvmStatic
+        external fun nativeDetachSurface(surfaceId: Long)
+    }
+}
