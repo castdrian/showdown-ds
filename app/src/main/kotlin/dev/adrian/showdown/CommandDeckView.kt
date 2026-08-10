@@ -456,13 +456,7 @@ class CommandDeckView(
             drawCompactMoveDetails(canvas, detailContent, move, scale)
             return
         }
-        paint.textAlign = Paint.Align.LEFT
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = fittedTextSize(move.name, detailContent.width(), readableTextSize(34f, scale, 29f, 20f), 22f * scale)
-        paint.color = PAPER
-        val titleRow = RectF(detailContent.left, detailContent.top, detailContent.right, detailContent.top + if (compact) 58f * scale else 64f * scale)
-        canvas.drawText(move.name, detailContent.left, centeredTextBaseline(titleRow.centerY()), paint)
-        var sectionTop = titleRow.bottom + if (compact) 8f * scale else 12f * scale
+        var sectionTop = detailContent.top
         val metricHeight = if (compact) 92f * scale else 112f * scale
         drawMoveMetrics(
             canvas,
@@ -487,24 +481,8 @@ class CommandDeckView(
         scale: Float
     ) {
         val content = RectF(detailContent)
-        val gap = 8f * scale
-        val rowHeight = ((content.height() - gap) / 2f).coerceAtLeast(1f)
-        var sectionTop = content.top
-        val titleBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
-        paint.textAlign = Paint.Align.LEFT
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = fittedTextSize(
-            move.name,
-            content.width(),
-            readableTextSize(30f, scale, 26f, 16f),
-            20f * scale
-        ).coerceAtMost(rowHeight - 6f * scale)
-        paint.color = PAPER
-        canvas.drawText(move.name, content.left, centeredTextBaseline(titleBounds.centerY()), paint)
-        sectionTop = titleBounds.bottom + gap
         val accuracy = move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—"
-        val metricsBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
-        drawCompactMetricLine(canvas, metricsBounds, "PWR ${move.power}  ·  ACC $accuracy", scale)
+        drawCompactMetricLine(canvas, content, "PWR ${move.power}  ·  ACC $accuracy", scale)
         paint.textAlign = Paint.Align.LEFT
     }
 
@@ -782,13 +760,12 @@ class CommandDeckView(
             paint.style = Paint.Style.FILL
         }
         drawMovePressAnimation(canvas, surface, palette, pressProgress, scale)
-        val typeBadge = RectF(surface.right - 340f * scale, surface.top + 8f * scale, surface.right - 18f * scale, surface.top + 68f * scale)
+        val iconChip = RectF(surface.right - 84f * scale, surface.top + 14f * scale, surface.right - 24f * scale, surface.top + 54f * scale)
         paint.color = Color.argb(108, 0, 14, 25)
-        canvas.drawRoundRect(typeBadge, 18f * scale, 18f * scale, paint)
+        canvas.drawRoundRect(iconChip, 16f * scale, 16f * scale, paint)
         typeIcon(move.type)?.let { icon ->
             source.set(0, 0, icon.width, icon.height)
-            val iconCenterX = typeBadge.left + 34f * scale
-            destination.set(iconCenterX - 24f * scale, typeBadge.centerY() - 24f * scale, iconCenterX + 24f * scale, typeBadge.centerY() + 24f * scale)
+            destination.set(iconChip.centerX() - 17f * scale, iconChip.centerY() - 17f * scale, iconChip.centerX() + 17f * scale, iconChip.centerY() + 17f * scale)
             paint.alpha = 255
             canvas.drawBitmap(icon, source, destination, paint)
         }
@@ -798,7 +775,7 @@ class CommandDeckView(
         val moveNameLeft = surface.left + 42f * scale
         drawSoftText(
             canvas,
-            fitTextToWidth(move.name, typeBadge.left - moveNameLeft - 16f * scale),
+            fitTextToWidth(move.name, iconChip.left - moveNameLeft - 16f * scale),
             moveNameLeft,
             surface.top + 54f * scale,
             PAPER,
@@ -950,8 +927,15 @@ class CommandDeckView(
             gimmickBounds[index] = card
             val selected = session.selectedGimmick == gimmick
             val glow = (0.56f + 0.44f * kotlin.math.sin(phase * 4f + index)).coerceIn(0f, 1f)
+            val typePalette = if (gimmick == BattleSession.BattleGimmick.TERASTALLIZATION) {
+                movePalette(session.terastallizeType().uppercase())
+            } else {
+                null
+            }
             if (selected) {
-                paint.shader = LinearGradient(
+                paint.shader = typePalette?.let { palette ->
+                    LinearGradient(card.left, card.top, card.right, card.bottom, intArrayOf(palette.highlight, palette.base, palette.shadow), floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
+                } ?: LinearGradient(
                     card.left,
                     card.top,
                     card.right,
@@ -961,7 +945,9 @@ class CommandDeckView(
                     Shader.TileMode.CLAMP
                 )
             } else {
-                paint.shader = LinearGradient(card.left, card.top, card.right, card.bottom, Color.rgb(39, 70, 88), Color.rgb(13, 31, 47), Shader.TileMode.CLAMP)
+                paint.shader = typePalette?.let { palette ->
+                    LinearGradient(card.left, card.top, card.right, card.bottom, palette.base, palette.shadow, Shader.TileMode.CLAMP)
+                } ?: LinearGradient(card.left, card.top, card.right, card.bottom, Color.rgb(39, 70, 88), Color.rgb(13, 31, 47), Shader.TileMode.CLAMP)
             }
             canvas.drawRoundRect(card, 26f * scale, 26f * scale, paint)
             paint.shader = null
@@ -1147,18 +1133,10 @@ class CommandDeckView(
         paint.strokeWidth = 2.5f * scale
         paint.color = Color.rgb(240, 253, 255)
         canvas.drawPath(crystalPath(centerX, centerY, radius * 1.2f, radius * 1.14f), paint)
-        val icon = typeIcon(type)
-        if (icon != null) {
-            source.set(0, 0, icon.width, icon.height)
-            destination.set(centerX - radius * 0.72f, centerY - radius * 0.58f, centerX + radius * 0.72f, centerY + radius * 0.58f)
-            paint.alpha = 255
-            canvas.drawBitmap(icon, source, destination, paint)
-        } else {
-            paint.style = Paint.Style.FILL
-            paint.color = Color.rgb(222, 253, 255)
-            canvas.drawCircle(centerX, centerY, radius * 0.2f, paint)
-            canvas.drawLine(centerX, centerY - radius * 0.82f, centerX, centerY + radius * 0.72f, paint)
-        }
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(222, 253, 255)
+        canvas.drawCircle(centerX, centerY, radius * 0.2f, paint)
+        canvas.drawLine(centerX, centerY - radius * 0.82f, centerX, centerY + radius * 0.72f, paint)
         paint.style = Paint.Style.FILL
     }
 
