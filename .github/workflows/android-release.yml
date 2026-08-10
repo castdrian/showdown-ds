@@ -147,6 +147,53 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/$apk_name"
           echo "path=$RUNNER_TEMP/$apk_name" >> "$GITHUB_OUTPUT"
 
+      - name: Generate release notes
+        id: notes
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          previous_tag="$(git describe --tags --abbrev=0 "$RELEASE_TAG^" 2>/dev/null || true)"
+          notes_path="$RUNNER_TEMP/showdown-release-notes.md"
+          features_path="$RUNNER_TEMP/showdown-release-features.md"
+          fixes_path="$RUNNER_TEMP/showdown-release-fixes.md"
+          other_path="$RUNNER_TEMP/showdown-release-other.md"
+          : > "$features_path"
+          : > "$fixes_path"
+          : > "$other_path"
+          commit_range="$RELEASE_TAG"
+          if [[ -n "$previous_tag" ]]; then
+            commit_range="$previous_tag..$RELEASE_TAG"
+          fi
+          while IFS=$'\t' read -r subject commit; do
+            [[ -z "$subject" ]] && continue
+            commit_type="$(printf '%s' "$subject" | sed -E 's/^([a-z]+)(\([^)]*\))?!?:.*/\1/')"
+            commit_title="$(printf '%s' "$subject" | sed -E 's/^[a-z]+(\([^)]*\))?!?:[[:space:]]*//')"
+            commit_link="https://${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}/commit/$commit"
+            line="- $commit_title ([${commit:0:7}]($commit_link))"
+            case "$commit_type" in
+              feat) printf '%s\n' "$line" >> "$features_path" ;;
+              fix) printf '%s\n' "$line" >> "$fixes_path" ;;
+              *) printf '%s\n' "$line" >> "$other_path" ;;
+            esac
+          done < <(git log --no-merges --format='%s%x09%H' "$commit_range")
+          {
+            echo "## What's changed"
+            for category_path in "$features_path" "$fixes_path" "$other_path"; do
+              case "$category_path" in
+                "$features_path") category_title="Features" ;;
+                "$fixes_path") category_title="Fixes" ;;
+                *) category_title="Other Changes" ;;
+              esac
+              if [[ -s "$category_path" ]]; then
+                echo
+                echo "### $category_title"
+                cat "$category_path"
+              fi
+            done
+          } > "$notes_path"
+          echo "path=$notes_path" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
+
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
@@ -157,6 +204,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
+          body_path: ${{ steps.notes.outputs.path }}
           generate_release_notes: true
+          previous_tag: ${{ steps.notes.outputs.previous_tag }}
           prerelease: ${{ steps.release.outputs.prerelease }}
           files: ${{ steps.apk.outputs.path }}
