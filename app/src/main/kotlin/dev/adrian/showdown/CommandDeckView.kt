@@ -546,12 +546,13 @@ class CommandDeckView(
                 iconCenterX + iconSize / 2f,
                 bounds.centerY() + iconSize / 2f
             )
+            paint.alpha = 255
             canvas.drawBitmap(icon, source, destination, paint)
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
-        paint.textSize = (30f * scale).coerceAtMost(bounds.height() - 6f * scale)
-        val labelLeft = bounds.left + 70f * scale
+        paint.textSize = readableTextSize(30f, scale, 30f, 16f).coerceAtMost(bounds.height() - 6f * scale)
+        val labelLeft = bounds.left + 66f * scale
         val label = fitTextToWidth(type, bounds.right - labelLeft - 12f * scale)
         drawOutlinedText(canvas, label, labelLeft, centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.25f * scale)
     }
@@ -823,19 +824,20 @@ class CommandDeckView(
             paint.style = Paint.Style.FILL
         }
         drawMovePressAnimation(canvas, surface, palette, pressProgress, scale)
-        val iconChip = RectF(surface.right - 256f * scale, surface.top + 8f * scale, surface.right - 18f * scale, surface.top + 68f * scale)
+        val iconChip = RectF(surface.right - 340f * scale, surface.top + 8f * scale, surface.right - 18f * scale, surface.top + 68f * scale)
         paint.color = Color.argb(108, 0, 14, 25)
         canvas.drawRoundRect(iconChip, 18f * scale, 18f * scale, paint)
         typeIcon(move.type)?.let { icon ->
             source.set(0, 0, icon.width, icon.height)
             val iconCenterX = iconChip.left + 34f * scale
             destination.set(iconCenterX - 24f * scale, iconChip.centerY() - 24f * scale, iconCenterX + 24f * scale, iconChip.centerY() + 24f * scale)
+            paint.alpha = 255
             canvas.drawBitmap(icon, source, destination, paint)
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
-        paint.textSize = 30f * scale
-        val typeLabelLeft = iconChip.left + 70f * scale
+        paint.textSize = readableTextSize(30f, scale, 30f, 16f).coerceAtMost(iconChip.height() - 6f * scale)
+        val typeLabelLeft = iconChip.left + 66f * scale
         val typeLabel = fitTextToWidth(move.type, iconChip.right - typeLabelLeft - 12f * scale)
         drawOutlinedText(
             canvas,
@@ -922,7 +924,7 @@ class CommandDeckView(
             }
         }
         val glyphCenterY = if (glyphBottom >= glyphTop) (glyphTop + glyphBottom + 1) / 2f else height / 2f
-        val glyphOffsetY = (height / 2f - glyphCenterY).roundToInt()
+        val glyphOffsetY = (height / 2f - glyphCenterY + FAIRY_GLYPH_OPTICAL_OFFSET_PIXELS).roundToInt()
         val centered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         centered.setPixels(background, 0, width, 0, 0, width, height)
         val centeredGlyph = IntArray(width * height)
@@ -1442,6 +1444,7 @@ class CommandDeckView(
         const val FOCUS = 0xFF70D8FF.toInt()
         const val MAGENTA = 0xFFFF4AB0.toInt()
         const val MUTED = 0xFF97B1D1.toInt()
+        const val FAIRY_GLYPH_OPTICAL_OFFSET_PIXELS = 2f
         val BOOST_NAMES = mapOf("atk" to "Atk", "def" to "Def", "spa" to "Sp. Atk", "spd" to "Sp. Def", "spe" to "Speed", "accuracy" to "Accuracy", "evasion" to "Evasion")
     }
 }
