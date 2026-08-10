@@ -470,7 +470,7 @@ class CommandDeckView(
             detailContent.right,
             sectionTop + typeBadgeHeight
         )
-        drawTypeBadge(canvas, typeBadge, move.type, move.category, palette, scale)
+        drawTypeBadge(canvas, typeBadge, move.type, palette, scale)
         sectionTop = typeBadge.bottom + if (compact) 8f * scale else 12f * scale
         val metricHeight = if (compact) 92f * scale else 112f * scale
         drawMoveMetrics(
@@ -510,7 +510,7 @@ class CommandDeckView(
         canvas.drawText(fitTextToWidth(move.name, content.width()), content.left, centeredTextBaseline(titleBounds.centerY()), paint)
         sectionTop = titleBounds.bottom + gap
         val typeBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
-        drawTypeBadge(canvas, typeBounds, move.type, move.category, movePalette(move.type), scale)
+        drawTypeBadge(canvas, typeBounds, move.type, movePalette(move.type), scale)
         sectionTop = typeBounds.bottom + gap
         val accuracy = move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—"
         val metricsBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
@@ -525,7 +525,6 @@ class CommandDeckView(
         canvas: Canvas,
         bounds: RectF,
         type: String,
-        category: String,
         palette: MovePalette,
         scale: Float
     ) {
@@ -551,9 +550,9 @@ class CommandDeckView(
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
-        paint.textSize = readableTextSize(25f, scale, 22f, 16f).coerceAtMost(bounds.height() - 6f * scale)
+        paint.textSize = (30f * scale).coerceAtMost(bounds.height() - 6f * scale)
         val labelLeft = bounds.left + 70f * scale
-        val label = fitTextToWidth("$type  ·  $category", bounds.right - labelLeft - 12f * scale)
+        val label = fitTextToWidth(type, bounds.right - labelLeft - 12f * scale)
         drawOutlinedText(canvas, label, labelLeft, centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.25f * scale)
     }
 
@@ -835,7 +834,7 @@ class CommandDeckView(
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
-        paint.textSize = readableTextSize(25f, scale, 22f)
+        paint.textSize = 30f * scale
         val typeLabelLeft = iconChip.left + 70f * scale
         val typeLabel = fitTextToWidth(move.type, iconChip.right - typeLabelLeft - 12f * scale)
         drawOutlinedText(
