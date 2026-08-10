@@ -518,7 +518,11 @@ class BattleSession {
 
     fun targetOptions() = targetOptions.toList()
 
-    fun canShift() = decisionAvailable && decisionKind == DecisionKind.MOVE && gameType.equals("triples", true) && activeRequests.size >= 3
+    fun canShift() = decisionAvailable &&
+        decisionKind == DecisionKind.MOVE &&
+        gameType.equals("triples", true) &&
+        activeRequests.size >= 3 &&
+        activeSlotIndex != 1
 
     fun availableMatchFormats() = availableMatchFormats.toList()
 

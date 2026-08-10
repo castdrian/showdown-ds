@@ -764,6 +764,31 @@ class BattleSessionTest {
     }
 
     @Test
+    fun triplesOnlyAllowShiftFromTheEdgeSlots() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|triples",
+                "|request|{\"rqid\":37,\"active\":[null,{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]},null]}"
+            )
+        )
+
+        assertFalse(session.canShift())
+
+        session.applyProtocolPacket(
+            listOf(
+                "|request|{\"rqid\":38,\"active\":[null,null,{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+            )
+        )
+
+        assertTrue(session.canShift())
+        session.selectShiftWithTouch()
+        assertEquals(listOf("/choose pass, pass, shift|38"), decisions)
+    }
+
+    @Test
     fun pokemonPanelCanSubmitARequestedVoluntarySwitch() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
