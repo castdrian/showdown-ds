@@ -15,13 +15,14 @@ import org.json.JSONArray
 class ShowdownMoveEffectsView(
     context: Context,
     private val audioCueListener: (BattleAudioCue) -> Unit,
+    private val audioCueResetter: () -> Unit = {},
     private val protocolHistoryProvider: () -> List<String>
 ) : WebView(context) {
     private val pendingPackets = ShowdownMoveEffectsQueue()
     private var pageLoaded = false
     private var playbackPaused = false
     private var playbackSpeed = 1f
-    private val nativeAudioBridge = NativeAudioBridge(audioCueListener)
+    private val nativeAudioBridge = NativeAudioBridge(audioCueListener, audioCueResetter)
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
@@ -283,13 +284,15 @@ class ShowdownMoveEffectsView(
     }
 
     private class NativeAudioBridge(
-        callback: (BattleAudioCue) -> Unit
+        callback: (BattleAudioCue) -> Unit,
+        private val resetAudio: () -> Unit
     ) {
         private val cueSequencer = BattleAudioCueSequencer(callback)
 
         @JavascriptInterface
         fun battleStarted() {
             cueSequencer.reset()
+            resetAudio()
         }
 
         @JavascriptInterface

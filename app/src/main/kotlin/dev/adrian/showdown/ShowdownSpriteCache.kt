@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -68,13 +69,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 canvas.restore()
                 return
             }
-            animatedDrawable?.let {
-                it.bounds = Rect(left.toInt(), top.toInt(), (left + drawWidth).toInt(), (top + drawHeight).toInt())
-                if (!it.isRunning) it.start()
-                it.draw(canvas)
-                if (alpha < 255) canvas.restore()
-                canvas.restore()
-                return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                animatedDrawable?.let {
+                    it.bounds = Rect(left.toInt(), top.toInt(), (left + drawWidth).toInt(), (top + drawHeight).toInt())
+                    if (!it.isRunning) it.start()
+                    it.draw(canvas)
+                    if (alpha < 255) canvas.restore()
+                    canvas.restore()
+                    return
+                }
             }
             movie ?: run {
                 if (alpha < 255) canvas.restore()
@@ -94,6 +97,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
             fun fromMovie(movie: Movie) = SpriteAsset(null, movie, null, movie.width(), movie.height())
 
+            @TargetApi(Build.VERSION_CODES.P)
             fun fromAnimatedDrawable(drawable: AnimatedImageDrawable): SpriteAsset {
                 drawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
                 return SpriteAsset(null, null, drawable, drawable.intrinsicWidth, drawable.intrinsicHeight)

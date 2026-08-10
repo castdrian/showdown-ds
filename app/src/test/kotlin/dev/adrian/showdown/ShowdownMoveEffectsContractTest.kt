@@ -16,6 +16,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("nativeMoveStarted();"))
         assertTrue(source.contains("nativeBattleStarted();"))
         assertTrue(source.contains("fun battleStarted()"))
+        assertTrue(source.contains("resetAudio()"))
         assertTrue(source.contains("fun moveStarted()"))
         assertTrue(source.contains("if (!this.scene.__showdownNativeResultCues) this.scene.__showdownNativeResultCues = [];"))
         assertTrue(source.contains("this.__showdownNativeResultCues && this.__showdownNativeResultCues.length"))

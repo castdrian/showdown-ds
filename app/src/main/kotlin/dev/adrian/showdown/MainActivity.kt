@@ -495,7 +495,7 @@ class MainActivity : Activity() {
         frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
-        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue) { session.protocolHistory() }.also { effects ->
+        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue, battleAudio::resetBattleCues) { session.protocolHistory() }.also { effects ->
             frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
             effects.setPlaybackSpeed(replaySpeed)
             effects.seed(session.protocolHistory())
