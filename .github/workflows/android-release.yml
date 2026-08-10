@@ -86,7 +86,27 @@ jobs:
           esac
           test "$minor" -le 999
           test "$patch" -le 999
-          release_code=$((major * 1000000 + minor * 1000 + patch))
+          release_suffix="${release_version#"$numeric_version"}"
+          prerelease_number=0
+          case "$release_suffix" in
+            "") inferred_channel=stable ;;
+            -alpha.*) inferred_channel=alpha; prerelease_number="${release_suffix#-alpha.}" ;;
+            -beta.*) inferred_channel=beta; prerelease_number="${release_suffix#-beta.}" ;;
+            *) exit 1 ;;
+          esac
+          if [[ -n "$release_suffix" ]]; then
+            case "$prerelease_number" in
+              ''|*[!0-9]*) exit 1 ;;
+            esac
+            test "$prerelease_number" -ge 1
+            test "$prerelease_number" -le 99
+          fi
+          case "$inferred_channel" in
+            alpha) qualifier_rank="$prerelease_number" ;;
+            beta) qualifier_rank=$((100 + prerelease_number)) ;;
+            stable) qualifier_rank=200 ;;
+          esac
+          release_code=$((major * 10000000 + minor * 10000 + patch * 1000 + qualifier_rank))
           test "$release_code" -gt 0
           test "$release_code" -le 2147483647
           keystore_path="$RUNNER_TEMP/showdown-release.jks"
@@ -94,11 +114,6 @@ jobs:
           echo "SHOWDOWN_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
           echo "SHOWDOWN_VERSION_NAME=$release_version" >> "$GITHUB_ENV"
           echo "SHOWDOWN_VERSION_CODE=$release_code" >> "$GITHUB_ENV"
-          case "$RELEASE_TAG" in
-            *-alpha.*) inferred_channel=alpha ;;
-            *-beta.*) inferred_channel=beta ;;
-            *) inferred_channel=stable ;;
-          esac
           release_channel="${REQUESTED_CHANNEL:-$inferred_channel}"
           case "$release_channel" in
             alpha|beta|stable) ;;
