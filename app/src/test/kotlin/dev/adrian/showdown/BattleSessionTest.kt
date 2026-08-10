@@ -276,7 +276,7 @@ class BattleSessionTest {
         val session = BattleSession()
         val decisions = mutableListOf<String>()
         session.addDecisionListener(decisions::add)
-        session.applyProtocolLine("|request|{\"rqid\":14,\"teamPreview\":true}")
+        session.applyProtocolLine("|request|{\"rqid\":14,\"teamPreview\":true,\"chosenTeamSize\":6}")
 
         val desiredOrder = listOf(2, 0, 1, 3, 4, 5)
         desiredOrder.forEach { index ->
@@ -292,7 +292,7 @@ class BattleSessionTest {
     @Test
     fun teamPreviewBackRemovesTheLastSelectionBeforeSubmission() {
         val session = BattleSession()
-        session.applyProtocolLine("|request|{\"rqid\":15,\"teamPreview\":true}")
+        session.applyProtocolLine("|request|{\"rqid\":15,\"teamPreview\":true,\"chosenTeamSize\":6}")
 
         session.confirmSelection()
         session.goBack()
@@ -647,6 +647,36 @@ class BattleSessionTest {
     }
 
     @Test
+    fun multiActiveRequestsAllowOnlyOneGimmickFamilyPerTurn() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"rqid\":20,\"active\":[{\"canMegaEvo\":true,\"canMegaEvoX\":true,\"canDynamax\":true,\"moves\":[{\"move\":\"Protect\",\"pp\":10}]},{\"canMegaEvoY\":true,\"canDynamax\":true,\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}"
+        )
+
+        session.selectGimmick(BattleSession.BattleGimmick.MEGA_EVOLUTION)
+        session.confirmSelection()
+
+        assertFalse(session.availableGimmicks().contains(BattleSession.BattleGimmick.MEGA_EVOLUTION_X))
+        assertTrue(session.availableGimmicks().contains(BattleSession.BattleGimmick.DYNAMAX))
+        assertFalse(session.availableGimmicks().contains(BattleSession.BattleGimmick.MEGA_EVOLUTION_Y))
+    }
+
+    @Test
+    fun requestTypeAndBattleFormatChooseOfficialTeamPreviewDefaults() {
+        val session = BattleSession()
+        session.applyProtocolLine("|gametype|doubles")
+        session.applyProtocolLine("|request|{\"requestType\":\"team\",\"side\":{\"pokemon\":[]}}")
+
+        assertEquals(BattleSession.DecisionKind.TEAM_PREVIEW, session.decisionKind)
+        assertEquals(2, session.teamPreviewRequiredSize())
+
+        session.applyProtocolLine("|request|{\"requestType\":\"wait\"}")
+
+        assertEquals(BattleSession.DecisionKind.WAIT, session.decisionKind)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
     fun detailsReflectKnownBattleInformation() {
         val session = BattleSession()
 
@@ -899,7 +929,7 @@ class BattleSessionTest {
 
         assertEquals("/choose switch 2|31", decisions.last())
 
-        session.applyProtocolLine("|request|{\"rqid\":32,\"teamPreview\":true,\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50, M\",\"condition\":\"100/100\"},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\"}]}}")
+        session.applyProtocolLine("|request|{\"rqid\":32,\"teamPreview\":true,\"chosenTeamSize\":2,\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50, M\",\"condition\":\"100/100\"},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\"}]}}")
 
         assertEquals(BattleSession.DecisionKind.TEAM_PREVIEW, session.decisionKind)
         session.moveFocus(-1, 0)

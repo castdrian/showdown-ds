@@ -279,6 +279,7 @@ class BattleSession {
     private var requestId: Int? = null
     private val activeRequests = mutableListOf<JSONObject>()
     private val activeChoices = mutableListOf<String>()
+    private val usedGimmickFamilies = mutableSetOf<String>()
     private val forceSwitchChoices = mutableListOf<String>()
     private val targetOptions = mutableListOf<TargetOption>()
     private var activeSlotIndex = 0
@@ -803,6 +804,7 @@ class BattleSession {
                 }
                 val gimmick = selectedGimmick
                 val selectedChoice = "move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${target?.let { " $it" } ?: ""}"
+                gimmick?.let { usedGimmickFamilies += gimmickFamily(it) }
                 if (activeRequests.size > 1) {
                     ensureActiveChoiceSlots()
                     activeChoices[activeSlotIndex] = selectedChoice
@@ -838,6 +840,7 @@ class BattleSession {
         selectedGimmick = null
         selectedTargetIndex = -1
         activeChoices.clear()
+        usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
         choiceCanBeCancelled = false
         activeSlotIndex = 0
@@ -1082,6 +1085,7 @@ class BattleSession {
                 decisionKind = DecisionKind.WAIT
                 activeRequests.clear()
                 activeChoices.clear()
+                usedGimmickFamilies.clear()
                 forceSwitchChoices.clear()
                 targetOptions.clear()
             }
@@ -1158,6 +1162,7 @@ class BattleSession {
         playerSlot = restoredPlayerSlot ?: "p1"
         activeRequests.clear()
         activeChoices.clear()
+        usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
         playerActiveCombatants.clear()
@@ -1696,6 +1701,7 @@ class BattleSession {
         playerDetails = playerDetails.copy(moves = emptyList())
         activeRequests.clear()
         activeChoices.clear()
+        usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
         choiceCanBeCancelled = false
@@ -1715,21 +1721,22 @@ class BattleSession {
             requestId = request.optInt("rqid", -1).takeIf { it >= 0 }
             requestNoCancel = request.optBoolean("noCancel")
             syncTeamFromRequest(request)
-            if (request.optBoolean("wait")) {
+            val requestType = request.optString("requestType").lowercase()
+            if (request.optBoolean("wait") || requestType == "wait") {
                 battlePhase = BattlePhase.BATTLE
                 decisionKind = DecisionKind.WAIT
                 decisionAvailable = false
                 status = "Waiting for the other player…"
                 return@runCatching
             }
-            if (request.optBoolean("teamPreview")) {
+            if (request.optBoolean("teamPreview") || requestType == "team") {
                 battlePhase = BattlePhase.TEAM_PREVIEW
                 decisionKind = DecisionKind.TEAM_PREVIEW
                 val availableTeamSize = team.indices.count { !teamCondition(it).contains("FNT", true) }
                 val requestedTeamSize = request.optInt("chosenTeamSize", 0).takeIf { it > 0 }
                     ?: request.optInt("maxChosenTeamSize", 0).takeIf { it > 0 }
                     ?: protocolTeamPreviewSize.takeIf { it > 0 }
-                    ?: team.size
+                    ?: defaultTeamPreviewSize()
                 teamPreviewRequiredSize = requestedTeamSize.coerceIn(1, maxOf(1, availableTeamSize))
                 decisionAvailable = availableTeamSize > 0
                 panel = Panel.TEAM
@@ -1933,6 +1940,7 @@ class BattleSession {
             teamPreviewRequiredSize = 0
             activeRequests.clear()
             activeChoices.clear()
+            usedGimmickFamilies.clear()
             forceSwitchChoices.clear()
             targetOptions.clear()
             activeSlotIndex = 0
@@ -1957,6 +1965,7 @@ class BattleSession {
         teamPreviewRequiredSize = 0
         activeRequests.clear()
         activeChoices.clear()
+        usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
         activeSlotIndex = 0
@@ -1972,6 +1981,7 @@ class BattleSession {
         if (battleFinished || requestId == null || decisionKind == DecisionKind.WAIT) return
         if (decisionKind == DecisionKind.MOVE && activeRequests.size > 1) {
             activeChoices.clear()
+            usedGimmickFamilies.clear()
             activeSlotIndex = 0
             choiceCanBeCancelled = false
             prepareNextActiveRequest()
@@ -2375,8 +2385,19 @@ class BattleSession {
         if (active.optBoolean("canDynamax")) updated += BattleGimmick.DYNAMAX
         if (active.optString("canTerastallize").isNotBlank()) updated += BattleGimmick.TERASTALLIZATION
         availableGimmicks.clear()
-        availableGimmicks += updated
+        availableGimmicks += updated.filterNot { gimmickFamily(it) in usedGimmickFamilies }
         if (selectedGimmick !in availableGimmicks) selectedGimmick = null
+    }
+
+    private fun gimmickFamily(gimmick: BattleGimmick) = when (gimmick) {
+        BattleGimmick.MEGA_EVOLUTION, BattleGimmick.MEGA_EVOLUTION_X, BattleGimmick.MEGA_EVOLUTION_Y -> "mega"
+        else -> gimmick.choiceSuffix
+    }
+
+    private fun defaultTeamPreviewSize() = when (gameType.lowercase()) {
+        "doubles" -> 2
+        "triples", "rotation" -> 3
+        else -> 1
     }
 
     private fun updateTargetOptions() {
