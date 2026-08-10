@@ -546,6 +546,11 @@ class MainActivity : Activity() {
             KeyEvent.KEYCODE_BUTTON_Y -> openPanel(BattleSession.Panel.TEAM)
             KeyEvent.KEYCODE_BUTTON_L2 -> openPanel(BattleSession.Panel.ACTIVITY)
             KeyEvent.KEYCODE_BUTTON_R2, KeyEvent.KEYCODE_BUTTON_SELECT -> openPanel(BattleSession.Panel.MENU)
+            KeyEvent.KEYCODE_BUTTON_THUMBL -> {
+                if (!session.canShift()) return false
+                session.selectShiftWithTouch()
+                battleAudio.playConfirm()
+            }
             KeyEvent.KEYCODE_BUTTON_THUMBR -> cycleGimmick()
             else -> return false
         }

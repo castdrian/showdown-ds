@@ -716,6 +716,54 @@ class BattleSessionTest {
     }
 
     @Test
+    fun commandingActiveSlotsArePassedAutomatically() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":34,\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"100/100\",\"active\":true,\"commanding\":true}]}}"
+        )
+
+        assertEquals(listOf("/choose pass|34"), decisions)
+        assertFalse(session.decisionAvailable)
+        assertEquals("Choice sent. Waiting for the other player…", session.status)
+    }
+
+    @Test
+    fun revivalSwitchRequestsAllowARevivingFaintedPokemon() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":35,\"forceSwitch\":[true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"reviving\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\"}]}}"
+        )
+
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose switch 1|35"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
+    fun triplesExposeAndSubmitTheOfficialShiftChoice() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|triples",
+                "|request|{\"rqid\":36,\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]},null,null]}"
+            )
+        )
+
+        assertTrue(session.canShift())
+        session.selectShiftWithTouch()
+
+        assertEquals(listOf("/choose shift, pass, pass|36"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
     fun pokemonPanelCanSubmitARequestedVoluntarySwitch() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()

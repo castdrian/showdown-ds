@@ -44,6 +44,7 @@ class CommandDeckView(
     private val typeIcons = mutableMapOf<String, Bitmap?>()
     private var activityChatBounds: RectF? = null
     private var cancelChoiceBounds: RectF? = null
+    private var shiftBounds: RectF? = null
     private var zPowerSymbol: Bitmap? = null
     private var pressedMoveIndex: Int? = null
     private var pressStartedAt = 0L
@@ -111,6 +112,11 @@ class CommandDeckView(
             }
         }
         if (session.panel == BattleSession.Panel.MOVES) {
+            if (session.canShift() && shiftBounds?.contains(x, y) == true) {
+                session.selectShiftWithTouch()
+                interactionListener.onConfirmation()
+                return true
+            }
             if (session.canCancelChoice() && cancelChoiceBounds?.contains(x, y) == true) {
                 interactionListener.onCancelChoice()
                 return true
@@ -372,11 +378,17 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         targetBounds.fill(null)
         gimmickBounds.fill(null)
+        shiftBounds = null
         val inset = 18f * scale
         val content = RectF(bounds.left + inset, bounds.top + inset, bounds.right - inset, bounds.bottom - inset)
         val targets = session.targetOptions()
         val gimmicks = session.availableGimmicks()
         var contentTop = content.top
+        if (session.canShift()) {
+            shiftBounds = RectF(content.left, contentTop, content.right, contentTop + 66f * scale)
+            drawShiftButton(canvas, shiftBounds!!, scale)
+            contentTop += 80f * scale
+        }
         if (targets.isNotEmpty()) {
             drawTargets(canvas, content.left, content.right, contentTop, scale)
             contentTop += 112f * scale
@@ -393,6 +405,23 @@ class CommandDeckView(
         } else {
             drawMoveDetails(canvas, RectF(content.left, contentTop, content.right, content.bottom), scale)
         }
+    }
+
+    private fun drawShiftButton(canvas: Canvas, bounds: RectF, scale: Float) {
+        paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.rgb(41, 124, 132), Color.rgb(17, 63, 77), Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.rgb(129, 227, 216)
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(25f, scale, 22f)
+        paint.color = PAPER
+        canvas.drawText("SHIFT", bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawMoveDetails(canvas: Canvas, bounds: RectF, scale: Float) {

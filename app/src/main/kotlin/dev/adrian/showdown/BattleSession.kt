@@ -270,6 +270,8 @@ class BattleSession {
     private val opponentActiveCombatants = linkedMapOf<String, ActiveCombatant>()
     private val activeTeamNames = mutableSetOf<String>()
     private val activeSlotNames = mutableMapOf<String, String>()
+    private val autoPassActiveSlots = mutableSetOf<Int>()
+    private val revivingTeamIndices = mutableSetOf<Int>()
     private val baseTypesBySlot = mutableMapOf<String, List<String>>()
     private val typeChangeBySlot = mutableMapOf<String, List<String>>()
     private val typeAdditionsBySlot = mutableMapOf<String, MutableList<String>>()
@@ -516,6 +518,8 @@ class BattleSession {
 
     fun targetOptions() = targetOptions.toList()
 
+    fun canShift() = decisionAvailable && decisionKind == DecisionKind.MOVE && gameType.equals("triples", true) && activeRequests.size >= 3
+
     fun availableMatchFormats() = availableMatchFormats.toList()
 
     fun isSinglesBattle() = gameType.equals("singles", true)
@@ -627,6 +631,8 @@ class BattleSession {
             decisionKind = DecisionKind.WAIT
             activeRequests.clear()
             activeChoices.clear()
+            autoPassActiveSlots.clear()
+            revivingTeamIndices.clear()
             forceSwitchChoices.clear()
             targetOptions.clear()
         }
@@ -732,6 +738,12 @@ class BattleSession {
         selectedTargetIndex = index
         status = "Target: ${targetOptions[index].label}"
         confirmSelection()
+    }
+
+    fun selectShiftWithTouch() {
+        if (!canShift()) return
+        submitShiftChoice()
+        notifyListeners()
     }
 
     fun cycleTarget(direction: Int) {
@@ -1094,6 +1106,8 @@ class BattleSession {
                 decisionKind = DecisionKind.WAIT
                 activeRequests.clear()
                 activeChoices.clear()
+                autoPassActiveSlots.clear()
+                revivingTeamIndices.clear()
                 usedGimmickFamilies.clear()
                 forceSwitchChoices.clear()
                 targetOptions.clear()
@@ -1171,6 +1185,8 @@ class BattleSession {
         playerSlot = restoredPlayerSlot ?: "p1"
         activeRequests.clear()
         activeChoices.clear()
+        autoPassActiveSlots.clear()
+        revivingTeamIndices.clear()
         usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
@@ -1713,6 +1729,8 @@ class BattleSession {
         playerDetails = playerDetails.copy(moves = emptyList())
         activeRequests.clear()
         activeChoices.clear()
+        autoPassActiveSlots.clear()
+        revivingTeamIndices.clear()
         usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
@@ -1777,9 +1795,11 @@ class BattleSession {
             }
             requestTargetable = request.optBoolean("targetable", activeRequests.size > 1)
             if (!prepareNextActiveRequest()) {
-                decisionKind = DecisionKind.WAIT
-                decisionAvailable = false
-                status = "Waiting for a battle decision…"
+                if (!submitAutomaticActivePasses()) {
+                    decisionKind = DecisionKind.WAIT
+                    decisionAvailable = false
+                    status = "Waiting for a battle decision…"
+                }
             }
         }.onFailure {
             appendLog("Received an unreadable battle request.")
@@ -1909,6 +1929,12 @@ class BattleSession {
 
     private fun prepareNextActiveRequest(): Boolean {
         while (activeSlotIndex < activeRequests.size) {
+            if (activeSlotIndex in autoPassActiveSlots) {
+                ensureActiveChoiceSlots()
+                activeChoices[activeSlotIndex] = "pass"
+                activeSlotIndex += 1
+                continue
+            }
             if (applyActiveRequest(activeRequests[activeSlotIndex])) return true
             ensureActiveChoiceSlots()
             activeChoices[activeSlotIndex] = "pass"
@@ -1918,6 +1944,19 @@ class BattleSession {
         decisionAvailable = false
         status = "Waiting for a battle decision…"
         return false
+    }
+
+    private fun submitAutomaticActivePasses(): Boolean {
+        if (activeRequests.isEmpty() || activeChoices.size < activeRequests.size || activeChoices.any { it != "pass" }) return false
+        val choice = "/choose ${activeChoices.joinToString(", ")}${requestId?.let { "|$it" } ?: ""}"
+        decisionAvailable = false
+        choiceCanBeCancelled = false
+        decisionKind = DecisionKind.WAIT
+        status = "Choice sent. Waiting for the other player…"
+        chatMessages += "[You] $choice"
+        if (chatMessages.size > 32) chatMessages.removeAt(0)
+        decisionListeners.toList().forEach { it.onDecision(choice) }
+        return true
     }
 
     private fun ensureActiveChoiceSlots() {
@@ -1950,6 +1989,8 @@ class BattleSession {
             teamPreviewRequiredSize = 0
             activeRequests.clear()
             activeChoices.clear()
+            autoPassActiveSlots.clear()
+            revivingTeamIndices.clear()
             usedGimmickFamilies.clear()
             forceSwitchChoices.clear()
             targetOptions.clear()
@@ -1975,6 +2016,8 @@ class BattleSession {
         teamPreviewRequiredSize = 0
         activeRequests.clear()
         activeChoices.clear()
+        autoPassActiveSlots.clear()
+        revivingTeamIndices.clear()
         usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
@@ -2676,7 +2719,7 @@ class BattleSession {
         }
         val choice = when (decisionKind) {
             DecisionKind.SWITCH -> {
-                if (teamCondition(focusedTeam).contains("FNT", true)) {
+                if (teamCondition(focusedTeam).contains("FNT", true) && focusedTeam !in revivingTeamIndices) {
                     status = "That Pokémon has fainted."
                     return
                 }
@@ -2715,7 +2758,7 @@ class BattleSession {
             notifyListeners()
             return
         }
-        if (teamCondition(focusedTeam).contains("FNT", true)) {
+        if (teamCondition(focusedTeam).contains("FNT", true) && focusedTeam !in revivingTeamIndices) {
             status = "That Pokémon has fainted."
             notifyListeners()
             return
@@ -2755,6 +2798,27 @@ class BattleSession {
         notifyListeners()
     }
 
+    private fun submitShiftChoice() {
+        ensureActiveChoiceSlots()
+        activeChoices[activeSlotIndex] = "shift"
+        selectedGimmick = null
+        selectedTargetIndex = -1
+        targetOptions.clear()
+        if (activeSlotIndex < activeRequests.lastIndex) {
+            activeSlotIndex += 1
+            if (prepareNextActiveRequest()) return
+        }
+        val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else "shift"
+        val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
+        status = "Shift sent."
+        appendLog("$playerPokemon shifted position.")
+        chatMessages += "[You] $choice"
+        if (chatMessages.size > 32) chatMessages.removeAt(0)
+        decisionAvailable = false
+        choiceCanBeCancelled = !requestNoCancel
+        decisionListeners.toList().forEach { it.onDecision(choice) }
+    }
+
     private fun completeTeamSelection(choice: String) {
         decisionAvailable = false
         choiceCanBeCancelled = !requestNoCancel
@@ -2782,9 +2846,11 @@ class BattleSession {
             val details = entry.optString("details", entry.optString("ident").substringAfter(": "))
             val name = details.substringBefore(',').ifBlank { entry.optString("ident").substringAfter(": ", "Pokémon") }
             if (entry.optBoolean("active")) {
+                if (entry.optBoolean("commanding")) autoPassActiveSlots += activeIndex
                 activeSlotNames["$playerSlot${('a'.code + activeIndex).toChar()}"] = name
                 activeIndex += 1
             }
+            if (entry.optBoolean("reviving")) revivingTeamIndices += index
             val known = teamDetails.firstOrNull { it.name.equals(name, true) }
             val levelGender = parseDetails(details)
             val condition = entry.optString("condition", "100/100")
@@ -2833,9 +2899,11 @@ class BattleSession {
         }
     }
 
-    private fun canSwitchTo(index: Int) = index in team.indices &&
-        !teamCondition(index).contains("FNT", true) &&
-        team[index] !in activeTeamNames
+    private fun canSwitchTo(index: Int): Boolean {
+        if (index !in team.indices || team[index] in activeTeamNames) return false
+        val fainted = teamCondition(index).contains("FNT", true)
+        return !fainted || index in revivingTeamIndices
+    }
 
     private fun updateOpponentParty(details: PokemonDetails) {
         val index = opponentTeamDetails.indexOfFirst { it.name.equals(details.name, true) }
