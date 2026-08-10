@@ -35,6 +35,7 @@ class BattleAudio(
     private val battleSoundIds = mutableMapOf<BattleAudioCue, Int>()
     private val loadedBattleSoundIds = Collections.synchronizedSet(mutableSetOf<Int>())
     private val failedBattleCues = Collections.synchronizedSet(mutableSetOf<BattleAudioCue>())
+    private val activeBattleStreamIds = mutableSetOf<Int>()
     private val pendingBattleCues = ArrayDeque<PendingBattleCue>()
     private val diagnosticEvents = ArrayDeque<BattleAudioCueEvent>()
     private val cuePlaybackQueue = BattleAudioCuePlaybackQueue()
@@ -113,6 +114,7 @@ class BattleAudio(
         audioCueHandler.removeCallbacksAndMessages(null)
         audioCueHandler.post {
             pendingBattleCues.clear()
+            stopActiveBattleStreams()
             battleSoundPool.release()
             audioCueThread.quitSafely()
         }
@@ -204,13 +206,21 @@ class BattleAudio(
 
     private fun clearPendingBattleCues() {
         pendingBattleCues.clear()
+        stopActiveBattleStreams()
         cuePlaybackGeneration += 1
         cuePlaybackQueue.reset(SystemClock.elapsedRealtime())
     }
 
+    private fun stopActiveBattleStreams() {
+        activeBattleStreamIds.forEach(battleSoundPool::stop)
+        activeBattleStreamIds.clear()
+    }
+
     private fun playBattleCueNow(cue: BattleAudioCue, soundId: Int, queuedAtMillis: Long, plannedDelayMillis: Long) {
         if (released.get() || !soundEffectsEnabled.get()) return
-        val playbackAccepted = battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f) != 0
+        val streamId = battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f)
+        val playbackAccepted = streamId != 0
+        if (playbackAccepted) activeBattleStreamIds += streamId
         val actualDelayMillis = (SystemClock.elapsedRealtime() - queuedAtMillis).coerceAtLeast(0L)
         synchronized(diagnosticEvents) {
             if (diagnosticEvents.size >= MAX_DIAGNOSTIC_EVENTS) diagnosticEvents.removeFirst()
