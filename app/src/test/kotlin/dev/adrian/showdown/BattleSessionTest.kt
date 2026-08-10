@@ -1145,6 +1145,35 @@ class BattleSessionTest {
     }
 
     @Test
+    fun forcedSwitchesAutoPassWhenNoReplacementIsAvailable() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":39,\"forceSwitch\":[true,false],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
+        )
+
+        assertEquals(listOf("/choose pass|39"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
+    fun forcedSwitchesPadMissingReplacementsWithPasses() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":40,\"forceSwitch\":[true,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+
+        session.moveFocus(2, 0)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose switch 3, pass|40"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
     fun liveRequestPublishesActualPartyHpAndConditions() {
         val session = BattleSession()
 

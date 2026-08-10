@@ -1782,6 +1782,7 @@ class BattleSession {
                 decisionAvailable = team.indices.any { canSwitchTo(it) }
                 panel = Panel.TEAM
                 status = if (requiredSwitches > 1) "Choose a Pokémon to switch in 1/$requiredSwitches" else "Choose a Pokémon to switch in"
+                if (!decisionAvailable) submitAutomaticForcedSwitchPasses()
                 return@runCatching
             }
             val active = request.optJSONArray("active") ?: run {
@@ -2738,6 +2739,9 @@ class BattleSession {
                 }
                 if (requiredSwitches > 1) {
                     forceSwitchChoices += switchChoice
+                    val remainingChoices = requiredSwitches - forceSwitchChoices.size
+                    val availableSwitches = availableSwitchChoices().size
+                    repeat((remainingChoices - availableSwitches).coerceAtLeast(0)) { forceSwitchChoices += "pass" }
                     if (forceSwitchChoices.size < requiredSwitches) {
                         status = "Choose a Pokémon to switch in ${forceSwitchChoices.size + 1}/$requiredSwitches"
                         return
@@ -2753,6 +2757,24 @@ class BattleSession {
             }
         }
         completeTeamSelection(choice)
+    }
+
+    private fun availableSwitchChoices() = team.indices
+        .filter(::canSwitchTo)
+        .map { "switch ${it + 1}" }
+        .filterNot(forceSwitchChoices::contains)
+
+    private fun submitAutomaticForcedSwitchPasses() {
+        if (requiredSwitches <= 0) return
+        forceSwitchChoices.clear()
+        repeat(requiredSwitches) { forceSwitchChoices += "pass" }
+        val choice = "/choose ${forceSwitchChoices.joinToString(", ")}${requestId?.let { "|$it" } ?: ""}"
+        decisionAvailable = false
+        choiceCanBeCancelled = false
+        status = "Choice sent. Waiting for the other player…"
+        chatMessages += "[You] $choice"
+        if (chatMessages.size > 32) chatMessages.removeAt(0)
+        decisionListeners.toList().forEach { it.onDecision(choice) }
     }
 
     private fun confirmMoveRequestSwitch() {
