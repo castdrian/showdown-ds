@@ -15,6 +15,7 @@ import android.graphics.Shader
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.roundToInt
 
 class CommandDeckView(
     context: Context,
@@ -471,20 +472,11 @@ class CommandDeckView(
         )
         drawTypeBadge(canvas, typeBadge, move.type, move.category, palette, scale)
         sectionTop = typeBadge.bottom + if (compact) 8f * scale else 12f * scale
-        val metricHeight = if (compact) 68f * scale else 82f * scale
-        drawMoveMetric(
+        val metricHeight = if (compact) 92f * scale else 112f * scale
+        drawMoveMetrics(
             canvas,
             RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + metricHeight),
-            "POWER",
-            move.power,
-            scale
-        )
-        sectionTop += metricHeight + if (compact) 8f * scale else 10f * scale
-        drawMoveMetric(
-            canvas,
-            RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + metricHeight),
-            "ACCURACY",
-            move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—",
+            move,
             scale
         )
         sectionTop += metricHeight + if (compact) 8f * scale else 12f * scale
@@ -565,49 +557,56 @@ class CommandDeckView(
         drawOutlinedText(canvas, label, labelLeft, centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.25f * scale)
     }
 
-    private fun drawMoveMetric(canvas: Canvas, bounds: RectF, label: String, value: String, scale: Float) {
+    private fun drawMoveMetrics(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, scale: Float) {
+        val gap = 8f * scale
+        val cellWidth = (bounds.width() - gap) / 2f
+        val accuracy = move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—"
+        drawMoveMetricCell(
+            canvas,
+            RectF(bounds.left, bounds.top, bounds.left + cellWidth, bounds.bottom),
+            "POWER",
+            move.power,
+            scale
+        )
+        drawMoveMetricCell(
+            canvas,
+            RectF(bounds.right - cellWidth, bounds.top, bounds.right, bounds.bottom),
+            "ACCURACY",
+            accuracy,
+            scale
+        )
+    }
+
+    private fun drawMoveMetricCell(canvas: Canvas, bounds: RectF, label: String, value: String, scale: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(168, 2, 13, 22)
+        paint.color = Color.argb(178, 2, 13, 22)
         canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.25f * scale
         paint.color = Color.argb(130, 141, 196, 211)
         canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.FILL
-        paint.textAlign = Paint.Align.LEFT
+        paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(18f, scale, 16f, 18f)
+        val labelSize = readableTextSize(18f, scale, 16f, 14f).coerceAtMost(bounds.height() * 0.24f)
+        paint.textSize = labelSize
         paint.color = Color.rgb(159, 221, 226)
-        val labelLeft = bounds.left + 18f * scale
-        val valueRight = bounds.right - 18f * scale
-        val maxTextWidth = valueRight - labelLeft - 12f * scale
-        val measuredLabelWidth = paint.measureText(label)
-        paint.textSize = readableTextSize(33f, scale, 29f, 20f)
-        val measuredValueWidth = paint.measureText(value)
-        if (measuredLabelWidth + measuredValueWidth > maxTextWidth) {
-            val labelWidth = (maxTextWidth - measuredValueWidth).coerceAtLeast(1f)
-            paint.textSize = readableTextSize(18f, scale, 16f, 18f)
-            if (paint.measureText(label) > labelWidth) paint.textSize *= labelWidth / paint.measureText(label)
-        } else {
-            paint.textSize = readableTextSize(18f, scale, 16f, 18f)
-        }
         drawOutlinedText(
             canvas,
             label,
-            labelLeft,
-            centeredTextBaseline(bounds.centerY()),
+            bounds.centerX(),
+            bounds.top + 24f * scale,
             Color.rgb(3, 14, 22),
             Color.rgb(159, 221, 226),
-            1.5f * scale
+            1.25f * scale
         )
-        paint.textAlign = Paint.Align.RIGHT
-        paint.textSize = readableTextSize(33f, scale, 29f, 20f)
+        paint.textSize = readableTextSize(38f, scale, 32f, 22f).coerceAtMost(bounds.height() * 0.5f)
         paint.color = PAPER
         drawOutlinedText(
             canvas,
             value,
-            bounds.right - 18f * scale,
-            centeredTextBaseline(bounds.centerY()),
+            bounds.centerX(),
+            centeredTextBaseline(bounds.centerY() + 12f * scale),
             Color.rgb(3, 14, 22),
             PAPER,
             1.75f * scale
@@ -924,12 +923,20 @@ class CommandDeckView(
             }
         }
         val glyphCenterY = if (glyphBottom >= glyphTop) (glyphTop + glyphBottom + 1) / 2f else height / 2f
-        val glyphOffsetY = height / 2f - glyphCenterY
+        val glyphOffsetY = (height / 2f - glyphCenterY).roundToInt()
         val centered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         centered.setPixels(background, 0, width, 0, 0, width, height)
+        val centeredGlyph = IntArray(width * height)
+        for (y in 0 until height) {
+            val centeredY = y + glyphOffsetY
+            if (centeredY !in 0 until height) continue
+            for (x in 0 until width) {
+                centeredGlyph[centeredY * width + x] = glyph[y * width + x]
+            }
+        }
         val glyphBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        glyphBitmap.setPixels(glyph, 0, width, 0, 0, width, height)
-        Canvas(centered).drawBitmap(glyphBitmap, 0f, glyphOffsetY, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        glyphBitmap.setPixels(centeredGlyph, 0, width, 0, 0, width, height)
+        Canvas(centered).drawBitmap(glyphBitmap, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG))
         glyphBitmap.recycle()
         return centered
     }
