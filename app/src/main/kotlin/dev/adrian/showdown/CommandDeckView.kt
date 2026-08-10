@@ -457,7 +457,7 @@ class CommandDeckView(
         val icon = typeIcon(move.type)
         if (icon != null) {
             source.set(0, 0, icon.width, icon.height)
-            destination.set(detailContent.right - 44f * scale, detailContent.top, detailContent.right, detailContent.top + 44f * scale)
+            destination.set(detailContent.right - 52f * scale, detailContent.top - 4f * scale, detailContent.right, detailContent.top + 48f * scale)
             canvas.drawBitmap(icon, source, destination, paint)
         }
         paint.textSize = readableTextSize(24f, scale, 21f)
@@ -623,18 +623,41 @@ class CommandDeckView(
             paint.style = Paint.Style.FILL
         }
         drawMovePressAnimation(canvas, surface, palette, pressProgress, scale)
-        val iconChip = RectF(surface.right - 84f * scale, surface.top + 14f * scale, surface.right - 24f * scale, surface.top + 54f * scale)
+        val iconChip = RectF(surface.right - 232f * scale, surface.top + 10f * scale, surface.right - 20f * scale, surface.top + 62f * scale)
         paint.color = Color.argb(108, 0, 14, 25)
-        canvas.drawRoundRect(iconChip, 16f * scale, 16f * scale, paint)
+        canvas.drawRoundRect(iconChip, 18f * scale, 18f * scale, paint)
         typeIcon(move.type)?.let { icon ->
             source.set(0, 0, icon.width, icon.height)
-            destination.set(iconChip.centerX() - 17f * scale, iconChip.centerY() - 17f * scale, iconChip.centerX() + 17f * scale, iconChip.centerY() + 17f * scale)
+            val iconCenterX = iconChip.left + 30f * scale
+            destination.set(iconCenterX - 21f * scale, iconChip.centerY() - 21f * scale, iconCenterX + 21f * scale, iconChip.centerY() + 21f * scale)
             canvas.drawBitmap(icon, source, destination, paint)
         }
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textAlign = Paint.Align.LEFT
+        paint.textSize = readableTextSize(22f, scale, 20f)
+        val typeLabelLeft = iconChip.left + 58f * scale
+        val typeLabel = fitTextToWidth(move.type, iconChip.right - typeLabelLeft - 12f * scale)
+        drawOutlinedText(
+            canvas,
+            typeLabel,
+            typeLabelLeft,
+            centeredTextBaseline(iconChip.centerY()),
+            Color.rgb(5, 14, 22),
+            PAPER,
+            1.25f * scale
+        )
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = moveNameSize(move.name, scale)
-        drawSoftText(canvas, move.name, surface.left + 42f * scale, surface.top + 54f * scale, PAPER, 0.85f * scale)
+        val moveNameLeft = surface.left + 42f * scale
+        drawSoftText(
+            canvas,
+            fitTextToWidth(move.name, iconChip.left - moveNameLeft - 16f * scale),
+            moveNameLeft,
+            surface.top + 54f * scale,
+            PAPER,
+            0.85f * scale
+        )
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(30f, scale, 26f)
         drawSoftText(canvas, "PP ${move.pp} / ${move.maxPp}", surface.left + 42f * scale, surface.bottom - 23f * scale, PAPER, 0.65f * scale)
@@ -668,7 +691,7 @@ class CommandDeckView(
     private fun typeIcon(type: String): Bitmap? = typeIcons.getOrPut(type) {
         val resourceId = resources.getIdentifier("type_${type.lowercase()}", "drawable", context.packageName)
         if (resourceId == 0) null else BitmapFactory.decodeResource(resources, resourceId)?.let { bitmap ->
-            if (type == "FAIRY") centeredFairyIcon(bitmap) else bitmap
+            if (type.equals("FAIRY", true)) centeredFairyIcon(bitmap) else bitmap
         }
     }
 
@@ -691,11 +714,21 @@ class CommandDeckView(
                 glyph[index] = Color.argb(if (whiteAmount < 0.08f) 0 else (alpha * whiteAmount).toInt(), 255, 255, 255)
             }
         }
+        var glyphWeight = 0f
+        var glyphCenterY = 0f
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val alpha = Color.alpha(glyph[y * width + x]).toFloat()
+                glyphWeight += alpha
+                glyphCenterY += y * alpha
+            }
+        }
+        val glyphOffsetY = if (glyphWeight > 0f) height / 2f - glyphCenterY / glyphWeight else 0f
         val centered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         centered.setPixels(background, 0, width, 0, 0, width, height)
         val glyphBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         glyphBitmap.setPixels(glyph, 0, width, 0, 0, width, height)
-        Canvas(centered).drawBitmap(glyphBitmap, 0f, 4f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        Canvas(centered).drawBitmap(glyphBitmap, 0f, glyphOffsetY, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         glyphBitmap.recycle()
         return centered
     }
