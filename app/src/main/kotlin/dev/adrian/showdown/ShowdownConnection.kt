@@ -25,11 +25,13 @@ class ShowdownConnection(
     }
 
     private var socket: WebSocket? = null
+    private var closedSocket: WebSocket? = null
     private var transportReady = false
     private var usesSockJs = false
 
     fun connect() {
         disconnect()
+        closedSocket = null
         transportReady = false
         usesSockJs = false
         listener.onConnectionStateChanged(State.CONNECTING)
@@ -40,6 +42,7 @@ class ShowdownConnection(
     fun disconnect() {
         val previousSocket = socket
         socket = null
+        closedSocket = previousSocket
         transportReady = false
         usesSockJs = false
         previousSocket?.close(1000, "Client closed")
@@ -91,11 +94,19 @@ class ShowdownConnection(
 
     private fun isCurrent(webSocket: WebSocket): Boolean = socket === webSocket
 
+    private fun markDisconnected(webSocket: WebSocket, detail: String): Boolean {
+        if (!isCurrent(webSocket) || closedSocket === webSocket) return false
+        closedSocket = webSocket
+        transportReady = false
+        listener.onConnectionStateChanged(State.DISCONNECTED, detail)
+        return true
+    }
+
     private inner class SocketListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) = Unit
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            if (!isCurrent(webSocket)) return
+            if (!isCurrent(webSocket) || closedSocket === webSocket) return
             when (val frame = ShowdownSocketFrames.decode(text)) {
                 ShowdownSocketFrame.Open -> {
                     usesSockJs = true
@@ -107,8 +118,7 @@ class ShowdownConnection(
                     frame.values.forEach(::dispatchProtocol)
                 }
                 is ShowdownSocketFrame.Closed -> {
-                    transportReady = false
-                    listener.onConnectionStateChanged(State.DISCONNECTED, frame.reason)
+                    if (markDisconnected(webSocket, frame.reason)) webSocket.close(1000, frame.reason.ifBlank { "Server closed" })
                 }
                 is ShowdownSocketFrame.Raw -> {
                     usesSockJs = false
@@ -119,13 +129,15 @@ class ShowdownConnection(
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-            if (!isCurrent(webSocket)) return
-            transportReady = false
-            listener.onConnectionStateChanged(State.DISCONNECTED, reason)
+            markDisconnected(webSocket, reason)
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            markDisconnected(webSocket, reason)
         }
 
         override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
-            if (!isCurrent(webSocket)) return
+            if (!isCurrent(webSocket) || closedSocket === webSocket) return
             transportReady = false
             listener.onConnectionStateChanged(State.FAILED, throwable.message.orEmpty())
         }

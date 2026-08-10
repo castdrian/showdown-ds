@@ -76,6 +76,10 @@ class ShowdownConnectionLifecycleTest {
             server.sendText(socket, "c[3000,\"server maintenance\"]")
             assertTrue(listener.disconnected.await(2, TimeUnit.SECONDS))
             assertEquals("server maintenance", listener.states.last().second)
+            server.sendText(socket, "a[\">lobby\\n|late|message\"]")
+            Thread.sleep(100)
+            assertEquals(1, listener.protocolPackets.size)
+            assertFalse(connection.sendGlobal("/search gen9ou"))
         } finally {
             connection.close()
             server.close()
