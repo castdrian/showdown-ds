@@ -21,8 +21,28 @@ class ShowdownAssetPathsTest {
     @Test
     fun fallsBackToTheBaseSpeciesForUnavailableFormSprites() {
         assertEquals(
-            listOf("sprites/xyani/furfroulareine.gif", "sprites/xyani/furfrou.gif"),
+            listOf(
+                "sprites/xyani/furfroulareine.gif",
+                "sprites/xyani/furfrou.gif",
+                "sprites/gen5ani/furfroulareine.gif",
+                "sprites/gen5ani/furfrou.gif",
+                "sprites/dex/furfrou-la-reine.png",
+                "sprites/dex/furfroulareine.png"
+            ),
             ShowdownAssetPaths.battleSpriteCandidates("Furfrou-La Reine", false, BattleSession.SpriteStyle.MODERN_3D)
+        )
+    }
+
+    @Test
+    fun fallsBackToGen5AnimationAndDexSpritesForNewSpecies() {
+        assertEquals(
+            listOf(
+                "sprites/xyani/ironhands.gif",
+                "sprites/gen5ani/ironhands.gif",
+                "sprites/dex/iron-hands.png",
+                "sprites/dex/ironhands.png"
+            ),
+            ShowdownAssetPaths.battleSpriteCandidates("Iron Hands", false, BattleSession.SpriteStyle.MODERN_3D)
         )
     }
 }

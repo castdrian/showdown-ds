@@ -9,13 +9,31 @@ object ShowdownAssetPaths {
     }
 
     fun battleSpriteCandidates(species: String, back: Boolean, style: BattleSession.SpriteStyle): List<String> {
-        val candidates = linkedSetOf(battleSprite(species, back, style))
+        val candidates = linkedSetOf<String>()
         val baseSpecies = species.substringBefore('-').trim()
-        if (baseSpecies.isNotEmpty() && !baseSpecies.equals(species.trim(), ignoreCase = true)) {
-            candidates += battleSprite(baseSpecies, back, style)
+        val speciesNames = buildList {
+            add(species)
+            if (baseSpecies.isNotEmpty() && !baseSpecies.equals(species.trim(), ignoreCase = true)) add(baseSpecies)
         }
+        val collections = buildList {
+            add(if (style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani")
+            if (style == BattleSession.SpriteStyle.MODERN_3D) add("gen5ani")
+        }
+        collections.forEach { collection ->
+            speciesNames.forEach { name -> candidates += battleSprite(name, back, collection) }
+        }
+        if (back) {
+            collections.forEach { collection ->
+                speciesNames.forEach { name -> candidates += battleSprite(name, false, collection) }
+            }
+        }
+        candidates += dexSprite(species)
+        candidates += "sprites/dex/${animationId(species)}.png"
         return candidates.toList()
     }
+
+    private fun battleSprite(species: String, back: Boolean, collection: String) =
+        "sprites/${if (back) "$collection-back" else collection}/${animationId(species)}.gif"
 
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
 
