@@ -1538,10 +1538,14 @@ class CommandDeckView(
             }
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textAlign = Paint.Align.LEFT
-            paint.textSize = readableTextSize(38f, scale, 33f)
             paint.color = if (index == 3 && (entry == "Forfeit" || entry == "Leave battle")) MAGENTA else PAPER
-            val label = fitTextToWidth(entry, bounds.width() - 64f * scale)
-            canvas.drawText(label, bounds.left + 32f * scale, centeredTextBaseline(bounds.centerY()), paint)
+            paint.textSize = fittedTextSize(
+                entry,
+                bounds.width() - 64f * scale,
+                readableTextSize(38f, scale, 33f),
+                readableTextSize(28f, scale, 24f)
+            )
+            canvas.drawText(entry, bounds.left + 32f * scale, centeredTextBaseline(bounds.centerY()), paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }
