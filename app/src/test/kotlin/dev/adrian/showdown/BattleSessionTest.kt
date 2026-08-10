@@ -677,6 +677,45 @@ class BattleSessionTest {
     }
 
     @Test
+    fun illusionTeamPreviewRequestsTheFullTeamOrder() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"requestType\":\"team\",\"side\":{\"pokemon\":[{\"details\":\"Zoroark, L50\",\"baseAbility\":\"Illusion\"},{\"details\":\"Incineroar, L50\"},{\"details\":\"Naganadel, L50\"},{\"details\":\"Mimikyu, L50\"},{\"details\":\"Landorus, L50\"},{\"details\":\"Ferrothorn, L50\"}]}}"
+        )
+
+        assertEquals(6, session.teamPreviewRequiredSize())
+    }
+
+    @Test
+    fun gigantamaxRequestsUseTheOfficialGimmickLabel() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"gigantamax\":true,\"moves\":[{\"move\":\"Max Flare\",\"pp\":5}]}]}"
+        )
+
+        assertEquals("Gigantamax", session.gimmickLabel(BattleSession.BattleGimmick.DYNAMAX))
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+        assertTrue(session.status.contains("Gigantamax"))
+    }
+
+    @Test
+    fun anyTargetMovesExposeOpponentsAndAlliesInMultiBattles() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|doubles",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Naganadel|Naganadel, L50|100/100",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p2b: Druddigon|Druddigon, L50|100/100",
+                "|request|{\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Trick\",\"pp\":10,\"target\":\"any\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+            )
+        )
+
+        assertEquals(listOf("1", "2", "-2"), session.targetOptions().map { it.choice })
+    }
+
+    @Test
     fun pokemonPanelCanSubmitARequestedVoluntarySwitch() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()

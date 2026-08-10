@@ -732,8 +732,9 @@ class CommandDeckView(
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(if (gimmicks.size > 2) 22f else 36f, scale, 20f)
             paint.color = if (selected) Color.rgb(22, 22, 22) else PAPER
-            if (gimmick != BattleSession.BattleGimmick.Z_POWER) canvas.drawText(gimmick.label.first().toString(), card.centerX(), card.top + card.height() * 0.48f, paint)
-            canvas.drawText(gimmick.label, card.centerX(), card.top + card.height() * 0.79f, paint)
+            val label = session.gimmickLabel(gimmick)
+            if (gimmick != BattleSession.BattleGimmick.Z_POWER) canvas.drawText(label.first().toString(), card.centerX(), card.top + card.height() * 0.48f, paint)
+            canvas.drawText(fitTextToWidth(label, card.width() - 24f * scale), card.centerX(), card.top + card.height() * 0.79f, paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }

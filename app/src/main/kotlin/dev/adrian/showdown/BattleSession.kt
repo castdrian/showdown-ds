@@ -302,6 +302,7 @@ class BattleSession {
     private var choiceCanBeCancelled = false
     private var requestNoCancel = false
     private var requestTargetable = true
+    private var activeGMaxAvailable = false
     private val playerSideConditions = mutableListOf<String>()
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
@@ -806,6 +807,7 @@ class BattleSession {
                     return
                 }
                 val gimmick = selectedGimmick
+                val gimmickLabel = gimmick?.let(::gimmickLabel)
                 val selectedChoice = "move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${target?.let { " $it" } ?: ""}"
                 val activeRequest = activeRequests.getOrNull(activeSlotIndex)
                 val isLastActiveChoice = activeRequests.size <= 1 || activeSlotIndex >= activeRequests.lastIndex
@@ -826,8 +828,8 @@ class BattleSession {
                 }
                 val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else selectedChoice
                 val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
-                status = "Move sent: ${gimmick?.label?.plus(" ") ?: ""}${move.name}"
-                appendLog("$playerPokemon chose ${gimmick?.label?.plus(" ") ?: ""}${move.name}.")
+                status = "Move sent: ${gimmickLabel?.plus(" ") ?: ""}${move.name}"
+                appendLog("$playerPokemon chose ${gimmickLabel?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
                 choiceCanBeCancelled = !requestNoCancel && !choiceMayNotBeCancelled
@@ -923,7 +925,7 @@ class BattleSession {
         if (gimmick !in availableGimmicks) return
         selectedGimmick = if (selectedGimmick == gimmick) null else gimmick
         updateTargetOptions()
-        status = selectedGimmick?.let { "${it.label} ready: choose a move" } ?: "Choose a move"
+        status = selectedGimmick?.let { "${gimmickLabel(it)} ready: choose a move" } ?: "Choose a move"
         notifyListeners()
     }
 
@@ -932,7 +934,7 @@ class BattleSession {
         val currentIndex = availableGimmicks.indexOf(selectedGimmick)
         selectedGimmick = availableGimmicks[Math.floorMod(currentIndex + 1, availableGimmicks.size)]
         updateTargetOptions()
-        status = "${selectedGimmick?.label} ready: choose a move"
+        status = "${selectedGimmick?.let(::gimmickLabel)} ready: choose a move"
         notifyListeners()
     }
 
@@ -1193,6 +1195,7 @@ class BattleSession {
         choiceCanBeCancelled = false
         requestNoCancel = false
         requestTargetable = true
+        activeGMaxAvailable = false
         decisionKind = DecisionKind.WAIT
         panel = Panel.MOVES
         status = "Battle starting"
@@ -1742,10 +1745,7 @@ class BattleSession {
                 battlePhase = BattlePhase.TEAM_PREVIEW
                 decisionKind = DecisionKind.TEAM_PREVIEW
                 val availableTeamSize = team.indices.count { !teamCondition(it).contains("FNT", true) }
-                val requestedTeamSize = request.optInt("chosenTeamSize", 0).takeIf { it > 0 }
-                    ?: request.optInt("maxChosenTeamSize", 0).takeIf { it > 0 }
-                    ?: protocolTeamPreviewSize.takeIf { it > 0 }
-                    ?: defaultTeamPreviewSize()
+                val requestedTeamSize = teamPreviewSize(request, availableTeamSize)
                 teamPreviewRequiredSize = requestedTeamSize.coerceIn(1, maxOf(1, availableTeamSize))
                 decisionAvailable = availableTeamSize > 0
                 panel = Panel.TEAM
@@ -2385,6 +2385,8 @@ class BattleSession {
     }
 
     private fun updateAvailableGimmicks(active: JSONObject) {
+        activeGMaxAvailable = active.optBoolean("gigantamax") ||
+            active.optJSONObject("maxMoves")?.optBoolean("gigantamax") == true
         val updated = mutableListOf<BattleGimmick>()
         val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
         if (zMoves != null && (0 until zMoves.length()).any { !zMoves.isNull(it) }) updated += BattleGimmick.Z_POWER
@@ -2404,6 +2406,25 @@ class BattleSession {
         else -> gimmick.choiceSuffix
     }
 
+    fun gimmickLabel(gimmick: BattleGimmick) = if (gimmick == BattleGimmick.DYNAMAX && activeGMaxAvailable) {
+        "Gigantamax"
+    } else {
+        gimmick.label
+    }
+
+    private fun teamPreviewSize(request: JSONObject, availableTeamSize: Int): Int {
+        request.optInt("chosenTeamSize", 0).takeIf { it > 0 }?.let { return it }
+        request.optInt("maxChosenTeamSize", 0).takeIf { it > 0 }?.let { return it }
+        protocolTeamPreviewSize.takeIf { it > 0 }?.let { return it }
+        val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon")
+        val hasIllusion = pokemon != null && (0 until pokemon.length()).any { index ->
+            val entry = pokemon.optJSONObject(index) ?: return@any false
+            val ability = entry.optString("baseAbility").ifBlank { entry.optString("ability") }
+            ability.filter(Char::isLetterOrDigit).equals("illusion", true)
+        }
+        return if (hasIllusion) availableTeamSize else defaultTeamPreviewSize()
+    }
+
     private fun defaultTeamPreviewSize() = when (gameType.lowercase()) {
         "doubles" -> 2
         "triples", "rotation" -> 3
@@ -2418,15 +2439,18 @@ class BattleSession {
         val target = move.target.lowercase()
         val allySlots = activeSlots(playerActiveCombatants, activeRequests.size).map { -it }
         val foeSlots = activeSlots(opponentActiveCombatants, activeRequests.size)
+        val selfSlot = -(activeSlotIndex + 1)
         val options = when (target) {
             "adjacentally" -> allySlots
-                .filterNot { it == -(activeSlotIndex + 1) }
+                .filterNot { it == selfSlot }
                 .map { TargetOption("Ally ${-it}", it.toString()) }
             "adjacentallyorself" -> allySlots.map { slot ->
-                val label = "Ally ${-slot}" + if (slot == -(activeSlotIndex + 1)) " (self)" else ""
+                val label = "Ally ${-slot}" + if (slot == selfSlot) " (self)" else ""
                 TargetOption(label, slot.toString())
             }
-            "normal", "adjacentfoe", "any" -> foeSlots.map { TargetOption("Foe $it", it.toString()) }
+            "normal", "adjacentfoe" -> foeSlots.map { TargetOption("Foe $it", it.toString()) }
+            "any" -> (foeSlots.map { TargetOption("Foe $it", it.toString()) } +
+                allySlots.filterNot { it == selfSlot }.map { TargetOption("Ally ${-it}", it.toString()) })
             else -> emptyList()
         }
         targetOptions += options
