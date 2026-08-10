@@ -991,7 +991,9 @@ class BattleSession {
     }
 
     fun applyProtocolPacket(lines: List<String>) {
-        val packet = lines.filter { it.startsWith('|') }
+        val rawPacket = lines.filter { it.startsWith('|') }
+        synchronizePlayerSlot(rawPacket)
+        val packet = visibleProtocolLines(rawPacket)
         if (packet.any { it.startsWith("|init|battle") }) protocolHistory.clear()
         protocolHistory += packet
         val events = mutableListOf<String>()
@@ -1154,6 +1156,42 @@ class BattleSession {
             }
         }
         notifyListeners()
+    }
+
+    private fun synchronizePlayerSlot(lines: List<String>) {
+        val username = localUsername?.takeIf(String::isNotBlank) ?: return
+        lines.asSequence()
+            .map { it.split('|') }
+            .firstOrNull { fields -> fields.getOrNull(1) == "player" && fields.getOrNull(3)?.equals(username, true) == true }
+            ?.getOrNull(2)
+            ?.takeIf(String::isNotBlank)
+            ?.let { playerSlot = it }
+    }
+
+    private fun visibleProtocolLines(lines: List<String>): List<String> {
+        val visible = mutableListOf<String>()
+        var index = 0
+        while (index < lines.size) {
+            val fields = lines[index].split('|')
+            if (fields.getOrNull(1) == "split") {
+                val side = fields.getOrNull(2)?.removePrefix("p")?.toIntOrNull()
+                val secret = lines.getOrNull(index + 1)
+                val shared = lines.getOrNull(index + 2)
+                if (side != null) {
+                    val selected = if (isPlayerSide("p$side")) secret else shared
+                    selected?.takeIf(String::isNotBlank)?.let(visible::add)
+                    index += when {
+                        shared != null -> 3
+                        secret != null -> 2
+                        else -> 1
+                    }
+                    continue
+                }
+            }
+            visible += lines[index]
+            index += 1
+        }
+        return visible
     }
 
     private fun applyInit(fields: List<String>) {

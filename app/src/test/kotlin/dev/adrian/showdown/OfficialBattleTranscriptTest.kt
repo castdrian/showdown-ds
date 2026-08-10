@@ -74,6 +74,37 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun selectsTheViewerSideOfOfficialSplitReplayPackets() {
+        val playerOne = BattleSession().apply { setLocalUsername("ADRIAN") }
+        playerOne.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|split|p1",
+                "|-damage|p1a: Mewtwo|90/100",
+                "|-damage|p1a: Mewtwo|80/100"
+            )
+        )
+
+        val playerTwo = BattleSession().apply { setLocalUsername("OPPONENT") }
+        playerTwo.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|split|p1",
+                "|-damage|p1a: Mewtwo|90/100",
+                "|-damage|p1a: Mewtwo|80/100"
+            )
+        )
+
+        assertEquals("90/100", playerOne.playerHp)
+        assertEquals("80/100", playerTwo.opponentHp)
+        assertFalse(playerOne.protocolHistory().any { it.startsWith("|split|") })
+    }
+
+    @Test
     fun tracksOfficialBattlePhasesAndClearsTheMessageFeedMarker() {
         val session = BattleSession()
 
