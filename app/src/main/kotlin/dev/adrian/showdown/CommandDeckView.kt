@@ -588,12 +588,14 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        val labelSize = readableTextSize(18f, scale, 16f, 14f).coerceAtMost(bounds.height() * 0.24f)
+        val labelInset = 16f * scale
+        val labelWidth = bounds.width() - labelInset * 2f
+        val labelSize = readableTextSize(18f, scale, 14f, 12f).coerceAtMost(bounds.height() * 0.22f)
         paint.textSize = labelSize
         paint.color = Color.rgb(159, 221, 226)
         drawOutlinedText(
             canvas,
-            label,
+            fitTextToWidth(label, labelWidth),
             bounds.centerX(),
             bounds.top + 24f * scale,
             Color.rgb(3, 14, 22),
@@ -778,10 +780,12 @@ class CommandDeckView(
             canvas.drawRoundRect(cancelChoiceBounds!!, 18f * scale, 18f * scale, paint)
             paint.style = Paint.Style.FILL
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = readableTextSize(22f, scale, 19f)
+            val buttonTextInset = 18f * scale
+            paint.textSize = readableTextSize(22f, scale, 18f, 14f).coerceAtMost(26f * scale)
             paint.color = PAPER
+            val buttonLabel = fitTextToWidth("CANCEL CHOICE", cancelChoiceBounds!!.width() - buttonTextInset * 2f)
             val baseline = cancelChoiceBounds!!.centerY() - (paint.ascent() + paint.descent()) / 2f
-            canvas.drawText("CANCEL CHOICE", cancelChoiceBounds!!.centerX(), baseline, paint)
+            canvas.drawText(buttonLabel, cancelChoiceBounds!!.centerX(), baseline, paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }
