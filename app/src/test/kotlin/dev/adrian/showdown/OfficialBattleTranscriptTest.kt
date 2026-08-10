@@ -48,6 +48,32 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun appliesOfficialOpenTeamSheetPacketsToPartyInspection() {
+        val session = BattleSession()
+        session.setLocalUsername("ADRIAN")
+        session.setTeamDetailNameResolvers(
+            { value -> mapOf("hydropump" to "Hydro Pump", "voltswitch" to "Volt Switch", "willowisp" to "Will-O-Wisp", "protect" to "Protect", "earthquake" to "Earthquake", "dragonclaw" to "Dragon Claw", "rockslide" to "Rock Slide")[value] ?: value },
+            { value -> mapOf("leftovers" to "Leftovers", "choicescarf" to "Choice Scarf")[value] ?: value },
+            { value -> mapOf("levitate" to "Levitate", "roughskin" to "Rough Skin")[value] ?: value }
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|showteam|p2|Rotom-Wash||leftovers|levitate|hydropump,voltswitch,willowisp,protect|||F||||]Garchomp||choicescarf|roughskin|earthquake,dragonclaw,rockslide,protect|||M||||"
+            )
+        )
+
+        assertEquals(2, session.opponentPartyDetails().size)
+        assertEquals("Rotom-Wash", session.opponentPartyDetails()[0].name)
+        assertEquals("Leftovers", session.opponentPartyDetails()[0].item)
+        assertEquals("Levitate", session.opponentPartyDetails()[0].ability)
+        assertEquals(listOf("Hydro Pump", "Volt Switch", "Will-O-Wisp", "Protect"), session.opponentPartyDetails()[0].moves)
+        assertEquals("♂", session.opponentPartyDetails()[1].gender)
+        assertTrue(session.battleLog().any { it.contains("OPPONENT revealed their team") })
+    }
+
+    @Test
     fun tracksOfficialBattlePhasesAndClearsTheMessageFeedMarker() {
         val session = BattleSession()
 

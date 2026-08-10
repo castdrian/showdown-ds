@@ -287,10 +287,12 @@ class MainActivity : Activity() {
         session.setMoveTypeResolver(moveDex::typeFor)
         session.setMoveInfoResolver(moveDex::infoFor)
         session.setPokemonTypeResolver(moveDex::typesFor)
+        session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
         moveDex.load {
             session.setMoveTypeResolver(moveDex::typeFor)
             session.setMoveInfoResolver(moveDex::infoFor)
             session.setPokemonTypeResolver(moveDex::typesFor)
+            session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
         }
         battleAudio = BattleAudio(this, spriteCache, session)
         battleAudio.updateOptions(session)

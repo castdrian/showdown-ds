@@ -33,6 +33,12 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     fun abilityNames() = abilityNames.toList()
 
+    fun moveNameFor(move: String) = displayName(move, moveNames)
+
+    fun itemNameFor(item: String) = displayName(item, itemNames)
+
+    fun abilityNameFor(ability: String) = displayName(ability, abilityNames)
+
     fun natureNames() = NATURE_NAMES
 
     fun typeNames() = TYPE_NAMES
@@ -170,6 +176,9 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
             .replace("♀", "f")
             .replace("♂", "m")
             .filter(Char::isLetterOrDigit)
+
+        private fun displayName(value: String, names: List<String>) =
+            names.firstOrNull { moveId(it) == moveId(value) } ?: value
 
         private val NATURE_NAMES = listOf(
             "Adamant", "Bashful", "Bold", "Brave", "Calm", "Careful", "Docile", "Gentle", "Hardy", "Hasty",

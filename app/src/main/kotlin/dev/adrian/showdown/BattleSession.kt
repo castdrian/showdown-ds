@@ -223,6 +223,9 @@ class BattleSession {
     private var moveTypeResolver: ((String) -> String?)? = null
     private var moveInfoResolver: ((String) -> MoveInfo?)? = null
     private var pokemonTypeResolver: ((String) -> List<String>?)? = null
+    private var moveNameResolver: ((String) -> String)? = null
+    private var itemNameResolver: ((String) -> String)? = null
+    private var abilityNameResolver: ((String) -> String)? = null
     private val availableMatchFormats = MatchFormat.defaults.toMutableList()
     private val battleLog = mutableListOf("Battle started.", "Incineroar entered the field.", "Tapu Koko's Electric Surge activated!")
     private val markupEntries = mutableMapOf<String, String>()
@@ -458,6 +461,28 @@ class BattleSession {
         moves.clear()
         moves += resolvedMoves
         playerDetails = playerDetails.copy(moves = moves.map { it.name })
+        notifyListeners()
+    }
+
+    fun setTeamDetailNameResolvers(
+        moveResolver: (String) -> String,
+        itemResolver: (String) -> String,
+        abilityResolver: (String) -> String
+    ) {
+        moveNameResolver = moveResolver
+        itemNameResolver = itemResolver
+        abilityNameResolver = abilityResolver
+        val updatedTeam = teamDetails.map(::resolveTeamDetailNames)
+        val updatedPlayer = resolveTeamDetailNames(playerDetails)
+        val updatedOpponent = resolveTeamDetailNames(opponentDetails)
+        val updatedOpponentTeam = opponentTeamDetails.map(::resolveTeamDetailNames)
+        if (updatedTeam == teamDetails && updatedPlayer == playerDetails && updatedOpponent == opponentDetails && updatedOpponentTeam == opponentTeamDetails) return
+        teamDetails.clear()
+        teamDetails += updatedTeam
+        playerDetails = updatedPlayer
+        opponentDetails = updatedOpponent
+        opponentTeamDetails.clear()
+        opponentTeamDetails += updatedOpponentTeam
         notifyListeners()
     }
 
@@ -985,6 +1010,7 @@ class BattleSession {
                     "player" -> applyPlayer(fields)
                     "gametype" -> applyGameType(fields)
                     "clearpoke" -> opponentTeamDetails.clear()
+                    "showteam" -> applyShowTeam(fields)
                     "gen" -> fields.getOrNull(2)?.toIntOrNull()?.let { appendLog("Generation $it battle.") }
                     "tier" -> if (fields.size > 2) {
                         format = fields[2]
@@ -1421,6 +1447,71 @@ class BattleSession {
             )
         )
     }
+
+    private fun applyShowTeam(fields: List<String>) {
+        val side = fields.getOrNull(2)?.trim().orEmpty()
+        val packedTeam = fields.drop(3).joinToString("|")
+        if (side.isBlank() || packedTeam.isBlank()) return
+        val sets = ShowdownTeamCodec.unpack(packedTeam).take(6)
+        if (sets.isEmpty()) return
+        val playerSide = isPlayerSide(side)
+        val existingParty = if (playerSide) teamDetails.toList() else opponentTeamDetails.toList()
+        val revealedParty = sets.mapIndexed { index, set ->
+            val existing = if (playerSide) {
+                existingParty.getOrNull(index)
+            } else {
+                val name = set.nickname.ifBlank { set.species }
+                existingParty.firstOrNull { it.name.equals(name, true) }
+            }
+            revealedPokemonDetails(set, existing)
+        }
+        if (playerSide) {
+            team.clear()
+            team += revealedParty.map { it.name }
+            teamDetails.clear()
+            teamDetails += revealedParty
+            focusedTeam = focusedTeam.coerceIn(0, team.lastIndex)
+            teamDetails.firstOrNull { it.name.equals(playerDetails.name, true) }?.let { playerDetails = it }
+        } else {
+            opponentTeamDetails.clear()
+            opponentTeamDetails += revealedParty
+            revealedParty.firstOrNull { it.name.equals(opponentDetails.name, true) }?.let { opponentDetails = it }
+        }
+        appendLog("${sideNames[side] ?: side} revealed their team.")
+    }
+
+    private fun revealedPokemonDetails(set: ShowdownTeamSet, existing: PokemonDetails?): PokemonDetails {
+        val name = set.nickname.ifBlank { set.species }
+        val types = resolvedTypes(set.species, existing?.types.orEmpty())
+        val gender = when (set.gender.uppercase()) {
+            "M" -> "♂"
+            "F" -> "♀"
+            else -> existing?.gender.orEmpty()
+        }
+        return PokemonDetails(
+            name = name,
+            types = types,
+            level = set.level.toString(),
+            gender = gender,
+            hp = existing?.hp ?: "100/100",
+            condition = existing?.condition ?: "READY",
+            ability = set.ability.takeIf(String::isNotBlank)?.let { abilityNameResolver?.invoke(it) ?: it }
+                ?: existing?.ability ?: "Unknown ability",
+            item = set.item.takeIf(String::isNotBlank)?.let { itemNameResolver?.invoke(it) ?: it }
+                ?: existing?.item ?: "Unknown item",
+            moves = set.moves.map { moveNameResolver?.invoke(it) ?: it }.ifEmpty { existing?.moves.orEmpty() },
+            stats = existing?.stats.orEmpty(),
+            pokeball = set.pokeBall.ifBlank { existing?.pokeball ?: "pokeball" }
+        )
+    }
+
+    private fun resolveTeamDetailNames(details: PokemonDetails) = details.copy(
+        ability = details.ability.takeUnless { it.isBlank() || it == "Unknown ability" }?.let { abilityNameResolver?.invoke(it) ?: it }
+            ?: details.ability,
+        item = details.item.takeUnless { it.isBlank() || it == "Unknown item" }?.let { itemNameResolver?.invoke(it) ?: it }
+            ?: details.item,
+        moves = details.moves.map { moveNameResolver?.invoke(it) ?: it }
+    )
 
     private fun queueEntry(playerSide: Boolean): Long {
         val nowNanos = System.nanoTime()
