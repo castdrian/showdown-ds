@@ -31,7 +31,7 @@ object ShowdownChangelog {
             "v0.1.0-alpha.2",
             listOf(
                 "Added a signed installable alpha release for Android.",
-                "Added battle audio diagnostics and adjustable replay speed.",
+                "Added adjustable replay speed.",
                 "Refined the custom Thor UI, battle log contrast, and readable battle information."
             )
         ),

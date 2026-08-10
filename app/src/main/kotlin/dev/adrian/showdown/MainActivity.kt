@@ -2479,9 +2479,6 @@ class MainActivity : Activity() {
                 "Support this project",
                 "If Showdown DS is useful to you, sponsor development on GitHub.",
                 "",
-                "Battle audio",
-                "Run an audio check for sample loading, cue timing, and playback acceptance. Speaker loudness still needs a listen.",
-                "",
                 "Useful commands",
                 "/help for server commands",
                 "/rules for room rules",
@@ -2497,10 +2494,6 @@ class MainActivity : Activity() {
             text = "Sponsor on GitHub"
             styleDynamicDialogButton(this)
         }
-        val audioButton = Button(this).apply {
-            text = "Run audio check"
-            styleDynamicDialogButton(this)
-        }
         val pokedexButton = Button(this).apply {
             text = "Open Pokédex"
             styleDynamicDialogButton(this)
@@ -2514,7 +2507,6 @@ class MainActivity : Activity() {
             addView(ScrollView(this@MainActivity).apply { addView(resources, -1, -2) }, LinearLayout.LayoutParams(-1, 0, 1f))
             addView(changelogButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(sponsorButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
-            addView(audioButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(pokedexButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
         }
         val dialog = ShowdownDialogBuilder(this)
@@ -2536,17 +2528,6 @@ class MainActivity : Activity() {
                 startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/sponsors/castdrian")))
             }.onFailure {
                 session.setConnectionStatus("Open github.com/sponsors/castdrian to support the project.")
-            }
-        }
-        audioButton.setOnClickListener {
-            if (!session.soundEffectsEnabled) {
-                session.setConnectionStatus("Enable sound effects from Menu before previewing battle sounds.")
-            } else {
-                session.setConnectionStatus("Running battle audio check…")
-                battleAudio.playCuePreview {
-                    dialog.dismiss()
-                    showAudioDiagnosticDialog(battleAudio.diagnosticSnapshot())
-                }
             }
         }
     }
@@ -2578,51 +2559,6 @@ class MainActivity : Activity() {
             .setTitle("What's new")
             .setView(ScrollView(this).apply { addView(content, -1, -2) })
             .setNegativeButton("Close", null)
-            .show()
-    }
-
-    private fun showAudioDiagnosticDialog(snapshot: BattleAudioDiagnosticSnapshot) {
-        val density = resources.displayMetrics.density
-        val eventByCue = snapshot.events.associateBy { it.cue }
-        val cueLines = BattleAudioCue.values().map { cue ->
-            val event = eventByCue[cue]
-            val state = when {
-                event == null -> "not played"
-                !event.playbackAccepted -> "rejected"
-                else -> "accepted, +${event.actualDelayMillis} ms start (${event.plannedDelayMillis} ms queued)"
-            }
-            "${cue.name.replace('_', ' ')}  $state"
-        }
-        val result = when {
-            snapshot.passed -> "PASS  All five samples loaded and all five SoundPool starts were accepted."
-            snapshot.loadedCues.isEmpty() -> "FAIL  No battle samples reported as loaded."
-            else -> "CHECK  The audio engine reported an incomplete preview."
-        }
-        val report = TextView(this).apply {
-            setTextSize(17f)
-            setTextColor(0xffdceff2.toInt())
-            setTextIsSelectable(true)
-            val failureLine = snapshot.failedCues.takeIf { it.isNotEmpty() }?.let { failed ->
-                "Failed samples  ${failed.joinToString(" · ") { it.name.replace('_', ' ') }}"
-            }
-            text = listOf(
-                result,
-                "",
-                "Loaded ${snapshot.loadedCues.size}/${BattleAudioCue.values().size} samples",
-                "Accepted ${snapshot.events.count { it.playbackAccepted }}/${BattleAudioCue.values().size} starts",
-                failureLine,
-                "",
-                cueLines.joinToString("\n"),
-                "",
-                "This verifies the app audio path and timing. It cannot measure the physical speaker, amplifier, or your listening volume."
-            ).filterNotNull().joinToString("\n")
-            setPadding((12f * density).toInt(), (8f * density).toInt(), (12f * density).toInt(), (8f * density).toInt())
-        }
-        ShowdownDialogBuilder(this)
-            .setTitle("Battle audio check")
-            .setView(report)
-            .setNegativeButton("Close", null)
-            .create()
             .show()
     }
 
