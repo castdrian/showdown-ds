@@ -83,6 +83,9 @@ class BattleSession {
     enum class BattleGimmick(val choiceSuffix: String, val label: String) {
         Z_POWER("zmove", "Z-Power"),
         MEGA_EVOLUTION("mega", "Mega Evolution"),
+        MEGA_EVOLUTION_X("megax", "Mega X"),
+        MEGA_EVOLUTION_Y("megay", "Mega Y"),
+        ULTRA_BURST("ultra", "Ultra Burst"),
         DYNAMAX("dynamax", "Dynamax"),
         TERASTALLIZATION("terastallize", "Terastallize")
     }
@@ -2285,10 +2288,14 @@ class BattleSession {
 
     private fun updateAvailableGimmicks(active: JSONObject) {
         val updated = mutableListOf<BattleGimmick>()
-        if (active.has("canZMove") && !active.isNull("canZMove")) updated += BattleGimmick.Z_POWER
+        val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
+        if (zMoves != null && (0 until zMoves.length()).any { !zMoves.isNull(it) }) updated += BattleGimmick.Z_POWER
         if (active.optBoolean("canMegaEvo")) updated += BattleGimmick.MEGA_EVOLUTION
+        if (active.optBoolean("canMegaEvoX")) updated += BattleGimmick.MEGA_EVOLUTION_X
+        if (active.optBoolean("canMegaEvoY")) updated += BattleGimmick.MEGA_EVOLUTION_Y
+        if (active.optBoolean("canUltraBurst")) updated += BattleGimmick.ULTRA_BURST
         if (active.optBoolean("canDynamax")) updated += BattleGimmick.DYNAMAX
-        if (active.has("canTerastallize") && !active.isNull("canTerastallize")) updated += BattleGimmick.TERASTALLIZATION
+        if (active.optString("canTerastallize").isNotBlank()) updated += BattleGimmick.TERASTALLIZATION
         availableGimmicks.clear()
         availableGimmicks += updated
         if (selectedGimmick !in availableGimmicks) selectedGimmick = null

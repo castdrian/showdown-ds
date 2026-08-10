@@ -37,7 +37,7 @@ class CommandDeckView(
     private val moveBounds = arrayOfNulls<RectF>(4)
     private val teamBounds = arrayOfNulls<RectF>(6)
     private val menuBounds = arrayOfNulls<RectF>(BattleSession.MENU_ITEM_COUNT)
-    private val gimmickBounds = arrayOfNulls<RectF>(4)
+    private val gimmickBounds = arrayOfNulls<RectF>(7)
     private val targetBounds = arrayOfNulls<RectF>(4)
     private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
     private val requestedTeamSprites = mutableSetOf<String>()

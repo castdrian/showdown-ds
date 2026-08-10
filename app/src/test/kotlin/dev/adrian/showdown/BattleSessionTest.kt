@@ -600,6 +600,27 @@ class BattleSessionTest {
     }
 
     @Test
+    fun requestExposesMegaVariantsAndUltraBurstWithOfficialChoiceSuffixes() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|request|{\"active\":[{\"canMegaEvoX\":true,\"canMegaEvoY\":true,\"canUltraBurst\":true,\"moves\":[{\"move\":\"Flare Blitz\",\"type\":\"Fire\",\"pp\":15}]}]}")
+
+        assertEquals(
+            listOf(
+                BattleSession.BattleGimmick.MEGA_EVOLUTION_X,
+                BattleSession.BattleGimmick.MEGA_EVOLUTION_Y,
+                BattleSession.BattleGimmick.ULTRA_BURST
+            ),
+            session.availableGimmicks()
+        )
+
+        session.selectGimmick(BattleSession.BattleGimmick.MEGA_EVOLUTION_X)
+        session.confirmSelection()
+
+        assertTrue(session.chatMessages().last().contains("/choose move 1 megax"))
+    }
+
+    @Test
     fun detailsReflectKnownBattleInformation() {
         val session = BattleSession()
 
