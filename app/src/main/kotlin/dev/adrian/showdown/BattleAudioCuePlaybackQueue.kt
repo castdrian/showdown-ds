@@ -16,7 +16,11 @@ class BattleAudioCuePlaybackQueue {
     @Synchronized
     fun enqueue(cue: BattleAudioCue, requestedAtMillis: Long): BattleAudioCuePlayback {
         val startAtMillis = maxOf(requestedAtMillis, nextAvailableAtMillis)
-        nextAvailableAtMillis = startAtMillis + cue.playbackDurationMillis
+        nextAvailableAtMillis = startAtMillis + CUE_ALIGNMENT_WINDOW_MILLIS
         return BattleAudioCuePlayback(cue, startAtMillis - requestedAtMillis)
+    }
+
+    private companion object {
+        const val CUE_ALIGNMENT_WINDOW_MILLIS = 80L
     }
 }

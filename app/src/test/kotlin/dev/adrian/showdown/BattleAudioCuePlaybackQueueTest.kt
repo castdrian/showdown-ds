@@ -5,12 +5,12 @@ import org.junit.Test
 
 class BattleAudioCuePlaybackQueueTest {
     @Test
-    fun schedulesTheNextCueAfterThePreviousCueFinishes() {
+    fun keepsTheNextCueInsideTheAnimationWindow() {
         val queue = BattleAudioCuePlaybackQueue()
 
         assertEquals(0L, queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L).delayMillis)
         assertEquals(
-            BattleAudioCue.GENERIC_DAMAGE.playbackDurationMillis,
+            80L,
             queue.enqueue(BattleAudioCue.SUPER_EFFECTIVE, 1_000L).delayMillis
         )
     }
@@ -24,7 +24,7 @@ class BattleAudioCuePlaybackQueueTest {
             0L,
             queue.enqueue(
                 BattleAudioCue.STAT_BOOST,
-                1_000L + BattleAudioCue.GENERIC_DAMAGE.playbackDurationMillis
+                1_080L
             ).delayMillis
         )
     }
