@@ -31,7 +31,30 @@ class ThorDisplayProfileTest {
     }
 
     @Test
-    fun scalesTheLowerPanelFloorToFourteenSpAtThorDensity() {
+    fun scalesTheLowerPanelFloorToEighteenSpAtThorDensity() {
+        assertEquals(
+            ThorDisplayProfile.LOWER_MINIMUM_TEXT_SP * 2.625f,
+            ThorDisplayProfile.minimumReadablePixels(
+                ThorDisplayProfile.LOWER_WIDTH_PIXELS,
+                ThorDisplayProfile.LOWER_HEIGHT_PIXELS,
+                2.625f
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun supportsCompactSupportingTextWithoutLoweringPrimaryTextFloor() {
+        assertEquals(
+            14f * 2.625f,
+            ThorDisplayProfile.minimumReadablePixels(
+                ThorDisplayProfile.LOWER_WIDTH_PIXELS,
+                ThorDisplayProfile.LOWER_HEIGHT_PIXELS,
+                2.625f,
+                14f
+            ),
+            0.001f
+        )
         assertEquals(
             ThorDisplayProfile.LOWER_MINIMUM_TEXT_SP * 2.625f,
             ThorDisplayProfile.minimumReadablePixels(

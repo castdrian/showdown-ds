@@ -15,7 +15,7 @@ object ThorDisplayProfile {
     const val ENCLOSURE_WIDTH_MILLIMETRES = 150f
     const val ENCLOSURE_HEIGHT_MILLIMETRES = 94f
     const val ENCLOSURE_DEPTH_MILLIMETRES = 25.6f
-    const val LOWER_MINIMUM_TEXT_SP = 14f
+    const val LOWER_MINIMUM_TEXT_SP = 18f
 
     fun kindFor(widthPixels: Int, heightPixels: Int): ThorDisplayKind = if (
         widthPixels <= 1400 && heightPixels >= 900 && widthPixels.toFloat() / heightPixels < 1.4f
@@ -25,8 +25,13 @@ object ThorDisplayProfile {
         ThorDisplayKind.UPPER
     }
 
-    fun minimumReadablePixels(widthPixels: Int, heightPixels: Int, scaledDensity: Float = 1f): Float = when (kindFor(widthPixels, heightPixels)) {
+    fun minimumReadablePixels(
+        widthPixels: Int,
+        heightPixels: Int,
+        scaledDensity: Float = 1f,
+        minimumTextSp: Float = LOWER_MINIMUM_TEXT_SP
+    ): Float = when (kindFor(widthPixels, heightPixels)) {
         ThorDisplayKind.UPPER -> 24f
-        ThorDisplayKind.LOWER -> maxOf(32f, LOWER_MINIMUM_TEXT_SP * scaledDensity)
+        ThorDisplayKind.LOWER -> maxOf(32f, minimumTextSp * scaledDensity)
     }
 }

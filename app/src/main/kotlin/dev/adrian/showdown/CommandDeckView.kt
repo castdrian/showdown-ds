@@ -435,7 +435,7 @@ class CommandDeckView(
             return
         }
         val palette = movePalette(move.type)
-        val detailPadding = 32f * scale
+        val detailPadding = 24f * scale
         val detailContent = RectF(
             bounds.left + detailPadding,
             bounds.top + detailPadding,
@@ -464,7 +464,7 @@ class CommandDeckView(
         val metricGap = 12f * scale
         val metricWidth = (detailContent.width() - metricGap) / 2f
         val metricTop = typeBadge.bottom + 14f * scale
-        val metricBottom = metricTop + 88f * scale
+        val metricBottom = metricTop + 102f * scale
         drawMoveMetric(
             canvas,
             RectF(detailContent.left, metricTop, detailContent.left + metricWidth, metricBottom),
@@ -522,7 +522,7 @@ class CommandDeckView(
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
-        paint.textSize = readableTextSize(25f, scale, 22f)
+        paint.textSize = readableTextSize(25f, scale, 22f, 16f)
         val labelLeft = bounds.left + 70f * scale
         val label = fitTextToWidth("$type  ·  $category", bounds.right - labelLeft - 12f * scale)
         drawOutlinedText(canvas, label, labelLeft, centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.25f * scale)
@@ -538,13 +538,18 @@ class CommandDeckView(
         canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(17f, scale, 15f)
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(17f, scale, 15f, 14f)
+        val labelWidth = bounds.width() - 24f * scale
+        val measuredLabelWidth = paint.measureText(label)
+        if (measuredLabelWidth > labelWidth) {
+            paint.textSize *= labelWidth / measuredLabelWidth
+        }
         paint.color = Color.rgb(159, 221, 226)
-        canvas.drawText(label, bounds.centerX(), bounds.top + 27f * scale, paint)
+        canvas.drawText(label, bounds.centerX(), bounds.top + 31f * scale, paint)
         paint.textSize = readableTextSize(33f, scale, 29f)
         paint.color = PAPER
-        canvas.drawText(value, bounds.centerX(), bounds.top + 70f * scale, paint)
+        canvas.drawText(value, bounds.centerX(), bounds.top + 81f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
     }
 
@@ -573,7 +578,7 @@ class CommandDeckView(
         canvas.drawRoundRect(summary, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(20f, scale, 18f)
+        paint.textSize = readableTextSize(20f, scale, 18f, 14f)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText("FIELD STATUS", detailContent.left, summary.top + 31f * scale, paint)
         val lines = mutableListOf<String>()
@@ -586,10 +591,10 @@ class CommandDeckView(
         info.opponentBoosts.takeIf { it.isNotEmpty() }?.let { lines += "Opp. boosts  ${formatBoosts(it)}" }
         if (lines.isEmpty()) lines += "No active effects"
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(21f, scale, 18f)
+        paint.textSize = readableTextSize(21f, scale, 18f, 16f)
         paint.color = PAPER
-        val lineHeight = 35f * scale
-        var baseline = summary.top + 68f * scale
+        val lineHeight = maxOf(42f * scale, paint.textSize * 1.32f)
+        var baseline = summary.top + 76f * scale
         val maxLines = ((summary.bottom - baseline - 16f * scale) / lineHeight).toInt().coerceAtLeast(1)
         val visibleLines = if (lines.size <= maxLines) {
             lines
@@ -774,8 +779,8 @@ class CommandDeckView(
         val bubbleRed = Color.red(bubble)
         val bubbleGreen = Color.green(bubble)
         val bubbleBlue = Color.blue(bubble)
-        var glyphTop = height
-        var glyphBottom = -1
+        var glyphWeight = 0f
+        var glyphCenterSum = 0f
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val index = y * width + x
@@ -785,14 +790,12 @@ class CommandDeckView(
                 val glyphAlpha = if (whiteAmount < 0.08f) 0 else (alpha * whiteAmount).toInt()
                 background[index] = Color.argb(alpha, bubbleRed, bubbleGreen, bubbleBlue)
                 glyph[index] = Color.argb(glyphAlpha, 255, 255, 255)
-                if (glyphAlpha > 20) {
-                    glyphTop = minOf(glyphTop, y)
-                    glyphBottom = maxOf(glyphBottom, y)
-                }
+                glyphWeight += glyphAlpha
+                glyphCenterSum += y * glyphAlpha
             }
         }
-        val glyphCenterY = if (glyphBottom >= glyphTop) (glyphTop + glyphBottom + 1) / 2f else height / 2f
-        val glyphOffsetY = height / 2f - glyphCenterY + 6f
+        val glyphCenterY = if (glyphWeight > 0f) glyphCenterSum / glyphWeight else height / 2f
+        val glyphOffsetY = height / 2f - glyphCenterY + 1f
         val centered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         centered.setPixels(background, 0, width, 0, 0, width, height)
         val glyphBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -1281,13 +1284,19 @@ class CommandDeckView(
 
     private fun centeredTextBaseline(centerY: Float): Float = centerY - (paint.ascent() + paint.descent()) / 2f
 
-    private fun readableTextSize(designPixels: Float, scale: Float, minimumPixels: Float = 12f): Float = maxOf(
+    private fun readableTextSize(
+        designPixels: Float,
+        scale: Float,
+        minimumPixels: Float = 12f,
+        minimumDisplaySp: Float = ThorDisplayProfile.LOWER_MINIMUM_TEXT_SP
+    ): Float = maxOf(
         designPixels * scale,
         minimumPixels * scale,
         ThorDisplayProfile.minimumReadablePixels(
             width.toInt(),
             height.toInt(),
-            resources.displayMetrics.density * resources.configuration.fontScale
+            resources.displayMetrics.density * resources.configuration.fontScale,
+            minimumDisplaySp
         )
     )
 
