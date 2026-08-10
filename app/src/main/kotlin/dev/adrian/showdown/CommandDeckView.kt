@@ -435,7 +435,9 @@ class CommandDeckView(
             return
         }
         val palette = movePalette(move.type)
-        val detailPadding = 24f * scale
+        val compact = bounds.height() < 520f * scale
+        val veryCompact = bounds.height() < 400f * scale
+        val detailPadding = if (compact) 20f * scale else 24f * scale
         val detailContent = RectF(
             bounds.left + detailPadding,
             bounds.top + detailPadding,
@@ -449,47 +451,87 @@ class CommandDeckView(
         paint.color = Color.argb(150, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.FILL
+        if (veryCompact) {
+            drawCompactMoveDetails(canvas, detailContent, move, scale)
+            return
+        }
         paint.textAlign = Paint.Align.LEFT
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(34f, scale, 29f)
+        paint.textSize = readableTextSize(34f, scale, 29f, 20f)
         paint.color = PAPER
-        canvas.drawText(fitTextToWidth(move.name, detailContent.width()), detailContent.left, bounds.top + 48f * scale, paint)
+        val titleRow = RectF(detailContent.left, detailContent.top, detailContent.right, detailContent.top + if (compact) 58f * scale else 64f * scale)
+        canvas.drawText(fitTextToWidth(move.name, detailContent.width()), detailContent.left, centeredTextBaseline(titleRow.centerY()), paint)
+        var sectionTop = titleRow.bottom + if (compact) 8f * scale else 12f * scale
+        val typeBadgeHeight = if (compact) 56f * scale else 62f * scale
         val typeBadge = RectF(
             detailContent.left,
-            bounds.top + 70f * scale,
+            sectionTop,
             detailContent.right,
-            bounds.top + 132f * scale
+            sectionTop + typeBadgeHeight
         )
         drawTypeBadge(canvas, typeBadge, move.type, move.category, palette, scale)
-        val metricGap = 12f * scale
-        val metricWidth = (detailContent.width() - metricGap) / 2f
-        val metricTop = typeBadge.bottom + 14f * scale
-        val metricBottom = metricTop + 102f * scale
+        sectionTop = typeBadge.bottom + if (compact) 8f * scale else 12f * scale
+        val metricHeight = if (compact) 68f * scale else 82f * scale
         drawMoveMetric(
             canvas,
-            RectF(detailContent.left, metricTop, detailContent.left + metricWidth, metricBottom),
+            RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + metricHeight),
             "POWER",
             move.power,
             scale
         )
+        sectionTop += metricHeight + if (compact) 8f * scale else 10f * scale
         drawMoveMetric(
             canvas,
-            RectF(detailContent.left + metricWidth + metricGap, metricTop, detailContent.right, metricBottom),
+            RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + metricHeight),
             "ACCURACY",
             move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—",
             scale
         )
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(28f, scale, 24f)
-        paint.color = PAPER
-        canvas.drawText("PP ${move.pp} / ${move.maxPp}", detailContent.left, metricBottom + 50f * scale, paint)
-        drawFieldSummary(canvas, bounds, detailContent, scale, move.disabled, metricBottom + 86f * scale)
+        sectionTop += metricHeight + if (compact) 8f * scale else 12f * scale
+        val ppHeight = if (compact) 56f * scale else 64f * scale
+        val ppBounds = RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + ppHeight)
+        drawMovePp(canvas, ppBounds, move, scale)
+        sectionTop = ppBounds.bottom + if (compact) 8f * scale else 12f * scale
+        if (!compact) drawFieldSummary(canvas, detailContent, scale, move.disabled, sectionTop)
         if (move.disabled) {
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(23f, scale, 20f)
             paint.color = MAGENTA
             canvas.drawText("DISABLED", detailContent.left, centeredTextBaseline(detailContent.bottom - 24f * scale), paint)
         }
+    }
+
+    private fun drawCompactMoveDetails(
+        canvas: Canvas,
+        detailContent: RectF,
+        move: BattleSession.MoveOption,
+        scale: Float
+    ) {
+        val compactPadding = 12f * scale
+        val content = RectF(
+            detailContent.left - compactPadding,
+            detailContent.top - compactPadding,
+            detailContent.right + compactPadding,
+            detailContent.bottom + compactPadding
+        )
+        var sectionTop = content.top
+        val titleBounds = RectF(content.left, sectionTop, content.right, sectionTop + 50f * scale)
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(30f, scale, 26f, 16f)
+        paint.color = PAPER
+        canvas.drawText(fitTextToWidth(move.name, content.width()), content.left, centeredTextBaseline(titleBounds.centerY()), paint)
+        sectionTop = titleBounds.bottom + 4f * scale
+        val typeBounds = RectF(content.left, sectionTop, content.right, sectionTop + 48f * scale)
+        drawTypeBadge(canvas, typeBounds, move.type, move.category, movePalette(move.type), scale)
+        sectionTop = typeBounds.bottom + 4f * scale
+        val accuracy = move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—"
+        val metricsBounds = RectF(content.left, sectionTop, content.right, sectionTop + 46f * scale)
+        drawCompactMetricLine(canvas, metricsBounds, "PWR ${move.power}  ·  ACC $accuracy", scale)
+        sectionTop = metricsBounds.bottom + 4f * scale
+        val ppBounds = RectF(content.left, sectionTop, content.right, sectionTop + 48f * scale)
+        drawCompactPp(canvas, ppBounds, move, scale)
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawTypeBadge(
@@ -537,25 +579,85 @@ class CommandDeckView(
         paint.color = Color.argb(130, 141, 196, 211)
         canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(18f, scale, 16f, 18f)
+        paint.color = Color.rgb(159, 221, 226)
+        val labelLeft = bounds.left + 18f * scale
+        val valueRight = bounds.right - 18f * scale
+        val maxTextWidth = valueRight - labelLeft - 12f * scale
+        val measuredLabelWidth = paint.measureText(label)
+        paint.textSize = readableTextSize(33f, scale, 29f, 20f)
+        val measuredValueWidth = paint.measureText(value)
+        if (measuredLabelWidth + measuredValueWidth > maxTextWidth) {
+            val labelWidth = (maxTextWidth - measuredValueWidth).coerceAtLeast(1f)
+            paint.textSize = readableTextSize(18f, scale, 16f, 18f)
+            if (paint.measureText(label) > labelWidth) paint.textSize *= labelWidth / paint.measureText(label)
+        } else {
+            paint.textSize = readableTextSize(18f, scale, 16f, 18f)
+        }
+        canvas.drawText(label, labelLeft, centeredTextBaseline(bounds.centerY()), paint)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.textSize = readableTextSize(33f, scale, 29f, 20f)
+        paint.color = PAPER
+        canvas.drawText(value, bounds.right - 18f * scale, centeredTextBaseline(bounds.centerY()), paint)
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawCompactMetricLine(canvas: Canvas, bounds: RectF, text: String, scale: Float) {
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(108, 2, 13, 22)
+        canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.25f * scale
+        paint.color = Color.argb(130, 141, 196, 211)
+        canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(17f, scale, 15f, 14f)
-        val labelWidth = bounds.width() - 24f * scale
-        val measuredLabelWidth = paint.measureText(label)
-        if (measuredLabelWidth > labelWidth) {
-            paint.textSize *= labelWidth / measuredLabelWidth
-        }
-        paint.color = Color.rgb(159, 221, 226)
-        canvas.drawText(label, bounds.centerX(), bounds.top + 31f * scale, paint)
-        paint.textSize = readableTextSize(33f, scale, 29f)
+        paint.textSize = readableTextSize(18f, scale, 16f, 15f)
+        val label = fitTextToWidth(text, bounds.width() - 24f * scale)
         paint.color = PAPER
-        canvas.drawText(value, bounds.centerX(), bounds.top + 81f * scale, paint)
+        canvas.drawText(label, bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawCompactPp(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, scale: Float) {
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(84, 3, 14, 24)
+        canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.25f * scale
+        paint.color = Color.argb(118, 107, 181, 196)
+        canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(22f, scale, 19f, 16f)
+        paint.color = PAPER
+        canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawMovePp(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, scale: Float) {
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(84, 3, 14, 24)
+        canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.25f * scale
+        paint.color = Color.argb(118, 107, 181, 196)
+        canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(28f, scale, 24f, 20f)
+        paint.color = PAPER
+        canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
         paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawFieldSummary(
         canvas: Canvas,
-        bounds: RectF,
         detailContent: RectF,
         scale: Float,
         disabled: Boolean,
@@ -578,9 +680,10 @@ class CommandDeckView(
         canvas.drawRoundRect(summary, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(20f, scale, 18f, 14f)
+        paint.textSize = readableTextSize(20f, scale, 18f, 18f)
         paint.color = Color.rgb(153, 224, 220)
-        canvas.drawText("FIELD STATUS", detailContent.left, summary.top + 31f * scale, paint)
+        val header = RectF(summary.left + 16f * scale, summary.top + 8f * scale, summary.right - 16f * scale, summary.top + 58f * scale)
+        canvas.drawText(fitTextToWidth("FIELD STATUS", header.width()), header.left, centeredTextBaseline(header.centerY()), paint)
         val lines = mutableListOf<String>()
         info.weather.takeIf { it.isNotBlank() }?.let { lines += "Weather  $it" }
         info.terrain.takeIf { it.isNotBlank() }?.let { lines += "Terrain  $it" }
@@ -591,10 +694,10 @@ class CommandDeckView(
         info.opponentBoosts.takeIf { it.isNotEmpty() }?.let { lines += "Opp. boosts  ${formatBoosts(it)}" }
         if (lines.isEmpty()) lines += "No active effects"
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(21f, scale, 18f, 16f)
+        paint.textSize = readableTextSize(20f, scale, 18f, 18f)
         paint.color = PAPER
-        val lineHeight = maxOf(42f * scale, paint.textSize * 1.32f)
-        var baseline = summary.top + 76f * scale
+        val lineHeight = maxOf(48f * scale, paint.textSize * 1.18f)
+        var baseline = summary.top + 92f * scale
         val maxLines = ((summary.bottom - baseline - 16f * scale) / lineHeight).toInt().coerceAtLeast(1)
         val visibleLines = if (lines.size <= maxLines) {
             lines
@@ -795,7 +898,7 @@ class CommandDeckView(
             }
         }
         val glyphCenterY = if (glyphWeight > 0f) glyphCenterSum / glyphWeight else height / 2f
-        val glyphOffsetY = height / 2f - glyphCenterY + 1f
+        val glyphOffsetY = height / 2f - glyphCenterY
         val centered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         centered.setPixels(background, 0, width, 0, 0, width, height)
         val glyphBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
