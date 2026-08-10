@@ -444,7 +444,7 @@ class CommandDeckView(
             bounds.right - detailPadding,
             bounds.bottom - detailPadding
         )
-        paint.color = Color.argb(100, 3, 14, 24)
+        paint.color = Color.argb(178, 3, 14, 24)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.25f * scale
@@ -491,8 +491,7 @@ class CommandDeckView(
         val ppHeight = if (compact) 56f * scale else 64f * scale
         val ppBounds = RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + ppHeight)
         drawMovePp(canvas, ppBounds, move, scale)
-        sectionTop = ppBounds.bottom + if (compact) 8f * scale else 12f * scale
-        if (!compact) drawFieldSummary(canvas, detailContent, scale, move.disabled, sectionTop)
+        if (!compact) drawEffectSummary(canvas, detailContent, scale, ppBounds.bottom + 12f * scale)
         if (move.disabled) {
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(23f, scale, 20f)
@@ -507,29 +506,25 @@ class CommandDeckView(
         move: BattleSession.MoveOption,
         scale: Float
     ) {
-        val compactPadding = 12f * scale
-        val content = RectF(
-            detailContent.left - compactPadding,
-            detailContent.top - compactPadding,
-            detailContent.right + compactPadding,
-            detailContent.bottom + compactPadding
-        )
+        val content = RectF(detailContent)
+        val gap = 4f * scale
+        val rowHeight = ((content.height() - gap * 3f) / 4f).coerceAtLeast(1f)
         var sectionTop = content.top
-        val titleBounds = RectF(content.left, sectionTop, content.right, sectionTop + 50f * scale)
+        val titleBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
         paint.textAlign = Paint.Align.LEFT
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(30f, scale, 26f, 16f)
+        paint.textSize = readableTextSize(30f, scale, 26f, 16f).coerceAtMost(rowHeight - 6f * scale)
         paint.color = PAPER
         canvas.drawText(fitTextToWidth(move.name, content.width()), content.left, centeredTextBaseline(titleBounds.centerY()), paint)
-        sectionTop = titleBounds.bottom + 4f * scale
-        val typeBounds = RectF(content.left, sectionTop, content.right, sectionTop + 48f * scale)
+        sectionTop = titleBounds.bottom + gap
+        val typeBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
         drawTypeBadge(canvas, typeBounds, move.type, move.category, movePalette(move.type), scale)
-        sectionTop = typeBounds.bottom + 4f * scale
+        sectionTop = typeBounds.bottom + gap
         val accuracy = move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—"
-        val metricsBounds = RectF(content.left, sectionTop, content.right, sectionTop + 46f * scale)
+        val metricsBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
         drawCompactMetricLine(canvas, metricsBounds, "PWR ${move.power}  ·  ACC $accuracy", scale)
-        sectionTop = metricsBounds.bottom + 4f * scale
-        val ppBounds = RectF(content.left, sectionTop, content.right, sectionTop + 48f * scale)
+        sectionTop = metricsBounds.bottom + gap
+        val ppBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
         drawCompactPp(canvas, ppBounds, move, scale)
         paint.textAlign = Paint.Align.LEFT
     }
@@ -543,7 +538,7 @@ class CommandDeckView(
         scale: Float
     ) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(122, 2, 13, 22)
+        paint.color = Color.argb(168, 2, 13, 22)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.5f * scale
@@ -564,7 +559,7 @@ class CommandDeckView(
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
-        paint.textSize = readableTextSize(25f, scale, 22f, 16f)
+        paint.textSize = readableTextSize(25f, scale, 22f, 16f).coerceAtMost(bounds.height() - 6f * scale)
         val labelLeft = bounds.left + 70f * scale
         val label = fitTextToWidth("$type  ·  $category", bounds.right - labelLeft - 12f * scale)
         drawOutlinedText(canvas, label, labelLeft, centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.25f * scale)
@@ -572,7 +567,7 @@ class CommandDeckView(
 
     private fun drawMoveMetric(canvas: Canvas, bounds: RectF, label: String, value: String, scale: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(108, 2, 13, 22)
+        paint.color = Color.argb(168, 2, 13, 22)
         canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.25f * scale
@@ -596,17 +591,33 @@ class CommandDeckView(
         } else {
             paint.textSize = readableTextSize(18f, scale, 16f, 18f)
         }
-        canvas.drawText(label, labelLeft, centeredTextBaseline(bounds.centerY()), paint)
+        drawOutlinedText(
+            canvas,
+            label,
+            labelLeft,
+            centeredTextBaseline(bounds.centerY()),
+            Color.rgb(3, 14, 22),
+            Color.rgb(159, 221, 226),
+            1.5f * scale
+        )
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(33f, scale, 29f, 20f)
         paint.color = PAPER
-        canvas.drawText(value, bounds.right - 18f * scale, centeredTextBaseline(bounds.centerY()), paint)
+        drawOutlinedText(
+            canvas,
+            value,
+            bounds.right - 18f * scale,
+            centeredTextBaseline(bounds.centerY()),
+            Color.rgb(3, 14, 22),
+            PAPER,
+            1.75f * scale
+        )
         paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawCompactMetricLine(canvas: Canvas, bounds: RectF, text: String, scale: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(108, 2, 13, 22)
+        paint.color = Color.argb(168, 2, 13, 22)
         canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.25f * scale
@@ -615,16 +626,24 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(18f, scale, 16f, 15f)
+        paint.textSize = readableTextSize(18f, scale, 16f, 15f).coerceAtMost(bounds.height() - 6f * scale)
         val label = fitTextToWidth(text, bounds.width() - 24f * scale)
         paint.color = PAPER
-        canvas.drawText(label, bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        drawOutlinedText(
+            canvas,
+            label,
+            bounds.centerX(),
+            centeredTextBaseline(bounds.centerY()),
+            Color.rgb(3, 14, 22),
+            PAPER,
+            1.5f * scale
+        )
         paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawCompactPp(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, scale: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(84, 3, 14, 24)
+        paint.color = Color.argb(156, 3, 14, 24)
         canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.25f * scale
@@ -633,15 +652,23 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(22f, scale, 19f, 16f)
+        paint.textSize = readableTextSize(22f, scale, 19f, 16f).coerceAtMost(bounds.height() - 6f * scale)
         paint.color = PAPER
-        canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        drawOutlinedText(
+            canvas,
+            "PP ${move.pp} / ${move.maxPp}",
+            bounds.centerX(),
+            centeredTextBaseline(bounds.centerY()),
+            Color.rgb(3, 14, 22),
+            PAPER,
+            1.5f * scale
+        )
         paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawMovePp(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, scale: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(84, 3, 14, 24)
+        paint.color = Color.argb(156, 3, 14, 24)
         canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.25f * scale
@@ -650,66 +677,63 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(28f, scale, 24f, 20f)
+        paint.textSize = readableTextSize(28f, scale, 24f, 20f).coerceAtMost(bounds.height() - 8f * scale)
         paint.color = PAPER
-        canvas.drawText("PP ${move.pp} / ${move.maxPp}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        drawOutlinedText(
+            canvas,
+            "PP ${move.pp} / ${move.maxPp}",
+            bounds.centerX(),
+            centeredTextBaseline(bounds.centerY()),
+            Color.rgb(3, 14, 22),
+            PAPER,
+            1.75f * scale
+        )
         paint.textAlign = Paint.Align.LEFT
     }
 
-    private fun drawFieldSummary(
-        canvas: Canvas,
-        detailContent: RectF,
-        scale: Float,
-        disabled: Boolean,
-        summaryTop: Float
-    ) {
-        val summaryBottom = detailContent.bottom - if (disabled) 48f * scale else 0f
-        if (summaryBottom <= summaryTop + 56f * scale) return
+    private fun drawEffectSummary(canvas: Canvas, detailContent: RectF, scale: Float, top: Float) {
         val info = session.battleInfo()
+        val effects = mutableListOf<String>()
+        info.weather.takeIf { it.isNotBlank() }?.let { effects += "Weather $it" }
+        info.terrain.takeIf { it.isNotBlank() }?.let { effects += "Terrain $it" }
+        info.fieldEffects.forEach { effects += "Field $it" }
+        info.playerSideConditions.takeIf { it.isNotEmpty() }?.let { effects += "Your side ${it.joinToString(" · ")}" }
+        info.opponentSideConditions.takeIf { it.isNotEmpty() }?.let { effects += "Opp. side ${it.joinToString(" · ")}" }
+        info.playerBoosts.takeIf { it.isNotEmpty() }?.let { effects += "Your boosts ${formatBoosts(it)}" }
+        info.opponentBoosts.takeIf { it.isNotEmpty() }?.let { effects += "Opp. boosts ${formatBoosts(it)}" }
+        if (effects.isEmpty()) return
         val summary = RectF(
             detailContent.left,
-            summaryTop,
+            top,
             detailContent.right,
-            summaryBottom
+            minOf(detailContent.bottom, top + 70f * scale)
         )
-        paint.color = Color.argb(72, 3, 14, 24)
+        if (summary.height() < 42f * scale) return
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(156, 3, 14, 24)
         canvas.drawRoundRect(summary, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.25f * scale
         paint.color = Color.argb(118, 107, 181, 196)
         canvas.drawRoundRect(summary, 16f * scale, 16f * scale, paint)
         paint.style = Paint.Style.FILL
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(20f, scale, 18f, 18f)
-        paint.color = Color.rgb(153, 224, 220)
-        val header = RectF(summary.left + 16f * scale, summary.top + 8f * scale, summary.right - 16f * scale, summary.top + 58f * scale)
-        canvas.drawText(fitTextToWidth("FIELD STATUS", header.width()), header.left, centeredTextBaseline(header.centerY()), paint)
-        val lines = mutableListOf<String>()
-        info.weather.takeIf { it.isNotBlank() }?.let { lines += "Weather  $it" }
-        info.terrain.takeIf { it.isNotBlank() }?.let { lines += "Terrain  $it" }
-        info.fieldEffects.forEach { lines += "Field  $it" }
-        info.playerSideConditions.takeIf { it.isNotEmpty() }?.let { lines += "Your side  ${it.joinToString(" · ")}" }
-        info.opponentSideConditions.takeIf { it.isNotEmpty() }?.let { lines += "Opp. side  ${it.joinToString(" · ")}" }
-        info.playerBoosts.takeIf { it.isNotEmpty() }?.let { lines += "Your boosts  ${formatBoosts(it)}" }
-        info.opponentBoosts.takeIf { it.isNotEmpty() }?.let { lines += "Opp. boosts  ${formatBoosts(it)}" }
-        if (lines.isEmpty()) lines += "No active effects"
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(20f, scale, 18f, 18f)
-        paint.color = PAPER
-        val lineHeight = maxOf(48f * scale, paint.textSize * 1.18f)
-        var baseline = summary.top + 92f * scale
-        val maxLines = ((summary.bottom - baseline - 16f * scale) / lineHeight).toInt().coerceAtLeast(1)
-        val visibleLines = if (lines.size <= maxLines) {
-            lines
-        } else {
-            lines.take((maxLines - 1).coerceAtLeast(1)) + "+${lines.size - maxLines + 1} more active effects"
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textAlign = Paint.Align.LEFT
+        paint.textSize = readableTextSize(18f, scale, 16f, 16f).coerceAtMost(summary.height() - 8f * scale)
+        val visibleEffects = effects.take(3).let { values ->
+            if (effects.size > values.size) values + "+${effects.size - values.size} more" else values
         }
-        visibleLines.forEach { line ->
-            if (baseline <= summary.bottom - 16f * scale) {
-                canvas.drawText(fitTextToWidth(line, detailContent.width()), detailContent.left, baseline, paint)
-                baseline += lineHeight
-            }
-        }
+        val text = fitTextToWidth("FIELD  ${visibleEffects.joinToString(" · ")}", summary.width() - 24f * scale)
+        drawOutlinedText(
+            canvas,
+            text,
+            summary.left + 12f * scale,
+            centeredTextBaseline(summary.centerY()),
+            Color.rgb(3, 14, 22),
+            PAPER,
+            1.5f * scale
+        )
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun formatBoosts(boosts: Map<String, Int>): String = boosts.entries
@@ -882,8 +906,8 @@ class CommandDeckView(
         val bubbleRed = Color.red(bubble)
         val bubbleGreen = Color.green(bubble)
         val bubbleBlue = Color.blue(bubble)
-        var glyphWeight = 0f
-        var glyphCenterSum = 0f
+        var glyphTop = height
+        var glyphBottom = -1
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val index = y * width + x
@@ -893,11 +917,13 @@ class CommandDeckView(
                 val glyphAlpha = if (whiteAmount < 0.08f) 0 else (alpha * whiteAmount).toInt()
                 background[index] = Color.argb(alpha, bubbleRed, bubbleGreen, bubbleBlue)
                 glyph[index] = Color.argb(glyphAlpha, 255, 255, 255)
-                glyphWeight += glyphAlpha
-                glyphCenterSum += y * glyphAlpha
+                if (glyphAlpha > 20) {
+                    glyphTop = minOf(glyphTop, y)
+                    glyphBottom = maxOf(glyphBottom, y)
+                }
             }
         }
-        val glyphCenterY = if (glyphWeight > 0f) glyphCenterSum / glyphWeight else height / 2f
+        val glyphCenterY = if (glyphBottom >= glyphTop) (glyphTop + glyphBottom + 1) / 2f else height / 2f
         val glyphOffsetY = height / 2f - glyphCenterY
         val centered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         centered.setPixels(background, 0, width, 0, 0, width, height)
