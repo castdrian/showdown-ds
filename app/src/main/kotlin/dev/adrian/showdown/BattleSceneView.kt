@@ -887,32 +887,35 @@ class BattleSceneView(
         val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
         val arrival = min(1f, age / 0.18f)
         val alpha = min(1f, 0.3f + arrival)
-        val left = width * 0.33f + (1f - arrival) * width * 0.04f
-        val right = width * 0.96f
+        val playerCardRight = width * 0.315f
+        val sideGap = maxOf(48f * scale, width * 0.025f)
+        val settledLeft = maxOf(width * 0.33f, playerCardRight + sideGap)
+        val left = settledLeft + (1f - arrival) * width * 0.035f
+        val right = width * 0.97f
         val top = height * 0.81f
-        val bottom = height * 0.94f
+        val bottom = min(height * 0.965f, height * 0.98f - 24f * scale)
         val bounds = RectF(left, top, right, bottom)
         paint.shader = LinearGradient(
             bounds.left,
             bounds.top,
             bounds.right,
             bounds.bottom,
-            Color.argb((154f * alpha).toInt(), 25, 50, 68),
-            Color.argb((104f * alpha).toInt(), 56, 83, 98),
+            Color.argb((78f * alpha).toInt(), 21, 42, 57),
+            Color.argb((32f * alpha).toInt(), 52, 79, 94),
             Shader.TileMode.CLAMP
         )
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.shader = null
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f * scale
-        paint.color = Color.argb((188f * alpha).toInt(), 192, 239, 244)
+        paint.strokeWidth = 1.5f * scale
+        paint.color = Color.argb((132f * alpha).toInt(), 183, 229, 235)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-        paint.textSize = 40f * scale
+        paint.textSize = 42f * scale
         val lines = BattleFeedText.wrap(feedMessage, bounds.width() - 48f * scale, 2, paint::measureText)
             .ifEmpty { listOf("…") }
-        val lineHeight = 48f * scale
+        val lineHeight = 50f * scale
         val firstBaseline = bounds.centerY() - lines.size * lineHeight / 2f - (paint.ascent() + paint.descent()) / 2f + lineHeight / 2f
         canvas.save()
         canvas.clipRect(bounds)
