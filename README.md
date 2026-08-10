@@ -2,7 +2,7 @@
 
 Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
-https://github.com/user-attachments/assets/93ee1b73-685a-43f4-b891-99026ffeb69a
+https://github.com/user-attachments/assets/f915edcf-5bd3-4251-a44c-11e5bac6d10c
 
 ## Hardware target
 

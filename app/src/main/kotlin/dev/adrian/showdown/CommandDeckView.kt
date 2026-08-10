@@ -651,7 +651,18 @@ class CommandDeckView(
         paint.textSize = readableTextSize(30f, scale, 26f)
         paint.color = PAPER
         val message = if (session.decisionAvailable) session.latestBattleEvent else session.status
-        canvas.drawText(fitTextToWidth(message, bounds.width() - 24f * scale), bounds.centerX(), bounds.centerY() + 34f * scale, paint)
+        val messageLines = wrapText(message, bounds.width() - 48f * scale)
+        val messageLineHeight = paint.textSize * 1.2f
+        val messageCenterY = bounds.centerY() + 34f * scale
+        messageLines.forEachIndexed { index, line ->
+            val offset = (index - (messageLines.lastIndex / 2f)) * messageLineHeight
+            canvas.drawText(
+                line,
+                bounds.centerX(),
+                messageCenterY + offset - (paint.ascent() + paint.descent()) / 2f,
+                paint
+            )
+        }
         if (session.canCancelChoice()) {
             cancelChoiceBounds = RectF(
                 bounds.left + 18f * scale,
@@ -1303,6 +1314,42 @@ class CommandDeckView(
             value = "${withoutEllipsis.dropLast(1).trimEnd()}…"
         }
         return value
+    }
+
+    private fun wrapText(text: String, maximumWidth: Float): List<String> {
+        val words = text.trim().split(Regex("\\s+")).filter(String::isNotBlank)
+        if (words.isEmpty()) return listOf("")
+        val lines = mutableListOf<String>()
+        var current = ""
+        words.forEach { word ->
+            if (paint.measureText(word) <= maximumWidth) {
+                val candidate = if (current.isEmpty()) word else "$current $word"
+                if (current.isEmpty() || paint.measureText(candidate) <= maximumWidth) {
+                    current = candidate
+                } else {
+                    lines += current
+                    current = word
+                }
+            } else {
+                if (current.isNotEmpty()) {
+                    lines += current
+                    current = ""
+                }
+                var chunk = ""
+                word.forEach { character ->
+                    val candidate = chunk + character
+                    if (chunk.isNotEmpty() && paint.measureText(candidate) > maximumWidth) {
+                        lines += chunk
+                        chunk = character.toString()
+                    } else {
+                        chunk = candidate
+                    }
+                }
+                current = chunk
+            }
+        }
+        if (current.isNotEmpty()) lines += current
+        return lines
     }
 
     private fun centeredTextBaseline(centerY: Float): Float = centerY - (paint.ascent() + paint.descent()) / 2f
