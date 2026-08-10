@@ -667,7 +667,37 @@ class CommandDeckView(
 
     private fun typeIcon(type: String): Bitmap? = typeIcons.getOrPut(type) {
         val resourceId = resources.getIdentifier("type_${type.lowercase()}", "drawable", context.packageName)
-        if (resourceId == 0) null else BitmapFactory.decodeResource(resources, resourceId)
+        if (resourceId == 0) null else BitmapFactory.decodeResource(resources, resourceId)?.let { bitmap ->
+            if (type == "FAIRY") centeredFairyIcon(bitmap) else bitmap
+        }
+    }
+
+    private fun centeredFairyIcon(source: Bitmap): Bitmap {
+        val width = source.width
+        val height = source.height
+        val background = IntArray(width * height)
+        val glyph = IntArray(width * height)
+        val bubble = source.getPixel(width / 2, (height * 0.04f).toInt().coerceAtMost(height - 1))
+        val bubbleRed = Color.red(bubble)
+        val bubbleGreen = Color.green(bubble)
+        val bubbleBlue = Color.blue(bubble)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val index = y * width + x
+                val pixel = source.getPixel(x, y)
+                val alpha = Color.alpha(pixel)
+                val whiteAmount = ((Color.green(pixel) - bubbleGreen).toFloat() / (255f - bubbleGreen)).coerceIn(0f, 1f)
+                background[index] = Color.argb(alpha, bubbleRed, bubbleGreen, bubbleBlue)
+                glyph[index] = Color.argb(if (whiteAmount < 0.08f) 0 else (alpha * whiteAmount).toInt(), 255, 255, 255)
+            }
+        }
+        val centered = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        centered.setPixels(background, 0, width, 0, 0, width, height)
+        val glyphBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        glyphBitmap.setPixels(glyph, 0, width, 0, 0, width, height)
+        Canvas(centered).drawBitmap(glyphBitmap, 0f, 4f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        glyphBitmap.recycle()
+        return centered
     }
 
     private fun drawOutlinedText(canvas: Canvas, text: String, centerX: Float, baseline: Float, outline: Int, fill: Int, width: Float) {
