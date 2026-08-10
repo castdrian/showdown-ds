@@ -522,7 +522,7 @@ class BattleSession {
         decisionKind == DecisionKind.MOVE &&
         gameType.equals("triples", true) &&
         activeRequests.size >= 3 &&
-        activeSlotIndex != 1
+        (activeSlotIndex == 0 || activeSlotIndex == 2)
 
     fun availableMatchFormats() = availableMatchFormats.toList()
 
