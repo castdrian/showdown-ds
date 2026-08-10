@@ -21,6 +21,10 @@ data class ShowdownReplayPayload(
 }
 
 object ShowdownReplayImporter {
+    fun uploadUrl(message: String): String? = Regex(
+        "https?://replay\\.pokemonshowdown\\.com/[A-Za-z0-9-]+(?:\\.json)?"
+    ).find(message)?.value?.removeSuffix(".json")
+
     fun normalize(input: String): String? {
         val uri = runCatching { URI(input.trim()) }.getOrNull() ?: return null
         val scheme = uri.scheme?.lowercase(Locale.ROOT)

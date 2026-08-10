@@ -79,6 +79,22 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun keepsTheLatestMeaningfulBattleFeedEventAfterAConversationTurnMarker() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|turn|1",
+                "|request|null"
+            )
+        )
+
+        assertEquals("Go! Pikachu!", session.battleFeedText())
+    }
+
+    @Test
     fun presentsCommonSimulatorFailureAndFieldEvents() {
         val session = BattleSession()
 

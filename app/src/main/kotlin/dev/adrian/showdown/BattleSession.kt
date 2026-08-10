@@ -464,6 +464,9 @@ class BattleSession {
 
     fun battleLog() = battleLog.toList()
 
+    fun battleFeedText(): String? = battleLog.asReversed()
+        .firstOrNull { it.isNotBlank() && !it.startsWith("Turn ") }
+
     fun chatMessages() = chatMessages.toList()
 
     fun activityMessages() = activityMessages.toList()

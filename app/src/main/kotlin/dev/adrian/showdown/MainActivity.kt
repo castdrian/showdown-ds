@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -1903,10 +1904,11 @@ class MainActivity : Activity() {
                     val deletedTeamId = lines.mapNotNull(ShowdownTeamRemote::parseDeleted).firstOrNull()
                     val privacyUpdate = lines.mapNotNull(ShowdownTeamRemote::parsePrivacyUpdate).firstOrNull()
                     val upload = lines.mapNotNull(ShowdownTeamRemote::parseUpload).firstOrNull()
+                    val replayUrl = lines.mapNotNull(ShowdownReplayImporter::uploadUrl).firstOrNull()
                     val validationResult = pendingTeamValidationFormat?.let { format ->
                         ShowdownTeamValidation.response(lines)?.let { format to it }
                     }
-                    val teamResponseHandled = deletedTeamId != null || privacyUpdate != null || upload != null || validationResult != null
+                    val teamResponseHandled = deletedTeamId != null || privacyUpdate != null || upload != null || replayUrl != null || validationResult != null
                     deletedTeamId?.let { remoteId ->
                         pendingTeamDelete?.takeIf { it.remoteId == remoteId }?.let { pending ->
                             teamLibrary.remove(pending.localId)
@@ -1940,6 +1942,7 @@ class MainActivity : Activity() {
                         pendingTeamValidationFormat = null
                         showTeamValidationResult(format, result)
                     }
+                    replayUrl?.let(::showReplayUploaded)
                     lines.mapNotNull(ShowdownAuthentication::serverError).firstOrNull()
                         ?.takeUnless { teamResponseHandled }
                         ?.let { error ->
@@ -3667,6 +3670,23 @@ class MainActivity : Activity() {
         } else {
             session.setConnectionStatus("The battle replay could not be saved.")
         }
+    }
+
+    private fun showReplayUploaded(url: String) {
+        ShowdownDialogBuilder(this)
+            .setTitle("Replay saved")
+            .setMessage(url)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Copy") { _, _ ->
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown replay", url))
+                session.setConnectionStatus("Replay URL copied to the clipboard.")
+            }
+            .setPositiveButton("Open") { _, _ ->
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                    .onFailure { session.setConnectionStatus("Open $url in a browser.") }
+            }
+            .show()
     }
 
     private fun showReplayControls() {

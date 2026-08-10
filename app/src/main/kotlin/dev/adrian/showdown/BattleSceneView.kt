@@ -881,7 +881,8 @@ class BattleSceneView(
     }
 
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
-        if (!session.battleFeedVisible || session.latestBattleEvent.startsWith("Turn ")) return
+        if (!session.battleFeedVisible) return
+        val feedMessage = session.battleFeedText() ?: return
         val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
         val arrival = min(1f, age / 0.18f)
         val alpha = min(1f, 0.3f + arrival)
@@ -908,7 +909,7 @@ class BattleSceneView(
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         paint.textSize = 40f * scale
-        val lines = BattleFeedText.wrap(session.latestBattleEvent, bounds.width() - 48f * scale, 2, paint::measureText)
+        val lines = BattleFeedText.wrap(feedMessage, bounds.width() - 48f * scale, 2, paint::measureText)
             .ifEmpty { listOf("…") }
         val lineHeight = 48f * scale
         val firstBaseline = bounds.centerY() - lines.size * lineHeight / 2f - (paint.ascent() + paint.descent()) / 2f + lineHeight / 2f

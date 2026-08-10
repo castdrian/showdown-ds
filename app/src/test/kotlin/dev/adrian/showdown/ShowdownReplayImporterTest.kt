@@ -6,6 +6,17 @@ import org.junit.Test
 
 class ShowdownReplayImporterTest {
     @Test
+    fun extractsUploadedReplayLinksFromShowdownPopups() {
+        assertEquals(
+            "https://replay.pokemonshowdown.com/gen9ou-123",
+            ShowdownReplayImporter.uploadUrl(
+                "|popup||html|Your replay has been uploaded! <a href=\"https://replay.pokemonshowdown.com/gen9ou-123\">Open</a>"
+            )
+        )
+        assertNull(ShowdownReplayImporter.uploadUrl("|popup|Replay upload failed"))
+    }
+
+    @Test
     fun normalizesOfficialReplayLinks() {
         assertEquals(
             "https://replay.pokemonshowdown.com/gen9ou-123.json",
