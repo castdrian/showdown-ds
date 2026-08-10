@@ -27,6 +27,15 @@ class BattleSessionTest {
     }
 
     @Test
+    fun truncatedDamagePacketsDoNotBreakTheBattleSession() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(listOf("|-damage", "|-damage|"))
+
+        assertTrue(session.battleLog().isNotEmpty())
+    }
+
+    @Test
     fun requestUsesDashesForMovesWithoutNumericAccuracy() {
         val session = BattleSession()
 

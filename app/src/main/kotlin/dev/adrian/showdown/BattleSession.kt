@@ -1046,7 +1046,11 @@ class BattleSession {
                     "-damage" -> {
                         publishPendingHit()
                         applyHealth(fields)
-                        pendingHit = PendingHit(fields[2].substringAfter(':').trim(), fields[2].substringAfter(':').trim())
+                        fields.getOrNull(2)
+                            ?.substringAfter(':')
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { target -> pendingHit = PendingHit(target, target) }
                     }
                     "-heal" -> {
                         applyHealth(fields)
