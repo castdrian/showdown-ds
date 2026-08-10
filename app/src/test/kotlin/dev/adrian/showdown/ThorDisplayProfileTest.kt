@@ -74,5 +74,6 @@ class ThorDisplayProfileTest {
         assertTrue(source.contains("clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)"))
         assertTrue(source.contains("frame.isFocusableInTouchMode = true"))
         assertTrue(source.contains("frame.requestFocus()"))
+        assertTrue(source.contains("configurePresentationWindow(presentation.window)"))
     }
 }

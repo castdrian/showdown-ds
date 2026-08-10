@@ -525,6 +525,7 @@ class MainActivity : Activity() {
                     if (!isFinishing) window.decorView.post { showSecondaryDisplay() }
                 }
                 presentation.show()
+                configurePresentationWindow(presentation.window)
             }
         }
     }

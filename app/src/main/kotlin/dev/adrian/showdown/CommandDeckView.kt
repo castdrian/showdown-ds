@@ -1125,7 +1125,6 @@ class CommandDeckView(
     private fun drawTeraIcon(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, selected: Boolean, scale: Float) {
         val type = session.terastallizeType()
         val palette = movePalette(type.uppercase())
-        drawIconHalo(canvas, centerX, centerY, radius, palette.highlight, selected, scale)
         paint.style = Paint.Style.FILL
         paint.color = palette.base
         canvas.drawPath(crystalPath(centerX, centerY, radius * 1.2f, radius * 1.14f), paint)
