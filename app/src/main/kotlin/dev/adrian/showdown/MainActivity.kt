@@ -20,7 +20,6 @@ import android.view.Display
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.Surface
 import android.view.View
 import android.view.Window
 import android.view.WindowManager
@@ -261,7 +260,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureWindow()
-        nativeInitializeVulkan()
         serverEndpoint = loadServerEndpoint()
         credentialsStore = ShowdownCredentialsStore(this)
         teamLibrary = ShowdownTeamLibrary(this)
@@ -433,7 +431,6 @@ class MainActivity : Activity() {
         if (::replayFetcher.isInitialized) replayFetcher.close()
         showdownMoveEffects?.release()
         showdownMoveEffects = null
-        nativeReleaseVulkan()
         super.onDestroy()
     }
 
@@ -503,9 +500,6 @@ class MainActivity : Activity() {
 
     private fun createPrimaryScreen(): View {
         val frame = FrameLayout(this)
-        val surfaceView = VulkanSurfaceView(this)
-        surfaceView.setZOrderOnTop(false)
-        frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
         showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue, battleAudio::resetBattleCues) { session.protocolHistory() }.also { effects ->
@@ -4281,9 +4275,6 @@ class MainActivity : Activity() {
             setCancelable(false)
             configurePresentationWindow(window)
             val frame = FrameLayout(context)
-            val surfaceView = VulkanSurfaceView(context)
-            surfaceView.setZOrderOnTop(false)
-            frame.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
             commandDeck = CommandDeckView(context, session, spriteCache, object : CommandDeckView.InteractionListener {
                 override fun onNavigation() {
                     battleAudio.playNavigation()
@@ -4323,21 +4314,5 @@ class MainActivity : Activity() {
     companion object {
         const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
         const val DEFAULT_BATTLE_SPEED = 0.75f
-
-        init {
-            System.loadLibrary("showdown_vulkan")
-        }
-
-        @JvmStatic
-        private external fun nativeInitializeVulkan(): Boolean
-
-        @JvmStatic
-        private external fun nativeReleaseVulkan()
-
-        @JvmStatic
-        external fun nativeAttachSurface(surface: Surface): Long
-
-        @JvmStatic
-        external fun nativeDetachSurface(surfaceId: Long)
     }
 }

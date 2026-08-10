@@ -10,8 +10,6 @@ def releaseVersionCode = (System.getenv('SHOWDOWN_VERSION_CODE') ?: '1').toInteg
 android {
     namespace 'dev.adrian.showdown'
     compileSdk 36
-    ndkVersion '27.3.13750724'
-
     defaultConfig {
         applicationId 'dev.adrian.showdown'
         minSdk 26
@@ -19,15 +17,6 @@ android {
         versionCode releaseVersionCode
         versionName releaseVersionName
 
-        ndk {
-            abiFilters 'arm64-v8a', 'x86_64'
-        }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags '-std=c++20 -fno-exceptions -fno-rtti'
-            }
-        }
     }
 
     signingConfigs {
@@ -62,18 +51,6 @@ android {
         jvmTarget = '17'
     }
 
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/CMakeLists.txt')
-            version '3.22.1'
-        }
-    }
-
-    packaging {
-        jniLibs {
-            useLegacyPackaging false
-        }
-    }
 }
 
 dependencies {
