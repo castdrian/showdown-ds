@@ -65,6 +65,7 @@ class MainActivity : Activity() {
     private var pendingTeamUpload: PendingTeamUpload? = null
     private var pendingTeamPrivacy: PendingTeamPrivacy? = null
     private var pendingTeamDelete: PendingTeamDelete? = null
+    private var pendingTeamValidationFormat: String? = null
     private var teamUploadButtons: List<Button> = emptyList()
     private var teamPrivacyButton: Button? = null
     private var teamEditorDialog: ShowdownDialog? = null
@@ -272,6 +273,7 @@ class MainActivity : Activity() {
         savedInstanceState?.getString("pending_team_delete_local_id")?.let { localId ->
             pendingTeamDelete = PendingTeamDelete(localId, savedInstanceState.getString("pending_team_delete_remote_id").orEmpty())
         }
+        pendingTeamValidationFormat = savedInstanceState?.getString("pending_team_validation_format")
         session.addListener(sessionListener)
         session.addProtocolListener(protocolListener)
         session.addDecisionListener(decisionListener)
@@ -324,6 +326,7 @@ class MainActivity : Activity() {
         outState.putString("pending_team_privacy_remote_id", pendingTeamPrivacy?.remoteId)
         outState.putString("pending_team_delete_local_id", pendingTeamDelete?.localId)
         outState.putString("pending_team_delete_remote_id", pendingTeamDelete?.remoteId)
+        outState.putString("pending_team_validation_format", pendingTeamValidationFormat)
         outState.putString("active_replay_source", replayLoadRequest ?: activeReplayLink)
         outState.putBoolean("replay_paused", replayPaused || replayPausedForLifecycle)
         outState.putFloat("replay_speed", replaySpeed)
@@ -372,6 +375,7 @@ class MainActivity : Activity() {
         pendingTeamUpload = null
         pendingTeamPrivacy = null
         pendingTeamDelete = null
+        pendingTeamValidationFormat = null
         teamUploadButtons = emptyList()
         teamPrivacyButton = null
         userDetailsDialog?.dismiss()
@@ -1814,6 +1818,7 @@ class MainActivity : Activity() {
                             pendingDecisionCommand = null
                             session.setLiveBattleActive(false)
                         }
+                        pendingTeamValidationFormat = null
                         serverUserNamed = false
                         chatRoomDialog?.dismiss()
                         chatRoomState.clear()
@@ -1898,7 +1903,10 @@ class MainActivity : Activity() {
                     val deletedTeamId = lines.mapNotNull(ShowdownTeamRemote::parseDeleted).firstOrNull()
                     val privacyUpdate = lines.mapNotNull(ShowdownTeamRemote::parsePrivacyUpdate).firstOrNull()
                     val upload = lines.mapNotNull(ShowdownTeamRemote::parseUpload).firstOrNull()
-                    val teamResponseHandled = deletedTeamId != null || privacyUpdate != null || upload != null
+                    val validationResult = pendingTeamValidationFormat?.let { format ->
+                        ShowdownTeamValidation.response(lines)?.let { format to it }
+                    }
+                    val teamResponseHandled = deletedTeamId != null || privacyUpdate != null || upload != null || validationResult != null
                     deletedTeamId?.let { remoteId ->
                         pendingTeamDelete?.takeIf { it.remoteId == remoteId }?.let { pending ->
                             teamLibrary.remove(pending.localId)
@@ -1928,6 +1936,10 @@ class MainActivity : Activity() {
                             teamUploadButtons = emptyList()
                         }
                     }
+                    validationResult?.let { (format, result) ->
+                        pendingTeamValidationFormat = null
+                        showTeamValidationResult(format, result)
+                    }
                     lines.mapNotNull(ShowdownAuthentication::serverError).firstOrNull()
                         ?.takeUnless { teamResponseHandled }
                         ?.let { error ->
@@ -1939,6 +1951,7 @@ class MainActivity : Activity() {
                             pendingTeamUpload = null
                             pendingTeamPrivacy = null
                             pendingTeamDelete = null
+                            pendingTeamValidationFormat = null
                             teamUploadButtons.forEach { it.isEnabled = true }
                             teamUploadButtons = emptyList()
                             teamPrivacyButton?.isEnabled = true
@@ -2776,6 +2789,14 @@ class MainActivity : Activity() {
         session.setConnectionStatus("Signed out of Showdown.")
     }
 
+    private fun showTeamValidationResult(format: String, result: String) {
+        ShowdownDialogBuilder(this)
+            .setTitle("Team validation · $format")
+            .setMessage(result)
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
     private fun showTeamLibrary() {
         val teams = teamLibrary.teams()
         val labels = listOf("Browse remote teams") + teams.map {
@@ -3115,6 +3136,42 @@ class MainActivity : Activity() {
             }
             return TeamDraft(teamPacked, validation.firstOrNull())
         }
+        fun readValidatedTeamDraft(action: String): Pair<String, TeamDraft>? {
+            val teamFormat = format.text.toString().trim()
+            if (teamFormat.isBlank()) {
+                session.setConnectionStatus("Enter a format ID before $action.")
+                return null
+            }
+            val draft = readTeamDraft()
+            when {
+                draft.packed.isBlank() -> {
+                    session.setConnectionStatus("Add at least one Pokémon before $action.")
+                    return null
+                }
+                draft.error != null -> {
+                    session.setConnectionStatus(draft.error)
+                    return null
+                }
+            }
+            return teamFormat to draft
+        }
+        fun validateDraftOnShowdown() {
+            val request = readValidatedTeamDraft("validating the team") ?: return
+            val (teamFormat, draft) = request
+            if (showdownConnection == null) {
+                session.setConnectionStatus("Connect to Showdown before validating the team.")
+                return
+            }
+            pendingTeamValidationFormat = teamFormat
+            val teamSent = showdownConnection?.sendGlobal(ShowdownTeamValidation.setTeamCommand(draft.packed)) == true
+            val validationSent = teamSent && showdownConnection?.sendGlobal(ShowdownTeamValidation.validateCommand(teamFormat)) == true
+            if (!validationSent) {
+                pendingTeamValidationFormat = null
+                session.setConnectionStatus("The team validation request could not reach Showdown.")
+            } else {
+                session.setConnectionStatus("Validating the team for $teamFormat…")
+            }
+        }
         val revertButton = existing?.takeIf { it.remoteNeedsUpload && it.uploadedPacked != null }?.let { team ->
             Button(this).apply {
                 text = "Revert local edits"
@@ -3145,20 +3202,9 @@ class MainActivity : Activity() {
                 session.setConnectionStatus("Sign in to Showdown before uploading a team.")
                 return
             }
-            if (format.text.toString().trim().isBlank()) {
-                session.setConnectionStatus("Enter a format ID before uploading the team.")
-                return
-            }
-            val draft = readTeamDraft()
-            if (draft.packed.isBlank()) {
-                session.setConnectionStatus("Add at least one Pokémon before uploading the team.")
-                return
-            }
-            if (draft.error != null) {
-                session.setConnectionStatus(draft.error)
-                return
-            }
-            val saved = teamLibrary.save(name.text.toString(), format.text.toString(), draft.packed, localId)
+            val request = readValidatedTeamDraft("uploading the team") ?: return
+            val (teamFormat, draft) = request
+            val saved = teamLibrary.save(name.text.toString(), teamFormat, draft.packed, localId)
             val action = if (saved.remoteId == null) "save" else "update"
             val command = ShowdownTeamRemote.command(action, saved.remoteId, saved.name, saved.format, privateTeam, saved.packed)
             pendingTeamUpload = PendingTeamUpload(localId, saved.packed)
@@ -3198,6 +3244,10 @@ class MainActivity : Activity() {
                     session.setConnectionStatus("Loaded ${imported.size} Pokémon into the editor.")
                 }
             }
+        }
+        val validateButton = Button(this).apply {
+            text = "Validate on Showdown"
+            setOnClickListener { validateDraftOnShowdown() }
         }
         val copyButton = Button(this).apply {
             text = "Copy packed team"
@@ -3260,6 +3310,7 @@ class MainActivity : Activity() {
             addView(format)
             addView(formatPicker)
             addView(importButton)
+            addView(validateButton)
             addView(copyButton)
             addView(copyTextButton)
             addView(copyJsonButton)
