@@ -27,6 +27,7 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.AutoCompleteTextView
 import android.widget.MultiAutoCompleteTextView
@@ -2802,27 +2803,161 @@ class MainActivity : Activity() {
 
     private fun showTeamLibrary() {
         val teams = teamLibrary.teams()
-        val labels = listOf("Browse remote teams") + teams.map {
-            val remoteState = when {
-                it.remoteNeedsUpload -> " · Upload needed"
-                it.remoteId != null -> " · Uploaded"
-                else -> ""
+        val density = resources.displayMetrics.density
+        val search = EditText(this).apply {
+            hint = "Search teams, Pokémon, or moves"
+            setSingleLine(true)
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+        }
+        val folderBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val resultSummary = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffa9e8e2.toInt())
+            setPadding(0, (8f * density).toInt(), 0, (8f * density).toInt())
+        }
+        val resultList = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val activeFolder = arrayOfNulls<String>(1)
+        var teamDialog: ShowdownDialog? = null
+        fun styleTeamButton(button: Button, compact: Boolean = false, selected: Boolean = false) = button.apply {
+            isAllCaps = false
+            setTextColor(if (selected) Color.rgb(229, 252, 248) else Color.rgb(137, 221, 215))
+            setTextSize(if (compact) 14f else 15f)
+            typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            minHeight = (if (compact) 38f else 44f).times(density).toInt()
+            minimumHeight = minHeight
+            setPadding((14f * density).toInt(), 0, (14f * density).toInt(), 0)
+            background = GradientDrawable().apply {
+                setColor(if (selected) Color.rgb(24, 124, 129) else Color.rgb(15, 50, 67))
+                setStroke((1f * density).toInt(), if (selected) Color.rgb(121, 218, 211) else Color.rgb(53, 117, 127))
+                cornerRadius = 14f * density
             }
-            "${it.name} · ${it.format}$remoteState"
-        } + "Add team"
-        ShowdownDialogBuilder(this)
-            .setTitle("Team library")
-            .setItems(labels.toTypedArray()) { _, selected ->
-                when {
-                    selected == 0 -> showTeamRemoteLibrary()
-                    selected == teams.size + 1 -> showTeamEditor()
-                    else -> showTeamEditor(teams[selected - 1])
+        }
+        fun renderResults() {
+            val visibleTeams = ShowdownTeamLibraryQuery.filter(
+                teams,
+                ShowdownTeamLibraryFilter(search.text.toString(), activeFolder[0])
+            )
+            resultSummary.text = if (activeFolder[0] == null) {
+                "${visibleTeams.size} of ${teams.size} teams"
+            } else {
+                val folderName = activeFolder[0].takeUnless { it.isNullOrBlank() } ?: "Unfiled"
+                "$folderName · ${visibleTeams.size} team${if (visibleTeams.size == 1) "" else "s"}"
+            }
+            resultList.removeAllViews()
+            if (visibleTeams.isEmpty()) {
+                resultList.addView(TextView(this).apply {
+                    text = if (teams.isEmpty()) "No teams yet. Add a team or import a backup." else "No teams match this search."
+                    setTextSize(17f)
+                    setTextColor(0xffcfe1e8.toInt())
+                    setPadding((12f * density).toInt(), (12f * density).toInt(), (12f * density).toInt(), (12f * density).toInt())
+                })
+            } else {
+                visibleTeams.forEach { team ->
+                    val remoteState = when {
+                        team.remoteNeedsUpload -> " · Upload needed"
+                        team.remoteId != null -> " · Uploaded"
+                        else -> ""
+                    }
+                    resultList.addView(styleTeamButton(Button(this)).apply {
+                        text = buildString {
+                            append(team.name)
+                            append("\n${team.format}")
+                            team.folder.takeIf(String::isNotBlank)?.let { append(" · $it") }
+                            append(remoteState)
+                        }
+                        gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
+                        setOnClickListener {
+                            teamDialog?.dismiss()
+                            showTeamEditor(team)
+                        }
+                    }, LinearLayout.LayoutParams(-1, -2).apply {
+                        bottomMargin = (8f * density).toInt()
+                    })
                 }
             }
+            teamDialog?.setTitle("Team library · ${visibleTeams.size}/${teams.size}")
+        }
+        fun renderFolders() {
+            folderBar.removeAllViews()
+            val options = buildList<Pair<String?, String>> {
+                add(null to "All teams")
+                add("" to "Unfiled")
+                ShowdownTeamLibraryQuery.folders(teams).forEach { add(it to it) }
+            }
+            options.forEach { (folder, label) ->
+                val selected = activeFolder[0].equals(folder, true)
+                folderBar.addView(styleTeamButton(Button(this), compact = true, selected = selected).apply {
+                    text = if (selected) "✓ $label" else label
+                    isSelected = selected
+                    setOnClickListener {
+                        activeFolder[0] = folder
+                        renderFolders()
+                        renderResults()
+                    }
+                }, LinearLayout.LayoutParams(-2, -2).apply {
+                    setMargins(0, 0, (8f * density).toInt(), 0)
+                })
+            }
+        }
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = renderResults()
+            override fun afterTextChanged(editable: Editable?) = Unit
+        })
+        val addButton = styleTeamButton(Button(this)).apply {
+            text = "Add team"
+            setOnClickListener {
+                teamDialog?.dismiss()
+                showTeamEditor(initialFolder = activeFolder[0].orEmpty())
+            }
+        }
+        val remoteButton = styleTeamButton(Button(this)).apply {
+            text = "Browse remote teams"
+            setOnClickListener {
+                teamDialog?.dismiss()
+                showTeamRemoteLibrary()
+            }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(search, LinearLayout.LayoutParams(-1, -2))
+            addView(HorizontalScrollView(this@MainActivity).apply {
+                overScrollMode = View.OVER_SCROLL_NEVER
+                addView(folderBar, LinearLayout.LayoutParams(-2, -2))
+            }, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = (8f * density).toInt()
+            })
+            addView(resultSummary, LinearLayout.LayoutParams(-1, -2))
+            addView(resultList, LinearLayout.LayoutParams(-1, -2))
+            addView(addButton, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = (8f * density).toInt()
+            })
+            addView(remoteButton, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = (8f * density).toInt()
+            })
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, LinearLayout.LayoutParams(-1, -2))
+        }
+        teamDialog = ShowdownDialogBuilder(this)
+            .setTitle("Team library · 0/${teams.size}")
+            .setView(scroll)
             .setNeutralButton("Export backup") { _, _ -> copyTeamBackup() }
             .setPositiveButton("Import backup") { _, _ -> showTeamBackupImport() }
             .setNegativeButton("Close", null)
-            .show()
+            .create()
+        teamDialog?.setOnShowListener {
+            styleTeamButton(addButton)
+            styleTeamButton(remoteButton)
+            renderFolders()
+            renderResults()
+        }
+        teamDialog?.show()
     }
 
     private fun showTeamRemoteLibrary(initialCommand: String = ShowdownTeamRemoteState.ownTeamsCommand()) {
@@ -3043,7 +3178,7 @@ class MainActivity : Activity() {
     private fun String.isLikelyTeamBackup() = ShowdownTeamUrlImporter.normalize(this) != null || contains("===") || contains("]") && contains("|") ||
         contains("\n-") || contains("Ability:", true) || contains(" @ ")
 
-    private fun showTeamEditor(existing: ShowdownTeam? = null) {
+    private fun showTeamEditor(existing: ShowdownTeam? = null, initialFolder: String = "") {
         val localId = existing?.id ?: java.util.UUID.randomUUID().toString()
         val name = EditText(this).apply {
             hint = "Team name"
@@ -3058,6 +3193,11 @@ class MainActivity : Activity() {
         val formatPicker = Button(this).apply {
             text = "Choose format from Showdown"
             setOnClickListener { showTeamFormatPicker(format) }
+        }
+        val folder = EditText(this).apply {
+            hint = "Folder (optional)"
+            setSingleLine(true)
+            setText(existing?.folder ?: initialFolder)
         }
         val packed = EditText(this).apply {
             hint = "Packed or Showdown export"
@@ -3122,7 +3262,8 @@ class MainActivity : Activity() {
         val setEditors = mutableListOf<TeamSetEditor>()
         val setFields = LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(24, 8, 24, 0)
+            val density = resources.displayMetrics.density
+            setPadding((24f * density).toInt(), (8f * density).toInt(), (24f * density).toInt(), 0)
             for (index in 0 until 6) {
                 setEditors += createTeamSetEditor(this, index, sets.getOrNull(index) ?: ShowdownTeamSet())
             }
@@ -3185,6 +3326,7 @@ class MainActivity : Activity() {
                     } else {
                         name.setText(reverted.name)
                         format.setText(reverted.format)
+                        folder.setText(reverted.folder)
                         packed.setText(reverted.packed)
                         val revertedSets = ShowdownTeamCodec.unpack(reverted.packed)
                         setEditors.forEachIndexed { index, editor ->
@@ -3207,7 +3349,7 @@ class MainActivity : Activity() {
             }
             val request = readValidatedTeamDraft("uploading the team") ?: return
             val (teamFormat, draft) = request
-            val saved = teamLibrary.save(name.text.toString(), teamFormat, draft.packed, localId)
+            val saved = teamLibrary.save(name.text.toString(), teamFormat, draft.packed, localId, folder.text.toString())
             val action = if (saved.remoteId == null) "save" else "update"
             val command = ShowdownTeamRemote.command(action, saved.remoteId, saved.name, saved.format, privateTeam, saved.packed)
             pendingTeamUpload = PendingTeamUpload(localId, saved.packed)
@@ -3312,6 +3454,7 @@ class MainActivity : Activity() {
             addView(name)
             addView(format)
             addView(formatPicker)
+            addView(folder)
             addView(importButton)
             addView(validateButton)
             addView(copyButton)
@@ -3385,7 +3528,7 @@ class MainActivity : Activity() {
                     teamFormat.isBlank() || teamPacked.isBlank() -> session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
                     validation.isNotEmpty() -> session.setConnectionStatus(validation.first())
                     else -> {
-                        teamLibrary.save(name.text.toString(), teamFormat, teamPacked, localId)
+                        teamLibrary.save(name.text.toString(), teamFormat, teamPacked, localId, folder.text.toString())
                         session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
                         dialog.dismiss()
                     }

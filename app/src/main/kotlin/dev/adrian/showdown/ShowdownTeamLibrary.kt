@@ -15,7 +15,8 @@ data class ShowdownTeam(
     val remotePrivateKey: String? = null,
     val uploadedPacked: String? = null,
     val uploadedName: String? = null,
-    val uploadedFormat: String? = null
+    val uploadedFormat: String? = null,
+    val folder: String = ""
 ) {
     val remoteNeedsUpload: Boolean
         get() = remoteId != null && (
@@ -35,33 +36,41 @@ class ShowdownTeamLibrary(context: Context) {
                 val value = values.getJSONObject(index)
                 add(
                     ShowdownTeam(
-                        value.getString("id"),
-                        value.getString("name").decodeTeamText(),
-                        value.getString("format").decodeTeamText(),
-                        value.getString("packed"),
-                        value.optString("remoteId").takeIf(String::isNotBlank),
-                        value.optString("remotePrivateKey").takeIf(String::isNotBlank),
-                        value.optString("uploadedPacked").takeIf(String::isNotBlank),
-                        value.optString("uploadedName").takeIf(String::isNotBlank)?.decodeTeamText(),
-                        value.optString("uploadedFormat").takeIf(String::isNotBlank)?.decodeTeamText()
+                        id = value.getString("id"),
+                        name = value.getString("name").decodeTeamText(),
+                        format = value.getString("format").decodeTeamText(),
+                        packed = value.getString("packed"),
+                        remoteId = value.optString("remoteId").takeIf(String::isNotBlank),
+                        remotePrivateKey = value.optString("remotePrivateKey").takeIf(String::isNotBlank),
+                        uploadedPacked = value.optString("uploadedPacked").takeIf(String::isNotBlank),
+                        uploadedName = value.optString("uploadedName").takeIf(String::isNotBlank)?.decodeTeamText(),
+                        uploadedFormat = value.optString("uploadedFormat").takeIf(String::isNotBlank)?.decodeTeamText(),
+                        folder = value.optString("folder").decodeTeamText()
                     )
                 )
             }
         }
     }.getOrDefault(emptyList())
 
-    fun save(name: String, format: String, packed: String, id: String = UUID.randomUUID().toString()): ShowdownTeam {
+    fun save(
+        name: String,
+        format: String,
+        packed: String,
+        id: String = UUID.randomUUID().toString(),
+        folder: String? = null
+    ): ShowdownTeam {
         val previous = teams().firstOrNull { it.id == id }
         val team = ShowdownTeam(
-            id,
-            name.trim().ifBlank { "Untitled team" },
-            format.trim(),
-            packed.trim(),
-            previous?.remoteId,
-            previous?.remotePrivateKey,
-            previous?.uploadedPacked,
-            previous?.uploadedName,
-            previous?.uploadedFormat
+            id = id,
+            name = name.trim().ifBlank { "Untitled team" },
+            format = format.trim(),
+            packed = packed.trim(),
+            remoteId = previous?.remoteId,
+            remotePrivateKey = previous?.remotePrivateKey,
+            uploadedPacked = previous?.uploadedPacked,
+            uploadedName = previous?.uploadedName,
+            uploadedFormat = previous?.uploadedFormat,
+            folder = folder?.trim()?.trim('/') ?: previous?.folder.orEmpty()
         )
         val updated = teams().filterNot { it.id == team.id } + team
         write(updated)
@@ -82,7 +91,8 @@ class ShowdownTeamLibrary(context: Context) {
             id = UUID.randomUUID().toString(),
             name = copyName,
             format = original.format,
-            packed = original.packed
+            packed = original.packed,
+            folder = original.folder
         )
         write(storedTeams + copy)
         return copy
@@ -159,6 +169,7 @@ class ShowdownTeamLibrary(context: Context) {
                         .put("format", value.format)
                         .put("packed", value.packed)
                         .apply {
+                            if (value.folder.isNotBlank()) put("folder", value.folder)
                             value.remoteId?.let { put("remoteId", it) }
                             value.remotePrivateKey?.let { put("remotePrivateKey", it) }
                             value.uploadedPacked?.let { put("uploadedPacked", it) }

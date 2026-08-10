@@ -22,14 +22,25 @@ class ShowdownTeamBackupCodecTest {
     @Test
     fun packsAndParsesReadableTeamBackups() {
         val source = listOf(
-            ShowdownTeam("one", "Balance", "gen9ou", ShowdownTeamCodec.pack(listOf(ShowdownTeamSet(species = "Gholdengo", moves = listOf("Make It Rain")))))
+            ShowdownTeam("one", "Balance", "gen9ou", ShowdownTeamCodec.pack(listOf(ShowdownTeamSet(species = "Gholdengo", moves = listOf("Make It Rain")))), folder = "Tournament")
         )
 
         val parsed = ShowdownTeamBackupCodec.parse(ShowdownTeamBackupCodec.toText(source))
 
         assertEquals("Balance", parsed.single().name)
         assertEquals("gen9ou", parsed.single().format)
+        assertEquals("Tournament", parsed.single().folder)
         assertTrue(ShowdownTeamCodec.toText(ShowdownTeamCodec.unpack(parsed.single().packed)).contains("makeitrain"))
+    }
+
+    @Test
+    fun packsAndParsesFolderPrefixesInPackedBackups() {
+        val packed = ShowdownTeamCodec.pack(listOf(ShowdownTeamSet(species = "Gholdengo", moves = listOf("Make It Rain"))))
+
+        val parsed = ShowdownTeamBackupCodec.parse("gen9ou]Tournament/Balance|$packed")
+
+        assertEquals("Balance", parsed.single().name)
+        assertEquals("Tournament", parsed.single().folder)
     }
 
     @Test
