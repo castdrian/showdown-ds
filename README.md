@@ -2,12 +2,10 @@
 
 Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
-<p align="center">
-  <img src="media/showdown-upper.png" alt="Showdown battle on the upper display" width="100%">
-</p>
-<p align="center">
+<div align="center">
+  <img src="media/showdown-upper.png" alt="Showdown battle on the upper display" width="100%"><br>
   <img src="media/showdown-lower.png" alt="Showdown move controls on the lower display" width="64.6%">
-</p>
+</div>
 
 ## Hardware target
 

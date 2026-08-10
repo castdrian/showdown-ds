@@ -782,12 +782,13 @@ class CommandDeckView(
             paint.style = Paint.Style.FILL
         }
         drawMovePressAnimation(canvas, surface, palette, pressProgress, scale)
-        val iconChip = RectF(surface.right - 84f * scale, surface.top + 14f * scale, surface.right - 24f * scale, surface.top + 54f * scale)
+        val typeBadge = RectF(surface.right - 340f * scale, surface.top + 8f * scale, surface.right - 18f * scale, surface.top + 68f * scale)
         paint.color = Color.argb(108, 0, 14, 25)
-        canvas.drawRoundRect(iconChip, 16f * scale, 16f * scale, paint)
+        canvas.drawRoundRect(typeBadge, 18f * scale, 18f * scale, paint)
         typeIcon(move.type)?.let { icon ->
             source.set(0, 0, icon.width, icon.height)
-            destination.set(iconChip.centerX() - 17f * scale, iconChip.centerY() - 17f * scale, iconChip.centerX() + 17f * scale, iconChip.centerY() + 17f * scale)
+            val iconCenterX = typeBadge.left + 34f * scale
+            destination.set(iconCenterX - 24f * scale, typeBadge.centerY() - 24f * scale, iconCenterX + 24f * scale, typeBadge.centerY() + 24f * scale)
             paint.alpha = 255
             canvas.drawBitmap(icon, source, destination, paint)
         }
@@ -797,7 +798,7 @@ class CommandDeckView(
         val moveNameLeft = surface.left + 42f * scale
         drawSoftText(
             canvas,
-            fitTextToWidth(move.name, iconChip.left - moveNameLeft - 16f * scale),
+            fitTextToWidth(move.name, typeBadge.left - moveNameLeft - 16f * scale),
             moveNameLeft,
             surface.top + 54f * scale,
             PAPER,
