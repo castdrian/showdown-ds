@@ -171,4 +171,20 @@ class ShowdownLobbyStateTest {
 
         assertEquals("battle-gen9ou-2", lobby.firstNewBattle(setOf("battle-gen9ou-1")))
     }
+
+    @Test
+    fun selectsAnAuthoritativeBattleForReconnect() {
+        val lobby = ShowdownLobbyState()
+        lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-gen9ou-1\":\"Adrian vs. Gladion\"}}"))
+
+        assertEquals("battle-gen9ou-1", lobby.battleForReconnect(null, null))
+        assertEquals(null, lobby.battleForReconnect("battle-gen9ou-1", null))
+        assertEquals(null, lobby.battleForReconnect(null, "battle-gen9ou-1"))
+        assertEquals("battle-gen9ou-1", lobby.battleForReconnect(null, "battle-gen9ou-1", true))
+
+        lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-gen9ou-1\":\"Adrian vs. Gladion\",\"battle-gen9ou-2\":\"Adrian vs. Misty\"}}"))
+
+        assertEquals(null, lobby.battleForReconnect(null, "battle-gen9ou-1"))
+        assertTrue(lobby.battleForReconnect(null, "battle-gen9ou-1", true) in setOf("battle-gen9ou-1", "battle-gen9ou-2"))
+    }
 }

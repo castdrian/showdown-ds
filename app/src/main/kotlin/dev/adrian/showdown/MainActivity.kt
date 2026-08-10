@@ -91,6 +91,10 @@ class MainActivity : Activity() {
     private var completedBattleRoomId: String? = null
     private var leftBattleRoomId: String? = null
     private var pendingBattleJoinRoomId: String? = null
+    private var pendingBattleSearchFormat: String? = null
+    private var pendingBattleSearchLabel: String? = null
+    private var pendingBattleSearchUsesRandomTeams: Boolean? = null
+    private var pendingBattleSearchTeamPacked: String? = null
     private var battleProtocolReady = false
     private var pendingDecisionCommand: String? = null
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
@@ -322,6 +326,10 @@ class MainActivity : Activity() {
         outState.putStringArrayList("reconnect_lobby_commands", ArrayList(reconnectLobbyCommands.orEmpty()))
         outState.putString("active_search_format", activeSearchFormat)
         outState.putString("active_battle_room", activeBattleRoomId)
+        outState.putString("pending_battle_search_format", pendingBattleSearchFormat)
+        outState.putString("pending_battle_search_label", pendingBattleSearchLabel)
+        outState.putBoolean("pending_battle_search_random", pendingBattleSearchUsesRandomTeams == true)
+        outState.putString("pending_battle_search_team", pendingBattleSearchTeamPacked)
         outState.putString("battle_player_slot", session.battlePlayerSlot())
         outState.putString("completed_battle_room", completedBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
@@ -706,6 +714,10 @@ class MainActivity : Activity() {
             lobbyState.clearBattle(roomId)
             completedBattleRoomId = roomId
             activeBattleRoomId = null
+            pendingBattleSearchFormat = null
+            pendingBattleSearchLabel = null
+            pendingBattleSearchUsesRandomTeams = null
+            pendingBattleSearchTeamPacked = null
             battleProtocolReady = false
             pendingDecisionCommand = null
             clearPersistedLobbyState()
@@ -732,21 +744,43 @@ class MainActivity : Activity() {
         beginBattleSearch()
     }
 
-    private fun beginBattleSearch() {
-        val teamOptions = teamLibrary.teams().filter { it.format.equals(session.matchFormat.id, true) }
-        if (!session.matchFormat.usesRandomTeams && teamOptions.isEmpty()) {
-            session.setConnectionStatus("Save a ${session.matchFormat.label} team before searching.")
+    private fun beginBattleSearch(
+        searchFormat: String? = null,
+        searchTeamPacked: String? = null,
+        searchLabel: String? = null,
+        searchUsesRandomTeams: Boolean? = null
+    ) {
+        val format = searchFormat?.let { id ->
+            BattleSession.MatchFormat.defaults.firstOrNull { it.id.equals(id, true) }
+                ?: BattleSession.MatchFormat(
+                    id = id,
+                    label = searchLabel ?: id,
+                    menuLabel = searchLabel ?: id,
+                    usesRandomTeams = searchUsesRandomTeams ?: (id.contains("randombattle") || id.contains("battlefactory"))
+                )
+        } ?: session.matchFormat
+        if (format.id != session.matchFormat.id || format.label != session.matchFormat.label) {
+            session.setMatchFormat(format)
+            getSharedPreferences("showdown", MODE_PRIVATE).edit()
+                .putString("match_format", format.id)
+                .putString("match_format_label", format.label)
+                .apply()
+        }
+        val teamOptions = teamLibrary.teams().filter { it.format.equals(format.id, true) }
+        if (!format.usesRandomTeams && searchTeamPacked.isNullOrBlank() && teamOptions.isEmpty()) {
+            session.setConnectionStatus("Save a ${format.label} team before searching.")
             showTeamLibrary()
             return
         }
-        if (!session.matchFormat.usesRandomTeams && teamOptions.size > 1) {
+        if (!format.usesRandomTeams && searchTeamPacked.isNullOrBlank() && teamOptions.size > 1) {
             showTeamPicker(teamOptions) {
                 pendingSearchTeamPacked = it.packed
                 startLobbyConnection()
             }
             return
         }
-        pendingSearchTeamPacked = teamOptions.firstOrNull()?.packed?.takeUnless { session.matchFormat.usesRandomTeams }
+        pendingSearchTeamPacked = searchTeamPacked
+            ?: teamOptions.firstOrNull()?.packed?.takeUnless { format.usesRandomTeams }
         startLobbyConnection()
     }
 
@@ -1722,6 +1756,10 @@ class MainActivity : Activity() {
         replayLoadRequest = null
         activeReplayLink = null
         pendingBattleJoinRoomId = null
+        pendingBattleSearchFormat = null
+        pendingBattleSearchLabel = null
+        pendingBattleSearchUsesRandomTeams = null
+        pendingBattleSearchTeamPacked = null
         chatRoomDialog?.dismiss()
         tournamentDialog?.dismiss()
         tournamentDialog = null
@@ -1771,6 +1809,17 @@ class MainActivity : Activity() {
             ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
         activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
         activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
+        pendingBattleSearchFormat = savedInstanceState?.getString("pending_battle_search_format")
+            ?: preferences.getString("pending_battle_search_format", null)
+        pendingBattleSearchLabel = savedInstanceState?.getString("pending_battle_search_label")
+            ?: preferences.getString("pending_battle_search_label", null)
+        pendingBattleSearchUsesRandomTeams = if (savedInstanceState?.containsKey("pending_battle_search_random") == true) {
+            savedInstanceState.getBoolean("pending_battle_search_random")
+        } else {
+            preferences.getBoolean("pending_battle_search_random", false)
+        }.takeIf { pendingBattleSearchFormat != null }
+        pendingBattleSearchTeamPacked = savedInstanceState?.getString("pending_battle_search_team")
+            ?: preferences.getString("pending_battle_search_team", null)
         val battlePlayerSlot = savedInstanceState?.getString("battle_player_slot") ?: preferences.getString("battle_player_slot", null)
         if (activeBattleRoomId != null) session.restoreBattlePlayerSlot(battlePlayerSlot)
         completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
@@ -1790,6 +1839,10 @@ class MainActivity : Activity() {
             .putString("reconnect_lobby_commands", encodeLobbyCommands(reconnectLobbyCommands))
             .putString("active_search_format", activeSearchFormat)
             .putString("active_battle_room", activeBattleRoomId)
+            .putString("pending_battle_search_format", pendingBattleSearchFormat)
+            .putString("pending_battle_search_label", pendingBattleSearchLabel)
+            .putBoolean("pending_battle_search_random", pendingBattleSearchUsesRandomTeams == true)
+            .putString("pending_battle_search_team", pendingBattleSearchTeamPacked)
             .putString("battle_player_slot", activeBattleRoomId?.let { session.battlePlayerSlot() })
             .apply()
     }
@@ -1802,6 +1855,10 @@ class MainActivity : Activity() {
         activeBattleRoomId = null
         completedBattleRoomId = null
         pendingBattleJoinRoomId = null
+        pendingBattleSearchFormat = null
+        pendingBattleSearchLabel = null
+        pendingBattleSearchUsesRandomTeams = null
+        pendingBattleSearchTeamPacked = null
         battleProtocolReady = false
         pendingDecisionCommand = null
         activeSearchFormat = null
@@ -1986,7 +2043,6 @@ class MainActivity : Activity() {
                             .putString("match_format_label", session.matchFormat.label)
                             .apply()
                         val previousChallenges = lobbyState.incomingChallenges
-                        val previousBattleRoomIds = lobbyState.battles.keys
                         val challengesUpdated = lines.any { it.startsWith("|updatechallenges|") }
                         lobbyState.applyProtocol(lines)
                         handlePrivateMessages(lines)
@@ -1999,8 +2055,12 @@ class MainActivity : Activity() {
                         }
                         if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") || it.startsWith("|queryresponse|roomlist|") }) renderRoomListDialog()
                         if (ladderDialog != null && lines.any { it.startsWith("|queryresponse|laddertop|") }) renderLadderDialog()
-                        if (activeSearchFormat != null) {
-                            lobbyState.firstNewBattle(previousBattleRoomIds)?.let { matchedRoomId ->
+                        if (lines.any { it.startsWith("|updatesearch|") }) {
+                            lobbyState.battleForReconnect(
+                                activeBattleRoomId,
+                                pendingBattleJoinRoomId,
+                                pendingBattleSearchFormat != null
+                            )?.let { matchedRoomId ->
                                 joinMatchedBattle(connection, matchedRoomId)
                             }
                         }
@@ -2025,14 +2085,17 @@ class MainActivity : Activity() {
                         if (noInitMessage != null && roomId != leftBattleRoomId &&
                             (roomId == activeBattleRoomId || roomId == pendingBattleJoinRoomId)
                         ) {
-                            val wasPendingJoin = pendingBattleJoinRoomId == roomId && activeBattleRoomId != roomId
+                            val searchFormat = pendingBattleSearchFormat
+                            val searchLabel = pendingBattleSearchLabel
+                            val searchUsesRandomTeams = pendingBattleSearchUsesRandomTeams
+                            val searchTeam = pendingBattleSearchTeamPacked
                             reconnectHandler.removeCallbacks(battleRejoinTimeout)
                             lobbyState.clearBattle(roomId)
                             leftBattleRoomId = roomId
                             clearBattleRoomState()
-                            if (wasPendingJoin) {
+                            if (searchFormat != null) {
                                 session.setConnectionStatus("That battle ended before you could join. Finding another battle…")
-                                beginBattleSearch()
+                                beginBattleSearch(searchFormat, searchTeam, searchLabel, searchUsesRandomTeams)
                             } else {
                                 session.setConnectionStatus(noInitMessage)
                             }
@@ -2046,7 +2109,13 @@ class MainActivity : Activity() {
                             if (!confirmedJoin) return@runOnUiThread
                             leftBattleRoomId = null
                         }
-                        if (confirmedJoin) pendingBattleJoinRoomId = null
+                        if (confirmedJoin) {
+                            pendingBattleJoinRoomId = null
+                            pendingBattleSearchFormat = null
+                            pendingBattleSearchLabel = null
+                            pendingBattleSearchUsesRandomTeams = null
+                            pendingBattleSearchTeamPacked = null
+                        }
                         if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
                         if (lines.any { it.startsWith("|sentchoice|") }) pendingDecisionCommand = null
                         activeBattleRoomId = roomId
@@ -2077,6 +2146,10 @@ class MainActivity : Activity() {
         if (activeBattleRoomId != null || !connection.sendGlobal(ShowdownLobbyState.joinBattleCommand(roomId))) return
         session.prepareForLobby()
         pendingBattleJoinRoomId = roomId
+        pendingBattleSearchFormat = activeSearchFormat
+        pendingBattleSearchLabel = activeSearchFormat?.let { session.matchFormat.label }
+        pendingBattleSearchUsesRandomTeams = activeSearchFormat?.let { session.matchFormat.usesRandomTeams }
+        pendingBattleSearchTeamPacked = pendingSearchTeamPacked
         activeSearchFormat?.let(lobbyState::clearSearch)
         activeSearchFormat = null
         pendingSearch = false
@@ -2881,6 +2954,11 @@ class MainActivity : Activity() {
         teamPrivacyButton = null
         activeBattleRoomId = null
         completedBattleRoomId = null
+        pendingBattleJoinRoomId = null
+        pendingBattleSearchFormat = null
+        pendingBattleSearchLabel = null
+        pendingBattleSearchUsesRandomTeams = null
+        pendingBattleSearchTeamPacked = null
         pendingDecisionCommand = null
         displayedOutgoingChallenge = null
         displayedIncomingChallenge = null
@@ -4019,6 +4097,11 @@ class MainActivity : Activity() {
         if (isFinishing) return
         activeBattleRoomId = null
         completedBattleRoomId = null
+        pendingBattleJoinRoomId = null
+        pendingBattleSearchFormat = null
+        pendingBattleSearchLabel = null
+        pendingBattleSearchUsesRandomTeams = null
+        pendingBattleSearchTeamPacked = null
         battleProtocolReady = false
         pendingDecisionCommand = null
         activeSearchFormat = null
