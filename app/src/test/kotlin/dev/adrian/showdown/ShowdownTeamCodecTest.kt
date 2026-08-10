@@ -128,7 +128,7 @@ Tera Type: Steel
 
     @Test
     fun parsesAndExportsShowdownJson() {
-        val input = """[{"name":"Lead","species":"Gholdengo","item":"Leftovers","ability":"Good as Gold","moves":["Make It Rain","Shadow Ball"],"nature":"Timid","evs":{"hp":4,"spa":252,"spe":252},"ivs":{"atk":0},"level":50,"teraType":"Steel"}]"""
+        val input = """[{"name":"Lead","species":"Gholdengo","item":"Leftovers","ability":"Good as Gold","moves":["Make It Rain","Shadow Ball"],"nature":"Timid","evs":{"hp":4,"spa":252,"spe":252},"ivs":{"atk":0},"level":50,"hpType":"Ice","teraType":"Steel"}]"""
 
         val set = ShowdownTeamCodec.parse(input).single()
 
@@ -138,7 +138,10 @@ Tera Type: Steel
         assertEquals(listOf(4, 0, 0, 252, 0, 252), set.evs)
         assertEquals(listOf(31, 0, 31, 31, 31, 31), set.ivs)
         assertEquals(50, set.level)
+        assertEquals("Ice", set.hiddenPowerType)
         assertEquals("Steel", set.teraType)
-        assertEquals(1, ShowdownTeamCodec.parse(ShowdownTeamCodec.toJson(listOf(set))).size)
+        val exported = ShowdownTeamCodec.toJson(listOf(set))
+        assertTrue(exported.contains("\"hpType\":\"Ice\""))
+        assertEquals(1, ShowdownTeamCodec.parse(exported).size)
     }
 }
