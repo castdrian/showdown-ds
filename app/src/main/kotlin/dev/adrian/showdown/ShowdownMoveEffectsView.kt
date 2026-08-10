@@ -22,6 +22,7 @@ class ShowdownMoveEffectsView(
     private var pageLoaded = false
     private var playbackPaused = false
     private var playbackSpeed = 1f
+    private var released = false
     private val nativeAudioBridge = NativeAudioBridge(audioCueListener, audioCueResetter)
 
     init {
@@ -38,6 +39,7 @@ class ShowdownMoveEffectsView(
         addJavascriptInterface(nativeAudioBridge, NATIVE_AUDIO_BRIDGE)
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
+                if (released) return
                 pageLoaded = true
                 runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
                 seed(protocolHistoryProvider())
@@ -83,9 +85,19 @@ class ShowdownMoveEffectsView(
     }
 
     fun release() {
+        if (released) return
+        released = true
         pendingPackets.clear()
-        stopLoading()
-        destroy()
+        val cleanup = {
+            pageLoaded = false
+            stopLoading()
+            destroy()
+        }
+        if (pageLoaded) {
+            evaluateJavascript("window.ShowdownNativeEffects.release();") { cleanup() }
+        } else {
+            cleanup()
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean = false
@@ -143,7 +155,7 @@ class ShowdownMoveEffectsView(
                     (function () {
                         var battle = null;
                         var animationSpeed = 1;
-                        var hideFrame = 0;
+                        var chromeObserver = null;
                         function nativeCue(value) {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.cue(value);
                         }
@@ -221,16 +233,22 @@ class ShowdownMoveEffectsView(
                                 element.addClass('native-effects-hidden').css('visibility', 'hidden');
                             });
                         }
-                        function keepChromeHidden() {
-                            if (!battle) return;
+                        function observeChrome() {
+                            if (chromeObserver) chromeObserver.disconnect();
+                            chromeObserver = new MutationObserver(function () {
+                                if (battle) hideChrome();
+                            });
+                            chromeObserver.observe(document.getElementById('battle'), { childList: true, subtree: true });
                             hideChrome();
-                            hideFrame = window.requestAnimationFrame(keepChromeHidden);
                         }
                         function createBattle() {
                             nativeBattleStarted();
                             installAudioHooks();
+                            if (chromeObserver) {
+                                chromeObserver.disconnect();
+                                chromeObserver = null;
+                            }
                             if (battle) battle.destroy();
-                            if (hideFrame) window.cancelAnimationFrame(hideFrame);
                             document.getElementById('battle').innerHTML = '';
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', paused: true, ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
@@ -242,9 +260,8 @@ class ShowdownMoveEffectsView(
                                 scene.acceleration *= animationSpeed;
                             };
                             scene.acceleration = animationSpeed;
-                            hideChrome();
+                            observeChrome();
                             layout();
-                            keepChromeHidden();
                         }
                         function add(lines) {
                             lines.forEach(function (line) {
@@ -274,6 +291,16 @@ class ShowdownMoveEffectsView(
                             },
                             resume: function () {
                                 if (battle && battle.paused) battle.play();
+                            },
+                            release: function () {
+                                if (chromeObserver) {
+                                    chromeObserver.disconnect();
+                                    chromeObserver = null;
+                                }
+                                if (battle) {
+                                    battle.destroy();
+                                    battle = null;
+                                }
                             }
                         };
                     }());

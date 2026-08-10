@@ -47,4 +47,13 @@ class ShowdownMoveDexTest {
         assertEquals(BattleSession.MoveInfo("—", "—"), info["splash"])
         assertEquals(BattleSession.MoveInfo("110", "70"), info["thunder"])
     }
+
+    @Test
+    fun keepsFocusBlastAsAFightingMove() {
+        val types = ShowdownMoveDex.parseMoveTypes(
+            """{"focusblast":{"name":"Focus Blast","type":"Fighting"}}"""
+        )
+
+        assertEquals("FIGHTING", types["focusblast"])
+    }
 }

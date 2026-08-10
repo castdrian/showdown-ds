@@ -15,6 +15,7 @@ import android.graphics.Shader
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import java.util.Locale
 import kotlin.math.roundToInt
 
 class CommandDeckView(
@@ -464,7 +465,7 @@ class CommandDeckView(
             move,
             scale
         )
-        sectionTop += metricHeight + if (compact) 8f * scale else 12f * scale
+        sectionTop += metricHeight + if (compact) 20f * scale else 24f * scale
         val contextHeight = if (compact) 84f * scale else 96f * scale
         drawMoveContext(
             canvas,
@@ -829,8 +830,6 @@ class CommandDeckView(
             paint.color = Color.argb(132, 3, 12, 20)
             canvas.drawPath(moveRowPath(surface, scale), paint)
         }
-        paint.color = Color.argb(194, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
-        canvas.drawRoundRect(RectF(surface.left + 13f * scale, surface.top + 12f * scale, surface.left + 19f * scale, surface.bottom - 12f * scale), 3f * scale, 3f * scale, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = if (focused) 3f * scale else 1.5f * scale
         paint.color = if (focused) Color.rgb(225, 255, 247) else Color.argb(174, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
@@ -1571,28 +1570,9 @@ class CommandDeckView(
     }
 
     private fun movePalette(type: String): MovePalette {
-        val canonical = when (type) {
-            "NORMAL" -> Color.rgb(145, 151, 159)
-            "FIRE" -> Color.rgb(250, 112, 60)
-            "WATER" -> Color.rgb(93, 144, 246)
-            "ELECTRIC" -> Color.rgb(245, 202, 48)
-            "GRASS" -> Color.rgb(93, 194, 102)
-            "ICE" -> Color.rgb(104, 204, 221)
-            "FIGHTING" -> Color.rgb(216, 69, 62)
-            "POISON" -> Color.rgb(177, 83, 188)
-            "GROUND" -> Color.rgb(208, 150, 77)
-            "FLYING" -> Color.rgb(125, 144, 236)
-            "PSYCHIC" -> Color.rgb(241, 91, 151)
-            "BUG" -> Color.rgb(151, 181, 50)
-            "ROCK" -> Color.rgb(178, 145, 67)
-            "GHOST" -> Color.rgb(105, 88, 173)
-            "DRAGON" -> Color.rgb(105, 83, 236)
-            "DARK" -> Color.rgb(118, 88, 72)
-            "STEEL" -> Color.rgb(126, 145, 171)
-            "FAIRY" -> Color.rgb(232, 128, 177)
-            else -> Color.rgb(89, 107, 127)
-        }
-        val base = if (type == "NORMAL" || type == "DARK") canonical else vibrant(canonical)
+        val normalizedType = type.trim().uppercase(Locale.ROOT)
+        val canonical = ShowdownTypePalette.canonical(normalizedType)
+        val base = if (normalizedType == "NORMAL" || normalizedType == "DARK") canonical else vibrant(canonical)
         return MovePalette(
             blend(base, PAPER, 0.10f),
             blend(base, Color.BLACK, 0.08f),
