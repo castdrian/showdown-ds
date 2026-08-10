@@ -1284,7 +1284,11 @@ class CommandDeckView(
     private fun readableTextSize(designPixels: Float, scale: Float, minimumPixels: Float = 12f): Float = maxOf(
         designPixels * scale,
         minimumPixels * scale,
-        ThorDisplayProfile.minimumReadablePixels(width.toInt(), height.toInt())
+        ThorDisplayProfile.minimumReadablePixels(
+            width.toInt(),
+            height.toInt(),
+            resources.displayMetrics.density * resources.configuration.fontScale
+        )
     )
 
     private companion object {

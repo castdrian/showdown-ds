@@ -29,4 +29,17 @@ class ThorDisplayProfileTest {
             )
         )
     }
+
+    @Test
+    fun scalesTheLowerPanelFloorToFourteenSpAtThorDensity() {
+        assertEquals(
+            ThorDisplayProfile.LOWER_MINIMUM_TEXT_SP * 2.625f,
+            ThorDisplayProfile.minimumReadablePixels(
+                ThorDisplayProfile.LOWER_WIDTH_PIXELS,
+                ThorDisplayProfile.LOWER_HEIGHT_PIXELS,
+                2.625f
+            ),
+            0.001f
+        )
+    }
 }

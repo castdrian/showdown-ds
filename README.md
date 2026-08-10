@@ -12,7 +12,7 @@ All physical measurements use metric units.
 - Lower display: 1240 × 1080 pixels, 99.6 mm diagonal, 60 Hz.
 - Closed enclosure: 150 × 94 × 25.6 mm, approximately 380 g.
 
-The repository AVD uses the two display resolutions and densities from the Thor target. The published hardware specifications are summarized by [Android Central](https://www.androidcentral.com/gaming/android-games/ayn-thor-pre-orders-open-tonight-and-its-much-cheaper-than-i-thought).
+The repository AVD uses the two display resolutions and densities from the Thor target. The display sizes are listed by [AYN](https://www.ayntec.com/products/ayn-thor), with the resolution and enclosure dimensions cross-checked against [Android Central](https://www.androidcentral.com/gaming/android-games/ayn-thor-pre-orders-open-tonight-and-its-much-cheaper-than-i-thought).
 
 ## Build
 
