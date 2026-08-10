@@ -465,7 +465,8 @@ class CommandDeckView(
             move,
             scale
         )
-        sectionTop += metricHeight + if (compact) 20f * scale else 24f * scale
+        val metricToContextGap = if (compact) 32f * scale else 36f * scale
+        sectionTop += metricHeight + metricToContextGap
         val contextHeight = if (compact) 84f * scale else 96f * scale
         drawMoveContext(
             canvas,
