@@ -309,6 +309,7 @@ class BattleSession {
     private var requestNoCancel = false
     private var requestTargetable = true
     private var activeGMaxAvailable = false
+    private var availableTeraType = ""
     private val playerSideConditions = mutableListOf<String>()
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
@@ -542,6 +543,8 @@ class BattleSession {
 
     fun availableGimmicks() = availableGimmicks.toList()
 
+    fun terastallizeType() = availableTeraType
+
     fun targetOptions() = targetOptions.toList()
 
     fun canShift() = decisionAvailable &&
@@ -641,9 +644,39 @@ class BattleSession {
     }
 
     fun setLiveBattleActive(value: Boolean) {
-        if (liveBattleActive == value) return
+        val changed = liveBattleActive != value
         liveBattleActive = value
-        if (!value) choiceCanBeCancelled = false
+        if (!value) {
+            decisionAvailable = false
+            choiceCanBeCancelled = false
+            requestNoCancel = false
+            requestTargetable = true
+            decisionKind = DecisionKind.WAIT
+            selectedGimmick = null
+            selectedTargetIndex = -1
+            activeSlotIndex = 0
+            requiredSwitches = 0
+            requestId = null
+            moves.clear()
+            zMoveVariants.clear()
+            maxMoveVariants.clear()
+            availableGimmicks.clear()
+            availableTeraType = ""
+            activeRequests.clear()
+            activeChoices.clear()
+            autoPassActiveSlots.clear()
+            revivingTeamIndices.clear()
+            usedGimmickFamilies.clear()
+            forceSwitchChoices.clear()
+            targetOptions.clear()
+            if (!battleFinished) {
+                battlePhase = BattlePhase.LOBBY
+                status = LOBBY_STATUS
+                latestBattleEvent = LOBBY_STATUS
+                latestBattleEventAtNanos = System.nanoTime()
+            }
+        }
+        if (!changed && value) return
         notifyListeners()
     }
 
@@ -693,7 +726,7 @@ class BattleSession {
         requestTargetable = true
         decisionKind = DecisionKind.WAIT
         panel = Panel.MENU
-        status = "Find a battle or challenge a player."
+        status = LOBBY_STATUS
         latestBattleEvent = status
         latestBattleEventAtNanos = System.nanoTime()
         notifyListeners()
@@ -804,16 +837,20 @@ class BattleSession {
         panel = nextPanel
         focusedMessage = 0
         if (nextPanel == Panel.MENU) focusedMenuItem = 0
-        status = when (nextPanel) {
-            Panel.MOVES -> "Choose a move"
-            Panel.TEAM -> when (decisionKind) {
-                DecisionKind.SWITCH -> "Choose a Pokémon to switch in"
-                DecisionKind.TEAM_PREVIEW -> teamPreviewPrompt()
-                DecisionKind.MOVE -> "Choose a move or switch Pokémon"
-                else -> "Choose a Pokémon"
+        if (!liveBattleActive && !battleFinished) {
+            if (nextPanel == Panel.MOVES || nextPanel == Panel.TEAM) status = LOBBY_STATUS
+        } else {
+            status = when (nextPanel) {
+                Panel.MOVES -> "Choose a move"
+                Panel.TEAM -> when (decisionKind) {
+                    DecisionKind.SWITCH -> "Choose a Pokémon to switch in"
+                    DecisionKind.TEAM_PREVIEW -> teamPreviewPrompt()
+                    DecisionKind.MOVE -> "Choose a move or switch Pokémon"
+                    else -> "Choose a Pokémon"
+                }
+                Panel.ACTIVITY -> "Battle activity and chat"
+                Panel.MENU -> "Battle menu"
             }
-            Panel.ACTIVITY -> "Battle activity and chat"
-            Panel.MENU -> "Battle menu"
         }
         notifyListeners()
     }
@@ -1227,6 +1264,7 @@ class BattleSession {
         battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
         selectedGimmick = null
         availableGimmicks.clear()
+        availableTeraType = ""
         battleFinished = false
         battlePhase = BattlePhase.BATTLE
         openingEntrances = 0
@@ -1286,6 +1324,7 @@ class BattleSession {
         requestNoCancel = false
         requestTargetable = true
         activeGMaxAvailable = false
+        availableTeraType = ""
         decisionKind = DecisionKind.WAIT
         panel = Panel.MOVES
         status = "Battle starting"
@@ -2642,18 +2681,28 @@ class BattleSession {
     private fun updateAvailableGimmicks(active: JSONObject) {
         activeGMaxAvailable = active.optBoolean("gigantamax") ||
             active.optJSONObject("maxMoves")?.optBoolean("gigantamax") == true
+        availableTeraType = active.optString("canTerastallize").trim()
         val updated = mutableListOf<BattleGimmick>()
         val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
         if (zMoves != null && (0 until zMoves.length()).any { !zMoves.isNull(it) }) updated += BattleGimmick.Z_POWER
-        if (active.optBoolean("canMegaEvo")) updated += BattleGimmick.MEGA_EVOLUTION
-        if (active.optBoolean("canMegaEvoX")) updated += BattleGimmick.MEGA_EVOLUTION_X
-        if (active.optBoolean("canMegaEvoY")) updated += BattleGimmick.MEGA_EVOLUTION_Y
-        if (active.optBoolean("canUltraBurst")) updated += BattleGimmick.ULTRA_BURST
-        if (active.optBoolean("canDynamax")) updated += BattleGimmick.DYNAMAX
-        if (active.optString("canTerastallize").isNotBlank()) updated += BattleGimmick.TERASTALLIZATION
+        if (hasProtocolFlag(active, "canMegaEvo")) updated += BattleGimmick.MEGA_EVOLUTION
+        if (hasProtocolFlag(active, "canMegaEvoX")) updated += BattleGimmick.MEGA_EVOLUTION_X
+        if (hasProtocolFlag(active, "canMegaEvoY")) updated += BattleGimmick.MEGA_EVOLUTION_Y
+        if (hasProtocolFlag(active, "canUltraBurst")) updated += BattleGimmick.ULTRA_BURST
+        if (hasProtocolFlag(active, "canDynamax")) updated += BattleGimmick.DYNAMAX
+        if (availableTeraType.isNotBlank()) updated += BattleGimmick.TERASTALLIZATION
         availableGimmicks.clear()
         availableGimmicks += updated.filterNot { gimmickFamily(it) in usedGimmickFamilies }
         if (selectedGimmick !in availableGimmicks) selectedGimmick = null
+    }
+
+    private fun hasProtocolFlag(active: JSONObject, key: String): Boolean {
+        return when (val value = active.opt(key)) {
+            is Boolean -> value
+            is String -> value.isNotBlank() && !value.equals("false", true)
+            JSONObject.NULL, null -> false
+            else -> true
+        }
     }
 
     private fun gimmickFamily(gimmick: BattleGimmick) = when (gimmick) {
@@ -3251,6 +3300,7 @@ class BattleSession {
     companion object {
         const val MENU_ITEM_COUNT = 14
         const val MENU_COLUMNS = 3
+        private const val LOBBY_STATUS = "Find a battle or challenge a player."
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun parseServerFormats(line: String): List<MatchFormat> {

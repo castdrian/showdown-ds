@@ -140,6 +140,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun deactivatingLiveBattleClearsTheBattlePrompt() {
+        val session = BattleSession()
+        session.setLiveBattleActive(true)
+        session.applyProtocolLine("|request|{\"rqid\":9,\"active\":[{\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15}]}]}")
+
+        session.setLiveBattleActive(false)
+
+        assertFalse(session.isLiveBattleActive())
+        assertFalse(session.decisionAvailable)
+        assertEquals(BattleSession.DecisionKind.WAIT, session.decisionKind)
+        assertEquals("Find a battle or challenge a player.", session.status)
+    }
+
+    @Test
     fun lobbyChatAndPrivateMessagesEnterActivity() {
         val session = BattleSession()
 
@@ -601,6 +615,7 @@ class BattleSessionTest {
             ),
             session.availableGimmicks()
         )
+        assertEquals("Fire", session.terastallizeType())
         session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
         session.confirmSelection()
 
@@ -653,6 +668,19 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertTrue(session.chatMessages().last().contains("/choose move 1 megax"))
+    }
+
+    @Test
+    fun requestAcceptsStringMegaCapabilityFromCustomFormats() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|request|{\"active\":[{\"canMegaEvo\":\"Incineroar-Mega\",\"moves\":[{\"move\":\"Flare Blitz\",\"pp\":15}]}]}")
+
+        assertEquals(listOf(BattleSession.BattleGimmick.MEGA_EVOLUTION), session.availableGimmicks())
+        session.selectGimmick(BattleSession.BattleGimmick.MEGA_EVOLUTION)
+        session.confirmSelection()
+
+        assertTrue(session.chatMessages().last().contains("/choose move 1 mega"))
     }
 
     @Test

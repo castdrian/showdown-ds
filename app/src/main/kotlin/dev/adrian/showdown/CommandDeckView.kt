@@ -321,7 +321,7 @@ class CommandDeckView(
         val gap = 16f * scale
         val targetWidth = (right - left - gap * (targets.size - 1)) / targets.size
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(24f, scale, 21f)
+        paint.textSize = fittedTextSize("TARGET", right - left - 24f * scale, readableTextSize(24f, scale, 21f), 18f * scale)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText("TARGET", left, top + 18f * scale, paint)
         targets.forEachIndexed { index, target ->
@@ -336,7 +336,7 @@ class CommandDeckView(
             canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
             paint.style = Paint.Style.FILL
             paint.textAlign = Paint.Align.CENTER
-            paint.textSize = readableTextSize(24f, scale, 21f)
+            paint.textSize = fittedTextSize(target.label, bounds.width() - 24f * scale, readableTextSize(24f, scale, 21f), 18f * scale)
             paint.color = PAPER
             canvas.drawText(target.label, bounds.centerX(), bounds.centerY() + 7f * scale, paint)
             paint.textAlign = Paint.Align.LEFT
@@ -458,10 +458,10 @@ class CommandDeckView(
         }
         paint.textAlign = Paint.Align.LEFT
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(34f, scale, 29f, 20f)
+        paint.textSize = fittedTextSize(move.name, detailContent.width(), readableTextSize(34f, scale, 29f, 20f), 22f * scale)
         paint.color = PAPER
         val titleRow = RectF(detailContent.left, detailContent.top, detailContent.right, detailContent.top + if (compact) 58f * scale else 64f * scale)
-        canvas.drawText(fitTextToWidth(move.name, detailContent.width()), detailContent.left, centeredTextBaseline(titleRow.centerY()), paint)
+        canvas.drawText(move.name, detailContent.left, centeredTextBaseline(titleRow.centerY()), paint)
         var sectionTop = titleRow.bottom + if (compact) 8f * scale else 12f * scale
         val metricHeight = if (compact) 92f * scale else 112f * scale
         drawMoveMetrics(
@@ -493,9 +493,14 @@ class CommandDeckView(
         val titleBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
         paint.textAlign = Paint.Align.LEFT
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(30f, scale, 26f, 16f).coerceAtMost(rowHeight - 6f * scale)
+        paint.textSize = fittedTextSize(
+            move.name,
+            content.width(),
+            readableTextSize(30f, scale, 26f, 16f),
+            20f * scale
+        ).coerceAtMost(rowHeight - 6f * scale)
         paint.color = PAPER
-        canvas.drawText(fitTextToWidth(move.name, content.width()), content.left, centeredTextBaseline(titleBounds.centerY()), paint)
+        canvas.drawText(move.name, content.left, centeredTextBaseline(titleBounds.centerY()), paint)
         sectionTop = titleBounds.bottom + gap
         val accuracy = move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—"
         val metricsBounds = RectF(content.left, sectionTop, content.right, sectionTop + rowHeight)
@@ -537,18 +542,24 @@ class CommandDeckView(
         val labelInset = 16f * scale
         val labelWidth = bounds.width() - labelInset * 2f
         val labelSize = readableTextSize(18f, scale, 14f, 12f).coerceAtMost(bounds.height() * 0.22f)
-        paint.textSize = labelSize
+        paint.textSize = fittedTextSize(label, labelWidth, labelSize, 12f * scale)
         paint.color = Color.rgb(159, 221, 226)
         drawOutlinedText(
             canvas,
-            fitTextToWidth(label, labelWidth),
+            label,
             bounds.centerX(),
             bounds.top + 24f * scale,
             Color.rgb(3, 14, 22),
             Color.rgb(159, 221, 226),
             1.25f * scale
         )
-        paint.textSize = readableTextSize(38f, scale, 32f, 22f).coerceAtMost(bounds.height() * 0.5f)
+        val valueWidth = bounds.width() - 24f * scale
+        paint.textSize = fittedTextSize(
+            value,
+            valueWidth,
+            readableTextSize(38f, scale, 32f, 22f).coerceAtMost(bounds.height() * 0.5f),
+            22f * scale
+        )
         paint.color = PAPER
         drawOutlinedText(
             canvas,
@@ -573,12 +584,16 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(18f, scale, 16f, 15f).coerceAtMost(bounds.height() - 6f * scale)
-        val label = fitTextToWidth(text, bounds.width() - 24f * scale)
+        paint.textSize = fittedTextSize(
+            text,
+            bounds.width() - 24f * scale,
+            readableTextSize(18f, scale, 16f, 15f).coerceAtMost(bounds.height() - 6f * scale),
+            18f * scale
+        )
         paint.color = PAPER
         drawOutlinedText(
             canvas,
-            label,
+            text,
             bounds.centerX(),
             centeredTextBaseline(bounds.centerY()),
             Color.rgb(3, 14, 22),
@@ -617,19 +632,25 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = readableTextSize(18f, scale, 16f, 16f).coerceAtMost(summary.height() - 8f * scale)
-        val visibleEffects = effects.take(3).let { values ->
+        val visibleEffects = effects.take(1).let { values ->
             if (effects.size > values.size) values + "+${effects.size - values.size} more" else values
         }
-        val text = fitTextToWidth("FIELD  ${visibleEffects.joinToString(" · ")}", summary.width() - 24f * scale)
-        drawOutlinedText(
-            canvas,
-            text,
-            summary.left + 12f * scale,
-            centeredTextBaseline(summary.centerY()),
-            Color.rgb(3, 14, 22),
-            PAPER,
-            1.5f * scale
-        )
+        val text = "FIELD  ${visibleEffects.joinToString(" · ")}"
+        val lines = wrapText(text, summary.width() - 24f * scale)
+        paint.textAlign = Paint.Align.CENTER
+        val lineHeight = paint.textSize * 1.05f
+        lines.forEachIndexed { index, line ->
+            val centerY = summary.centerY() + (index - (lines.lastIndex / 2f)) * lineHeight
+            drawOutlinedText(
+                canvas,
+                line,
+                summary.centerX(),
+                centeredTextBaseline(centerY),
+                Color.rgb(3, 14, 22),
+                PAPER,
+                1.5f * scale
+            )
+        }
         paint.textAlign = Paint.Align.LEFT
     }
 
@@ -642,57 +663,83 @@ class CommandDeckView(
 
     private fun drawUtilityMessage(canvas: Canvas, bounds: RectF, scale: Float) {
         cancelChoiceBounds = null
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(24f, scale, 21f)
-        paint.color = Color.rgb(153, 224, 220)
-        canvas.drawText(if (session.decisionAvailable) "LAST ACTION" else "WAITING", bounds.centerX(), bounds.centerY() - 22f * scale, paint)
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(30f, scale, 26f)
-        paint.color = PAPER
-        val message = if (session.decisionAvailable) session.latestBattleEvent else session.status
-        val messageLines = wrapText(message, bounds.width() - 48f * scale)
-        val messageLineHeight = paint.textSize * 1.2f
-        val messageCenterY = bounds.centerY() + 34f * scale
-        messageLines.forEachIndexed { index, line ->
-            val offset = (index - (messageLines.lastIndex / 2f)) * messageLineHeight
-            canvas.drawText(
-                line,
-                bounds.centerX(),
-                messageCenterY + offset - (paint.ascent() + paint.descent()) / 2f,
-                paint
-            )
-        }
-        if (session.canCancelChoice()) {
-            cancelChoiceBounds = RectF(
+        val hasCancel = session.canCancelChoice()
+        val cancelBounds = if (hasCancel) {
+            RectF(
                 bounds.left + 18f * scale,
                 bounds.bottom - 104f * scale,
                 bounds.right - 18f * scale,
                 bounds.bottom - 20f * scale
             )
+        } else {
+            null
+        }
+        cancelChoiceBounds = cancelBounds
+        val textTop = bounds.top + 24f * scale
+        val textBottom = (cancelBounds?.top ?: bounds.bottom) - 28f * scale
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(24f, scale, 21f)
+        val title = if (session.decisionAvailable) "LAST ACTION" else "WAITING"
+        val titleHeight = paint.descent() - paint.ascent()
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        var messageSize = readableTextSize(30f, scale, 26f)
+        val message = if (session.decisionAvailable) session.latestBattleEvent else session.status
+        var messageLines: List<String>
+        var messageLineHeight: Float
+        var messageHeight: Float
+        val groupGap = 18f * scale
+        val availableHeight = (textBottom - textTop).coerceAtLeast(1f)
+        do {
+            paint.textSize = messageSize
+            messageLines = wrapText(message, bounds.width() - 48f * scale)
+            messageLineHeight = paint.textSize * 1.2f
+            messageHeight = messageLineHeight * messageLines.size
+            val groupHeight = titleHeight + groupGap + messageHeight
+            if (groupHeight <= availableHeight || messageSize <= 12f * scale) break
+            messageSize = (messageSize - 1f * scale).coerceAtLeast(12f * scale)
+        } while (true)
+        val groupHeight = titleHeight + groupGap + messageHeight
+        val groupTop = textTop + ((availableHeight - groupHeight) / 2f).coerceAtLeast(0f)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(24f, scale, 21f).coerceAtMost(titleHeight)
+        paint.color = Color.rgb(153, 224, 220)
+        canvas.drawText(title, bounds.centerX(), centeredTextBaseline(groupTop + titleHeight / 2f), paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = messageSize
+        paint.color = PAPER
+        messageLines.forEachIndexed { index, line ->
+            canvas.drawText(
+                line,
+                bounds.centerX(),
+                centeredTextBaseline(groupTop + titleHeight + groupGap + messageLineHeight * (index + 0.5f)),
+                paint
+            )
+        }
+        if (cancelBounds != null) {
             paint.shader = LinearGradient(
-                cancelChoiceBounds!!.left,
-                cancelChoiceBounds!!.top,
-                cancelChoiceBounds!!.right,
-                cancelChoiceBounds!!.bottom,
+                cancelBounds.left,
+                cancelBounds.top,
+                cancelBounds.right,
+                cancelBounds.bottom,
                 Color.rgb(112, 64, 103),
                 Color.rgb(67, 31, 67),
                 Shader.TileMode.CLAMP
             )
-            canvas.drawRoundRect(cancelChoiceBounds!!, 18f * scale, 18f * scale, paint)
+            canvas.drawRoundRect(cancelBounds, 18f * scale, 18f * scale, paint)
             paint.shader = null
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 1.5f * scale
             paint.color = Color.argb(188, 245, 157, 215)
-            canvas.drawRoundRect(cancelChoiceBounds!!, 18f * scale, 18f * scale, paint)
+            canvas.drawRoundRect(cancelBounds, 18f * scale, 18f * scale, paint)
             paint.style = Paint.Style.FILL
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val buttonTextInset = 18f * scale
             paint.textSize = readableTextSize(22f, scale, 18f, 14f).coerceAtMost(26f * scale)
             paint.color = PAPER
-            val buttonLabel = fitTextToWidth("CANCEL CHOICE", cancelChoiceBounds!!.width() - buttonTextInset * 2f)
-            val baseline = cancelChoiceBounds!!.centerY() - (paint.ascent() + paint.descent()) / 2f
-            canvas.drawText(buttonLabel, cancelChoiceBounds!!.centerX(), baseline, paint)
+            val buttonLabel = fitTextToWidth("CANCEL CHOICE", cancelBounds.width() - buttonTextInset * 2f)
+            val baseline = cancelBounds.centerY() - (paint.ascent() + paint.descent()) / 2f
+            canvas.drawText(buttonLabel, cancelBounds.centerX(), baseline, paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }
@@ -735,13 +782,12 @@ class CommandDeckView(
             paint.style = Paint.Style.FILL
         }
         drawMovePressAnimation(canvas, surface, palette, pressProgress, scale)
-        val iconChip = RectF(surface.right - 340f * scale, surface.top + 8f * scale, surface.right - 18f * scale, surface.top + 68f * scale)
+        val iconChip = RectF(surface.right - 84f * scale, surface.top + 14f * scale, surface.right - 24f * scale, surface.top + 54f * scale)
         paint.color = Color.argb(108, 0, 14, 25)
-        canvas.drawRoundRect(iconChip, 18f * scale, 18f * scale, paint)
+        canvas.drawRoundRect(iconChip, 16f * scale, 16f * scale, paint)
         typeIcon(move.type)?.let { icon ->
             source.set(0, 0, icon.width, icon.height)
-            val iconCenterX = iconChip.left + 34f * scale
-            destination.set(iconCenterX - 24f * scale, iconChip.centerY() - 24f * scale, iconCenterX + 24f * scale, iconChip.centerY() + 24f * scale)
+            destination.set(iconChip.centerX() - 17f * scale, iconChip.centerY() - 17f * scale, iconChip.centerX() + 17f * scale, iconChip.centerY() + 17f * scale)
             paint.alpha = 255
             canvas.drawBitmap(icon, source, destination, paint)
         }
@@ -923,16 +969,20 @@ class CommandDeckView(
             paint.color = if (selected) Color.argb((180f + 75f * glow).toInt(), 255, 255, 255) else Color.rgb(127, 184, 202)
             canvas.drawRoundRect(card, 26f * scale, 26f * scale, paint)
             paint.style = Paint.Style.FILL
-            val emblemSize = minOf(card.height() * 0.42f, if (gimmicks.size > 2) 62f * scale else 118f * scale)
+            val emblemSize = minOf(
+                card.height() * 0.42f,
+                if (gimmicks.size > 2) minOf(62f * scale, card.width() * 0.78f) else 118f * scale
+            )
             val emblemY = card.top + card.height() * 0.34f
-            drawGimmickAsset(canvas, gimmick, card.centerX(), emblemY, emblemSize)
+            drawGimmickIcon(canvas, gimmick, card.centerX(), emblemY, emblemSize, selected, scale)
             paint.textAlign = Paint.Align.CENTER
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(if (gimmicks.size > 2) 22f else 36f, scale, 20f)
             paint.color = if (selected) Color.rgb(22, 22, 22) else PAPER
-            val label = session.gimmickLabel(gimmick)
-            if (gimmick != BattleSession.BattleGimmick.Z_POWER) canvas.drawText(label.first().toString(), card.centerX(), card.top + card.height() * 0.48f, paint)
-            canvas.drawText(fitTextToWidth(label, card.width() - 24f * scale), card.centerX(), card.top + card.height() * 0.79f, paint)
+            val label = if (gimmicks.size > 2) compactGimmickLabel(gimmick) else session.gimmickLabel(gimmick)
+            val labelInset = if (gimmicks.size > 2) 8f * scale else 24f * scale
+            paint.textSize = fittedTextSize(label, card.width() - labelInset, paint.textSize, 10f * scale)
+            canvas.drawText(label, card.centerX(), card.top + card.height() * 0.79f, paint)
         }
         paint.textAlign = Paint.Align.LEFT
     }
@@ -954,18 +1004,220 @@ class CommandDeckView(
         else -> readableTextSize(42f, scale, 32f)
     }
 
-    private fun drawGimmickAsset(
+    private fun drawGimmickIcon(
         canvas: Canvas,
         gimmick: BattleSession.BattleGimmick,
         centerX: Float,
         centerY: Float,
-        size: Float
+        size: Float,
+        selected: Boolean,
+        scale: Float
     ) {
-        if (gimmick != BattleSession.BattleGimmick.Z_POWER) return
-        val symbol = zPowerSymbol ?: return
-        source.set(0, 0, symbol.width, symbol.height)
-        destination.set(centerX - size * 0.78f, centerY - size * 0.52f, centerX + size * 0.78f, centerY + size * 0.52f)
-        canvas.drawBitmap(symbol, source, destination, paint)
+        val radius = size * 0.52f
+        when (gimmick) {
+            BattleSession.BattleGimmick.Z_POWER -> drawZPowerIcon(canvas, centerX, centerY, size, selected, scale)
+            BattleSession.BattleGimmick.MEGA_EVOLUTION -> drawMegaIcon(canvas, centerX, centerY, radius, null, selected, scale)
+            BattleSession.BattleGimmick.MEGA_EVOLUTION_X -> drawMegaIcon(canvas, centerX, centerY, radius, "X", selected, scale)
+            BattleSession.BattleGimmick.MEGA_EVOLUTION_Y -> drawMegaIcon(canvas, centerX, centerY, radius, "Y", selected, scale)
+            BattleSession.BattleGimmick.ULTRA_BURST -> drawUltraIcon(canvas, centerX, centerY, radius, selected, scale)
+            BattleSession.BattleGimmick.DYNAMAX -> drawDynamaxIcon(canvas, centerX, centerY, radius, selected, scale)
+            BattleSession.BattleGimmick.TERASTALLIZATION -> drawTeraIcon(canvas, centerX, centerY, radius, selected, scale)
+        }
+    }
+
+    private fun compactGimmickLabel(gimmick: BattleSession.BattleGimmick) = when (gimmick) {
+        BattleSession.BattleGimmick.Z_POWER -> "Z"
+        BattleSession.BattleGimmick.MEGA_EVOLUTION -> "MEGA"
+        BattleSession.BattleGimmick.MEGA_EVOLUTION_X -> "M-X"
+        BattleSession.BattleGimmick.MEGA_EVOLUTION_Y -> "M-Y"
+        BattleSession.BattleGimmick.ULTRA_BURST -> "ULTRA"
+        BattleSession.BattleGimmick.DYNAMAX -> "MAX"
+        BattleSession.BattleGimmick.TERASTALLIZATION -> "TERA"
+    }
+
+    private fun drawZPowerIcon(canvas: Canvas, centerX: Float, centerY: Float, size: Float, selected: Boolean, scale: Float) {
+        val symbol = zPowerSymbol
+        if (symbol != null) {
+            source.set(0, 0, symbol.width, symbol.height)
+            val width = if (size < 50f * scale) size * 1.2f else size * 1.56f
+            destination.set(centerX - width / 2f, centerY - size * 0.52f, centerX + width / 2f, centerY + size * 0.52f)
+            paint.alpha = 255
+            canvas.drawBitmap(symbol, source, destination, paint)
+            return
+        }
+        drawIconHalo(canvas, centerX, centerY, size * 0.48f, Color.rgb(255, 188, 78), selected, scale)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(255, 221, 116)
+        canvas.drawPath(zigzagPath(centerX, centerY, size * 0.42f, size * 0.62f), paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2.5f * scale
+        paint.color = Color.rgb(255, 250, 211)
+        canvas.drawPath(zigzagPath(centerX, centerY, size * 0.42f, size * 0.62f), paint)
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawMegaIcon(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, variant: String?, selected: Boolean, scale: Float) {
+        val keystoneColor = if (variant == null) Color.rgb(255, 183, 70) else Color.rgb(116, 210, 255)
+        drawIconHalo(canvas, centerX, centerY, radius, keystoneColor, selected, scale)
+        paint.style = Paint.Style.FILL
+        paint.shader = LinearGradient(
+            centerX,
+            centerY - radius,
+            centerX,
+            centerY + radius,
+            Color.rgb(104, 112, 132),
+            Color.rgb(28, 33, 48),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawPath(keystonePath(centerX, centerY, radius * 0.9f, radius * 0.9f), paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2.5f * scale
+        paint.color = Color.rgb(205, 222, 238)
+        canvas.drawPath(keystonePath(centerX, centerY, radius * 0.9f, radius * 0.9f), paint)
+        canvas.drawLine(centerX - radius * 0.62f, centerY - radius * 0.06f, centerX + radius * 0.62f, centerY - radius * 0.06f, paint)
+        canvas.drawLine(centerX - radius * 0.36f, centerY - radius * 0.74f, centerX, centerY - radius * 0.06f, paint)
+        canvas.drawLine(centerX + radius * 0.36f, centerY - radius * 0.74f, centerX, centerY - radius * 0.06f, paint)
+        canvas.drawLine(centerX - radius * 0.38f, centerY + radius * 0.7f, centerX, centerY - radius * 0.06f, paint)
+        canvas.drawLine(centerX + radius * 0.38f, centerY + radius * 0.7f, centerX, centerY - radius * 0.06f, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = keystoneColor
+        canvas.drawCircle(centerX, centerY - radius * 0.06f, radius * 0.16f, paint)
+        if (variant != null) {
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = radius * 0.42f
+            paint.color = Color.rgb(20, 35, 50)
+            canvas.drawText(variant, centerX, centeredTextBaseline(centerY - radius * 0.06f), paint)
+            paint.textAlign = Paint.Align.LEFT
+        }
+    }
+
+    private fun drawUltraIcon(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, selected: Boolean, scale: Float) {
+        drawIconHalo(canvas, centerX, centerY, radius, Color.rgb(186, 122, 255), selected, scale)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(146, 101, 245)
+        canvas.drawPath(crystalPath(centerX, centerY, radius * 1.18f, radius * 1.08f), paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2.5f * scale
+        paint.color = Color.rgb(235, 214, 255)
+        canvas.drawPath(crystalPath(centerX, centerY, radius * 1.18f, radius * 1.08f), paint)
+        canvas.drawLine(centerX, centerY - radius * 1.08f, centerX, centerY + radius * 0.86f, paint)
+        canvas.drawLine(centerX - radius * 0.86f, centerY + radius * 0.18f, centerX + radius * 0.86f, centerY + radius * 0.18f, paint)
+        paint.strokeWidth = 3f * scale
+        canvas.drawArc(RectF(centerX - radius * 1.3f, centerY - radius * 1.3f, centerX + radius * 1.3f, centerY + radius * 1.3f), 210f, 120f, false, paint)
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawDynamaxIcon(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, selected: Boolean, scale: Float) {
+        drawIconHalo(canvas, centerX, centerY, radius, Color.rgb(255, 79, 89), selected, scale)
+        paint.style = Paint.Style.FILL
+        paint.shader = RadialGradient(
+            centerX - radius * 0.24f,
+            centerY - radius * 0.3f,
+            radius * 1.15f,
+            intArrayOf(Color.rgb(255, 145, 122), Color.rgb(229, 47, 66), Color.rgb(118, 23, 55)),
+            null,
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(centerX, centerY, radius * 0.9f, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2.5f * scale
+        paint.color = Color.rgb(255, 225, 219)
+        canvas.drawCircle(centerX, centerY, radius * 0.9f, paint)
+        canvas.drawLine(centerX - radius * 0.82f, centerY, centerX + radius * 0.82f, centerY, paint)
+        canvas.drawCircle(centerX, centerY, radius * 0.23f, paint)
+        paint.strokeWidth = 3f * scale
+        paint.color = Color.argb(210, 255, 188, 180)
+        canvas.drawArc(RectF(centerX - radius * 1.3f, centerY - radius * 1.3f, centerX + radius * 1.3f, centerY + radius * 1.3f), 202f, 136f, false, paint)
+        canvas.drawArc(RectF(centerX - radius * 1.46f, centerY - radius * 1.46f, centerX + radius * 1.46f, centerY + radius * 1.46f), 22f, 136f, false, paint)
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawTeraIcon(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, selected: Boolean, scale: Float) {
+        val type = session.terastallizeType()
+        val palette = movePalette(type.uppercase())
+        drawIconHalo(canvas, centerX, centerY, radius, palette.highlight, selected, scale)
+        paint.style = Paint.Style.FILL
+        paint.color = palette.base
+        canvas.drawPath(crystalPath(centerX, centerY, radius * 1.2f, radius * 1.14f), paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2.5f * scale
+        paint.color = Color.rgb(240, 253, 255)
+        canvas.drawPath(crystalPath(centerX, centerY, radius * 1.2f, radius * 1.14f), paint)
+        val icon = typeIcon(type)
+        if (icon != null) {
+            source.set(0, 0, icon.width, icon.height)
+            destination.set(centerX - radius * 0.72f, centerY - radius * 0.58f, centerX + radius * 0.72f, centerY + radius * 0.58f)
+            paint.alpha = 255
+            canvas.drawBitmap(icon, source, destination, paint)
+        } else {
+            paint.style = Paint.Style.FILL
+            paint.color = Color.rgb(222, 253, 255)
+            canvas.drawCircle(centerX, centerY, radius * 0.2f, paint)
+            canvas.drawLine(centerX, centerY - radius * 0.82f, centerX, centerY + radius * 0.72f, paint)
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawIconHalo(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, color: Int, selected: Boolean, scale: Float) {
+        paint.alpha = 255
+        paint.style = Paint.Style.FILL
+        val haloMultiplier = if (radius < 26f * scale) 1.22f else 1.5f
+        paint.shader = RadialGradient(
+            centerX,
+            centerY,
+            radius * haloMultiplier,
+            intArrayOf(Color.argb(if (selected) 150 else 118, Color.red(color), Color.green(color), Color.blue(color)), Color.argb(18, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT),
+            null,
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(centerX, centerY, radius * haloMultiplier, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = if (selected) 3f * scale else 2f * scale
+        paint.color = Color.argb(if (selected) 230 else 160, Color.red(color), Color.green(color), Color.blue(color))
+        canvas.drawCircle(centerX, centerY, radius * 1.06f, paint)
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun keystonePath(centerX: Float, centerY: Float, width: Float, height: Float): Path {
+        return Path().apply {
+            moveTo(centerX - width * 0.56f, centerY - height * 0.74f)
+            lineTo(centerX + width * 0.56f, centerY - height * 0.74f)
+            lineTo(centerX + width * 0.82f, centerY - height * 0.18f)
+            lineTo(centerX + width * 0.62f, centerY + height * 0.58f)
+            lineTo(centerX, centerY + height * 0.82f)
+            lineTo(centerX - width * 0.62f, centerY + height * 0.58f)
+            lineTo(centerX - width * 0.82f, centerY - height * 0.18f)
+            close()
+        }
+    }
+
+    private fun crystalPath(centerX: Float, centerY: Float, width: Float, height: Float): Path {
+        return Path().apply {
+            moveTo(centerX, centerY - height)
+            lineTo(centerX + width * 0.72f, centerY - height * 0.22f)
+            lineTo(centerX + width * 0.52f, centerY + height * 0.72f)
+            lineTo(centerX, centerY + height)
+            lineTo(centerX - width * 0.52f, centerY + height * 0.72f)
+            lineTo(centerX - width * 0.72f, centerY - height * 0.22f)
+            close()
+        }
+    }
+
+    private fun zigzagPath(centerX: Float, centerY: Float, width: Float, height: Float): Path {
+        return Path().apply {
+            moveTo(centerX - width * 0.72f, centerY - height * 0.52f)
+            lineTo(centerX + width * 0.78f, centerY - height * 0.52f)
+            lineTo(centerX + width * 0.1f, centerY - height * 0.06f)
+            lineTo(centerX + width * 0.64f, centerY - height * 0.06f)
+            lineTo(centerX - width * 0.78f, centerY + height * 0.52f)
+            lineTo(centerX - width * 0.12f, centerY + height * 0.06f)
+            lineTo(centerX - width * 0.64f, centerY + height * 0.06f)
+            close()
+        }
     }
 
     private fun drawTeam(canvas: Canvas, width: Float, height: Float, scale: Float) {
@@ -1314,6 +1566,21 @@ class CommandDeckView(
             value = "${withoutEllipsis.dropLast(1).trimEnd()}…"
         }
         return value
+    }
+
+    private fun fittedTextSize(text: String, maximumWidth: Float, preferredSize: Float, minimumSize: Float): Float {
+        if (maximumWidth <= 0f) return minimumSize
+        var size = preferredSize
+        paint.textSize = size
+        while (size > minimumSize && paint.measureText(text) > maximumWidth) {
+            size = (size - 1f).coerceAtLeast(minimumSize)
+            paint.textSize = size
+        }
+        if (paint.measureText(text) > maximumWidth) {
+            size = (size * maximumWidth / paint.measureText(text)).coerceAtLeast(1f)
+            paint.textSize = size
+        }
+        return size
     }
 
     private fun wrapText(text: String, maximumWidth: Float): List<String> {
