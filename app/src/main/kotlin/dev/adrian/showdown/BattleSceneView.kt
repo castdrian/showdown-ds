@@ -552,11 +552,11 @@ class BattleSceneView(
         val right = bounds.right - 32f * scale
         var row = bounds.top + 70f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = 48f * scale
+        paint.textSize = readableTextSize(48f, scale, 18f)
         paint.color = INK
         canvas.drawText(ellipsizeToWidth(details.name, right - left - 168f * scale, paint), left, row, paint)
         paint.textAlign = Paint.Align.RIGHT
-        paint.textSize = 34f * scale
+        paint.textSize = readableTextSize(34f, scale, 14f)
         paint.color = if (playerSide) CYAN else MAGENTA
         canvas.drawText("Lv.${details.level}${details.gender}", right, row, paint)
         paint.textAlign = Paint.Align.LEFT
@@ -568,7 +568,7 @@ class BattleSceneView(
             canvas.drawRoundRect(RectF(badgeLeft, row, badgeLeft + badgeWidth, row + 40f * scale), 16f * scale, 16f * scale, paint)
             paint.textAlign = Paint.Align.CENTER
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = 22f * scale
+            paint.textSize = readableTextSize(22f, scale, 12f)
             paint.color = Color.WHITE
             canvas.drawText(type, badgeLeft + badgeWidth / 2f, row + 27f * scale, paint)
             paint.textAlign = Paint.Align.LEFT
@@ -576,7 +576,7 @@ class BattleSceneView(
         }
         row += 88f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = 31f * scale
+        paint.textSize = readableTextSize(31f, scale, 13f)
         paint.color = MUTED
         canvas.drawText("HP", left, row, paint)
         paint.textAlign = Paint.Align.RIGHT
@@ -599,22 +599,22 @@ class BattleSceneView(
         paint.textAlign = Paint.Align.LEFT
         row += 57f * scale
         paint.color = MUTED
-        paint.textSize = 27f * scale
+        paint.textSize = readableTextSize(27f, scale, 12f)
         canvas.drawText(ellipsizeToWidth(details.stats, right - left, paint), left, row, paint)
         row += 47f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = 28f * scale
+        paint.textSize = readableTextSize(28f, scale, 12.5f)
         paint.color = if (playerSide) CYAN else MAGENTA
         canvas.drawText("Known moves", left, row, paint)
         row += 40f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = 27f * scale
+        paint.textSize = readableTextSize(27f, scale, 12f)
         details.moves.take(4).forEach { move ->
             paint.color = INK
             canvas.drawText("• $move", left, row, paint)
-            row += 31f * scale
+            row += paint.textSize + 6f * scale
         }
-        paint.textSize = 24f * scale
+        paint.textSize = readableTextSize(24f, scale, 11f)
         paint.color = MUTED
         canvas.drawText("Tap this Pokémon or outside the sheet to dismiss", left, bounds.bottom - 22f * scale, paint)
     }
