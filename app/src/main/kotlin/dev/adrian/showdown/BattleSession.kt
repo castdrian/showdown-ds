@@ -171,7 +171,8 @@ class BattleSession {
         val item: String,
         val moves: List<String>,
         val stats: String,
-        val pokeball: String = "pokeball"
+        val pokeball: String = "pokeball",
+        val species: String = name
     )
 
     data class ActiveCombatant(
@@ -1111,6 +1112,7 @@ class BattleSession {
                     "sentchoice" -> applySentChoice(fields)
                     "win" -> applyWin(fields)
                     "tie", "draw", "prematureend" -> applyTie(fields)
+                    "bigerror" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.takeIf { it.isNotBlank() }?.let { appendLog("Warning: $it") }
                     "error" -> applyBattleError(fields)
                     "c", "c:" -> applyChat(fields)
                     "inactive" -> {
@@ -1335,7 +1337,7 @@ class BattleSession {
                 activeTeamNames.clear()
                 activeTeamNames += activeSlotNames.values
                 val index = team.indexOfFirst { it.equals(pokemon, true) }
-                val activeDetails = if (index >= 0) teamDetails[index] else playerDetails.copy(name = pokemon, types = resolvedTypes(pokemon))
+                val activeDetails = if (index >= 0) teamDetails[index] else playerDetails.copy(name = pokemon, species = pokemon, types = resolvedTypes(pokemon))
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
                 baseTypesBySlot[slot] = baseTypes
                 typeChangeBySlot.remove(slot)
@@ -1345,6 +1347,7 @@ class BattleSession {
                 if (!passedBoosts.isNullOrEmpty()) playerBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
+                    species = activeDetails.species.ifBlank { pokemon },
                     types = baseTypes,
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
@@ -1365,7 +1368,7 @@ class BattleSession {
             else -> {
                 val primary = slot.endsWith("a") || opponentActiveCombatants.isEmpty()
                 val existing = opponentTeamDetails.firstOrNull { it.name.equals(pokemon, true) }
-                val activeDetails = existing ?: opponentDetails.copy(name = pokemon, types = resolvedTypes(pokemon))
+                val activeDetails = existing ?: opponentDetails.copy(name = pokemon, species = pokemon, types = resolvedTypes(pokemon))
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
                 baseTypesBySlot[slot] = baseTypes
                 typeChangeBySlot.remove(slot)
@@ -1375,6 +1378,7 @@ class BattleSession {
                 if (!passedBoosts.isNullOrEmpty()) opponentBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val updatedDetails = activeDetails.copy(
                     name = pokemon,
+                    species = activeDetails.species.ifBlank { pokemon },
                     types = baseTypes,
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
@@ -1471,7 +1475,7 @@ class BattleSession {
         val levelGender = parseDetails(details)
         val existing = opponentTeamDetails.firstOrNull { it.name.equals(pokemon, true) }
         updateOpponentParty(
-            existing?.copy(level = levelGender.first, gender = levelGender.second, types = resolvedTypes(pokemon, existing.types)) ?: PokemonDetails(
+            existing?.copy(level = levelGender.first, gender = levelGender.second, types = resolvedTypes(existing.species, existing.types)) ?: PokemonDetails(
                 name = pokemon,
                 types = resolvedTypes(pokemon),
                 level = levelGender.first,
@@ -1481,7 +1485,8 @@ class BattleSession {
                 ability = "Unknown ability",
                 item = "Unknown item",
                 moves = emptyList(),
-                stats = ""
+                stats = "",
+                species = pokemon
             )
         )
     }
@@ -1539,7 +1544,8 @@ class BattleSession {
                 ?: existing?.item ?: "Unknown item",
             moves = set.moves.map { moveNameResolver?.invoke(it) ?: it }.ifEmpty { existing?.moves.orEmpty() },
             stats = existing?.stats.orEmpty(),
-            pokeball = set.pokeBall.ifBlank { existing?.pokeball ?: "pokeball" }
+            pokeball = set.pokeBall.ifBlank { existing?.pokeball ?: "pokeball" },
+            species = set.species.ifBlank { existing?.species ?: name }
         )
     }
 
@@ -1745,7 +1751,7 @@ class BattleSession {
             playerActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
                 playerActiveCombatants[slot] = it.copy(name = species, types = types, level = parsed.first, gender = parsed.second)
-                updatePlayerPartyMember(it.name) { party -> party.copy(name = species, types = types, level = parsed.first, gender = parsed.second) }
+                updatePlayerPartyMember(it.name) { party -> party.copy(name = species, species = species, types = types, level = parsed.first, gender = parsed.second) }
             }
             activeSlotNames[slot] = species
             activeTeamNames.clear()
@@ -1754,20 +1760,20 @@ class BattleSession {
                 playerPokemon = species
                 playerLevel = parsed.first
                 playerGender = parsed.second
-                updatePlayerDetails { it.copy(name = species, types = if (slot in terastallizedSlots) it.types else baseTypes, level = playerLevel, gender = playerGender) }
+                updatePlayerDetails { it.copy(name = species, species = species, types = if (slot in terastallizedSlots) it.types else baseTypes, level = playerLevel, gender = playerGender) }
             }
         } else {
             val parsed = parseDetails(details)
             opponentActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
                 opponentActiveCombatants[slot] = it.copy(name = species, types = types, level = parsed.first, gender = parsed.second)
-                updateOpponentParty(it.name) { party -> party.copy(name = species, types = types, level = parsed.first, gender = parsed.second) }
+                updateOpponentParty(it.name) { party -> party.copy(name = species, species = species, types = types, level = parsed.first, gender = parsed.second) }
             }
             if (slot.endsWith('a')) {
                 opponentPokemon = species
                 opponentLevel = parsed.first
                 opponentGender = parsed.second
-                opponentDetails = opponentDetails.copy(name = species, types = if (slot in terastallizedSlots) opponentDetails.types else baseTypes, level = opponentLevel, gender = opponentGender)
+                opponentDetails = opponentDetails.copy(name = species, species = species, types = if (slot in terastallizedSlots) opponentDetails.types else baseTypes, level = opponentLevel, gender = opponentGender)
             }
         }
         appendLog("$species changed form.")
@@ -3005,6 +3011,7 @@ class BattleSession {
             val entry = pokemon.optJSONObject(index) ?: continue
             val details = entry.optString("details", entry.optString("ident").substringAfter(": "))
             val name = details.substringBefore(',').ifBlank { entry.optString("ident").substringAfter(": ", "Pokémon") }
+            val species = details.substringBefore(',').ifBlank { name }
             if (entry.optBoolean("active")) {
                 if (entry.optBoolean("commanding")) autoPassActiveSlots += activeIndex
                 activeSlotNames["$playerSlot${('a'.code + activeIndex).toChar()}"] = name
@@ -3023,7 +3030,7 @@ class BattleSession {
             } ?: known?.moves.orEmpty()
             synced += PokemonDetails(
                 name,
-                resolvedTypes(name, known?.types.orEmpty()),
+                resolvedTypes(species, known?.types.orEmpty()),
                 levelGender.first,
                 levelGender.second,
                 condition,
@@ -3032,7 +3039,8 @@ class BattleSession {
                 entry.optString("item", known?.item ?: "Unknown item").ifBlank { "Unknown item" },
                 knownMoves,
                 known?.stats.orEmpty(),
-                entry.optString("pokeball", known?.pokeball ?: "pokeball")
+                entry.optString("pokeball", known?.pokeball ?: "pokeball"),
+                species
             )
         }
         if (synced.isEmpty()) return
@@ -3085,7 +3093,7 @@ class BattleSession {
         if (index >= 0) teamDetails[index] = transform(teamDetails[index])
     }
 
-    private fun PokemonDetails.withResolvedTypes() = copy(types = resolvedTypes(name, types))
+    private fun PokemonDetails.withResolvedTypes() = copy(types = resolvedTypes(species, types))
 
     private fun resolvedTypes(species: String, current: List<String> = emptyList()) =
         current.ifEmpty { pokemonTypeResolver?.invoke(species).orEmpty() }

@@ -874,15 +874,15 @@ class CommandDeckView(
             canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", bounds.left + 164f * scale, bounds.top + 92f * scale, paint)
             drawTeamHp(canvas, RectF(bounds.left + 164f * scale, bounds.top + 112f * scale, bounds.right - 20f * scale, bounds.top + 140f * scale), details.hp, scale)
             var typeX = bounds.left + 18f * scale
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = readableTextSize(24f, scale, 21f)
             details.types.forEach { type ->
                 val typeWidth = maxOf(92f * scale, paint.measureText(type) + 28f * scale)
                 val typeBounds = RectF(typeX, bounds.top + 177f * scale, typeX + typeWidth, bounds.top + 217f * scale)
                 paint.color = movePalette(type).base
                 canvas.drawRoundRect(typeBounds, 13f * scale, 13f * scale, paint)
                 paint.textAlign = Paint.Align.CENTER
-                paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-                paint.textSize = readableTextSize(24f, scale, 21f)
-                drawOutlinedText(canvas, type, typeBounds.centerX(), typeBounds.centerY() + 7f * scale, Color.rgb(7, 18, 26), PAPER, 1.5f * scale)
+                drawOutlinedText(canvas, type, typeBounds.centerX(), centeredTextBaseline(typeBounds.centerY()), Color.rgb(7, 18, 26), PAPER, 1.5f * scale)
                 paint.textAlign = Paint.Align.LEFT
                 typeX = typeBounds.right + 8f * scale
             }

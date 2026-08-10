@@ -60,14 +60,21 @@ class OfficialBattleTranscriptTest {
             listOf(
                 "|player|p1|ADRIAN||",
                 "|player|p2|OPPONENT||",
-                "|showteam|p2|Rotom-Wash||leftovers|levitate|hydropump,voltswitch,willowisp,protect|||F||||]Garchomp||choicescarf|roughskin|earthquake,dragonclaw,rockslide,protect|||M||||"
+                "|showteam|p2|Washy|Rotom-Wash|leftovers|levitate|hydropump,voltswitch,willowisp,protect|||F||||]Garchomp||choicescarf|roughskin|earthquake,dragonclaw,rockslide,protect|||M||||"
             )
+        )
+        session.setPokemonTypeResolver(
+            mapOf(
+                "Rotom-Wash" to listOf("ELECTRIC", "WATER"),
+                "Garchomp" to listOf("GROUND", "DRAGON")
+            )::get
         )
 
         assertEquals(2, session.opponentPartyDetails().size)
-        assertEquals("Rotom-Wash", session.opponentPartyDetails()[0].name)
+        assertEquals("Washy", session.opponentPartyDetails()[0].name)
         assertEquals("Leftovers", session.opponentPartyDetails()[0].item)
         assertEquals("Levitate", session.opponentPartyDetails()[0].ability)
+        assertEquals(listOf("ELECTRIC", "WATER"), session.opponentPartyDetails()[0].types)
         assertEquals(listOf("Hydro Pump", "Volt Switch", "Will-O-Wisp", "Protect"), session.opponentPartyDetails()[0].moves)
         assertEquals("♂", session.opponentPartyDetails()[1].gender)
         assertTrue(session.battleLog().any { it.contains("OPPONENT revealed their team") })
@@ -162,7 +169,8 @@ class OfficialBattleTranscriptTest {
                 "|-sidestart|p1: Stealth Rock",
                 "|-boost|p1a: Mewtwo|spa|2",
                 "|cant|p1a: Mewtwo|slp",
-                "|-miss|p1a: Mewtwo|p2a: Magikarp"
+                "|-miss|p1a: Mewtwo|p2a: Magikarp",
+                "|bigerror|The battle is nearing its turn limit."
             )
         )
 
@@ -170,6 +178,7 @@ class OfficialBattleTranscriptTest {
         assertEquals("Electric Terrain", session.battleInfo().terrain)
         assertTrue(session.battleLog().any { it.contains("couldn't move") })
         assertTrue(session.battleLog().any { it.contains("missed") })
+        assertTrue(session.battleLog().any { it.contains("Warning: The battle is nearing its turn limit.") })
     }
 
     @Test
