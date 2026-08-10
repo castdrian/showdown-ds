@@ -23,6 +23,7 @@ import android.view.MotionEvent
 import android.view.Surface
 import android.view.View
 import android.view.Window
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -4297,12 +4298,15 @@ class MainActivity : Activity() {
                 }
             })
             frame.addView(commandDeck, FrameLayout.LayoutParams(-1, -1))
+            frame.isFocusableInTouchMode = true
             setContentView(frame)
+            frame.requestFocus()
         }
     }
 
     private fun configurePresentationWindow(presentationWindow: Window?) {
         presentationWindow ?: return
+        presentationWindow.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         presentationWindow.setDimAmount(0f)
         presentationWindow.statusBarColor = 0xFF071329.toInt()
         presentationWindow.navigationBarColor = 0xFF071329.toInt()

@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -64,5 +65,14 @@ class ThorDisplayProfileTest {
             ),
             0.001f
         )
+    }
+
+    @Test
+    fun keepsTheSecondaryPresentationInteractive() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)"))
+        assertTrue(source.contains("frame.isFocusableInTouchMode = true"))
+        assertTrue(source.contains("frame.requestFocus()"))
     }
 }
