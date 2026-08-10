@@ -10,7 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
-                "Move power, accuracy, and PP details now have comfortable Thor-sized insets.",
+                "Move detail panels now focus on readable move names, power, and accuracy while selector cards retain PP.",
+                "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
                 "Battle challenges announced by Showdown now open the custom accept or reject flow.",
                 "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading.",
                 "Matched battles are recovered after reconnecting, even when the room ID stays the same.",
