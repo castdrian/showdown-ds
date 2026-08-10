@@ -600,6 +600,32 @@ class BattleSessionTest {
     }
 
     @Test
+    fun noCancelRequestsDoNotExposeCancellationAfterSubmittingAChoice() {
+        val session = BattleSession()
+        session.setLiveBattleActive(true)
+        session.applyProtocolLine("|request|{\"rqid\":18,\"noCancel\":true,\"active\":[{\"moves\":[{\"move\":\"Flare Blitz\",\"pp\":15}]}]}")
+
+        session.confirmSelection()
+
+        assertFalse(session.canCancelChoice())
+    }
+
+    @Test
+    fun zAndMaxMoveRequestsExposeTheirAlternateMoveNamesWhenSelected() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"zMoves\":[{\"move\":\"Inferno Overdrive\",\"type\":\"Fire\",\"target\":\"normal\"}],\"maxMoves\":[{\"move\":\"Max Flare\",\"type\":\"Fire\",\"target\":\"normal\"}],\"moves\":[{\"move\":\"Flamethrower\",\"type\":\"Fire\",\"pp\":15,\"target\":\"normal\"}]}]}"
+        )
+
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        assertEquals("Inferno Overdrive", session.moves().single().name)
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+
+        assertEquals("Max Flare", session.moves().single().name)
+    }
+
+    @Test
     fun requestExposesMegaVariantsAndUltraBurstWithOfficialChoiceSuffixes() {
         val session = BattleSession()
 

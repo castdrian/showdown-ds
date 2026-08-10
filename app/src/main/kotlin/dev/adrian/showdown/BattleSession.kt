@@ -130,6 +130,16 @@ class BattleSession {
         val target: String = ""
     )
 
+    data class MoveVariant(
+        val name: String,
+        val type: String,
+        val category: String,
+        val power: String,
+        val accuracy: String,
+        val disabled: Boolean,
+        val target: String
+    )
+
     data class MoveInfo(
         val power: String,
         val accuracy: String
@@ -227,6 +237,8 @@ class BattleSession {
         MoveOption("Darkest Lariat", "DARK", 10, 10, "Physical", "85", "100"),
         MoveOption("Parting Shot", "DARK", 20, 20, "Status", "—", "—")
     )
+    private val zMoveVariants = mutableListOf<MoveVariant?>()
+    private val maxMoveVariants = mutableListOf<MoveVariant?>()
     private val team = mutableListOf("Incineroar", "Naganadel", "Mimikyu", "Landorus", "Rotom-Wash", "Ferrothorn")
     private val teamPreviewOrder = mutableListOf<Int>()
     private var teamPreviewRequiredSize = 0
@@ -287,6 +299,7 @@ class BattleSession {
     private var battleClockUpdatedAtNanos = 0L
     private var battleTimerEnabled = false
     private var choiceCanBeCancelled = false
+    private var requestNoCancel = false
     private val playerSideConditions = mutableListOf<String>()
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
@@ -461,7 +474,7 @@ class BattleSession {
         notifyListeners()
     }
 
-    fun moves() = moves.toList()
+    fun moves() = displayedMoves().toList()
 
     fun team() = team.toList()
 
@@ -637,6 +650,7 @@ class BattleSession {
         battleFeedVisible = true
         decisionAvailable = false
         choiceCanBeCancelled = false
+        requestNoCancel = false
         decisionKind = DecisionKind.WAIT
         panel = Panel.MENU
         status = "Find a battle or challenge a player."
@@ -686,18 +700,20 @@ class BattleSession {
     }
 
     fun focusMove(index: Int) {
-        if (index !in moves.indices) return
+        val selectableMoves = displayedMoves()
+        if (index !in selectableMoves.indices) return
         panel = Panel.MOVES
         focusedMove = index
         updateTargetOptions()
-        status = "Ready: ${moves[index].name}"
+        status = "Ready: ${selectableMoves[index].name}"
         notifyListeners()
     }
 
     fun selectMoveWithTouch(index: Int) {
-        if (index !in moves.indices) return
-        if (moves[index].disabled) {
-            status = "${moves[index].name} is disabled."
+        val selectableMoves = displayedMoves()
+        if (index !in selectableMoves.indices) return
+        if (selectableMoves[index].disabled) {
+            status = "${selectableMoves[index].name} is disabled."
             notifyListeners()
             return
         }
@@ -773,8 +789,9 @@ class BattleSession {
     fun confirmSelection() {
         when (panel) {
             Panel.MOVES -> {
-                if (!decisionAvailable || decisionKind != DecisionKind.MOVE || focusedMove !in moves.indices) return
-                val move = moves[focusedMove]
+                val selectableMoves = displayedMoves()
+                if (!decisionAvailable || decisionKind != DecisionKind.MOVE || focusedMove !in selectableMoves.indices) return
+                val move = selectableMoves[focusedMove]
                 if (move.disabled) {
                     status = "${move.name} is disabled."
                     return
@@ -804,7 +821,7 @@ class BattleSession {
                 appendLog("$playerPokemon chose ${gimmick?.label?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
-                choiceCanBeCancelled = true
+                choiceCanBeCancelled = !requestNoCancel
                 selectedGimmick = null
                 selectedTargetIndex = -1
                 decisionListeners.toList().forEach { it.onDecision(choice) }
@@ -895,6 +912,7 @@ class BattleSession {
     fun selectGimmick(gimmick: BattleGimmick) {
         if (gimmick !in availableGimmicks) return
         selectedGimmick = if (selectedGimmick == gimmick) null else gimmick
+        updateTargetOptions()
         status = selectedGimmick?.let { "${it.label} ready: choose a move" } ?: "Choose a move"
         notifyListeners()
     }
@@ -903,6 +921,7 @@ class BattleSession {
         if (availableGimmicks.isEmpty()) return
         val currentIndex = availableGimmicks.indexOf(selectedGimmick)
         selectedGimmick = availableGimmicks[Math.floorMod(currentIndex + 1, availableGimmicks.size)]
+        updateTargetOptions()
         status = "${selectedGimmick?.label} ready: choose a move"
         notifyListeners()
     }
@@ -1115,6 +1134,8 @@ class BattleSession {
         opponentEntryAtNanos = 0L
         requestId = null
         moves.clear()
+        zMoveVariants.clear()
+        maxMoveVariants.clear()
         playerDetails = teamDetails.firstOrNull() ?: playerDetails
         playerPokemon = playerDetails.name
         playerHp = playerDetails.hp
@@ -1158,6 +1179,7 @@ class BattleSession {
         pendingBatonPassBySide.clear()
         decisionAvailable = false
         choiceCanBeCancelled = false
+        requestNoCancel = false
         decisionKind = DecisionKind.WAIT
         panel = Panel.MOVES
         status = "Battle starting"
@@ -1666,7 +1688,10 @@ class BattleSession {
         val requestText = fields.getOrNull(2) ?: return
         teamPreviewOrder.clear()
         teamPreviewRequiredSize = 0
+        requestNoCancel = false
         moves.clear()
+        zMoveVariants.clear()
+        maxMoveVariants.clear()
         availableGimmicks.clear()
         playerDetails = playerDetails.copy(moves = emptyList())
         activeRequests.clear()
@@ -1688,6 +1713,7 @@ class BattleSession {
         runCatching {
             val request = JSONObject(requestText)
             requestId = request.optInt("rqid", -1).takeIf { it >= 0 }
+            requestNoCancel = request.optBoolean("noCancel")
             syncTeamFromRequest(request)
             if (request.optBoolean("wait")) {
                 battlePhase = BattlePhase.BATTLE
@@ -1747,7 +1773,7 @@ class BattleSession {
         val choice = fields.drop(2).joinToString("|").trim()
         if (choice.isBlank() || requestId == null || battleFinished) return
         decisionAvailable = false
-        choiceCanBeCancelled = true
+        choiceCanBeCancelled = !requestNoCancel
         selectedGimmick = null
         selectedTargetIndex = -1
         targetOptions.clear()
@@ -1760,6 +1786,8 @@ class BattleSession {
     private fun applyActiveRequest(active: JSONObject): Boolean {
         val requestMoves = active.optJSONArray("moves") ?: return false
         moves.clear()
+        zMoveVariants.clear()
+        maxMoveVariants.clear()
         for (index in 0 until requestMoves.length()) {
             val move = requestMoves.getJSONObject(index)
             val pp = move.optInt("pp", 0)
@@ -1776,6 +1804,16 @@ class BattleSession {
                 move.optBoolean("disabled") || pp <= 0,
                 move.optString("target")
             )
+        }
+        val baseMoves = moves.toList()
+        val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
+        if (zMoves != null) {
+            baseMoves.forEachIndexed { index, base -> zMoveVariants += parseMoveVariant(zMoves.opt(index), base) }
+        }
+        val maxMoves = active.optJSONArray("maxMoves")
+            ?: active.optJSONObject("maxMoves")?.optJSONArray("maxMoves")
+        if (maxMoves != null) {
+            baseMoves.forEachIndexed { index, base -> maxMoveVariants += parseMoveVariant(maxMoves.opt(index), base) }
         }
         focusedMove = 0
         selectedTargetIndex = -1
@@ -1804,6 +1842,46 @@ class BattleSession {
         val value = move.opt("accuracy")
         val displayedValue = if (value == null || value == JSONObject.NULL) fallback else value.toString()
         return numericMoveValue(displayedValue) ?: "—"
+    }
+
+    private fun displayedMoves(): List<MoveOption> {
+        val variants = when (selectedGimmick) {
+            BattleGimmick.Z_POWER -> zMoveVariants
+            BattleGimmick.DYNAMAX -> maxMoveVariants
+            else -> emptyList()
+        }
+        if (variants.isEmpty()) return moves.toList()
+        return moves.mapIndexed { index, base ->
+            val variant = variants.getOrNull(index)
+            if (variant == null) {
+                base.copy(disabled = true)
+            } else {
+                base.copy(
+                    name = variant.name,
+                    type = variant.type,
+                    category = variant.category,
+                    power = variant.power,
+                    accuracy = variant.accuracy,
+                    disabled = variant.disabled,
+                    target = variant.target
+                )
+            }
+        }
+    }
+
+    private fun parseMoveVariant(value: Any?, base: MoveOption): MoveVariant? {
+        val move = value as? JSONObject ?: return null
+        val name = move.optString("move").ifBlank { move.optString("name") }.ifBlank { base.name }
+        val info = moveInfoResolver?.invoke(name)
+        return MoveVariant(
+            name,
+            move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: base.type,
+            move.optString("category").takeIf { it.isNotBlank() } ?: base.category,
+            movePower(move, info),
+            moveAccuracy(move, info?.accuracy),
+            base.disabled || move.optBoolean("disabled"),
+            move.optString("target").ifBlank { base.target }
+        )
     }
 
     private fun numericMoveValue(value: String?): String? {
@@ -2304,7 +2382,7 @@ class BattleSession {
     private fun updateTargetOptions() {
         targetOptions.clear()
         selectedTargetIndex = -1
-        val move = moves.getOrNull(focusedMove) ?: return
+        val move = displayedMoves().getOrNull(focusedMove) ?: return
         if (activeRequests.size <= 1) return
         val target = move.target.lowercase()
         val allySlots = activeSlots(playerActiveCombatants, activeRequests.size).map { -it }
@@ -2573,7 +2651,7 @@ class BattleSession {
 
     private fun completeTeamSelection(choice: String) {
         decisionAvailable = false
-        choiceCanBeCancelled = true
+        choiceCanBeCancelled = !requestNoCancel
         status = "Queued: ${team[focusedTeam]}"
         appendLog(if (choice.startsWith("/choose team")) "Team order submitted." else "${team[focusedTeam]} was selected.")
         chatMessages += "[You] $choice"
