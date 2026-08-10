@@ -142,7 +142,7 @@ class BattleAudio(
 
     fun diagnosticSnapshot(): BattleAudioDiagnosticSnapshot {
         val loaded = battleSoundIds.filterValues { it in loadedBattleSoundIds }.keys.toSet()
-        val failed = failedBattleCues.toSet()
+        val failed = synchronized(failedBattleCues) { failedBattleCues.toSet() }
         val events = synchronized(diagnosticEvents) { diagnosticEvents.toList() }
         return BattleAudioDiagnosticSnapshot(loaded, failed, events)
     }
