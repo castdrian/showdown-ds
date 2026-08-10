@@ -226,6 +226,8 @@ class BattleSession {
     )
     private val team = mutableListOf("Incineroar", "Naganadel", "Mimikyu", "Landorus", "Rotom-Wash", "Ferrothorn")
     private val teamPreviewOrder = mutableListOf<Int>()
+    private var teamPreviewRequiredSize = 0
+    private var protocolTeamPreviewSize = 0
     private val availableGimmicks = mutableListOf(BattleGimmick.Z_POWER)
     private val teamDetails = mutableListOf(
         PokemonDetails("Incineroar", listOf("FIRE", "DARK"), "50", "♂", "100/100", "READY", "Intimidate", "Firium Z", moves.map { it.name }, "HP 100 · Atk 135 · Def 90 · Spe 60"),
@@ -461,6 +463,8 @@ class BattleSession {
     fun team() = team.toList()
 
     fun teamPreviewOrder() = teamPreviewOrder.toList()
+
+    fun teamPreviewRequiredSize() = teamPreviewRequiredSize
 
     fun battleLog() = battleLog.toList()
 
@@ -739,7 +743,7 @@ class BattleSession {
             Panel.MOVES -> "Choose a move"
             Panel.TEAM -> when (decisionKind) {
                 DecisionKind.SWITCH -> "Choose a Pokémon to switch in"
-                DecisionKind.TEAM_PREVIEW -> "Confirm your team order"
+                DecisionKind.TEAM_PREVIEW -> teamPreviewPrompt()
                 else -> "Choose a Pokémon"
             }
             Panel.ACTIVITY -> "Battle activity and chat"
@@ -831,7 +835,7 @@ class BattleSession {
             DecisionKind.TEAM_PREVIEW -> {
                 teamPreviewOrder.clear()
                 panel = Panel.TEAM
-                decisionAvailable = team.isNotEmpty()
+                decisionAvailable = teamPreviewRequiredSize > 0 && team.indices.any { !teamCondition(it).contains("FNT", true) }
                 status = "Connection unavailable. Set your team order again."
             }
             DecisionKind.WAIT -> return
@@ -943,7 +947,10 @@ class BattleSession {
                         }
                     }
                     "rated" -> appendLog("Rated battle.")
-                    "teampreview" -> battlePhase = BattlePhase.TEAM_PREVIEW
+                    "teampreview" -> {
+                        battlePhase = BattlePhase.TEAM_PREVIEW
+                        fields.getOrNull(2)?.toIntOrNull()?.takeIf { it > 0 }?.let { protocolTeamPreviewSize = it }
+                    }
                     "start" -> battlePhase = BattlePhase.BATTLE
                     "upkeep" -> battlePhase = BattlePhase.UPKEEP
                     "turn" -> {
@@ -1092,6 +1099,8 @@ class BattleSession {
         gameType = "singles"
         format = ""
         teamPreviewOrder.clear()
+        teamPreviewRequiredSize = 0
+        protocolTeamPreviewSize = 0
         battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
         selectedGimmick = null
         availableGimmicks.clear()
@@ -1653,6 +1662,7 @@ class BattleSession {
     private fun applyRequest(fields: List<String>) {
         val requestText = fields.getOrNull(2) ?: return
         teamPreviewOrder.clear()
+        teamPreviewRequiredSize = 0
         moves.clear()
         availableGimmicks.clear()
         playerDetails = playerDetails.copy(moves = emptyList())
@@ -1686,9 +1696,15 @@ class BattleSession {
             if (request.optBoolean("teamPreview")) {
                 battlePhase = BattlePhase.TEAM_PREVIEW
                 decisionKind = DecisionKind.TEAM_PREVIEW
-                decisionAvailable = team.isNotEmpty()
+                val availableTeamSize = team.indices.count { !teamCondition(it).contains("FNT", true) }
+                val requestedTeamSize = request.optInt("chosenTeamSize", 0).takeIf { it > 0 }
+                    ?: request.optInt("maxChosenTeamSize", 0).takeIf { it > 0 }
+                    ?: protocolTeamPreviewSize.takeIf { it > 0 }
+                    ?: team.size
+                teamPreviewRequiredSize = requestedTeamSize.coerceIn(1, maxOf(1, availableTeamSize))
+                decisionAvailable = availableTeamSize > 0
                 panel = Panel.TEAM
-                status = "Confirm your team order"
+                status = teamPreviewPrompt()
                 return@runCatching
             }
             val forceSwitch = request.optJSONArray("forceSwitch")
@@ -1833,6 +1849,7 @@ class BattleSession {
             requestId = null
             selectedGimmick = null
             teamPreviewOrder.clear()
+            teamPreviewRequiredSize = 0
             activeRequests.clear()
             activeChoices.clear()
             forceSwitchChoices.clear()
@@ -1856,6 +1873,7 @@ class BattleSession {
         requestId = null
         selectedGimmick = null
         teamPreviewOrder.clear()
+        teamPreviewRequiredSize = 0
         activeRequests.clear()
         activeChoices.clear()
         forceSwitchChoices.clear()
@@ -1897,7 +1915,7 @@ class BattleSession {
         status = when (decisionKind) {
             DecisionKind.MOVE -> "Choose a move"
             DecisionKind.SWITCH -> "Choose a Pokémon to switch in"
-            DecisionKind.TEAM_PREVIEW -> "Confirm your team order"
+            DecisionKind.TEAM_PREVIEW -> teamPreviewPrompt()
             DecisionKind.WAIT -> message
         }
     }
@@ -2503,9 +2521,8 @@ class BattleSession {
                 return
             }
             teamPreviewOrder += focusedTeam
-            val availableTeam = team.indices.filterNot { teamCondition(it).contains("FNT", true) }
-            if (teamPreviewOrder.size < availableTeam.size) {
-                status = "Team order ${teamPreviewOrder.size}/${availableTeam.size}: choose the next Pokémon."
+            if (teamPreviewOrder.size < teamPreviewRequiredSize) {
+                status = "Team order ${teamPreviewOrder.size}/$teamPreviewRequiredSize: choose the next Pokémon."
                 return
             }
             completeTeamSelection(
@@ -2555,6 +2572,12 @@ class BattleSession {
         chatMessages += "[You] $choice"
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionListeners.toList().forEach { it.onDecision(choice) }
+    }
+
+    private fun teamPreviewPrompt() = if (teamPreviewRequiredSize > 0) {
+        "Choose $teamPreviewRequiredSize Pokémon in battle order"
+    } else {
+        "Confirm your team order"
     }
 
     private fun syncTeamFromRequest(request: JSONObject) {

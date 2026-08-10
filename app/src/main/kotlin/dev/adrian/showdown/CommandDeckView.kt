@@ -790,6 +790,7 @@ class CommandDeckView(
         val cardHeight = 378f * scale
         teamBounds.fill(null)
         val previewOrder = session.teamPreviewOrder()
+        val previewLimit = session.teamPreviewRequiredSize()
         session.team().forEachIndexed { index, pokemon ->
             val row = index / 3
             val column = index % 3
@@ -859,7 +860,7 @@ class CommandDeckView(
             val state = when {
                 details.condition.contains("FNT", true) -> "Fainted"
                 session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Choose to switch in"
-                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> if (previewPosition >= 0) "Order ${previewPosition + 1}" else "Tap to order"
+                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> if (previewPosition >= 0) "Order ${previewPosition + 1}/$previewLimit" else "Tap to order"
                 pokemon.equals(session.playerPokemon, true) -> "In battle"
                 else -> "Available"
             }

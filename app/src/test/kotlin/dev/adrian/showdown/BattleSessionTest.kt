@@ -302,6 +302,43 @@ class BattleSessionTest {
     }
 
     @Test
+    fun teamPreviewSubmitsWhenTheRequestSelectionLimitIsReached() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine("|request|{\"rqid\":16,\"teamPreview\":true,\"maxChosenTeamSize\":2}")
+
+        assertEquals(2, session.teamPreviewRequiredSize())
+        session.confirmSelection()
+        assertTrue(session.decisionAvailable)
+        session.moveFocus(1, 0)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose team 12|16"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
+    fun protocolTeamPreviewSizeLimitsTheSelectionWhenRequestOmitsIt() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolPacket(
+            listOf(
+                "|teampreview|2",
+                "|request|{\"rqid\":17,\"teamPreview\":true}"
+            )
+        )
+
+        assertEquals(2, session.teamPreviewRequiredSize())
+        session.confirmSelection()
+        session.moveFocus(1, 0)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose team 12|17"), decisions)
+    }
+
+    @Test
     fun protocolLinesUpdateBattleState() {
         val session = BattleSession()
 
