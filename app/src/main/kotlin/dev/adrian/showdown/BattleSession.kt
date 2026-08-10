@@ -2844,6 +2844,11 @@ class BattleSession {
         val synced = mutableListOf<PokemonDetails>()
         activeTeamNames.clear()
         activeSlotNames.clear()
+        val hasRevivingActive = (0 until pokemon.length()).any { index ->
+            pokemon.optJSONObject(index)?.let { entry ->
+                entry.optBoolean("active") && entry.optBoolean("reviving")
+            } == true
+        }
         var activeIndex = 0
         for (index in 0 until pokemon.length()) {
             val entry = pokemon.optJSONObject(index) ?: continue
@@ -2854,10 +2859,12 @@ class BattleSession {
                 activeSlotNames["$playerSlot${('a'.code + activeIndex).toChar()}"] = name
                 activeIndex += 1
             }
-            if (entry.optBoolean("reviving")) revivingTeamIndices += index
             val known = teamDetails.firstOrNull { it.name.equals(name, true) }
             val levelGender = parseDetails(details)
             val condition = entry.optString("condition", "100/100")
+            if (hasRevivingActive && !entry.optBoolean("active") && condition(condition).contains("FNT", true)) {
+                revivingTeamIndices += index
+            }
             val knownMoves = entry.optJSONArray("moves")?.let { moves ->
                 buildList {
                     for (moveIndex in 0 until moves.length()) add(moves.optString(moveIndex))

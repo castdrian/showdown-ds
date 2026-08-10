@@ -735,12 +735,13 @@ class BattleSessionTest {
         val session = BattleSession()
         session.addDecisionListener { decisions += it }
         session.applyProtocolLine(
-            "|request|{\"rqid\":35,\"forceSwitch\":[true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"reviving\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\"}]}}"
+            "|request|{\"rqid\":35,\"forceSwitch\":[true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"100/100\",\"active\":true,\"reviving\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"0 fnt\",\"active\":false}]}}"
         )
 
+        session.moveFocus(1, 0)
         session.confirmSelection()
 
-        assertEquals(listOf("/choose switch 1|35"), decisions)
+        assertEquals(listOf("/choose switch 2|35"), decisions)
         assertFalse(session.decisionAvailable)
     }
 
