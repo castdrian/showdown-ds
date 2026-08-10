@@ -2,6 +2,7 @@ package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BattleAudioCueTest {
@@ -30,5 +31,16 @@ class BattleAudioCueTest {
         assertNull(BattleAudioCueResolver.cueForProtocolLine("|-boost|p1a: Pikachu|atk|0"))
         assertNull(BattleAudioCueResolver.cueForProtocolLine("|-unboost|p2a: Garchomp|def|0|[from]ability: Contrary"))
         assertNull(BattleAudioCueResolver.cueForProtocolLine("|-setboost|p1a: Pikachu|atk|0"))
+    }
+
+    @Test
+    fun previewHoldsCoverTheLongestCueBeforeTheNextSample() {
+        assertEquals(2_600L, BattleAudioCue.STAT_DROP.previewHoldMillis)
+        assertTrue(BattleAudioCue.values().all { it.previewHoldMillis >= 800L })
+        assertEquals(
+            listOf(0L, 1_000L, 3_200L, 4_000L, 6_400L),
+            BattleAudioPreviewTiming.startOffsets(BattleAudioCue.values().toList())
+        )
+        assertEquals(9_000L, BattleAudioPreviewTiming.completionDelay(BattleAudioCue.values().toList()))
     }
 }

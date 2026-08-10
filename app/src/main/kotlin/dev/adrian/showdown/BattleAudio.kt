@@ -126,10 +126,11 @@ class BattleAudio(
             onComplete()
             return
         }
-        BattleAudioCue.values().forEachIndexed { index, cue ->
-            postPreview(index * CUE_PREVIEW_INTERVAL_MILLIS) { playBattleCue(cue) }
+        val cues = BattleAudioCue.values().toList()
+        BattleAudioPreviewTiming.startOffsets(cues).forEachIndexed { index, delayMillis ->
+            postPreview(delayMillis) { playBattleCue(cues[index]) }
         }
-        postPreview(BattleAudioCue.values().size * CUE_PREVIEW_INTERVAL_MILLIS, onComplete)
+        postPreview(BattleAudioPreviewTiming.completionDelay(cues), onComplete)
     }
 
     fun playBattleCue(cue: BattleAudioCue) {
@@ -288,7 +289,6 @@ class BattleAudio(
         )
         const val MAX_PENDING_BATTLE_CUES = 16
         const val MAX_PENDING_BATTLE_CUE_AGE_MILLIS = 350L
-        const val CUE_PREVIEW_INTERVAL_MILLIS = 650L
     }
 
 }

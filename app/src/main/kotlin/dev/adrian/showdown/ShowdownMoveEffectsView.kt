@@ -146,10 +146,17 @@ class ShowdownMoveEffectsView(
                         function nativeCue(value) {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.cue(value);
                         }
+                        function nativeMoveStarted() {
+                            if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.moveStarted();
+                        }
+                        function nativeBattleStarted() {
+                            if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.battleStarted();
+                        }
                         function installAudioHooks() {
                             if (BattleScene.prototype.__showdownNativeAudioHooked) return;
                             var originalRunMoveAnim = BattleScene.prototype.runMoveAnim;
                             BattleScene.prototype.runMoveAnim = function (moveid, participants) {
+                                nativeMoveStarted();
                                 var move = this.battle.dex.moves.get(moveid);
                                 this.__showdownNativeDamageArmed = move && move.category !== 'Status';
                                 this.__showdownNativeDamagePlayed = false;
@@ -219,6 +226,7 @@ class ShowdownMoveEffectsView(
                             hideFrame = window.requestAnimationFrame(keepChromeHidden);
                         }
                         function createBattle() {
+                            nativeBattleStarted();
                             installAudioHooks();
                             if (battle) battle.destroy();
                             if (hideFrame) window.cancelAnimationFrame(hideFrame);
@@ -275,12 +283,24 @@ class ShowdownMoveEffectsView(
     }
 
     private class NativeAudioBridge(
-        private val callback: (BattleAudioCue) -> Unit
+        callback: (BattleAudioCue) -> Unit
     ) {
+        private val cueSequencer = BattleAudioCueSequencer(callback)
+
+        @JavascriptInterface
+        fun battleStarted() {
+            cueSequencer.reset()
+        }
+
+        @JavascriptInterface
+        fun moveStarted() {
+            cueSequencer.beginMove()
+        }
+
         @JavascriptInterface
         fun cue(value: String) {
             BattleAudioCueResolver.cueForNativeValue(value)?.let { cue ->
-                callback(cue)
+                cueSequencer.receive(cue)
             }
         }
 

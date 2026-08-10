@@ -1,11 +1,27 @@
 package dev.adrian.showdown
 
-enum class BattleAudioCue(val assetName: String) {
-    GENERIC_DAMAGE("hitnormaldamage"),
-    SUPER_EFFECTIVE("hitsupereffective"),
-    NOT_VERY_EFFECTIVE("hitweaknotveryeffective"),
-    STAT_BOOST("statriseup"),
-    STAT_DROP("statfalldown")
+enum class BattleAudioCue(
+    val assetName: String,
+    val previewHoldMillis: Long
+) {
+    GENERIC_DAMAGE("hitnormaldamage", 1_000L),
+    SUPER_EFFECTIVE("hitsupereffective", 2_200L),
+    NOT_VERY_EFFECTIVE("hitweaknotveryeffective", 800L),
+    STAT_BOOST("statriseup", 2_400L),
+    STAT_DROP("statfalldown", 2_600L)
+}
+
+object BattleAudioPreviewTiming {
+    fun startOffsets(cues: List<BattleAudioCue>): List<Long> {
+        var delayMillis = 0L
+        return cues.map { cue ->
+            val startOffset = delayMillis
+            delayMillis += cue.previewHoldMillis
+            startOffset
+        }
+    }
+
+    fun completionDelay(cues: List<BattleAudioCue>): Long = cues.sumOf { it.previewHoldMillis }
 }
 
 object BattleAudioCueResolver {
