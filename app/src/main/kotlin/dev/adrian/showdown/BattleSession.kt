@@ -1774,19 +1774,20 @@ class BattleSession {
 
     private fun movePower(move: JSONObject, info: MoveInfo?): String {
         return move.optInt("basePower", 0).takeIf { it > 0 }?.toString()
-            ?: info?.power
+            ?: numericMoveValue(info?.power)
             ?: "—"
     }
 
     private fun moveAccuracy(move: JSONObject, fallback: String?): String {
-        return when (val value = move.opt("accuracy")) {
-            is Number -> value.toString().removeSuffix(".0")
-            null, JSONObject.NULL -> fallback ?: "—"
-            is Boolean -> fallback ?: "—"
-            else -> value.toString().takeIf { it.isNotBlank() && !it.equals("null", true) && !it.equals("true", true) && !it.equals("false", true) }
-                ?: fallback
-                ?: "—"
-        }
+        val value = move.opt("accuracy")
+        val displayedValue = if (value == null || value == JSONObject.NULL) fallback else value.toString()
+        return numericMoveValue(displayedValue) ?: "—"
+    }
+
+    private fun numericMoveValue(value: String?): String? {
+        val number = value?.trim()?.toDoubleOrNull() ?: return null
+        if (!number.isFinite() || number <= 0) return null
+        return number.toString().removeSuffix(".0")
     }
 
     private fun prepareNextActiveRequest(): Boolean {

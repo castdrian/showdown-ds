@@ -31,11 +31,12 @@ class BattleSessionTest {
         val session = BattleSession()
 
         session.applyProtocolLine(
-            "|request|{\"active\":[{\"moves\":[{\"move\":\"Swift\",\"pp\":20,\"accuracy\":true},{\"move\":\"Thunderbolt\",\"pp\":15,\"accuracy\":85}]}]}"
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"accuracy\":\"always\"},{\"move\":\"Swift\",\"pp\":20,\"accuracy\":true},{\"move\":\"Thunderbolt\",\"pp\":15,\"accuracy\":85}]}]}"
         )
 
         assertEquals("—", session.moves()[0].accuracy)
-        assertEquals("85", session.moves()[1].accuracy)
+        assertEquals("—", session.moves()[1].accuracy)
+        assertEquals("85", session.moves()[2].accuracy)
     }
 
     @Test
