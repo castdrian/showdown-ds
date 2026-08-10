@@ -1008,7 +1008,7 @@ class CommandDeckView(
             BattleSession.BattleGimmick.MEGA_EVOLUTION_Y -> drawMegaIcon(canvas, centerX, centerY, radius, "Y", selected, scale)
             BattleSession.BattleGimmick.ULTRA_BURST -> drawUltraIcon(canvas, centerX, centerY, radius, selected, scale)
             BattleSession.BattleGimmick.DYNAMAX -> drawDynamaxIcon(canvas, centerX, centerY, radius, selected, scale)
-            BattleSession.BattleGimmick.TERASTALLIZATION -> drawTeraIcon(canvas, centerX, centerY, radius, selected, scale)
+            BattleSession.BattleGimmick.TERASTALLIZATION -> drawTeraIcon(canvas, centerX, centerY, radius, scale)
         }
     }
 
@@ -1122,7 +1122,7 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
     }
 
-    private fun drawTeraIcon(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, selected: Boolean, scale: Float) {
+    private fun drawTeraIcon(canvas: Canvas, centerX: Float, centerY: Float, radius: Float, scale: Float) {
         val type = session.terastallizeType()
         val palette = movePalette(type.uppercase())
         paint.style = Paint.Style.FILL
