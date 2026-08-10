@@ -17,6 +17,35 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun formatsStructuredBattleMetadataForTheBattlePicker() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(
+            listOf(
+                "|updatesearch|{\"games\":{\"battle-gen9ou-1\":{\"p1\":\"Alice\",\"p2\":\"Bob\",\"format\":\"gen9ou\"},\"room-other-1\":{\"title\":\"Not a battle\"}}}"
+            )
+        )
+
+        assertEquals("Alice vs. Bob", lobby.battles["battle-gen9ou-1"])
+        assertEquals(null, lobby.battles["room-other-1"])
+    }
+
+    @Test
+    fun usesReadableFallbacksForPartialStructuredBattleMetadata() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(
+            listOf(
+                "|updatesearch|{\"games\":{\"battle-gen9ou-1\":{\"title\":\"Alice vs. Bob\"},\"battle-gen9ou-2\":{\"format\":\"gen9ou\"},\"battle-gen9ou-3\":{}}}"
+            )
+        )
+
+        assertEquals("Alice vs. Bob", lobby.battles["battle-gen9ou-1"])
+        assertEquals("Battle · gen9ou", lobby.battles["battle-gen9ou-2"])
+        assertEquals("Battle room", lobby.battles["battle-gen9ou-3"])
+    }
+
+    @Test
     fun tracksIncomingAndOutgoingChallenges() {
         val lobby = ShowdownLobbyState()
 

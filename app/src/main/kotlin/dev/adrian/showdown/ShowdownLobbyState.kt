@@ -148,8 +148,25 @@ class ShowdownLobbyState {
         }
         activeBattles.clear()
         state.optJSONObject("games")?.let { games ->
-            games.keys().forEach { roomId -> activeBattles[roomId] = games.optString(roomId, roomId) }
+            games.keys().forEach { roomId ->
+                if (roomId.startsWith("battle-")) {
+                    activeBattles[roomId] = battleDescription(games.opt(roomId))
+                }
+            }
         }
+    }
+
+    private fun battleDescription(value: Any?): String {
+        if (value is JSONObject) {
+            value.optString("title").trim().takeIf(String::isNotBlank)?.let { return it }
+            val players = listOf(value.optString("p1"), value.optString("p2"))
+                .map(String::trim)
+                .filter(String::isNotBlank)
+            if (players.isNotEmpty()) return players.joinToString(" vs. ")
+            value.optString("format").trim().takeIf(String::isNotBlank)?.let { return "Battle · $it" }
+            return "Battle room"
+        }
+        return value?.toString()?.trim()?.takeIf(String::isNotBlank) ?: "Battle room"
     }
 
     private fun applyChallenges(payload: String?) {
