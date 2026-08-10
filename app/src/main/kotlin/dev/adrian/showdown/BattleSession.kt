@@ -1742,6 +1742,10 @@ class BattleSession {
         val details = fields.getOrNull(3) ?: return
         val species = details.substringBefore(',').trim().ifBlank { return }
         val slot = actor.substringBefore(":").trim()
+        val formHealth = fields.getOrNull(4)
+            ?.takeIf { fields.getOrNull(1) == "detailschange" || fields.getOrNull(1) == "-formechange" }
+            ?.takeIf(String::isNotBlank)
+        val formCondition = formHealth?.let(::condition)
         val baseTypes = typeOverride?.takeIf { it.isNotEmpty() } ?: baseTypesFor(species, resolvedTypes(species))
         baseTypesBySlot[slot] = baseTypes
         typeChangeBySlot.remove(slot)
@@ -1750,8 +1754,27 @@ class BattleSession {
             val parsed = parseDetails(details)
             playerActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
-                playerActiveCombatants[slot] = it.copy(name = species, types = types, level = parsed.first, gender = parsed.second)
-                updatePlayerPartyMember(it.name) { party -> party.copy(name = species, species = species, types = types, level = parsed.first, gender = parsed.second) }
+                val hp = formHealth ?: it.hp
+                val status = formCondition ?: it.condition
+                playerActiveCombatants[slot] = it.copy(
+                    name = species,
+                    types = types,
+                    level = parsed.first,
+                    gender = parsed.second,
+                    hp = hp,
+                    condition = status
+                )
+                updatePlayerPartyMember(it.name) { party ->
+                    party.copy(
+                        name = species,
+                        species = species,
+                        types = types,
+                        level = parsed.first,
+                        gender = parsed.second,
+                        hp = hp,
+                        condition = status
+                    )
+                }
             }
             activeSlotNames[slot] = species
             activeTeamNames.clear()
@@ -1760,20 +1783,65 @@ class BattleSession {
                 playerPokemon = species
                 playerLevel = parsed.first
                 playerGender = parsed.second
-                updatePlayerDetails { it.copy(name = species, species = species, types = if (slot in terastallizedSlots) it.types else baseTypes, level = playerLevel, gender = playerGender) }
+                formHealth?.let {
+                    playerHp = it
+                    playerCondition = formCondition ?: playerCondition
+                }
+                updatePlayerDetails {
+                    it.copy(
+                        name = species,
+                        species = species,
+                        types = if (slot in terastallizedSlots) it.types else baseTypes,
+                        level = playerLevel,
+                        gender = playerGender,
+                        hp = playerHp,
+                        condition = playerCondition
+                    )
+                }
             }
         } else {
             val parsed = parseDetails(details)
             opponentActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
-                opponentActiveCombatants[slot] = it.copy(name = species, types = types, level = parsed.first, gender = parsed.second)
-                updateOpponentParty(it.name) { party -> party.copy(name = species, species = species, types = types, level = parsed.first, gender = parsed.second) }
+                val hp = formHealth ?: it.hp
+                val status = formCondition ?: it.condition
+                opponentActiveCombatants[slot] = it.copy(
+                    name = species,
+                    types = types,
+                    level = parsed.first,
+                    gender = parsed.second,
+                    hp = hp,
+                    condition = status
+                )
+                updateOpponentParty(it.name) { party ->
+                    party.copy(
+                        name = species,
+                        species = species,
+                        types = types,
+                        level = parsed.first,
+                        gender = parsed.second,
+                        hp = hp,
+                        condition = status
+                    )
+                }
             }
             if (slot.endsWith('a')) {
                 opponentPokemon = species
                 opponentLevel = parsed.first
                 opponentGender = parsed.second
-                opponentDetails = opponentDetails.copy(name = species, species = species, types = if (slot in terastallizedSlots) opponentDetails.types else baseTypes, level = opponentLevel, gender = opponentGender)
+                formHealth?.let {
+                    opponentHp = it
+                    opponentCondition = formCondition ?: opponentCondition
+                }
+                opponentDetails = opponentDetails.copy(
+                    name = species,
+                    species = species,
+                    types = if (slot in terastallizedSlots) opponentDetails.types else baseTypes,
+                    level = opponentLevel,
+                    gender = opponentGender,
+                    hp = opponentHp,
+                    condition = opponentCondition
+                )
             }
         }
         appendLog("$species changed form.")

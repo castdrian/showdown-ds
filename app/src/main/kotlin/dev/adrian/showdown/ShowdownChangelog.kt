@@ -12,7 +12,17 @@ object ShowdownChangelog {
             listOf(
                 "Move power, accuracy, and PP details now have comfortable Thor-sized insets.",
                 "Battle challenges announced by Showdown now open the custom accept or reject flow.",
-                "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading."
+                "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading.",
+                "Matched battles are recovered after reconnecting, even when the room ID stays the same.",
+                "Battle form-change packets now keep the visible HP and status cards in sync."
+            )
+        ),
+        ShowdownChangelogEntry(
+            "v0.1.0-alpha.3",
+            listOf(
+                "Added an in-app What's new changelog to the Info & resources screen.",
+                "Release APK assets now use the lowercase showdown- filename prefix.",
+                "Improved challenge notifications and private-message handling."
             )
         ),
         ShowdownChangelogEntry(

@@ -54,4 +54,26 @@ class ShowdownProtocolContractTest {
         assertEquals("READY", session.playerCondition)
         assertEquals(listOf("GHOST"), session.opponentDetails().types)
     }
+
+    @Test
+    fun appliesHpAndStatusCarriedByOfficialFormChangePackets() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN|",
+                "|player|p2|OPPONENT|",
+                "|switch|p1a: Charizard|Charizard, L50, M|153/153",
+                "|switch|p2a: Dragapult|Dragapult, L50|163/163",
+                "|detailschange|p1a: Charizard|Charizard-Mega-X, L50, M|83/153 brn",
+                "|-formechange|p2a: Dragapult|Dragapult-Tera|41/163 par"
+            )
+        )
+
+        assertEquals("83/153 brn", session.playerHp)
+        assertEquals("BRN", session.playerCondition)
+        assertEquals("Charizard-Mega-X", session.playerDetails().name)
+        assertEquals("41/163 par", session.opponentHp)
+        assertEquals("PAR", session.opponentCondition)
+        assertEquals("Dragapult-Tera", session.opponentDetails().name)
+    }
 }
