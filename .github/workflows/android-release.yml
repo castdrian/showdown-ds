@@ -152,7 +152,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          previous_tag="$(git describe --tags --abbrev=0 "$RELEASE_TAG^" 2>/dev/null || true)"
+          previous_tag="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
           notes_path="$RUNNER_TEMP/showdown-release-notes.md"
           features_path="$RUNNER_TEMP/showdown-release-features.md"
           fixes_path="$RUNNER_TEMP/showdown-release-fixes.md"
@@ -160,9 +160,9 @@ jobs:
           : > "$features_path"
           : > "$fixes_path"
           : > "$other_path"
-          commit_range="$RELEASE_TAG"
+          commit_range="HEAD"
           if [[ -n "$previous_tag" ]]; then
-            commit_range="$previous_tag..$RELEASE_TAG"
+            commit_range="$previous_tag..HEAD"
           fi
           while IFS=$'\t' read -r subject commit; do
             [[ -z "$subject" ]] && continue
