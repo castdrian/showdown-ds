@@ -465,6 +465,14 @@ class CommandDeckView(
             scale
         )
         sectionTop += metricHeight + if (compact) 8f * scale else 12f * scale
+        val contextHeight = if (compact) 84f * scale else 96f * scale
+        drawMoveContext(
+            canvas,
+            RectF(detailContent.left, sectionTop, detailContent.right, minOf(detailContent.bottom, sectionTop + contextHeight)),
+            move,
+            scale
+        )
+        sectionTop += contextHeight + if (compact) 8f * scale else 12f * scale
         if (!compact) drawEffectSummary(canvas, detailContent, scale, sectionTop)
         if (move.disabled) {
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
@@ -549,6 +557,82 @@ class CommandDeckView(
             1.75f * scale
         )
         paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawMoveContext(canvas: Canvas, bounds: RectF, move: BattleSession.MoveOption, scale: Float) {
+        if (bounds.height() < 48f * scale) return
+        val gap = 8f * scale
+        val cellWidth = (bounds.width() - gap) / 2f
+        drawMoveContextCell(
+            canvas,
+            RectF(bounds.left, bounds.top, bounds.left + cellWidth, bounds.bottom),
+            "CATEGORY",
+            moveCategoryLabel(move.category),
+            scale
+        )
+        drawMoveContextCell(
+            canvas,
+            RectF(bounds.right - cellWidth, bounds.top, bounds.right, bounds.bottom),
+            "TARGET",
+            moveTargetLabel(move.target),
+            scale
+        )
+    }
+
+    private fun drawMoveContextCell(canvas: Canvas, bounds: RectF, label: String, value: String, scale: Float) {
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(142, 2, 13, 22)
+        canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.25f * scale
+        paint.color = Color.argb(112, 141, 196, 211)
+        canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.textSize = fittedTextSize(label, bounds.width() - 16f * scale, readableTextSize(16f, scale, 13f, 11f), 11f * scale)
+        drawOutlinedText(
+            canvas,
+            label,
+            bounds.centerX(),
+            bounds.top + 22f * scale,
+            Color.rgb(3, 14, 22),
+            Color.rgb(159, 221, 226),
+            1.1f * scale
+        )
+        paint.textSize = fittedTextSize(value, bounds.width() - 16f * scale, readableTextSize(22f, scale, 18f, 15f), 14f * scale)
+        drawOutlinedText(
+            canvas,
+            value,
+            bounds.centerX(),
+            centeredTextBaseline(bounds.centerY() + 10f * scale),
+            Color.rgb(3, 14, 22),
+            PAPER,
+            1.35f * scale
+        )
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun moveCategoryLabel(category: String): String = when (category.lowercase()) {
+        "physical" -> "PHYSICAL"
+        "special" -> "SPECIAL"
+        "status" -> "STATUS"
+        else -> category.trim().uppercase().ifBlank { "UNKNOWN" }
+    }
+
+    private fun moveTargetLabel(target: String): String = when (target.lowercase()) {
+        "normal" -> "ONE FOE"
+        "any" -> "ANY TARGET"
+        "self" -> "SELF"
+        "ally" -> "ALLY"
+        "adjacentfoe" -> "ADJACENT FOE"
+        "adjacentfoes" -> "ADJACENT FOES"
+        "alladjacent" -> "ALL ADJACENT"
+        "alladjacentfoes" -> "ALL FOES"
+        "randomnormal" -> "RANDOM FOE"
+        "foe" -> "FOE"
+        "all" -> "ALL TARGETS"
+        else -> target.trim().replace('_', ' ').replace('-', ' ').uppercase().ifBlank { "DEFAULT" }
     }
 
     private fun drawCompactMetricLine(canvas: Canvas, bounds: RectF, text: String, scale: Float) {
@@ -1134,7 +1218,6 @@ class CommandDeckView(
         canvas.drawPath(crystalPath(centerX, centerY, radius * 1.2f, radius * 1.14f), paint)
         paint.style = Paint.Style.FILL
         paint.color = Color.rgb(222, 253, 255)
-        canvas.drawCircle(centerX, centerY, radius * 0.2f, paint)
         canvas.drawLine(centerX, centerY - radius * 0.82f, centerX, centerY + radius * 0.72f, paint)
         paint.style = Paint.Style.FILL
     }
