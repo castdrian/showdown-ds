@@ -117,6 +117,10 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
       - name: Build installable release APK
+        env:
+          SHOWDOWN_KEYSTORE_PASSWORD: ${{ secrets.SHOWDOWN_KEYSTORE_PASSWORD }}
+          SHOWDOWN_KEY_ALIAS: ${{ secrets.SHOWDOWN_KEY_ALIAS }}
+          SHOWDOWN_KEY_PASSWORD: ${{ secrets.SHOWDOWN_KEY_PASSWORD }}
         run: gradle --no-daemon --stacktrace assembleRelease
 
       - name: Stage Obtainium APK
