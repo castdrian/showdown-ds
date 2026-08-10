@@ -170,6 +170,12 @@ class BattleAudio(
         }
     }
 
+    fun beginBattleMove() {
+        audioCueHandler.postAtFrontOfQueue {
+            if (!released.get()) clearPendingBattleCues()
+        }
+    }
+
     private fun flushPendingBattleCues() {
         if (released.get() || !soundEffectsEnabled.get()) {
             clearPendingBattleCues()

@@ -502,7 +502,13 @@ class MainActivity : Activity() {
         val frame = FrameLayout(this)
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
-        showdownMoveEffects = ShowdownMoveEffectsView(this, battleAudio::playBattleCue, battleAudio::resetBattleCues) { session.protocolHistory() }.also { effects ->
+        showdownMoveEffects = ShowdownMoveEffectsView(
+            this,
+            battleAudio::playBattleCue,
+            battleAudio::resetBattleCues,
+            protocolHistoryProvider = { session.protocolHistory() },
+            audioMoveResetter = battleAudio::beginBattleMove
+        ).also { effects ->
             frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
             effects.setPlaybackSpeed(replaySpeed)
             effects.seed(session.protocolHistory())
