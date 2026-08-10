@@ -301,6 +301,7 @@ class BattleSession {
     private var battleTimerEnabled = false
     private var choiceCanBeCancelled = false
     private var requestNoCancel = false
+    private var requestTargetable = true
     private val playerSideConditions = mutableListOf<String>()
     private val opponentSideConditions = mutableListOf<String>()
     private val playerBoosts = mutableMapOf<String, Int>()
@@ -652,6 +653,7 @@ class BattleSession {
         decisionAvailable = false
         choiceCanBeCancelled = false
         requestNoCancel = false
+        requestTargetable = true
         decisionKind = DecisionKind.WAIT
         panel = Panel.MENU
         status = "Find a battle or challenge a player."
@@ -764,6 +766,7 @@ class BattleSession {
             Panel.TEAM -> when (decisionKind) {
                 DecisionKind.SWITCH -> "Choose a Pokémon to switch in"
                 DecisionKind.TEAM_PREVIEW -> teamPreviewPrompt()
+                DecisionKind.MOVE -> "Choose a move or switch Pokémon"
                 else -> "Choose a Pokémon"
             }
             Panel.ACTIVITY -> "Battle activity and chat"
@@ -804,6 +807,10 @@ class BattleSession {
                 }
                 val gimmick = selectedGimmick
                 val selectedChoice = "move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${target?.let { " $it" } ?: ""}"
+                val activeRequest = activeRequests.getOrNull(activeSlotIndex)
+                val isLastActiveChoice = activeRequests.size <= 1 || activeSlotIndex >= activeRequests.lastIndex
+                val choiceMayNotBeCancelled = isLastActiveChoice &&
+                    !requestTargetable && activeRequest?.optBoolean("maybeDisabled") == true
                 gimmick?.let { usedGimmickFamilies += gimmickFamily(it) }
                 if (activeRequests.size > 1) {
                     ensureActiveChoiceSlots()
@@ -823,7 +830,7 @@ class BattleSession {
                 appendLog("$playerPokemon chose ${gimmick?.label?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
-                choiceCanBeCancelled = !requestNoCancel
+                choiceCanBeCancelled = !requestNoCancel && !choiceMayNotBeCancelled
                 selectedGimmick = null
                 selectedTargetIndex = -1
                 decisionListeners.toList().forEach { it.onDecision(choice) }
@@ -1185,6 +1192,7 @@ class BattleSession {
         decisionAvailable = false
         choiceCanBeCancelled = false
         requestNoCancel = false
+        requestTargetable = true
         decisionKind = DecisionKind.WAIT
         panel = Panel.MOVES
         status = "Battle starting"
@@ -1694,6 +1702,7 @@ class BattleSession {
         teamPreviewOrder.clear()
         teamPreviewRequiredSize = 0
         requestNoCancel = false
+        requestTargetable = true
         moves.clear()
         zMoveVariants.clear()
         maxMoveVariants.clear()
@@ -1766,6 +1775,7 @@ class BattleSession {
                 status = "Waiting for a battle decision…"
                 return@runCatching
             }
+            requestTargetable = request.optBoolean("targetable", activeRequests.size > 1)
             if (!prepareNextActiveRequest()) {
                 decisionKind = DecisionKind.WAIT
                 decisionAvailable = false
@@ -2404,7 +2414,7 @@ class BattleSession {
         targetOptions.clear()
         selectedTargetIndex = -1
         val move = displayedMoves().getOrNull(focusedMove) ?: return
-        if (activeRequests.size <= 1) return
+        if (activeRequests.size <= 1 || !requestTargetable) return
         val target = move.target.lowercase()
         val allySlots = activeSlots(playerActiveCombatants, activeRequests.size).map { -it }
         val foeSlots = activeSlots(opponentActiveCombatants, activeRequests.size)
@@ -2636,6 +2646,10 @@ class BattleSession {
             )
             return
         }
+        if (decisionKind == DecisionKind.MOVE) {
+            confirmMoveRequestSwitch()
+            return
+        }
         val choice = when (decisionKind) {
             DecisionKind.SWITCH -> {
                 if (teamCondition(focusedTeam).contains("FNT", true)) {
@@ -2668,6 +2682,53 @@ class BattleSession {
             }
         }
         completeTeamSelection(choice)
+    }
+
+    private fun confirmMoveRequestSwitch() {
+        val activeRequest = activeRequests.getOrNull(activeSlotIndex)
+        if (activeRequest?.optBoolean("trapped") == true) {
+            status = "$playerPokemon is trapped and cannot switch."
+            notifyListeners()
+            return
+        }
+        if (teamCondition(focusedTeam).contains("FNT", true)) {
+            status = "That Pokémon has fainted."
+            notifyListeners()
+            return
+        }
+        if (!canSwitchTo(focusedTeam)) {
+            status = "${team[focusedTeam]} is already active."
+            notifyListeners()
+            return
+        }
+        val selectedChoice = "switch ${focusedTeam + 1}"
+        val isLastActiveChoice = activeRequests.size <= 1 || activeSlotIndex >= activeRequests.lastIndex
+        val choiceMayNotBeCancelled = isLastActiveChoice && activeRequest?.optBoolean("maybeTrapped") == true
+        if (activeRequests.size > 1) {
+            ensureActiveChoiceSlots()
+            activeChoices[activeSlotIndex] = selectedChoice
+            selectedGimmick = null
+            if (activeSlotIndex < activeRequests.lastIndex) {
+                activeSlotIndex += 1
+                if (prepareNextActiveRequest()) {
+                    notifyListeners()
+                    return
+                }
+            }
+        }
+        val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else selectedChoice
+        val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
+        status = "Switch sent: ${team[focusedTeam]}"
+        appendLog("$playerPokemon switched to ${team[focusedTeam]}.")
+        chatMessages += "[You] $choice"
+        if (chatMessages.size > 32) chatMessages.removeAt(0)
+        decisionAvailable = false
+        choiceCanBeCancelled = !requestNoCancel && !choiceMayNotBeCancelled
+        selectedGimmick = null
+        selectedTargetIndex = -1
+        targetOptions.clear()
+        decisionListeners.toList().forEach { it.onDecision(choice) }
+        notifyListeners()
     }
 
     private fun completeTeamSelection(choice: String) {

@@ -677,6 +677,80 @@ class BattleSessionTest {
     }
 
     @Test
+    fun pokemonPanelCanSubmitARequestedVoluntarySwitch() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|request|{\"rqid\":21,\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+            )
+        )
+
+        session.selectPanel(BattleSession.Panel.TEAM)
+        session.moveFocus(1, 0)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose switch 2|21"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
+    fun trappedActivePokemonCannotSubmitAVoluntarySwitch() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":22,\"active\":[{\"trapped\":true,\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+        )
+
+        session.selectPanel(BattleSession.Panel.TEAM)
+        session.moveFocus(1, 0)
+        session.confirmSelection()
+
+        assertTrue(decisions.isEmpty())
+        assertTrue(session.status.contains("trapped"))
+        assertTrue(session.decisionAvailable)
+    }
+
+    @Test
+    fun explicitlyUntargetableRequestsDoNotOpenTargetSelection() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"targetable\":false,\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"normal\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"target\":\"self\"}]}]}"
+        )
+
+        session.focusMove(0)
+
+        assertTrue(session.targetOptions().isEmpty())
+    }
+
+    @Test
+    fun uncertainMoveAndSwitchRequestsDisableUndoOnTheFinalChoice() {
+        val moveSession = BattleSession()
+        moveSession.setLiveBattleActive(true)
+        moveSession.applyProtocolLine(
+            "|request|{\"targetable\":false,\"active\":[{\"maybeDisabled\":true,\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+        )
+        moveSession.confirmSelection()
+
+        assertFalse(moveSession.canCancelChoice())
+
+        val switchSession = BattleSession()
+        switchSession.setLiveBattleActive(true)
+        switchSession.applyProtocolLine(
+            "|request|{\"active\":[{\"maybeTrapped\":true,\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+        )
+        switchSession.selectPanel(BattleSession.Panel.TEAM)
+        switchSession.moveFocus(1, 0)
+        switchSession.confirmSelection()
+
+        assertFalse(switchSession.canCancelChoice())
+    }
+
+    @Test
     fun detailsReflectKnownBattleInformation() {
         val session = BattleSession()
 
