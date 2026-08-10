@@ -128,7 +128,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          apk_name="Showdown-${RELEASE_TAG}.apk"
+          apk_name="showdown-${RELEASE_TAG}.apk"
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/$apk_name"
           echo "path=$RUNNER_TEMP/$apk_name" >> "$GITHUB_OUTPUT"
 

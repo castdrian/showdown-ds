@@ -94,6 +94,7 @@ class MainActivity : Activity() {
     private var battleProtocolReady = false
     private var pendingDecisionCommand: String? = null
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
+    private var displayedIncomingChallenge: String? = null
     private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
     private val tournamentDirectoryState = ShowdownTournamentDirectoryState()
@@ -1301,6 +1302,13 @@ class MainActivity : Activity() {
         if (local.isBlank()) return
         lines.mapNotNull(ShowdownPrivateMessages::parse).forEach { message ->
             if (message.sender.equals(local, true) || !message.recipient.equals(local, true)) return@forEach
+            val challenge = ShowdownPrivateMessages.challenge(message)
+            if (challenge != null) {
+                if (lobbyState.incomingChallenges.keys.none { normalizeShowdownId(it) == normalizeShowdownId(message.sender) }) {
+                    showIncomingChallengeIfNeeded(message.sender, challenge.format)
+                }
+                return@forEach
+            }
             val target = message.sender
             privateMessageThreads.getOrPut(target) { mutableListOf() } += "${message.sender}: ${message.text}"
             if (privateMessageDialog != null && privateMessageTarget.equals(target, true)) {
@@ -1979,6 +1987,7 @@ class MainActivity : Activity() {
                             .apply()
                         val previousChallenges = lobbyState.incomingChallenges
                         val previousBattleRoomIds = lobbyState.battles.keys
+                        val challengesUpdated = lines.any { it.startsWith("|updatechallenges|") }
                         lobbyState.applyProtocol(lines)
                         handlePrivateMessages(lines)
                         lines.mapNotNull(ShowdownUserDetails::parse).firstOrNull()?.let { profile ->
@@ -1996,8 +2005,10 @@ class MainActivity : Activity() {
                             }
                         }
                         lobbyState.incomingChallenges.keys.firstOrNull { it !in previousChallenges }?.let { username ->
-                            showIncomingChallenge(username, lobbyState.incomingChallenges[username].orEmpty())
+                            val format = lobbyState.incomingChallenges[username].orEmpty()
+                            showIncomingChallengeIfNeeded(username, format)
                         }
+                        if (challengesUpdated && lobbyState.incomingChallenges.isEmpty()) displayedIncomingChallenge = null
                         val outgoingChallenge = lobbyState.outgoingChallenge
                         if (outgoingChallenge != null && outgoingChallenge != displayedOutgoingChallenge) {
                             displayedOutgoingChallenge = outgoingChallenge
@@ -2213,6 +2224,13 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun showIncomingChallengeIfNeeded(username: String, format: String) {
+        val challengeKey = "${normalizeShowdownId(username)}|${format.lowercase()}"
+        if (displayedIncomingChallenge == challengeKey) return
+        displayedIncomingChallenge = challengeKey
+        showIncomingChallenge(username, format)
+    }
+
     private fun showOutgoingChallenge(challenge: ShowdownLobbyState.OutgoingChallenge) {
         ShowdownDialogBuilder(this)
             .setTitle("Challenge pending")
@@ -2414,9 +2432,14 @@ class MainActivity : Activity() {
             text = "Open Pokédex"
             styleDynamicDialogButton(this)
         }
+        val changelogButton = Button(this).apply {
+            text = "What's new"
+            styleDynamicDialogButton(this)
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(ScrollView(this@MainActivity).apply { addView(resources, -1, -2) }, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(changelogButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(sponsorButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(audioButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(pokedexButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
@@ -2429,6 +2452,10 @@ class MainActivity : Activity() {
         pokedexButton.setOnClickListener {
             dialog.dismiss()
             showPokedexDialog()
+        }
+        changelogButton.setOnClickListener {
+            dialog.dismiss()
+            showChangelogDialog()
         }
         dialog.show()
         sponsorButton.setOnClickListener {
@@ -2449,6 +2476,36 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    private fun showChangelogDialog() {
+        val density = resources.displayMetrics.density
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((12f * density).toInt(), (8f * density).toInt(), (12f * density).toInt(), (8f * density).toInt())
+        }
+        val version = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty().takeIf { it.isNotBlank() }?.let { "v$it" } ?: "Current build"
+        ShowdownChangelog.entries(version).forEach { entry ->
+            content.addView(TextView(this).apply {
+                text = entry.version
+                setTextColor(0xffa9f5ed.toInt())
+                setTextSize(19f)
+                typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+                setPadding(0, (8f * density).toInt(), 0, (4f * density).toInt())
+            })
+            content.addView(TextView(this).apply {
+                text = entry.changes.joinToString("\n") { "• $it" }
+                setTextColor(0xffdceff2.toInt())
+                setTextSize(17f)
+                setLineSpacing(0f, 1.12f)
+                setPadding(0, 0, 0, (8f * density).toInt())
+            })
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("What's new")
+            .setView(ScrollView(this).apply { addView(content, -1, -2) })
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun showAudioDiagnosticDialog(snapshot: BattleAudioDiagnosticSnapshot) {
@@ -2826,6 +2883,7 @@ class MainActivity : Activity() {
         completedBattleRoomId = null
         pendingDecisionCommand = null
         displayedOutgoingChallenge = null
+        displayedIncomingChallenge = null
         privateMessageDialog?.dismiss()
         privateMessageDialog = null
         privateMessageTarget = null

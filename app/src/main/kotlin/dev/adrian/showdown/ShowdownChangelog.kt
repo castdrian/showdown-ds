@@ -1,0 +1,34 @@
+package dev.adrian.showdown
+
+data class ShowdownChangelogEntry(
+    val version: String,
+    val changes: List<String>
+)
+
+object ShowdownChangelog {
+    fun entries(currentVersion: String) = listOf(
+        ShowdownChangelogEntry(
+            currentVersion,
+            listOf(
+                "Move power, accuracy, and PP details now have comfortable Thor-sized insets.",
+                "Battle challenges announced by Showdown now open the custom accept or reject flow.",
+                "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading."
+            )
+        ),
+        ShowdownChangelogEntry(
+            "v0.1.0-alpha.2",
+            listOf(
+                "Added a signed installable alpha release for Android.",
+                "Added battle audio diagnostics and adjustable replay speed.",
+                "Refined the custom Thor UI, battle log contrast, and readable battle information."
+            )
+        ),
+        ShowdownChangelogEntry(
+            "v0.1.0-alpha.1",
+            listOf(
+                "Added live Showdown battles, team building, replays, rooms, chat, and account tools.",
+                "Added dual-screen battle presentation with touch and controller support."
+            )
+        )
+    )
+}

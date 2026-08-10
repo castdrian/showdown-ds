@@ -33,3 +33,5 @@ If this client is useful to you, [sponsor the project on GitHub](https://github.
 ## Releases
 
 Use `vMAJOR.MINOR.PATCH-alpha.N`, `vMAJOR.MINOR.PATCH-beta.N`, or `vMAJOR.MINOR.PATCH` tags for prereleases and stable releases.
+
+Release APKs use the `showdown-<tag>.apk` filename.

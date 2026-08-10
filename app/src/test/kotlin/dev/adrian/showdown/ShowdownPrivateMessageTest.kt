@@ -18,4 +18,16 @@ class ShowdownPrivateMessageTest {
         assertEquals("/pm Gladion, Hello there", ShowdownPrivateMessages.command(" Gladion ", " Hello there "))
         assertNull(ShowdownPrivateMessages.parse("|chat|Lobby|hello"))
     }
+
+    @Test
+    fun parsesShowdownChallengeNoticesWithoutTreatingThemAsChat() {
+        val message = ShowdownPrivateMessages.parse(
+            "|pm|Gladion|Adrian|/challenge gen7randombattle|||Accept|Reject"
+        )!!
+
+        assertEquals(ShowdownChallengeNotice("gen7randombattle"), ShowdownPrivateMessages.challenge(message))
+        assertNull(ShowdownPrivateMessages.challenge(message.copy(text = "/challenge")))
+        assertNull(ShowdownPrivateMessages.challenge(message.copy(text = "/challenger gen7randombattle")))
+        assertNull(ShowdownPrivateMessages.challenge(message.copy(text = "Want to battle?")))
+    }
 }
