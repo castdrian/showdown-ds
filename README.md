@@ -2,17 +2,16 @@
 
 Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
-## Screenshots
-
-### Battle controls
-
-<p align="center"><img src="media/showdown-upper.png" alt="Battle controls on the upper display" width="100%"></p>
-<p align="center"><img src="media/showdown-lower.png" alt="Battle controls on the lower display" width="64.6%"></p>
-
-### Battle menu
-
-<p align="center"><img src="media/showdown-upper-battle.png" alt="Battle menu on the upper display" width="100%"></p>
-<p align="center"><img src="media/showdown-lower-menu.png" alt="Battle menu on the lower display" width="64.6%"></p>
+<table>
+  <tr>
+    <td width="60%"><img src="media/showdown-upper.png" alt="Showdown battle display"></td>
+    <td width="40%"><img src="media/showdown-lower.png" alt="Showdown move controls display"></td>
+  </tr>
+  <tr>
+    <td width="60%"><img src="media/showdown-upper-battle.png" alt="Showdown battle menu display"></td>
+    <td width="40%"><img src="media/showdown-lower-menu.png" alt="Showdown battle menu controls display"></td>
+  </tr>
+</table>
 
 ## Hardware target
 
