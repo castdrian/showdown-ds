@@ -219,7 +219,7 @@ jobs:
           release_args=(
             --repo "$GITHUB_REPOSITORY"
             --verify-tag
-            --title "Showdown $RELEASE_TAG"
+            --title "$RELEASE_TAG"
             --notes-file "$RELEASE_NOTES_PATH"
             --generate-notes
             --fail-on-no-commits
