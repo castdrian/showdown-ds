@@ -11,6 +11,7 @@ object ShowdownChangelog {
             currentVersion,
             listOf(
                 "Account settings can now create a registered Showdown account and finish sign-in without leaving the client.",
+                "Battle sound effects now stop cleanly when the app leaves the foreground instead of resuming out of sync.",
                 "Move detail panels now focus on readable move names, power, and accuracy while selector cards retain PP.",
                 "Move previews now fill power, accuracy, category, and gimmick power from the official dex while keeping status and always-hit values as dashes.",
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",

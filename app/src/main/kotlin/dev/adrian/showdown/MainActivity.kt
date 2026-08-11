@@ -465,7 +465,10 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         pauseReplayForLifecycle()
-        if (::battleAudio.isInitialized) battleAudio.pauseMusic()
+        if (::battleAudio.isInitialized) {
+            battleAudio.resetBattleCues()
+            battleAudio.pauseMusic()
+        }
         super.onPause()
     }
 
