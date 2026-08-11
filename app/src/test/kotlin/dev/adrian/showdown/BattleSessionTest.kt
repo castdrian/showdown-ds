@@ -1151,6 +1151,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun duplicateSpeciesKeepNicknameSpecificPartyDetailsSeparated() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Sparky\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p1: Bolt\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+        session.applyProtocolLine("|switch|p1a: Sparky|Pikachu, L50|100/100")
+        session.applyProtocolLine("|-item|p1a: Sparky|Light Ball")
+        session.applyProtocolLine("|switch|p1a: Bolt|Pikachu, L50|100/100")
+        session.applyProtocolLine("|-item|p1a: Bolt|Magnet")
+
+        assertEquals("Light Ball", session.teamMemberDetails(0).item)
+        assertEquals("Magnet", session.teamMemberDetails(1).item)
+    }
+
+    @Test
     fun battlePacketEmitsAClassifiedCriticalHitAndCarriesTheRequestId() {
         val session = BattleSession()
         val feedback = mutableListOf<BattleSession.BattleFeedback>()

@@ -296,6 +296,8 @@ class BattleSession {
     private val opponentTeamDetails = mutableListOf(opponentDetails)
     private val playerActiveCombatants = linkedMapOf<String, ActiveCombatant>()
     private val opponentActiveCombatants = linkedMapOf<String, ActiveCombatant>()
+    private val playerPartyIdentifiers = mutableListOf<String>()
+    private val playerActivePartyIndices = mutableMapOf<String, Int>()
     private val activeTeamNames = mutableSetOf<String>()
     private val activeSlotNames = mutableMapOf<String, String>()
     private val autoPassActiveSlots = mutableSetOf<Int>()
@@ -1389,6 +1391,8 @@ class BattleSession {
         targetOptions.clear()
         playerActiveCombatants.clear()
         opponentActiveCombatants.clear()
+        playerPartyIdentifiers.clear()
+        playerActivePartyIndices.clear()
         activeSlotIndex = 0
         requiredSwitches = 0
         selectedTargetIndex = -1
@@ -1464,7 +1468,11 @@ class BattleSession {
                 activeSlotNames[slot] = pokemon
                 activeTeamNames.clear()
                 activeTeamNames += activeSlotNames.values
-                val index = team.indexOfFirst { it.equals(pokemon, true) }
+                val identifier = fields[2].substringAfter(':').trim()
+                val index = playerPartyIdentifiers.indexOfFirst { it.equals(identifier, true) }
+                    .takeIf { it >= 0 }
+                    ?: teamDetails.indexOfFirst { it.name.equals(pokemon, true) || it.species.equals(pokemon, true) }
+                if (index >= 0) playerActivePartyIndices[slot] = index else playerActivePartyIndices.remove(slot)
                 val activeDetails = if (index >= 0) teamDetails[index] else playerDetails.copy(name = pokemon, species = pokemon, types = resolvedTypes(pokemon))
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
                 baseTypesBySlot[slot] = baseTypes
@@ -1722,7 +1730,7 @@ class BattleSession {
                 playerActiveCombatants[slot]?.let {
                     playerActiveCombatants[slot] = it.copy(hp = hp, condition = currentCondition)
                 }
-                updatePlayerPartyMember(pokemon) { details -> details.copy(hp = hp, condition = currentCondition) }
+                updatePlayerPartyMemberForSlot(slot, pokemon) { details -> details.copy(hp = hp, condition = currentCondition) }
                 if (slot.endsWith('a')) {
                     playerHp = hp
                     playerCondition = currentCondition
@@ -1753,7 +1761,7 @@ class BattleSession {
         if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let {
                 playerActiveCombatants[slot] = it.copy(hp = "0 fnt", condition = "FNT")
-                updatePlayerPartyMember(it.name) { details -> details.copy(hp = "0 fnt", condition = "FNT") }
+                updatePlayerPartyMemberForSlot(slot, it.name) { details -> details.copy(hp = "0 fnt", condition = "FNT") }
             }
             if (slot.endsWith('a')) {
                 playerHp = "0 fnt"
@@ -1786,7 +1794,7 @@ class BattleSession {
             playerActiveCombatants[slot]?.let {
                 playerActiveCombatants[slot] = it.copy(condition = status)
             }
-            updatePlayerPartyMember(pokemon) { details -> details.copy(condition = status) }
+            updatePlayerPartyMemberForSlot(slot, pokemon) { details -> details.copy(condition = status) }
             if (slot.endsWith('a')) {
                 playerCondition = status
                 updatePlayerDetails { it.copy(condition = status) }
@@ -1892,7 +1900,7 @@ class BattleSession {
                     hp = hp,
                     condition = status
                 )
-                updatePlayerPartyMember(it.name) { party ->
+                updatePlayerPartyMemberForSlot(slot, it.name) { party ->
                     party.copy(
                         name = species,
                         species = species,
@@ -1985,7 +1993,7 @@ class BattleSession {
         if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let {
                 playerActiveCombatants[slot] = it.copy(types = listOf(teraType))
-                updatePlayerPartyMember(it.name) { details -> details.copy(types = listOf(teraType)) }
+                updatePlayerPartyMemberForSlot(slot, it.name) { details -> details.copy(types = listOf(teraType)) }
             }
             if (slot.endsWith('a')) updatePlayerDetails { it.copy(types = listOf(teraType)) }
         } else {
@@ -2798,9 +2806,11 @@ class BattleSession {
     private fun updatePlayerDetails(transform: (PokemonDetails) -> PokemonDetails) {
         val previous = playerDetails
         playerDetails = transform(previous)
-        teamDetails.indexOfFirst {
-            it.name.equals(previous.name, true) || it.species.equals(previous.species, true)
-        }
+        val primaryIndex = playerActivePartyIndices["${playerSlot}a"]
+            ?: teamDetails.indexOfFirst {
+                it.name.equals(previous.name, true) || it.species.equals(previous.species, true)
+            }
+        primaryIndex
             .takeIf { it >= 0 }
             ?.let { teamDetails[it] = playerDetails }
     }
@@ -2810,8 +2820,11 @@ class BattleSession {
         val slot = actor.substringBefore(':').trim()
         if (isPlayerSide(actor)) {
             val targetName = playerActiveCombatants[slot]?.name ?: name
-            if (slot.endsWith('a') && playerDetails.matchesIdentifier(targetName)) updatePlayerDetails(transform)
-            else updatePlayerPartyMember(targetName, transform)
+            if (slot.endsWith('a') && playerDetails.matchesIdentifier(targetName)) {
+                updatePlayerDetails(transform)
+            } else {
+                playerActivePartyIndices[slot]?.let { teamDetails[it] = transform(teamDetails[it]) } ?: updatePlayerPartyMember(targetName, transform)
+            }
         } else {
             val targetName = opponentActiveCombatants[slot]?.name ?: name
             updateOpponentParty(targetName, transform)
@@ -2858,7 +2871,7 @@ class BattleSession {
             val combatant = playerActiveCombatants[slot]
             val name = combatant?.name ?: actorName
             combatant?.let { playerActiveCombatants[slot] = it.copy(types = types) }
-            updatePlayerPartyMember(name) { details -> details.copy(types = types) }
+            updatePlayerPartyMemberForSlot(slot, name) { details -> details.copy(types = types) }
             if (slot.endsWith('a')) updatePlayerDetails { it.copy(types = types) }
         } else {
             val combatant = opponentActiveCombatants[slot]
@@ -2887,6 +2900,7 @@ class BattleSession {
         swap(typeChangeBySlot)
         swap(typeAdditionsBySlot)
         if (isPlayerSide(oldSlot)) swap(playerBoostsBySlot) else swap(opponentBoostsBySlot)
+        if (isPlayerSide(oldSlot)) swap(playerActivePartyIndices)
         val oldTera = terastallizedSlots.remove(oldSlot)
         val newTera = terastallizedSlots.remove(newSlot)
         if (oldTera) terastallizedSlots += newSlot
@@ -3349,8 +3363,10 @@ class BattleSession {
     private fun syncTeamFromRequest(request: JSONObject) {
         val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon") ?: return
         val synced = mutableListOf<PokemonDetails>()
+        val identifiers = mutableListOf<String>()
         activeTeamNames.clear()
         activeSlotNames.clear()
+        playerActivePartyIndices.clear()
         val hasRevivingActive = (0 until pokemon.length()).any { index ->
             pokemon.optJSONObject(index)?.let { entry ->
                 entry.optBoolean("active") && entry.optBoolean("reviving")
@@ -3362,9 +3378,13 @@ class BattleSession {
             val details = entry.optString("details", entry.optString("ident").substringAfter(": "))
             val name = details.substringBefore(',').ifBlank { entry.optString("ident").substringAfter(": ", "Pokémon") }
             val species = details.substringBefore(',').ifBlank { name }
+            val identifier = entry.optString("ident").substringAfter(':').trim().ifBlank { name }
+            identifiers += identifier
             if (entry.optBoolean("active")) {
                 if (entry.optBoolean("commanding")) autoPassActiveSlots += activeIndex
-                activeSlotNames["$playerSlot${('a'.code + activeIndex).toChar()}"] = name
+                val slot = "$playerSlot${('a'.code + activeIndex).toChar()}"
+                activeSlotNames[slot] = identifier
+                playerActivePartyIndices[slot] = index
                 activeIndex += 1
             }
             val known = teamDetails.firstOrNull { it.name.equals(name, true) }
@@ -3396,13 +3416,18 @@ class BattleSession {
         if (synced.isEmpty()) return
         team.clear()
         team += synced.map { it.name }
+        playerPartyIdentifiers.clear()
+        playerPartyIdentifiers += identifiers
         teamDetails.clear()
         teamDetails += synced
         activeTeamNames += activeSlotNames.values
         if (activeSlotNames.isNotEmpty()) {
             playerActiveCombatants.clear()
-            activeSlotNames.forEach { (slot, name) ->
-                synced.firstOrNull { it.name.equals(name, true) }?.let { details ->
+            activeSlotNames.forEach { (slot, identifier) ->
+                playerPartyIdentifiers.indexOfFirst { it.equals(identifier, true) }
+                    .takeIf { it >= 0 }
+                    ?.let { synced[it] }
+                    ?.let { details ->
                     playerActiveCombatants[slot] = ActiveCombatant(slot, details.name, details.types, details.level, details.gender, details.hp, details.condition, playerEntryAtNanos)
                 }
             }
@@ -3420,7 +3445,7 @@ class BattleSession {
     }
 
     private fun canSwitchTo(index: Int): Boolean {
-        if (index !in team.indices || team[index] in activeTeamNames) return false
+        if (index !in team.indices || index in playerActivePartyIndices.values) return false
         val fainted = teamCondition(index).contains("FNT", true)
         return !fainted || index in revivingTeamIndices
     }
@@ -3441,6 +3466,10 @@ class BattleSession {
     private fun updatePlayerPartyMember(name: String, transform: (PokemonDetails) -> PokemonDetails) {
         val index = teamDetails.indexOfFirst { it.matchesIdentifier(name) }
         if (index >= 0) teamDetails[index] = transform(teamDetails[index])
+    }
+
+    private fun updatePlayerPartyMemberForSlot(slot: String, name: String, transform: (PokemonDetails) -> PokemonDetails) {
+        playerActivePartyIndices[slot]?.let { teamDetails[it] = transform(teamDetails[it]) } ?: updatePlayerPartyMember(name, transform)
     }
 
     private fun PokemonDetails.matchesIdentifier(identifier: String) =
