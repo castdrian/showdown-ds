@@ -19,11 +19,13 @@ object ShowdownAssetPaths {
             add(if (style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani")
             if (style == BattleSession.SpriteStyle.MODERN_3D) add("gen5ani")
         }
+        if (back) {
+            trueBackSpriteUrl(species)?.let { candidates += it }
+        }
         collections.forEach { collection ->
             speciesNames.forEach { name -> candidates += battleSprite(name, back, collection) }
         }
         if (back) {
-            trueBackSpriteUrl(species)?.let { candidates += it }
             val staticCollections = if (style == BattleSession.SpriteStyle.MODERN_3D) {
                 listOf("xy", "gen5")
             } else {
