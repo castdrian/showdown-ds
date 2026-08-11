@@ -138,7 +138,7 @@ class BattleSceneView(
                         canvas,
                         RectF(width * 0.015f, height * 0.80f, width * 0.315f, height * 0.98f),
                         session.playerName,
-                        session.playerPokemon,
+                        BattleSession.displayPokemonName(session.playerPokemon),
                         session.playerLevel,
                         session.playerGender,
                         session.playerHp,
@@ -160,7 +160,7 @@ class BattleSceneView(
                         canvas,
                         RectF(width * 0.685f, height * 0.02f, width * 0.985f, height * 0.20f),
                         session.opponentName,
-                        session.opponentPokemon,
+                        BattleSession.displayPokemonName(session.opponentPokemon),
                         session.opponentLevel,
                         session.opponentGender,
                         session.opponentHp,
@@ -554,7 +554,12 @@ class BattleSceneView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(60f, scale, 24f)
         paint.color = INK
-        canvas.drawText(ellipsizeToWidth(details.name, right - left - 168f * scale, paint), left, row, paint)
+        canvas.drawText(
+            ellipsizeToWidth(BattleSession.displayPokemonName(details.name, details.species), right - left - 168f * scale, paint),
+            left,
+            row,
+            paint
+        )
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(42f, scale, 18f)
         paint.color = if (playerSide) CYAN else MAGENTA
@@ -796,7 +801,7 @@ class BattleSceneView(
         paint.style = Paint.Style.FILL
         val left = bounds.left + 14f * scale
         val right = bounds.right - 14f * scale
-        val label = "${index + 1}  ${combatant.name}${when {
+        val label = "${index + 1}  ${BattleSession.displayPokemonName(combatant.name)}${when {
             combatant.gMaxed -> " · G-MAX"
             combatant.dynamaxed -> " · MAX"
             else -> ""

@@ -298,6 +298,8 @@ class BattleSession {
     private val opponentActiveCombatants = linkedMapOf<String, ActiveCombatant>()
     private val playerPartyIdentifiers = mutableListOf<String>()
     private val playerActivePartyIndices = mutableMapOf<String, Int>()
+    private val opponentPartyIdentifiers = mutableMapOf<String, Int>()
+    private val opponentActivePartyIndices = mutableMapOf<String, Int>()
     private val activeTeamNames = mutableSetOf<String>()
     private val activeSlotNames = mutableMapOf<String, String>()
     private val autoPassActiveSlots = mutableSetOf<Int>()
@@ -828,7 +830,7 @@ class BattleSession {
     }
 
     fun sendOutMessage(pokemon: String, playerSide: Boolean) =
-        if (playerSide) "Go! $pokemon!" else "$opponentName sent out $pokemon!"
+        if (playerSide) "Go! ${displayPokemonName(pokemon)}!" else "$opponentName sent out ${displayPokemonName(pokemon)}!"
 
     fun setMatchFormat(format: MatchFormat) {
         matchFormat = format
@@ -1137,7 +1139,11 @@ class BattleSession {
                     "init" -> applyInit(fields)
                     "player" -> applyPlayer(fields)
                     "gametype" -> applyGameType(fields)
-                    "clearpoke" -> opponentTeamDetails.clear()
+                    "clearpoke" -> {
+                        opponentTeamDetails.clear()
+                        opponentPartyIdentifiers.clear()
+                        opponentActivePartyIndices.clear()
+                    }
                     "showteam" -> applyShowTeam(fields)
                     "gen" -> fields.getOrNull(2)?.toIntOrNull()?.let { appendLog("Generation $it battle.") }
                     "tier" -> if (fields.size > 2) {
@@ -1395,6 +1401,8 @@ class BattleSession {
         opponentActiveCombatants.clear()
         playerPartyIdentifiers.clear()
         playerActivePartyIndices.clear()
+        opponentPartyIdentifiers.clear()
+        opponentActivePartyIndices.clear()
         activeSlotIndex = 0
         requiredSwitches = 0
         selectedTargetIndex = -1
@@ -1507,8 +1515,10 @@ class BattleSession {
             }
             else -> {
                 val primary = slot.endsWith("a") || opponentActiveCombatants.isEmpty()
-                val existing = opponentTeamDetails.firstOrNull { it.name.equals(pokemon, true) }
-                val activeDetails = existing ?: opponentDetails.copy(name = pokemon, species = pokemon, types = resolvedTypes(pokemon))
+                val identifier = fields[2].substringAfter(':').trim()
+                val index = findOpponentPartyIndex(identifier, pokemon, slot)
+                val existing = opponentTeamDetails.getOrNull(index)
+                val activeDetails = existing ?: unknownOpponentDetails(pokemon, parsedDetails, hp, currentCondition)
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
                 baseTypesBySlot[slot] = baseTypes
                 typeChangeBySlot.remove(slot)
@@ -1516,19 +1526,28 @@ class BattleSession {
                 terastallizedSlots.remove(slot)
                 opponentBoostsBySlot.remove(slot)
                 if (!passedBoosts.isNullOrEmpty()) opponentBoostsBySlot[slot] = passedBoosts.toMutableMap()
+                val activeName = existing?.name?.takeIf { it.equals(identifier, true) } ?: pokemon
                 val updatedDetails = activeDetails.copy(
-                    name = pokemon,
-                    species = activeDetails.species.ifBlank { pokemon },
+                    name = activeName,
+                    species = pokemon,
                     types = baseTypes,
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
                     hp = hp,
                     condition = currentCondition
                 )
-                updateOpponentParty(updatedDetails)
-                opponentActiveCombatants[slot] = ActiveCombatant(slot, pokemon, updatedDetails.types, parsedDetails.first, parsedDetails.second, hp, currentCondition, opponentEntryAtNanos)
+                val resolvedIndex = if (index >= 0) {
+                    opponentTeamDetails[index] = updatedDetails
+                    index
+                } else {
+                    opponentTeamDetails += updatedDetails
+                    opponentTeamDetails.lastIndex
+                }
+                opponentPartyIdentifiers[identifier] = resolvedIndex
+                opponentActivePartyIndices[slot] = resolvedIndex
+                opponentActiveCombatants[slot] = ActiveCombatant(slot, activeName, updatedDetails.types, parsedDetails.first, parsedDetails.second, hp, currentCondition, opponentEntryAtNanos)
                 if (primary) {
-                    opponentPokemon = pokemon
+                    opponentPokemon = activeName
                     opponentHp = hp
                     opponentLevel = parsedDetails.first
                     opponentGender = parsedDetails.second
@@ -1660,6 +1679,13 @@ class BattleSession {
         } else {
             opponentTeamDetails.clear()
             opponentTeamDetails += revealedParty
+            rebuildOpponentPartyIdentifiers()
+            opponentActivePartyIndices.clear()
+            opponentActiveCombatants.forEach { (slot, combatant) ->
+                findOpponentPartyIndex(combatant.name, combatant.name, slot)
+                    .takeIf { it >= 0 }
+                    ?.let { opponentActivePartyIndices[slot] = it }
+            }
             revealedParty.firstOrNull { it.name.equals(opponentDetails.name, true) }?.let { opponentDetails = it }
         }
         appendLog("${sideNames[side] ?: side} revealed their team.")
@@ -1717,7 +1743,7 @@ class BattleSession {
     private fun applyMove(fields: List<String>) {
         if (fields.size <= 3) return
         val actor = fields[2].substringAfter(':').trim()
-        val event = "$actor used ${fields[3]}!"
+        val event = "${displayPokemonName(actor)} used ${fields[3]}!"
         latestMoveEvent = event
         latestMoveEventAtNanos = System.nanoTime()
         appendLog(event)
@@ -1747,12 +1773,12 @@ class BattleSession {
                 opponentActiveCombatants[slot]?.let {
                     opponentActiveCombatants[slot] = it.copy(hp = hp, condition = currentCondition)
                 }
-                updateOpponentParty(pokemon) { details -> details.copy(hp = hp, condition = currentCondition) }
+                updateOpponentPartyForSlot(slot) { details -> details.copy(hp = hp, condition = currentCondition) }
                 if (slot.endsWith('a')) {
                     opponentHp = hp
                     opponentCondition = currentCondition
                     opponentDetails = opponentDetails.copy(hp = opponentHp, condition = opponentCondition)
-                    updateOpponentParty(opponentDetails)
+                    updateOpponentPartyForSlot(slot) { details -> details.copy(hp = opponentHp, condition = opponentCondition) }
                 }
             }
         }
@@ -1777,18 +1803,18 @@ class BattleSession {
         } else {
             opponentActiveCombatants[slot]?.let {
                 opponentActiveCombatants[slot] = it.copy(hp = "0 fnt", condition = "FNT")
-                updateOpponentParty(it.name) { details -> details.copy(hp = "0 fnt", condition = "FNT") }
+                updateOpponentPartyForSlot(slot) { details -> details.copy(hp = "0 fnt", condition = "FNT") }
             }
             if (slot.endsWith('a')) {
                 opponentHp = "0 fnt"
                 opponentCondition = "FNT"
                 opponentDetails = opponentDetails.copy(hp = opponentHp, condition = opponentCondition)
-                updateOpponentParty(opponentDetails)
+                updateOpponentPartyForSlot(slot) { details -> details.copy(hp = opponentHp, condition = opponentCondition) }
             }
         }
         if (isPlayerSide(actor)) playerBoostsBySlot.remove(slot) else opponentBoostsBySlot.remove(slot)
         refreshVisibleBoosts()
-        appendLog("$pokemon fainted.")
+        appendLog("${displayPokemonName(pokemon)} fainted.")
     }
 
     private fun applyStatus(fields: List<String>, cured: Boolean = false) {
@@ -1809,11 +1835,11 @@ class BattleSession {
             opponentActiveCombatants[slot]?.let {
                 opponentActiveCombatants[slot] = it.copy(condition = status)
             }
-            updateOpponentParty(pokemon) { details -> details.copy(condition = status) }
+            updateOpponentPartyForSlot(slot) { details -> details.copy(condition = status) }
             if (slot.endsWith('a')) {
                 opponentCondition = status
                 opponentDetails = opponentDetails.copy(condition = status)
-                updateOpponentParty(opponentDetails)
+                updateOpponentPartyForSlot(slot) { details -> details.copy(condition = opponentCondition) }
             }
         }
         appendLog(if (cured) "${battleActor(actor)}'s status was cured." else "${battleActor(actor)} became ${statusLabel(status)}.")
@@ -1955,7 +1981,7 @@ class BattleSession {
                     hp = hp,
                     condition = status
                 )
-                updateOpponentParty(it.name) { party ->
+                updateOpponentPartyForSlot(slot) { party ->
                     party.copy(
                         name = species,
                         species = species,
@@ -2005,7 +2031,7 @@ class BattleSession {
         } else {
             opponentActiveCombatants[slot]?.let {
                 opponentActiveCombatants[slot] = it.copy(types = listOf(teraType))
-                updateOpponentParty(it.name) { details -> details.copy(types = listOf(teraType)) }
+                updateOpponentPartyForSlot(slot) { details -> details.copy(types = listOf(teraType)) }
             }
             if (slot.endsWith('a')) opponentDetails = opponentDetails.copy(types = listOf(teraType))
         }
@@ -2801,7 +2827,7 @@ class BattleSession {
         opponentBoosts.putAll(visible(opponentActiveCombatants, opponentBoostsBySlot))
     }
 
-    private fun battleActor(value: String?) = value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" }
+    private fun battleActor(value: String?) = displayPokemonName(value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" })
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
 
@@ -2834,7 +2860,7 @@ class BattleSession {
             }
         } else {
             val targetName = opponentActiveCombatants[slot]?.name ?: name
-            updateOpponentParty(targetName, transform)
+            updateOpponentPartyForSlot(slot, transform)
             if (slot.endsWith('a') && opponentDetails.matchesIdentifier(targetName)) opponentDetails = transform(opponentDetails)
         }
     }
@@ -2884,7 +2910,7 @@ class BattleSession {
             val combatant = opponentActiveCombatants[slot]
             val name = combatant?.name ?: actorName
             combatant?.let { opponentActiveCombatants[slot] = it.copy(types = types) }
-            updateOpponentParty(name) { details -> details.copy(types = types) }
+            updateOpponentPartyForSlot(slot) { details -> details.copy(types = types) }
             if (slot.endsWith('a')) opponentDetails = opponentDetails.copy(types = types)
         }
     }
@@ -2907,7 +2933,7 @@ class BattleSession {
         swap(typeChangeBySlot)
         swap(typeAdditionsBySlot)
         if (isPlayerSide(oldSlot)) swap(playerBoostsBySlot) else swap(opponentBoostsBySlot)
-        if (isPlayerSide(oldSlot)) swap(playerActivePartyIndices)
+        if (isPlayerSide(oldSlot)) swap(playerActivePartyIndices) else swap(opponentActivePartyIndices)
         val oldTera = terastallizedSlots.remove(oldSlot)
         val newTera = terastallizedSlots.remove(newSlot)
         if (oldTera) terastallizedSlots += newSlot
@@ -3472,12 +3498,75 @@ class BattleSession {
         return !fainted || index in revivingTeamIndices
     }
 
+    private fun rebuildOpponentPartyIdentifiers() {
+        opponentPartyIdentifiers.clear()
+        opponentTeamDetails.forEachIndexed { index, details ->
+            details.name.takeIf(String::isNotBlank)?.let { opponentPartyIdentifiers[it] = index }
+        }
+        opponentTeamDetails
+            .groupBy { it.species.lowercase() }
+            .filterValues { it.size == 1 }
+            .values
+            .map { it.single() }
+            .forEach { details ->
+                opponentTeamDetails.indexOf(details).takeIf { it >= 0 }?.let { opponentPartyIdentifiers[details.species] = it }
+            }
+    }
+
+    private fun findOpponentPartyIndex(identifier: String, species: String, slot: String): Int {
+        opponentPartyIdentifiers.entries.firstOrNull { it.key.equals(identifier, true) }
+            ?.value
+            ?.takeIf { it in opponentTeamDetails.indices }
+            ?.let { return it }
+        opponentTeamDetails.indexOfFirst { it.name.equals(identifier, true) }
+            .takeIf { it >= 0 }
+            ?.let { return it }
+        val occupiedByAnotherSlot = opponentActivePartyIndices
+            .filterKeys { it != slot }
+            .values
+            .toSet()
+        return opponentTeamDetails.indices.firstOrNull { index ->
+            index !in opponentPartyIdentifiers.values &&
+                index !in occupiedByAnotherSlot &&
+                opponentTeamDetails[index].species.equals(species, true)
+        } ?: -1
+    }
+
+    private fun unknownOpponentDetails(
+        species: String,
+        levelGender: Pair<String, String>,
+        hp: String,
+        currentCondition: String
+    ) = PokemonDetails(
+        name = species,
+        types = resolvedTypes(species),
+        level = levelGender.first,
+        gender = levelGender.second,
+        hp = hp,
+        condition = currentCondition,
+        ability = "Unknown ability",
+        item = "Unknown item",
+        moves = emptyList(),
+        stats = "",
+        species = species
+    )
+
     private fun updateOpponentParty(details: PokemonDetails) {
         val index = opponentTeamDetails.indexOfFirst { it.matchesIdentifier(details.name) || it.matchesIdentifier(details.species) }
         if (index >= 0) {
             opponentTeamDetails[index] = details
         } else if (opponentTeamDetails.size < 6) {
             opponentTeamDetails += details
+        }
+    }
+
+    private fun updateOpponentPartyForSlot(slot: String, transform: (PokemonDetails) -> PokemonDetails) {
+        opponentActivePartyIndices[slot]?.takeIf { it in opponentTeamDetails.indices }?.let {
+            opponentTeamDetails[it] = transform(opponentTeamDetails[it])
+            return
+        }
+        opponentActiveCombatants[slot]?.name?.let { name ->
+            updateOpponentParty(name, transform)
         }
     }
 
@@ -3585,6 +3674,17 @@ class BattleSession {
         const val MENU_COLUMNS = 3
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+
+        fun displayPokemonName(name: String, species: String = name): String {
+            val label = name.trim()
+            val canonicalSpecies = species.trim().ifBlank { label }
+            if (!label.equals(canonicalSpecies, true)) return label
+            return if (canonicalSpecies.length > 18 && canonicalSpecies.count { it == '-' } >= 2) {
+                canonicalSpecies.substringBefore('-')
+            } else {
+                label
+            }
+        }
 
         fun parseServerFormats(line: String): List<MatchFormat> {
             if (!line.startsWith("|formats|")) return emptyList()

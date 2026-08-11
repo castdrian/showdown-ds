@@ -1209,6 +1209,32 @@ class BattleSessionTest {
     }
 
     @Test
+    fun duplicateOpponentSpeciesKeepNicknameSpecificPartyDetailsSeparated() {
+        val session = BattleSession()
+        val packed = ShowdownTeamCodec.pack(
+            listOf(
+                ShowdownTeamSet(nickname = "Sparky", species = "Pikachu", item = "Light Ball", ability = "Static"),
+                ShowdownTeamSet(nickname = "Bolt", species = "Pikachu", item = "Magnet", ability = "Lightning Rod")
+            )
+        )
+        session.applyProtocolLine("|showteam|p2|$packed")
+        session.applyProtocolLine("|switch|p2a: Sparky|Pikachu, L50|100/100")
+        session.applyProtocolLine("|-item|p2a: Sparky|Light Ball")
+        session.applyProtocolLine("|switch|p2a: Bolt|Pikachu, L50|100/100")
+        session.applyProtocolLine("|-item|p2a: Bolt|Magnet")
+
+        assertEquals("Light Ball", session.opponentPartyDetails()[0].item)
+        assertEquals("Magnet", session.opponentPartyDetails()[1].item)
+    }
+
+    @Test
+    fun longFormNamesUseTheBaseSpeciesInReadableBattleLabels() {
+        assertEquals("Alcremie", BattleSession.displayPokemonName("Alcremie-Caramel-Swirl"))
+        assertEquals("Rotom-Wash", BattleSession.displayPokemonName("Rotom-Wash"))
+        assertEquals("Creamy", BattleSession.displayPokemonName("Creamy", "Alcremie-Caramel-Swirl"))
+    }
+
+    @Test
     fun battlePacketEmitsAClassifiedCriticalHitAndCarriesTheRequestId() {
         val session = BattleSession()
         val feedback = mutableListOf<BattleSession.BattleFeedback>()

@@ -1332,9 +1332,10 @@ class CommandDeckView(
             val spriteBounds = RectF(bounds.left + 16f * scale, bounds.top + 22f * scale, bounds.left + 150f * scale, bounds.top + 156f * scale)
             teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = readableTextSize(if (pokemon.length > 11) 32f else 38f, scale, 28f)
+            val displayPokemon = BattleSession.displayPokemonName(pokemon, details.species)
+            paint.textSize = readableTextSize(if (displayPokemon.length > 11) 32f else 38f, scale, 28f)
             paint.color = PAPER
-            val teamName = fitTextToWidth(pokemon, bounds.right - 20f * scale - (bounds.left + 164f * scale))
+            val teamName = fitTextToWidth(displayPokemon, bounds.right - 20f * scale - (bounds.left + 164f * scale))
             canvas.drawText(teamName, bounds.left + 164f * scale, bounds.top + 55f * scale, paint)
             paint.textSize = readableTextSize(30f, scale, 26f)
             paint.color = MUTED
