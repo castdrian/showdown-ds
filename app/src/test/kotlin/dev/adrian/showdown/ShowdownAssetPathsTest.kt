@@ -45,4 +45,18 @@ class ShowdownAssetPathsTest {
             ShowdownAssetPaths.battleSpriteCandidates("Iron Hands", false, BattleSession.SpriteStyle.MODERN_3D)
         )
     }
+
+    @Test
+    fun neverFallsBackFromAPlayerBackSpriteToAFrontSprite() {
+        assertEquals(
+            listOf(
+                "sprites/xyani-back/ironvaliant.gif",
+                "sprites/gen5ani-back/ironvaliant.gif",
+                "sprites/xy-back/ironvaliant.png",
+                "sprites/gen5-back/ironvaliant.png",
+                "sprites/ani-back/substitute.gif"
+            ),
+            ShowdownAssetPaths.battleSpriteCandidates("Iron Valiant", true, BattleSession.SpriteStyle.MODERN_3D)
+        )
+    }
 }

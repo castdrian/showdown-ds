@@ -557,6 +557,7 @@ class MainActivity : Activity() {
                 }
                 presentation.show()
                 configurePresentationWindow(presentation.window)
+                presentation.requestControllerFocus()
             }
         }
     }
@@ -4473,6 +4474,8 @@ class MainActivity : Activity() {
     }
 
     private inner class ThorPresentation(context: Context, display: Display) : Presentation(context, display) {
+        private lateinit var controllerFrame: FrameLayout
+
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 if (event.repeatCount > 0 && isConfirmButton(event.keyCode)) return true
@@ -4490,6 +4493,7 @@ class MainActivity : Activity() {
             setCancelable(false)
             configurePresentationWindow(window)
             val frame = FrameLayout(context)
+            controllerFrame = frame
             commandDeck = CommandDeckView(context, session, spriteCache, object : CommandDeckView.InteractionListener {
                 override fun onNavigation() {
                     battleAudio.playNavigation()
@@ -4505,9 +4509,21 @@ class MainActivity : Activity() {
                 }
             })
             frame.addView(commandDeck, FrameLayout.LayoutParams(-1, -1))
+            frame.isFocusable = true
             frame.isFocusableInTouchMode = true
             setContentView(frame)
             frame.requestFocus()
+        }
+
+        fun requestControllerFocus() {
+            window?.decorView?.post {
+                if (isShowing && ::controllerFrame.isInitialized) controllerFrame.requestFocus()
+            }
+        }
+
+        override fun onWindowFocusChanged(hasFocus: Boolean) {
+            super.onWindowFocusChanged(hasFocus)
+            if (hasFocus) requestControllerFocus()
         }
     }
 

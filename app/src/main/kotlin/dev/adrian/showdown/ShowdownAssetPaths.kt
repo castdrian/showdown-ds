@@ -23,17 +23,27 @@ object ShowdownAssetPaths {
             speciesNames.forEach { name -> candidates += battleSprite(name, back, collection) }
         }
         if (back) {
-            collections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += battleSprite(name, false, collection) }
+            val staticCollections = if (style == BattleSession.SpriteStyle.MODERN_3D) {
+                listOf("xy", "gen5")
+            } else {
+                listOf("gen5")
             }
+            staticCollections.forEach { collection ->
+                speciesNames.forEach { name -> candidates += staticBattleSprite(name, true, collection) }
+            }
+            candidates += placeholder(true)
+        } else {
+            candidates += dexSprite(species)
+            candidates += "sprites/dex/${animationId(species)}.png"
         }
-        candidates += dexSprite(species)
-        candidates += "sprites/dex/${animationId(species)}.png"
         return candidates.toList()
     }
 
     private fun battleSprite(species: String, back: Boolean, collection: String) =
         "sprites/${if (back) "$collection-back" else collection}/${animationId(species)}.gif"
+
+    private fun staticBattleSprite(species: String, back: Boolean, collection: String) =
+        "sprites/${if (back) "$collection-back" else collection}/${animationId(species)}.png"
 
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
 
