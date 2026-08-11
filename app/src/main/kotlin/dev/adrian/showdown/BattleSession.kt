@@ -1188,7 +1188,7 @@ class BattleSession {
                     "-crit" -> applyHitModifier(fields, critical = true)
                     "-ability" -> applyAbility(fields)
                     "-item" -> applyItem(fields)
-                    "-enditem" -> applyItem(fields, "No item")
+                    "-enditem" -> applyEndItem(fields)
                     "-eat" -> applyEat(fields)
                     "-weather" -> applyWeather(fields)
                     "-fieldstart" -> applyFieldEffect(fields, true)
@@ -2580,6 +2580,23 @@ class BattleSession {
         if (fields.size < 3) return
         val item = replacement ?: fields.getOrNull(3) ?: return
         updateActorDetails(fields[2]) { it.copy(item = item) }
+    }
+
+    private fun applyEndItem(fields: List<String>) {
+        if (fields.size < 3) return
+        val actor = fields[2]
+        val item = fields.getOrNull(3)
+            ?.let { itemNameResolver?.invoke(it) ?: it }
+            ?.takeIf(String::isNotBlank)
+            ?: "its item"
+        val consumed = fields.drop(4).any { it.equals("[eat]", true) }
+        updateActorDetails(actor) { it.copy(item = "No item") }
+        if (!isSilent(fields)) {
+            appendLog(
+                if (consumed) "${battleActor(actor)} consumed $item."
+                else "${battleActor(actor)} lost $item."
+            )
+        }
     }
 
     private fun applyEat(fields: List<String>) {

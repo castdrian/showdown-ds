@@ -1077,6 +1077,17 @@ class BattleSessionTest {
     }
 
     @Test
+    fun taggedEndItemPacketsRepresentConsumedItems() {
+        val session = BattleSession()
+        session.applyProtocolLine("|-item|p1a: Incineroar|Sitrus Berry")
+
+        session.applyProtocolLine("|-enditem|p1a: Incineroar|Sitrus Berry|[eat]")
+
+        assertEquals("No item", session.playerDetails().item)
+        assertTrue(session.battleLog().any { it.contains("consumed Sitrus Berry") })
+    }
+
+    @Test
     fun doublesKeepAbilityAndItemDetailsOnTheCorrectPartyMembers() {
         val session = BattleSession()
 
