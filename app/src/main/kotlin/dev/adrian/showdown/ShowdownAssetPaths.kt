@@ -20,7 +20,7 @@ object ShowdownAssetPaths {
             if (style == BattleSession.SpriteStyle.MODERN_3D) add("gen5ani")
         }
         if (back) {
-            trueBackSpriteUrl(species)?.let { candidates += it }
+            trueBackSpritePaths(species).forEach { candidates += it }
         }
         collections.forEach { collection ->
             speciesNames.forEach { name -> candidates += battleSprite(name, back, collection) }
@@ -42,8 +42,12 @@ object ShowdownAssetPaths {
         return candidates.toList()
     }
 
-    private fun trueBackSpriteUrl(species: String): String? = TRUE_BACK_SPRITE_NUMBERS[animationId(species)]?.let { number ->
-        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/$number.png"
+    private fun trueBackSpritePaths(species: String): List<String> = when (animationId(species)) {
+        "ironvaliant" -> listOf(
+            "sprites/gen5-back/ironvaliant.png",
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
+        )
+        else -> emptyList()
     }
 
     private fun battleSprite(species: String, back: Boolean, collection: String) =
@@ -72,8 +76,4 @@ object ShowdownAssetPaths {
             else -> normalized
         }
     }
-
-    private val TRUE_BACK_SPRITE_NUMBERS = mapOf(
-        "ironvaliant" to 1006
-    )
 }
