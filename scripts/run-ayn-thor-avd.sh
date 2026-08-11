@@ -23,9 +23,9 @@ case "$vsync_rate" in
 esac
 
 case "$gpu_mode" in
-    auto|host|software|lavapipe|swiftshader|swangle) ;;
+    auto|host|software|swiftshader|swangle) ;;
     *)
-        printf '%s\n' "AYN_THOR_GPU_MODE must be auto, host, software, lavapipe, swiftshader, or swangle."
+        printf '%s\n' "AYN_THOR_GPU_MODE must be auto, host, software, swiftshader, or swangle."
         exit 1
         ;;
 esac
