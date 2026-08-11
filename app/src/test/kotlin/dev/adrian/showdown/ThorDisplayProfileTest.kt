@@ -2,6 +2,7 @@ package dev.adrian.showdown
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,5 +76,21 @@ class ThorDisplayProfileTest {
         assertTrue(source.contains("frame.isFocusableInTouchMode = true"))
         assertTrue(source.contains("frame.requestFocus()"))
         assertTrue(source.contains("configurePresentationWindow(presentation.window)"))
+    }
+
+    @Test
+    fun keepsThorAvdMetadataAlignedWithTheCurrentRenderer() {
+        val baseConfig = File("../config/avd/ayn-thor-base.ini").readText()
+        val displayProfile = File("../config/avd/ayn-thor.ini").readText()
+        val createScript = File("../scripts/create-ayn-thor-avd.sh").readText()
+
+        assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
+        assertTrue(baseConfig.contains("hw.gpu.mode = auto"))
+        assertTrue(displayProfile.contains("hw.gpu.mode=auto"))
+        assertTrue(createScript.contains("avd_name=\"AYN_Thor_API_34\""))
+        assertFalse(baseConfig.contains("Vulkan", true))
+        assertFalse(baseConfig.contains("lavapipe", true))
+        assertFalse(createScript.contains("Vulkan", true))
+        assertFalse(createScript.contains("lavapipe", true))
     }
 }
