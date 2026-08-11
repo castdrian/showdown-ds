@@ -404,7 +404,7 @@ class BattleSession {
         private set
     var decisionKind = DecisionKind.MOVE
         private set
-    var matchFormat = MatchFormat.GEN7_RANDOM
+    var matchFormat = MatchFormat.GEN9_RANDOM
         private set
     var soundEffectsEnabled = true
         private set

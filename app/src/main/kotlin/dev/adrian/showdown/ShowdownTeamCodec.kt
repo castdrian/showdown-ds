@@ -160,12 +160,15 @@ object ShowdownTeamCodec {
             happiness = value.optInt("happiness", 255),
             pokeBall = value.optString("pokeball", value.optString("pokeBall")),
             hiddenPowerType = value.optString(
-                "hpType",
-                value.optString("hiddenpower", value.optString("hiddenPower"))
+                "hiddenpowertype",
+                value.optString(
+                    "hpType",
+                    value.optString("hiddenpower", value.optString("hiddenPower"))
+                )
             ),
             gigantamax = value.optBoolean("gigantamax"),
-            dynamaxLevel = value.optInt("dynamaxLevel", 10),
-            teraType = value.optString("teraType")
+            dynamaxLevel = value.optInt("dynamaxlevel", value.optInt("dynamaxLevel", 10)),
+            teraType = value.optString("teratype", value.optString("teraType"))
         )
     }
 
@@ -188,10 +191,10 @@ object ShowdownTeamCodec {
         if (set.level != 100) put("level", set.level.coerceIn(1, 100))
         if (set.happiness != 255) put("happiness", set.happiness.coerceIn(0, 255))
         if (set.pokeBall.isNotBlank()) put("pokeball", set.pokeBall.trim())
-        if (set.hiddenPowerType.isNotBlank()) put("hpType", set.hiddenPowerType.trim())
+        if (set.hiddenPowerType.isNotBlank()) put("hiddenpowertype", set.hiddenPowerType.trim())
         if (set.gigantamax) put("gigantamax", true)
-        if (set.dynamaxLevel != 10) put("dynamaxLevel", set.dynamaxLevel.coerceIn(0, 10))
-        if (set.teraType.isNotBlank()) put("teraType", set.teraType.trim())
+        if (set.dynamaxLevel != 10) put("dynamaxlevel", set.dynamaxLevel.coerceIn(0, 10))
+        if (set.teraType.isNotBlank()) put("teratype", set.teraType.trim())
     }
 
     private fun jsonStats(values: List<Int>, default: Int) = JSONObject().apply {

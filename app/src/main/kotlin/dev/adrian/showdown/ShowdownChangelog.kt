@@ -27,7 +27,9 @@ object ShowdownChangelog {
                 "Battle challenges announced by Showdown now open the custom accept or reject flow.",
                 "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading.",
                 "Matched battles are recovered after reconnecting, even when the room ID stays the same.",
-                "Battle form-change packets now keep the visible HP and status cards in sync."
+                "Battle form-change packets now keep the visible HP and status cards in sync.",
+                "Fresh installs now default to the current Gen 9 Random Battle format.",
+                "Team JSON import and export now preserve Showdown's advanced set fields."
             )
         ),
         ShowdownChangelogEntry(

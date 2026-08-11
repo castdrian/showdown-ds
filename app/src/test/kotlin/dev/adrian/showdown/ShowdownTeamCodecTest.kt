@@ -128,7 +128,7 @@ Tera Type: Steel
 
     @Test
     fun parsesAndExportsShowdownJson() {
-        val input = """[{"name":"Lead","species":"Gholdengo","item":"Leftovers","ability":"Good as Gold","moves":["Make It Rain","Shadow Ball"],"nature":"Timid","evs":{"hp":4,"spa":252,"spe":252},"ivs":{"atk":0},"level":50,"hpType":"Ice","teraType":"Steel"}]"""
+        val input = """[{"name":"Lead","species":"Gholdengo","item":"Leftovers","ability":"Good as Gold","moves":["Make It Rain","Shadow Ball"],"nature":"Timid","evs":{"hp":4,"spa":252,"spe":252},"ivs":{"atk":0},"level":50,"hiddenpowertype":"Ice","teratype":"Steel"}]"""
 
         val set = ShowdownTeamCodec.parse(input).single()
 
@@ -141,7 +141,30 @@ Tera Type: Steel
         assertEquals("Ice", set.hiddenPowerType)
         assertEquals("Steel", set.teraType)
         val exported = ShowdownTeamCodec.toJson(listOf(set))
-        assertTrue(exported.contains("\"hpType\":\"Ice\""))
+        assertTrue(exported.contains("\"hiddenpowertype\":\"Ice\""))
+        assertTrue(exported.contains("\"teratype\":\"Steel\""))
         assertEquals(1, ShowdownTeamCodec.parse(exported).size)
+    }
+
+    @Test
+    fun parsesAndExportsOfficialAdvancedJsonFields() {
+        val set = ShowdownTeamCodec.parse(
+            """[{"name":"Sparky","species":"Pikachu","happiness":120,"pokeball":"Luxury Ball","hiddenpowertype":"Ice","gigantamax":true,"dynamaxlevel":4,"teratype":"Electric"}]"""
+        ).single()
+
+        assertEquals(120, set.happiness)
+        assertEquals("Luxury Ball", set.pokeBall)
+        assertEquals("Ice", set.hiddenPowerType)
+        assertTrue(set.gigantamax)
+        assertEquals(4, set.dynamaxLevel)
+        assertEquals("Electric", set.teraType)
+
+        val exported = ShowdownTeamCodec.toJson(listOf(set))
+        assertTrue(exported.contains("\"pokeball\":\"Luxury Ball\""))
+        assertTrue(exported.contains("\"hiddenpowertype\":\"Ice\""))
+        assertTrue(exported.contains("\"gigantamax\":true"))
+        assertTrue(exported.contains("\"dynamaxlevel\":4"))
+        assertTrue(exported.contains("\"teratype\":\"Electric\""))
+        assertEquals(set, ShowdownTeamCodec.parse(exported).single())
     }
 }

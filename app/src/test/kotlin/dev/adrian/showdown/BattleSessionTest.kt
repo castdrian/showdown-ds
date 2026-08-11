@@ -8,6 +8,11 @@ import org.junit.Test
 
 class BattleSessionTest {
     @Test
+    fun newSessionsStartWithTheCurrentGen9RandomFormat() {
+        assertEquals(BattleSession.MatchFormat.GEN9_RANDOM, BattleSession().matchFormat)
+    }
+
+    @Test
     fun requestPopulatesMovesAndResetsFocus() {
         val session = BattleSession()
         session.focusMove(3)

@@ -4376,7 +4376,7 @@ class MainActivity : Activity() {
         val saved = preferences.getString("match_format", null)
         return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved }
             ?: saved?.let { BattleSession.MatchFormat(it, preferences.getString("match_format_label", it) ?: it) }
-            ?: BattleSession.MatchFormat.GEN7_RANDOM
+            ?: BattleSession.MatchFormat.GEN9_RANDOM
     }
 
     private fun loadUserPreferences() {
