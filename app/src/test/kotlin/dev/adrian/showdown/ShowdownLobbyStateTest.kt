@@ -181,7 +181,7 @@ class ShowdownLobbyStateTest {
     @Test
     fun extractsTheHumanReadableNoInitReason() {
         assertEquals(
-            "The room \"battle-gen9ou-1\" does not exist.",
+            "That battle room expired. Find another battle.",
             ShowdownLobbyState.noInitReason(listOf("|noinit|nonexistent|The room \"battle-gen9ou-1\" does not exist."))
         )
         assertEquals(null, ShowdownLobbyState.noInitReason(listOf("|init|battle")))

@@ -185,9 +185,10 @@ class ShowdownLobbyState {
     companion object {
         fun noInitReason(lines: List<String>): String? = lines.firstOrNull { it.startsWith("|noinit|") }?.let { line ->
             val fields = line.split('|', limit = 4)
-            fields.getOrNull(3)?.trim()?.takeIf { it.isNotBlank() }
+            val reason = fields.getOrNull(3)?.trim()?.takeIf { it.isNotBlank() }
                 ?: fields.getOrNull(2)?.trim()?.takeIf { it.isNotBlank() }
                 ?: "That battle room is no longer available."
+            if (reason.contains("does not exist", true)) "That battle room expired. Find another battle." else reason
         }
 
         fun searchCommands(format: String, packedTeam: String?) = listOf("/utm ${packedTeam?.takeIf { it.isNotBlank() } ?: "null"}", "/search $format")
