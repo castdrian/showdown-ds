@@ -15,7 +15,6 @@ import android.graphics.Shader
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
-import java.util.Locale
 import kotlin.math.roundToInt
 
 class CommandDeckView(
@@ -465,7 +464,7 @@ class CommandDeckView(
             move,
             scale
         )
-        val metricToContextGap = if (compact) 44f * scale else 48f * scale
+        val metricToContextGap = if (compact) 56f * scale else 64f * scale
         sectionTop += metricHeight + metricToContextGap
         val contextHeight = if (compact) 84f * scale else 96f * scale
         drawMoveContext(
@@ -871,19 +870,8 @@ class CommandDeckView(
     }
 
     private fun moveRowPath(bounds: RectF, scale: Float): Path {
-        val notch = 16f * scale
-        val corner = 20f * scale
         return Path().apply {
-            moveTo(bounds.left + notch, bounds.top)
-            lineTo(bounds.right - corner, bounds.top)
-            quadTo(bounds.right, bounds.top, bounds.right, bounds.top + corner)
-            lineTo(bounds.right, bounds.bottom - corner)
-            quadTo(bounds.right, bounds.bottom, bounds.right - corner, bounds.bottom)
-            lineTo(bounds.left + notch, bounds.bottom)
-            lineTo(bounds.left, bounds.centerY() + notch)
-            lineTo(bounds.left + 10f * scale, bounds.centerY())
-            lineTo(bounds.left, bounds.centerY() - notch)
-            close()
+            addRoundRect(bounds, 20f * scale, 20f * scale, Path.Direction.CW)
         }
     }
 
@@ -1575,23 +1563,13 @@ class CommandDeckView(
     }
 
     private fun movePalette(type: String): MovePalette {
-        val normalizedType = type.trim().uppercase(Locale.ROOT)
-        val canonical = ShowdownTypePalette.canonical(normalizedType)
-        val base = if (normalizedType == "NORMAL" || normalizedType == "DARK") canonical else vibrant(canonical)
+        val base = ShowdownTypePalette.canonical(type)
         return MovePalette(
             blend(base, PAPER, 0.10f),
             blend(base, Color.BLACK, 0.08f),
             blend(base, Color.BLACK, 0.48f),
             blend(base, PAPER, 0.22f)
         )
-    }
-
-    private fun vibrant(color: Int): Int {
-        val hsv = FloatArray(3)
-        Color.colorToHSV(color, hsv)
-        hsv[1] = (hsv[1] * 1.52f + 0.14f).coerceAtMost(1f)
-        hsv[2] = (hsv[2] * 1.18f).coerceAtMost(1f)
-        return Color.HSVToColor(hsv)
     }
 
     private fun blend(first: Int, second: Int, ratio: Float): Int {
