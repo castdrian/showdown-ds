@@ -457,14 +457,14 @@ class CommandDeckView(
             return
         }
         var sectionTop = detailContent.top
-        val infoCellHeight = if (compact) 96f * scale else 112f * scale
+        val infoCellHeight = 128f * scale
         drawMoveMetrics(
             canvas,
             RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + infoCellHeight),
             move,
             scale
         )
-        val metricToContextGap = if (compact) 72f * scale else 80f * scale
+        val metricToContextGap = if (compact) 48f * scale else 56f * scale
         sectionTop += infoCellHeight + metricToContextGap
         drawMoveContext(
             canvas,
@@ -563,35 +563,43 @@ class CommandDeckView(
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
 
-        val horizontalPadding = 16f * scale
+        val horizontalPadding = 20f * scale
         val verticalPadding = 12f * scale
-        val contentTop = bounds.top + verticalPadding
-        val contentBottom = bounds.bottom - verticalPadding
+        val rowGap = 4f * scale
         val contentWidth = bounds.width() - horizontalPadding * 2f
+        val labelArea = RectF(
+            bounds.left + horizontalPadding,
+            bounds.top + verticalPadding,
+            bounds.right - horizontalPadding,
+            bounds.centerY() - rowGap / 2f
+        )
+        val valueArea = RectF(
+            bounds.left + horizontalPadding,
+            bounds.centerY() + rowGap / 2f,
+            bounds.right - horizontalPadding,
+            bounds.bottom - verticalPadding
+        )
         val labelSize = fittedTextSize(
             label,
             contentWidth,
-            readableTextSize(17f, scale, 14f, 12f),
+            readableTextSize(17f, scale, 14f, 12f).coerceAtMost(labelArea.height() * 0.82f),
             12f * scale
         )
         paint.textSize = labelSize
-        val labelBaseline = contentTop - paint.ascent()
         drawOutlinedText(
             canvas,
             label,
             bounds.centerX(),
-            labelBaseline,
+            centeredTextBaseline(labelArea.centerY()),
             Color.rgb(3, 14, 22),
             Color.rgb(164, 228, 231),
             1.25f * scale
         )
 
-        val valueAreaTop = labelBaseline + paint.descent() + 6f * scale
-        val valueCenter = (valueAreaTop + contentBottom) / 2f
         val valueSize = fittedTextSize(
             value,
             contentWidth,
-            readableTextSize(29f, scale, 22f, 18f),
+            readableTextSize(29f, scale, 22f, 18f).coerceAtMost(valueArea.height() * 0.82f),
             18f * scale
         )
         paint.textSize = valueSize
@@ -599,7 +607,7 @@ class CommandDeckView(
             canvas,
             value,
             bounds.centerX(),
-            centeredTextBaseline(valueCenter),
+            centeredTextBaseline(valueArea.centerY()),
             Color.rgb(3, 14, 22),
             PAPER,
             1.5f * scale
