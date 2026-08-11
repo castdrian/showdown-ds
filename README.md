@@ -31,6 +31,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Set `AYN_THOR_VSYNC_RATE=120` when validating the upper display at its target refresh rate.
 
+The APK uses Android Canvas and WebView, so it does not have separate OpenGL and Vulkan APKs. The AVD launcher defaults to `AYN_THOR_GPU_MODE=auto`, which selects the best available renderer. Use `AYN_THOR_GPU_MODE=lavapipe` to force the Vulkan software path, `host` to use the host GPU, or `swiftshader` for software GLES/Vulkan rendering.
+
 ## Support the project
 
 If this client is useful to you, [sponsor the project on GitHub](https://github.com/sponsors/castdrian) or [support it on Ko-fi](https://ko-fi.com/castdrian).

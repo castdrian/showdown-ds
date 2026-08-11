@@ -11,12 +11,21 @@ avd_name="AYN_Thor_API_34_Vulkan"
 overlay_emulator="$repo_root/.emulator-overlay/emulator"
 audio_args=()
 vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
+gpu_mode="${AYN_THOR_GPU_MODE:-auto}"
 boot_animation_args=()
 
 case "$vsync_rate" in
     60|90|120) ;;
     *)
         printf '%s\n' "AYN_THOR_VSYNC_RATE must be 60, 90, or 120."
+        exit 1
+        ;;
+esac
+
+case "$gpu_mode" in
+    auto|host|software|lavapipe|swiftshader|swangle) ;;
+    *)
+        printf '%s\n' "AYN_THOR_GPU_MODE must be auto, host, software, lavapipe, swiftshader, or swangle."
         exit 1
         ;;
 esac
@@ -48,7 +57,7 @@ export ANDROID_AVD_HOME="$avd_home"
 export ANDROID_SDK_ROOT="$sdk_root"
 exec "$emulator" \
     -avd "$avd_name" \
-    -gpu host \
+    -gpu "$gpu_mode" \
     -vsync-rate "$vsync_rate" \
     "${boot_animation_args[@]}" \
     "${audio_args[@]}" \
