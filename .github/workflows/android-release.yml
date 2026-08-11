@@ -209,11 +209,22 @@ jobs:
           path: ${{ steps.apk.outputs.path }}
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          body_path: ${{ steps.notes.outputs.path }}
-          generate_release_notes: true
-          previous_tag: ${{ steps.notes.outputs.previous_tag }}
-          prerelease: ${{ steps.release.outputs.prerelease }}
-          files: ${{ steps.apk.outputs.path }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_NOTES_PATH: ${{ steps.notes.outputs.path }}
+          RELEASE_APK_PATH: ${{ steps.apk.outputs.path }}
+          RELEASE_PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          release_args=(
+            --repo "$GITHUB_REPOSITORY"
+            --verify-tag
+            --title "Showdown $RELEASE_TAG"
+            --notes-file "$RELEASE_NOTES_PATH"
+            --generate-notes
+            --fail-on-no-commits
+          )
+          if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" "$RELEASE_APK_PATH" "${release_args[@]}"
