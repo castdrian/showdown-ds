@@ -31,7 +31,8 @@ object ShowdownChangelog {
                 "Battle form-change packets now keep the visible HP and status cards in sync.",
                 "Fresh installs now default to the current Gen 9 Random Battle format.",
                 "Team JSON import and export now preserve Showdown's advanced set fields.",
-                "Team imports now also accept the beta client's bracketed ability and inline nature format."
+                "Team imports now also accept the beta client's bracketed ability and inline nature format.",
+                "Remote team imports now keep every Pokémon from the selected Showdown export."
             )
         ),
         ShowdownChangelogEntry(

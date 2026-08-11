@@ -46,7 +46,7 @@ class ShowdownTeamRemoteState {
                     val readable = toReadableText(html)
                     val teams = parsePreviews(html)
                     val selected = teams.firstOrNull()
-                    val packed = ShowdownTeamCodec.parse(readable).takeIf { it.isNotEmpty() }?.let(ShowdownTeamCodec::pack)
+                    val packed = parseTeamExport(html, readable).takeIf { it.isNotEmpty() }?.let(ShowdownTeamCodec::pack)
                     current = current.copy(
                         text = readable,
                         teams = teams,
@@ -82,6 +82,16 @@ class ShowdownTeamRemoteState {
             owner = toReadableText(match.groupValues[2]).ifBlank { "Unknown user" }
         )
     }.distinctBy { it.remoteId }.toList()
+
+    private fun parseTeamExport(html: String, readable: String): List<ShowdownTeamSet> {
+        val export = Regex("<a\\b[^>]*>\\s*View full team\\s*</a>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+            .find(html)
+            ?.let { html.substring(it.range.last + 1) }
+            ?.let(::toReadableText)
+            ?.let(ShowdownTeamCodec::parse)
+            ?.takeIf { it.isNotEmpty() }
+        return export ?: ShowdownTeamCodec.parse(readable)
+    }
 
     private fun toReadableText(html: String): String = html
         .replace(Regex("<br\\s*/?>"), "\n")

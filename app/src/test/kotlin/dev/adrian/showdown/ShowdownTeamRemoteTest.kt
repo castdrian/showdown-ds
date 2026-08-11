@@ -101,6 +101,10 @@ class ShowdownTeamRemoteTest {
         assertEquals("gen9ou", team.formatId)
         assertEquals("adrian", team.owner)
         assertEquals(2, state.snapshot.packed?.split(']')?.size)
+        assertEquals(
+            listOf("Pikachu", "Rotom-Wash"),
+            ShowdownTeamCodec.unpack(state.snapshot.packed.orEmpty()).map { it.species }
+        )
         assertEquals("/join view-teams-view-42-secret", ShowdownTeamRemoteState.viewCommand(team))
         assertEquals("/join view-teams-all", ShowdownTeamRemoteState.ownTeamsCommand())
         assertEquals("/join view-teams-browse", ShowdownTeamRemoteState.browseCommand())
