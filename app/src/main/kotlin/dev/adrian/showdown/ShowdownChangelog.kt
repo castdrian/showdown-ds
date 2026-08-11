@@ -23,6 +23,7 @@ object ShowdownChangelog {
                 "Consumed items now disappear from Pokémon details and appear in the battle log.",
                 "Battle requests no longer show a Terastal action when the server explicitly disables it.",
                 "Doubles item and ability updates now stay on the correct active Pokémon.",
+                "Battle details now resolve nickname-based protocol identifiers to the active species.",
                 "Battle challenges announced by Showdown now open the custom accept or reject flow.",
                 "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading.",
                 "Matched battles are recovered after reconnecting, even when the room ID stays the same.",

@@ -1133,6 +1133,19 @@ class BattleSessionTest {
     }
 
     @Test
+    fun nicknameIdentifiersUpdateTheActiveSpeciesDetails() {
+        val session = BattleSession()
+        session.applyProtocolLine("|switch|p1a: Sparky|Pikachu, L50|100/100")
+
+        session.applyProtocolLine("|-item|p1a: Sparky|Light Ball")
+        session.applyProtocolLine("|-ability|p1a: Sparky|Static")
+
+        assertEquals("Pikachu", session.playerDetails().name)
+        assertEquals("Light Ball", session.playerDetails().item)
+        assertEquals("Static", session.playerDetails().ability)
+    }
+
+    @Test
     fun battlePacketEmitsAClassifiedCriticalHitAndCarriesTheRequestId() {
         val session = BattleSession()
         val feedback = mutableListOf<BattleSession.BattleFeedback>()

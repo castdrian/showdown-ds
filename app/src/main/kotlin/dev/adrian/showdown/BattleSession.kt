@@ -2798,7 +2798,9 @@ class BattleSession {
     private fun updatePlayerDetails(transform: (PokemonDetails) -> PokemonDetails) {
         val previous = playerDetails
         playerDetails = transform(previous)
-        teamDetails.indexOfFirst { it.name.equals(previous.name, true) }
+        teamDetails.indexOfFirst {
+            it.name.equals(previous.name, true) || it.species.equals(previous.species, true)
+        }
             .takeIf { it >= 0 }
             ?.let { teamDetails[it] = playerDetails }
     }
@@ -2807,11 +2809,13 @@ class BattleSession {
         val name = actor.substringAfter(':').trim()
         val slot = actor.substringBefore(':').trim()
         if (isPlayerSide(actor)) {
-            updatePlayerPartyMember(name, transform)
-            if (slot.endsWith('a') && playerDetails.name.equals(name, true)) updatePlayerDetails(transform)
+            val targetName = playerActiveCombatants[slot]?.name ?: name
+            if (slot.endsWith('a') && playerDetails.matchesIdentifier(targetName)) updatePlayerDetails(transform)
+            else updatePlayerPartyMember(targetName, transform)
         } else {
-            updateOpponentParty(name, transform)
-            if (slot.endsWith('a') && opponentDetails.name.equals(name, true)) opponentDetails = transform(opponentDetails)
+            val targetName = opponentActiveCombatants[slot]?.name ?: name
+            updateOpponentParty(targetName, transform)
+            if (slot.endsWith('a') && opponentDetails.matchesIdentifier(targetName)) opponentDetails = transform(opponentDetails)
         }
     }
 
@@ -2820,13 +2824,13 @@ class BattleSession {
         if (!actor.contains(":")) return null
         return if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let { combatant ->
-                teamDetails.firstOrNull { it.name.equals(combatant.name, true) }
-                    ?: playerDetails.takeIf { it.name.equals(combatant.name, true) }
+                teamDetails.firstOrNull { it.matchesIdentifier(combatant.name) }
+                    ?: playerDetails.takeIf { it.matchesIdentifier(combatant.name) }
             }
         } else {
             opponentActiveCombatants[slot]?.let { combatant ->
-                opponentTeamDetails.firstOrNull { it.name.equals(combatant.name, true) }
-                    ?: opponentDetails.takeIf { it.name.equals(combatant.name, true) }
+                opponentTeamDetails.firstOrNull { it.matchesIdentifier(combatant.name) }
+                    ?: opponentDetails.takeIf { it.matchesIdentifier(combatant.name) }
             }
         }
     }
@@ -3422,7 +3426,7 @@ class BattleSession {
     }
 
     private fun updateOpponentParty(details: PokemonDetails) {
-        val index = opponentTeamDetails.indexOfFirst { it.name.equals(details.name, true) }
+        val index = opponentTeamDetails.indexOfFirst { it.matchesIdentifier(details.name) || it.matchesIdentifier(details.species) }
         if (index >= 0) {
             opponentTeamDetails[index] = details
         } else if (opponentTeamDetails.size < 6) {
@@ -3431,13 +3435,16 @@ class BattleSession {
     }
 
     private fun updateOpponentParty(name: String, transform: (PokemonDetails) -> PokemonDetails) {
-        opponentTeamDetails.firstOrNull { it.name.equals(name, true) }?.let { updateOpponentParty(transform(it)) }
+        opponentTeamDetails.firstOrNull { it.matchesIdentifier(name) }?.let { updateOpponentParty(transform(it)) }
     }
 
     private fun updatePlayerPartyMember(name: String, transform: (PokemonDetails) -> PokemonDetails) {
-        val index = teamDetails.indexOfFirst { it.name.equals(name, true) }
+        val index = teamDetails.indexOfFirst { it.matchesIdentifier(name) }
         if (index >= 0) teamDetails[index] = transform(teamDetails[index])
     }
+
+    private fun PokemonDetails.matchesIdentifier(identifier: String) =
+        name.equals(identifier, true) || species.equals(identifier, true)
 
     private fun PokemonDetails.withResolvedTypes() = copy(types = resolvedTypes(species, types))
 
