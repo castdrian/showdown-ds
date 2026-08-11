@@ -1230,8 +1230,24 @@ class BattleSessionTest {
     @Test
     fun longFormNamesUseTheBaseSpeciesInReadableBattleLabels() {
         assertEquals("Alcremie", BattleSession.displayPokemonName("Alcremie-Caramel-Swirl"))
+        assertEquals("Alcremie", BattleSession.displayPokemonName("Alcremie-Caramel-Swirl", "Alcremie"))
         assertEquals("Rotom-Wash", BattleSession.displayPokemonName("Rotom-Wash"))
         assertEquals("Creamy", BattleSession.displayPokemonName("Creamy", "Alcremie-Caramel-Swirl"))
+        assertEquals(
+            "Alcremie-Caramel-Swirl",
+            BattleSession.displayPokemonName("Alcremie-Caramel-Swirl", "Alcremie-Mint-Cream")
+        )
+    }
+
+    @Test
+    fun longFormSwitchKeepsTheFullFormInBattleState() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|switch|p1a: Alcremie-Caramel-Swirl|Alcremie-Caramel-Swirl, L50|100/100")
+
+        assertEquals("Alcremie-Caramel-Swirl", session.playerPokemon)
+        assertEquals("Alcremie-Caramel-Swirl", session.playerDetails().species)
+        assertEquals("Alcremie", BattleSession.displayPokemonName(session.playerPokemon, session.playerDetails().species))
     }
 
     @Test

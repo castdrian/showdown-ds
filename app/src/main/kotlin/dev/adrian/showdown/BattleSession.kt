@@ -3678,11 +3678,22 @@ class BattleSession {
         fun displayPokemonName(name: String, species: String = name): String {
             val label = name.trim()
             val canonicalSpecies = species.trim().ifBlank { label }
-            if (!label.equals(canonicalSpecies, true)) return label
-            return if (canonicalSpecies.length > 18 && canonicalSpecies.count { it == '-' } >= 2) {
-                canonicalSpecies.substringBefore('-')
+            val readableLabel = readableSpeciesName(label)
+            val readableSpecies = readableSpeciesName(canonicalSpecies)
+            val sameBaseSpecies = canonicalSpecies.equals(readableSpecies, true) &&
+                readableLabel.equals(readableSpecies, true)
+            return if (label.equals(canonicalSpecies, true) || sameBaseSpecies) {
+                readableSpecies
             } else {
                 label
+            }
+        }
+
+        private fun readableSpeciesName(value: String): String {
+            return if (value.length > 18 && value.count { it == '-' } >= 2) {
+                value.substringBefore('-')
+            } else {
+                value
             }
         }
 
