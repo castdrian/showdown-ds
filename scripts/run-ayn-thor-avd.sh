@@ -7,7 +7,7 @@ source "$repo_root/scripts/android-sdk-root.sh"
 sdk_root="$(android_sdk_root)"
 avd_home="$repo_root/.android/avd"
 emulator="$sdk_root/emulator/emulator"
-avd_name="AYN_Thor_API_34_Vulkan"
+avd_name="AYN_Thor_API_34"
 overlay_emulator="$repo_root/.emulator-overlay/emulator"
 audio_args=()
 vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"

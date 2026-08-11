@@ -23,7 +23,7 @@ case "$(uname -m)" in
         ;;
 esac
 
-avd_name="AYN_Thor_API_34_Vulkan"
+avd_name="AYN_Thor_API_34"
 system_image="system-images;android-34;google_apis;$system_image_abi"
 system_image_dir="$sdk_root/system-images/android-34/google_apis/$system_image_abi"
 image_sysdir="system-images/android-34/google_apis/$system_image_abi/"
@@ -69,7 +69,7 @@ done < "$profile"
 
 set_config "AvdId" "$avd_name"
 set_config "abi.type" "$system_image_abi"
-set_config "avd.ini.displayname" "$avd_name"
+set_config "avd.ini.displayname" "AYN Thor API 34"
 set_config "hw.cpu.arch" "$cpu_arch"
 set_config "image.sysdir.1" "$image_sysdir"
 set_config "tag.display" "$tag_display"
