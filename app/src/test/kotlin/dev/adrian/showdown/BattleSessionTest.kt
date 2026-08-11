@@ -1202,6 +1202,26 @@ class BattleSessionTest {
     }
 
     @Test
+    fun hitModifiersBeforeDamageRemainAttachedToTheMoveImpact() {
+        val session = BattleSession()
+        val feedback = mutableListOf<BattleSession.BattleFeedback>()
+        session.addFeedbackListener { feedback += it }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko",
+                "|-supereffective|p2a: Tapu Koko",
+                "|-crit|p2a: Tapu Koko",
+                "|-damage|p2a: Tapu Koko|10/100"
+            )
+        )
+
+        assertTrue(feedback.any { it.type == BattleSession.FeedbackType.HIT && it.impact == BattleSession.HitImpact.SUPER_EFFECTIVE_CRITICAL })
+        assertTrue(session.battleLog().contains("A critical hit!"))
+        assertTrue(session.battleLog().contains("It's super effective!"))
+    }
+
+    @Test
     fun faintedCombatantIsRemovedFromTheBattlePresentation() {
         val session = BattleSession()
 

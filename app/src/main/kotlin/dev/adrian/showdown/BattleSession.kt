@@ -1169,13 +1169,15 @@ class BattleSession {
                         applyMove(fields)
                     }
                     "-damage" -> {
-                        publishPendingHit()
-                        applyHealth(fields)
-                        fields.getOrNull(2)
+                        val target = fields.getOrNull(2)
                             ?.substringAfter(':')
                             ?.trim()
                             ?.takeIf { it.isNotBlank() }
-                            ?.let { target -> pendingHit = PendingHit(target, target) }
+                        if (target != null && pendingHit != null && pendingHit?.target != target) publishPendingHit()
+                        applyHealth(fields)
+                        target?.let {
+                            if (pendingHit == null) pendingHit = PendingHit(it, it)
+                        }
                     }
                     "-heal" -> {
                         applyHealth(fields)
@@ -2523,8 +2525,9 @@ class BattleSession {
     }
 
     private fun applyHitModifier(fields: List<String>, superEffective: Boolean = false, resisted: Boolean = false, critical: Boolean = false) {
-        val hit = pendingHit ?: return
-        if (fields.getOrNull(2)?.substringAfter(':')?.trim() != hit.target) return
+        val target = fields.getOrNull(2)?.substringAfter(':')?.trim()?.takeIf { it.isNotBlank() } ?: return
+        if (pendingHit != null && pendingHit?.target != target) publishPendingHit()
+        val hit = pendingHit ?: PendingHit(target, target).also { pendingHit = it }
         hit.superEffective = hit.superEffective || superEffective
         hit.resisted = hit.resisted || resisted
         hit.critical = hit.critical || critical
