@@ -127,6 +127,28 @@ Tera Type: Steel
     }
 
     @Test
+    fun parsesBetaClientExportFormat() {
+        val set = ShowdownTeamCodec.parse(
+            """Articuno
+[Pressure] @ Leftovers
+- Ice Beam
+- Hurricane
+- Substitute
+- Roost
+EVs: 252 HP / - Atk / 252+ SpA / 4 SpD (Modest)
+IVs: 30 SpA / 30 SpD"""
+        ).single()
+
+        assertEquals("Articuno", set.species)
+        assertEquals("Pressure", set.ability)
+        assertEquals("Leftovers", set.item)
+        assertEquals(listOf("Ice Beam", "Hurricane", "Substitute", "Roost"), set.moves)
+        assertEquals(listOf(252, 0, 0, 252, 4, 0), set.evs)
+        assertEquals("Modest", set.nature)
+        assertEquals(listOf(31, 31, 31, 30, 30, 31), set.ivs)
+    }
+
+    @Test
     fun parsesAndExportsShowdownJson() {
         val input = """[{"name":"Lead","species":"Gholdengo","item":"Leftovers","ability":"Good as Gold","moves":["Make It Rain","Shadow Ball"],"nature":"Timid","evs":{"hp":4,"spa":252,"spe":252},"ivs":{"atk":0},"level":50,"hiddenpowertype":"Ice","teratype":"Steel"}]"""
 

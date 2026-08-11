@@ -29,7 +29,8 @@ object ShowdownChangelog {
                 "Matched battles are recovered after reconnecting, even when the room ID stays the same.",
                 "Battle form-change packets now keep the visible HP and status cards in sync.",
                 "Fresh installs now default to the current Gen 9 Random Battle format.",
-                "Team JSON import and export now preserve Showdown's advanced set fields."
+                "Team JSON import and export now preserve Showdown's advanced set fields.",
+                "Team imports now also accept the beta client's bracketed ability and inline nature format."
             )
         ),
         ShowdownChangelogEntry(

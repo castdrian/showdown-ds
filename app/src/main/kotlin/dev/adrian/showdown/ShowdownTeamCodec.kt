@@ -52,7 +52,7 @@ object ShowdownTeamCodec {
         if (input.isBlank()) return emptyList()
         return when {
             input.startsWith("[") || input.startsWith("{") -> parseJson(input)
-            '|' in input || ']' in input -> unpack(input)
+            '|' in input || (']' in input && !looksLikeBetaClientExport(input)) -> unpack(input)
             else -> parseText(input)
         }
     }
@@ -128,6 +128,10 @@ object ShowdownTeamCodec {
     private fun parseText(input: String): List<ShowdownTeamSet> = input
         .split(Regex("\\r?\\n\\s*\\r?\\n"))
         .mapNotNull(::parseTextSet)
+
+    private fun looksLikeBetaClientExport(input: String): Boolean = input.lineSequence()
+        .map(String::trim)
+        .any { Regex("^\\[[^\\]]+](?:\\s*@.*)?$").matches(it) }
 
     private fun parseJson(input: String): List<ShowdownTeamSet> = runCatching {
         val values = if (input.startsWith("[")) JSONArray(input) else JSONArray().put(JSONObject(input))
@@ -206,7 +210,7 @@ object ShowdownTeamCodec {
     private fun parseTextSet(block: String): ShowdownTeamSet? {
         val lines = block.lines().map(String::trim).filter(String::isNotBlank)
         val header = lines.firstOrNull() ?: return null
-        val item = header.substringAfter(" @ ", "").trim()
+        var item = header.substringAfter(" @ ", "").trim()
         val subject = header.substringBefore(" @ ").trim()
         val gender = Regex("\\s\\(([MF])\\)$").find(subject)?.groupValues?.get(1).orEmpty()
         val withoutGender = subject.replace(Regex("\\s\\([MF]\\)$"), "").trim()
@@ -227,7 +231,12 @@ object ShowdownTeamCodec {
         var evs = List(6) { 0 }
         var ivs = List(6) { 31 }
         lines.drop(1).forEach { line ->
+            val betaAbility = Regex("^\\[([^\\]]+)](?:\\s*@\\s*(.*))?$").matchEntire(line)
             when {
+                betaAbility != null -> {
+                    ability = betaAbility.groupValues[1].trim()
+                    item = betaAbility.groupValues.getOrNull(2).orEmpty().trim()
+                }
                 line.startsWith("Ability:", true) -> ability = line.substringAfter(':').trim()
                 line.endsWith(" Nature", true) -> nature = line.removeSuffix(" Nature").trim()
                 line.startsWith("Level:", true) -> level = line.substringAfter(':').trim().toIntOrNull() ?: 100
@@ -238,7 +247,11 @@ object ShowdownTeamCodec {
                 line.startsWith("Dynamax Level:", true) -> dynamaxLevel = line.substringAfter(':').trim().toIntOrNull() ?: 10
                 line.startsWith("Tera Type:", true) -> teraType = line.substringAfter(':').trim()
                 line.startsWith("Poké Ball:", true) || line.startsWith("Pokeball:", true) -> pokeBall = line.substringAfter(':').trim()
-                line.startsWith("EVs:", true) -> evs = parseStatValues(line.substringAfter(':')) { 0 }
+                line.startsWith("EVs:", true) -> {
+                    val evLine = line.substringAfter(':').trim()
+                    Regex("\\(([^()]*)\\)\\s*$").find(evLine)?.groupValues?.get(1)?.trim()?.takeIf(String::isNotBlank)?.let { nature = it }
+                    evs = parseStatValues(evLine) { 0 }
+                }
                 line.startsWith("IVs:", true) -> ivs = parseStatValues(line.substringAfter(':')) { 31 }
                 line.startsWith("-") -> moves += line.removePrefix("-").trim()
             }
@@ -268,9 +281,9 @@ object ShowdownTeamCodec {
         val names = mapOf("HP" to 0, "Atk" to 1, "Def" to 2, "SpA" to 3, "SpD" to 4, "Spe" to 5)
         val values = MutableList(6) { default() }
         value.split('/').forEach { part ->
-            val match = Regex("(\\d+)\\s+(.+)").find(part.trim()) ?: return@forEach
+            val match = Regex("^(\\d+\\+?|[-+])\\s+(.+)$").matchEntire(part.substringBefore('(').trim()) ?: return@forEach
             val index = names[match.groupValues[2].trim()] ?: return@forEach
-            values[index] = match.groupValues[1].toIntOrNull() ?: values[index]
+            values[index] = match.groupValues[1].removeSuffix("+").toIntOrNull() ?: 0
         }
         return values
     }
