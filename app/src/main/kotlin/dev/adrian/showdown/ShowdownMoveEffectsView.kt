@@ -195,6 +195,11 @@ class ShowdownMoveEffectsView(
                                 }
                                 return originalDamageAnim.apply(this, arguments);
                             };
+                            var originalHealAnim = BattleScene.prototype.healAnim;
+                            BattleScene.prototype.healAnim = function () {
+                                this.__showdownNativeDamagePending = false;
+                                return originalHealAnim.apply(this, arguments);
+                            };
                             var originalRunMinor = Battle.prototype.runMinor;
                             Battle.prototype.runMinor = function (args) {
                                 var resultCue = null;
@@ -211,7 +216,7 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-clearpositiveboost') resultCue = 'stat_drop';
                                     if (args[0] === '-clearnegativeboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
-                                    if (args[0] === '-damage' && !kwArgs.from && this.scene.__showdownNativeDamageArmed) this.scene.__showdownNativeDamagePending = true;
+                                    if ((args[0] === '-damage' || args[0] === '-sethp') && !kwArgs.from && this.scene.__showdownNativeDamageArmed) this.scene.__showdownNativeDamagePending = true;
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
                                 this.scene.__showdownNativeAudioSilent = false;

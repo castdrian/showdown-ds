@@ -14,6 +14,7 @@ object ShowdownChangelog {
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
                 "Battle audio cues now wait for the previous clip to finish, keeping damage and effectiveness sounds synchronized.",
                 "Battle audio timing resets at each move boundary so faster playback cannot delay the next move's cue.",
+                "Damage cues also follow health changes represented by set-HP packets without sounding for healing.",
                 "Battle challenges announced by Showdown now open the custom accept or reject flow.",
                 "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading.",
                 "Matched battles are recovered after reconnecting, even when the room ID stays the same.",
