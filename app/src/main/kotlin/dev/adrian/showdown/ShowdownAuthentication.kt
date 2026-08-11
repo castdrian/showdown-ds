@@ -21,8 +21,20 @@ object ShowdownAuthentication {
         else -> null
     }
 
-    fun assertion(response: String): String? = runCatching {
-        JSONObject(response.removePrefix("]")).optString("assertion").takeIf { it.isNotBlank() }
+    fun assertion(response: String): String? = responseJson(response)
+        ?.optString("assertion")
+        ?.takeIf { it.isNotBlank() && it != "false" && !it.startsWith(";") }
+
+    fun actionSucceeded(response: String): Boolean? = responseJson(response)
+        ?.takeIf { it.has("actionsuccess") }
+        ?.optBoolean("actionsuccess")
+
+    fun actionError(response: String): String? = responseJson(response)
+        ?.optString("error")
+        ?.takeIf { it.isNotBlank() }
+
+    private fun responseJson(response: String): JSONObject? = runCatching {
+        JSONObject(response.removePrefix("]"))
     }.getOrNull()
 
     fun renameCommand(username: String, assertion: String) = "/trn $username,0,$assertion"

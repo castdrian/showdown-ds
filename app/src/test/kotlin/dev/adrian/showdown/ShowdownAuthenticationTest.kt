@@ -15,6 +15,15 @@ class ShowdownAuthenticationTest {
     fun parsesTheLoginAssertionAndRejectsMalformedResponses() {
         assertEquals("token", ShowdownAuthentication.assertion("]{\"assertion\":\"token\"}"))
         assertNull(ShowdownAuthentication.assertion("invalid"))
+        assertNull(ShowdownAuthentication.assertion("]{\"assertion\":false}"))
+    }
+
+    @Test
+    fun parsesLoginServerActionResults() {
+        assertEquals(true, ShowdownAuthentication.actionSucceeded("]{\"actionsuccess\":true}"))
+        assertEquals(false, ShowdownAuthentication.actionSucceeded("]{\"actionsuccess\":false}"))
+        assertEquals("That username is already taken.", ShowdownAuthentication.actionError("]{\"error\":\"That username is already taken.\"}"))
+        assertNull(ShowdownAuthentication.actionError("invalid"))
     }
 
     @Test

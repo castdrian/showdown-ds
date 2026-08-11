@@ -48,6 +48,11 @@ class MainActivity : Activity() {
     private data class PendingTeamPrivacy(val localId: String, val remoteId: String)
     private data class PendingTeamDelete(val localId: String, val remoteId: String)
     private data class TeamDraft(val packed: String, val error: String?)
+    private data class PendingRegistration(
+        val credentials: ShowdownCredentials,
+        val confirmation: String,
+        val captcha: String
+    )
 
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
@@ -85,6 +90,9 @@ class MainActivity : Activity() {
     private var reconnectLobbyCommands: List<String>? = null
     private var activeSearchFormat: String? = null
     private var loginInFlight = false
+    private var registrationInFlight = false
+    private var latestChallenge: String? = null
+    private var pendingRegistration: PendingRegistration? = null
     private var authenticated = false
     private var serverUserNamed = false
     private var activeBattleRoomId: String? = null
@@ -1750,6 +1758,7 @@ class MainActivity : Activity() {
         showdownConnection = null
         authenticated = false
         serverUserNamed = false
+        pendingRegistration = null
         clearPersistedLobbyState()
         session.setConnectionStatus("Battle search cancelled.")
     }
@@ -1785,6 +1794,8 @@ class MainActivity : Activity() {
         pendingLobbyStatus = lobbyStatus
         reconnectLobbyCommands = lobbyCommands
         loginInFlight = false
+        registrationInFlight = false
+        latestChallenge = null
         authenticated = false
         serverUserNamed = false
         persistLobbyState()
@@ -1881,6 +1892,8 @@ class MainActivity : Activity() {
     private fun connectLobbySocket() {
         val previousConnection = showdownConnection
         showdownConnection = null
+        latestChallenge = null
+        registrationInFlight = false
         previousConnection?.close()
         lateinit var connection: ShowdownConnection
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
@@ -1895,6 +1908,8 @@ class MainActivity : Activity() {
                             session.setLiveBattleActive(false)
                         }
                         pendingTeamValidationFormat = null
+                        latestChallenge = null
+                        registrationInFlight = false
                         serverUserNamed = false
                         chatRoomDialog?.dismiss()
                         chatRoomState.clear()
@@ -1907,7 +1922,8 @@ class MainActivity : Activity() {
                         ShowdownConnection.State.CONNECTED -> {
                             reconnectAttempt = 0
                             reconnectScheduled = false
-                            if (credentialsStore.load() == null) "Joining ${serverEndpoint.displayName}…"
+                            if (pendingRegistration != null) "Preparing account creation on ${serverEndpoint.displayName}…"
+                            else if (credentialsStore.load() == null) "Joining ${serverEndpoint.displayName}…"
                             else "Signing in to ${serverEndpoint.displayName}…"
                         }
                         ShowdownConnection.State.DISCONNECTED -> {
@@ -1954,7 +1970,11 @@ class MainActivity : Activity() {
                         }
                     }
                     lines.mapNotNull(ShowdownAuthentication::challenge).firstOrNull()?.let { challenge ->
-                        credentialsStore.load()?.takeUnless { loginInFlight }?.let { credentials ->
+                        latestChallenge = challenge
+                        pendingRegistration?.takeUnless { registrationInFlight }?.let { registration ->
+                            submitRegistration(connection, registration, challenge)
+                        }
+                        credentialsStore.load()?.takeUnless { loginInFlight || registrationInFlight || pendingRegistration != null }?.let { credentials ->
                             loginInFlight = true
                             loginClient.login(serverEndpoint, credentials, challenge) { result ->
                                 runOnUiThread {
@@ -2022,6 +2042,8 @@ class MainActivity : Activity() {
                         ?.takeUnless { teamResponseHandled }
                         ?.let { error ->
                             loginInFlight = false
+                            registrationInFlight = false
+                            pendingRegistration = null
                             pendingSearch = false
                             pendingLobbyCommands = null
                             pendingLobbyStatus = null
@@ -2412,6 +2434,13 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val register = Button(this).apply {
+            text = "Create account"
+            setOnClickListener {
+                accountDialog?.dismiss()
+                showRegistrationDialog()
+            }
+        }
         val resources = Button(this).apply {
             text = "Info & resources"
             setOnClickListener { accountDialog?.dismiss(); showResourcesDialog() }
@@ -2430,6 +2459,7 @@ class MainActivity : Activity() {
         val accountTools = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(56, 12, 56, 0)
+            addView(register)
             addView(findUser)
             addView(resources)
             addView(friends)
@@ -2463,6 +2493,125 @@ class MainActivity : Activity() {
             if (accountDialog === dialog) accountDialog = null
         }
         dialog.show()
+    }
+
+    private fun showRegistrationDialog() {
+        val username = EditText(this).apply {
+            hint = "Username"
+            setSingleLine(true)
+        }
+        val password = EditText(this).apply {
+            hint = "Password"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val confirmation = EditText(this).apply {
+            hint = "Repeat password"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val captcha = EditText(this).apply {
+            hint = "Anti-spam answer · Pikachu"
+            setSingleLine(true)
+        }
+        val details = TextView(this).apply {
+            text = "Registered accounts keep your name, friends, teams, and ladder progress. The anti-spam answer is Pikachu."
+            setTextColor(0xffdceff2.toInt())
+            setTextSize(16f)
+            setPadding(0, 0, 0, (12f * resources.displayMetrics.density).toInt())
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(56, 8, 56, 0)
+            addView(details)
+            addView(username)
+            addView(password)
+            addView(confirmation)
+            addView(captcha)
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(form, -1, -2)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Create Showdown account")
+            .setView(scroll)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Create") { _, _ ->
+                registerAccount(
+                    username.text.toString(),
+                    password.text.toString(),
+                    confirmation.text.toString(),
+                    captcha.text.toString()
+                )
+            }
+            .show()
+    }
+
+    private fun registerAccount(usernameInput: String, password: String, confirmation: String, captcha: String) {
+        val username = usernameInput.trim()
+        if (username.isBlank()) {
+            session.setConnectionStatus("Enter a username to create an account.")
+            return
+        }
+        if (password.length < 5) {
+            session.setConnectionStatus("Showdown passwords must be at least 5 characters.")
+            return
+        }
+        if (password != confirmation) {
+            session.setConnectionStatus("The passwords do not match.")
+            return
+        }
+        if (captcha.trim().lowercase() != "pikachu") {
+            session.setConnectionStatus("Answer the anti-spam question with Pikachu.")
+            return
+        }
+        val registration = PendingRegistration(ShowdownCredentials(username, password), confirmation, captcha.trim())
+        val connection = showdownConnection
+        val challenge = latestChallenge
+        if (connection != null && challenge != null && shouldMaintainConnection) {
+            submitRegistration(connection, registration, challenge)
+            return
+        }
+        pendingRegistration = registration
+        shouldMaintainConnection = true
+        pendingSearch = false
+        pendingLobbyCommands = null
+        pendingLobbyStatus = null
+        reconnectLobbyCommands = null
+        persistLobbyState()
+        session.setConnectionStatus("Connecting to Showdown to create your account…")
+        connectLobbySocket()
+    }
+
+    private fun submitRegistration(connection: ShowdownConnection, registration: PendingRegistration, challenge: String) {
+        if (registrationInFlight) return
+        registrationInFlight = true
+        pendingRegistration = null
+        session.setConnectionStatus("Creating Showdown account…")
+        loginClient.register(
+            serverEndpoint,
+            registration.credentials,
+            registration.confirmation,
+            registration.captcha,
+            challenge
+        ) { result ->
+            runOnUiThread {
+                if (showdownConnection !== connection) return@runOnUiThread
+                registrationInFlight = false
+                result.onSuccess { assertion ->
+                    credentialsStore.save(registration.credentials)
+                    if (connection.sendGlobal(ShowdownAuthentication.renameCommand(registration.credentials.username, assertion))) {
+                        session.setConnectionStatus("Account created. Finishing sign-in as ${registration.credentials.username}…")
+                    } else {
+                        session.setConnectionStatus("Account created, but Showdown sign-in could not reach the server.")
+                    }
+                }
+                result.onFailure { error ->
+                    session.setConnectionStatus(error.message ?: "Showdown account creation failed.")
+                }
+            }
+        }
     }
 
     private fun showResourcesDialog() {
@@ -2882,6 +3031,9 @@ class MainActivity : Activity() {
         reconnectLobbyCommands = null
         activeSearchFormat = null
         serverUserNamed = false
+        pendingRegistration = null
+        registrationInFlight = false
+        latestChallenge = null
         pendingTeamUpload = null
         pendingTeamPrivacy = null
         pendingTeamDelete = null

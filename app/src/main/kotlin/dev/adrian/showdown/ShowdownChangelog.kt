@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Account settings can now create a registered Showdown account and finish sign-in without leaving the client.",
                 "Move detail panels now focus on readable move names, power, and accuracy while selector cards retain PP.",
                 "Move previews now fill power, accuracy, category, and gimmick power from the official dex while keeping status and always-hit values as dashes.",
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
