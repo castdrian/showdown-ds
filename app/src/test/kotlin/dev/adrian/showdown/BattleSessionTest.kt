@@ -1111,6 +1111,28 @@ class BattleSessionTest {
     }
 
     @Test
+    fun doublesKeepOpponentSideDetailsOutOfThePrimaryCombatantCard() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p2b: Naganadel|Naganadel, L50|100/100",
+                "|-item|p2b: Naganadel|Dragonium Z",
+                "|-ability|p2b: Naganadel|Beast Boost"
+            )
+        )
+
+        assertEquals("Unknown item", session.opponentDetails().item)
+        assertEquals("Unknown ability", session.opponentDetails().ability)
+        val sideMember = session.opponentPartyDetails().first { it.name == "Naganadel" }
+        assertEquals("Dragonium Z", sideMember.item)
+        assertEquals("Beast Boost", sideMember.ability)
+    }
+
+    @Test
     fun battlePacketEmitsAClassifiedCriticalHitAndCarriesTheRequestId() {
         val session = BattleSession()
         val feedback = mutableListOf<BattleSession.BattleFeedback>()

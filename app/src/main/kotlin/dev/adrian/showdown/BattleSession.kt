@@ -2808,10 +2808,10 @@ class BattleSession {
         val slot = actor.substringBefore(':').trim()
         if (isPlayerSide(actor)) {
             updatePlayerPartyMember(name, transform)
-            if (slot.endsWith('a')) updatePlayerDetails(transform)
+            if (slot.endsWith('a') && playerDetails.name.equals(name, true)) updatePlayerDetails(transform)
         } else {
             updateOpponentParty(name, transform)
-            if (slot.endsWith('a')) opponentDetails = transform(opponentDetails)
+            if (slot.endsWith('a') && opponentDetails.name.equals(name, true)) opponentDetails = transform(opponentDetails)
         }
     }
 
