@@ -491,6 +491,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         configureWindow()
+        showSecondaryDisplay()
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()
@@ -548,6 +549,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSecondaryDisplay() {
+        if (secondaryPresentation?.isShowing == false) secondaryPresentation = null
         if (isFinishing || displayManager == null || secondaryPresentation != null) return
         findThorDisplay()?.let { display ->
             secondaryPresentation = ThorPresentation(this, display).also { presentation ->

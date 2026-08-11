@@ -23,4 +23,13 @@ class MainActivityLifecycleContractTest {
         assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::pause)"))
         assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::resume)"))
     }
+
+    @Test
+    fun resumeRestoresTheThorPresentationIfAndroidDismissedIt() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
+
+        assertTrue(resume.contains("showSecondaryDisplay()"))
+        assertTrue(source.contains("secondaryPresentation?.isShowing == false"))
+    }
 }
