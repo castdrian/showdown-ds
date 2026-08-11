@@ -11,7 +11,7 @@ object ShowdownChangelog {
             currentVersion,
             listOf(
                 "Account settings can now create a registered Showdown account and finish sign-in without leaving the client.",
-                "Battle sound effects now stop cleanly when the app leaves the foreground instead of resuming out of sync.",
+                "Battle sound effects now pause and resume with their active move timing when the app leaves and re-enters the foreground.",
                 "Live battle animations now pause with the app and resume cleanly after returning to the foreground.",
                 "Move detail panels now use matching padded metric cards for large, readable power, accuracy, category, and target values while selector cards retain PP.",
                 "Move previews now fill power, accuracy, category, and gimmick power from the official dex while keeping status and always-hit values as dashes.",

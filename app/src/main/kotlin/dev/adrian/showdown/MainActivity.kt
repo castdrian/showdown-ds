@@ -471,7 +471,7 @@ class MainActivity : Activity() {
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
         if (::battleAudio.isInitialized) {
-            battleAudio.resetBattleCues()
+            battleAudio.pauseBattleCues()
             battleAudio.pauseMusic()
         }
         super.onPause()
@@ -494,6 +494,7 @@ class MainActivity : Activity() {
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()
+        if (::battleAudio.isInitialized) battleAudio.resumeBattleCues()
         if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
     }
 

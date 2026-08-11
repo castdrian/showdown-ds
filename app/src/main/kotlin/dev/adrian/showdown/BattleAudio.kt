@@ -18,7 +18,22 @@ class BattleAudio(
     private val resourceCache: ShowdownSpriteCache,
     session: BattleSession
 ) {
-    private data class PendingBattleCue(val cue: BattleAudioCue, val queuedAtMillis: Long)
+    private data class PendingBattleCue(val cue: BattleAudioCue, var queuedAtMillis: Long)
+    private data class ScheduledBattleCue(
+        val cue: BattleAudioCue,
+        val soundId: Int,
+        val queuedAtMillis: Long,
+        val plannedDelayMillis: Long,
+        val scheduledAtMillis: Long,
+        var runnable: Runnable? = null
+    )
+    private data class PausedBattleCue(
+        val cue: BattleAudioCue,
+        val soundId: Int,
+        val queuedAtMillis: Long,
+        val plannedDelayMillis: Long,
+        val remainingDelayMillis: Long
+    )
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioCueThread = HandlerThread("showdown-audio").also { it.start() }
@@ -37,6 +52,8 @@ class BattleAudio(
     private val failedBattleCues = Collections.synchronizedSet(mutableSetOf<BattleAudioCue>())
     private val activeBattleStreamIds = mutableSetOf<Int>()
     private val pendingBattleCues = ArrayDeque<PendingBattleCue>()
+    private val scheduledBattleCues = mutableListOf<ScheduledBattleCue>()
+    private val pausedBattleCues = mutableListOf<PausedBattleCue>()
     private val diagnosticEvents = ArrayDeque<BattleAudioCueEvent>()
     private val cuePlaybackQueue = BattleAudioCuePlaybackQueue()
     private var cuePlaybackGeneration = 0L
@@ -50,6 +67,8 @@ class BattleAudio(
     private val transientPlayers = mutableSetOf<MediaPlayer>()
     private val previewRunnables = mutableSetOf<Runnable>()
     private var selectedMusic = MUSIC[session.showdownMusicIndex()]
+    private var battleCuesPaused = false
+    private var battleCuesPausedAtMillis = 0L
     private val loopCheck = object : Runnable {
         override fun run() {
             val player = bgmPlayer ?: return
@@ -114,6 +133,8 @@ class BattleAudio(
         audioCueHandler.removeCallbacksAndMessages(null)
         audioCueHandler.post {
             pendingBattleCues.clear()
+            scheduledBattleCues.clear()
+            pausedBattleCues.clear()
             stopActiveBattleStreams()
             battleSoundPool.release()
             audioCueThread.quitSafely()
@@ -172,6 +193,59 @@ class BattleAudio(
         }
     }
 
+    fun pauseBattleCues() {
+        audioCueHandler.postAtFrontOfQueue {
+            if (released.get() || battleCuesPaused) return@postAtFrontOfQueue
+            val nowMillis = SystemClock.elapsedRealtime()
+            battleCuesPaused = true
+            battleCuesPausedAtMillis = nowMillis
+            scheduledBattleCues
+                .sortedBy { it.scheduledAtMillis }
+                .forEach { scheduled ->
+                    scheduled.runnable?.let(audioCueHandler::removeCallbacks)
+                    pausedBattleCues += PausedBattleCue(
+                        scheduled.cue,
+                        scheduled.soundId,
+                        scheduled.queuedAtMillis,
+                        scheduled.plannedDelayMillis,
+                        (scheduled.scheduledAtMillis - nowMillis).coerceAtLeast(0L)
+                    )
+                }
+            scheduledBattleCues.clear()
+            activeBattleStreamIds.forEach(battleSoundPool::pause)
+        }
+    }
+
+    fun resumeBattleCues() {
+        audioCueHandler.postAtFrontOfQueue {
+            if (released.get() || !battleCuesPaused) return@postAtFrontOfQueue
+            val nowMillis = SystemClock.elapsedRealtime()
+            val pausedDurationMillis = (nowMillis - battleCuesPausedAtMillis).coerceAtLeast(0L)
+            pendingBattleCues.forEach { it.queuedAtMillis += pausedDurationMillis }
+            val restored = pausedBattleCues
+                .sortedBy { it.remainingDelayMillis }
+                .map { it.copy(queuedAtMillis = it.queuedAtMillis + pausedDurationMillis) }
+            val restoredEndMillis = restored.maxOfOrNull {
+                it.remainingDelayMillis + it.cue.playbackDurationMillis + BATTLE_CUE_GAP_MILLIS
+            } ?: 0L
+            cuePlaybackQueue.reset(maxOf(nowMillis, cuePlaybackQueue.availableAtMillis(), nowMillis + restoredEndMillis))
+            pausedBattleCues.clear()
+            battleCuesPaused = false
+            battleCuesPausedAtMillis = 0L
+            restored.forEach { paused ->
+                scheduleBattleCue(
+                    paused.cue,
+                    paused.soundId,
+                    paused.queuedAtMillis,
+                    paused.plannedDelayMillis,
+                    paused.remainingDelayMillis
+                )
+            }
+            activeBattleStreamIds.forEach(battleSoundPool::resume)
+            flushPendingBattleCues()
+        }
+    }
+
     fun beginBattleMove() {
         audioCueHandler.postAtFrontOfQueue {
             if (!released.get()) clearPendingBattleCues()
@@ -183,6 +257,7 @@ class BattleAudio(
             clearPendingBattleCues()
             return
         }
+        if (battleCuesPaused) return
         val nowMillis = SystemClock.elapsedRealtime()
         while (pendingBattleCues.isNotEmpty()) {
             val pending = pendingBattleCues.first()
@@ -196,16 +271,42 @@ class BattleAudio(
             val cue = pending.cue
             val queuedAtMillis = pending.queuedAtMillis
             val playback = cuePlaybackQueue.enqueue(cue, nowMillis)
-            val generation = cuePlaybackGeneration
-            audioCueHandler.postDelayed({
-                if (generation != cuePlaybackGeneration || released.get() || !soundEffectsEnabled.get()) return@postDelayed
-                playBattleCueNow(cue, soundId, queuedAtMillis, playback.delayMillis)
-            }, playback.delayMillis)
+            scheduleBattleCue(cue, soundId, queuedAtMillis, playback.delayMillis, playback.delayMillis)
         }
+    }
+
+    private fun scheduleBattleCue(
+        cue: BattleAudioCue,
+        soundId: Int,
+        queuedAtMillis: Long,
+        plannedDelayMillis: Long,
+        delayMillis: Long
+    ) {
+        if (released.get() || !soundEffectsEnabled.get() || battleCuesPaused) return
+        val scheduled = ScheduledBattleCue(
+            cue,
+            soundId,
+            queuedAtMillis,
+            plannedDelayMillis,
+            SystemClock.elapsedRealtime() + delayMillis
+        )
+        val generation = cuePlaybackGeneration
+        lateinit var runnable: Runnable
+        runnable = Runnable {
+            scheduledBattleCues.remove(scheduled)
+            if (generation != cuePlaybackGeneration || released.get() || !soundEffectsEnabled.get() || battleCuesPaused) return@Runnable
+            playBattleCueNow(cue, soundId, queuedAtMillis, plannedDelayMillis)
+        }
+        scheduled.runnable = runnable
+        scheduledBattleCues += scheduled
+        audioCueHandler.postDelayed(runnable, delayMillis)
     }
 
     private fun clearPendingBattleCues() {
         pendingBattleCues.clear()
+        scheduledBattleCues.forEach { it.runnable?.let(audioCueHandler::removeCallbacks) }
+        scheduledBattleCues.clear()
+        pausedBattleCues.clear()
         stopActiveBattleStreams()
         cuePlaybackGeneration += 1
         cuePlaybackQueue.reset(SystemClock.elapsedRealtime())
@@ -351,6 +452,7 @@ class BattleAudio(
         const val MAX_PENDING_BATTLE_CUES = 16
         const val MAX_PENDING_BATTLE_CUE_AGE_MILLIS = 5_000L
         const val MAX_DIAGNOSTIC_EVENTS = 24
+        const val BATTLE_CUE_GAP_MILLIS = 24L
     }
 
 }

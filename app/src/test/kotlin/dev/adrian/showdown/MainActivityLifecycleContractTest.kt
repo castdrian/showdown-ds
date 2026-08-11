@@ -8,6 +8,7 @@ class MainActivityLifecycleContractTest {
     @Test
     fun liveEffectsPauseAndResumeWithTheActivityLifecycle() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val audioSource = File("src/main/kotlin/dev/adrian/showdown/BattleAudio.kt").readText()
         val pauseIndex = source.indexOf("pauseLivePlaybackForLifecycle()")
         val resumeIndex = source.indexOf("resumeLivePlaybackForLifecycle()")
 
@@ -17,5 +18,9 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("livePlaybackPausedForLifecycle = false"))
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(true)"))
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(false)"))
+        assertTrue(source.contains("battleAudio.pauseBattleCues()"))
+        assertTrue(source.contains("battleAudio.resumeBattleCues()"))
+        assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::pause)"))
+        assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::resume)"))
     }
 }

@@ -20,6 +20,9 @@ class BattleAudioCuePlaybackQueue {
         return BattleAudioCuePlayback(cue, startAtMillis - requestedAtMillis)
     }
 
+    @Synchronized
+    fun availableAtMillis(): Long = nextAvailableAtMillis
+
     private companion object {
         const val CUE_GAP_MILLIS = 24L
     }

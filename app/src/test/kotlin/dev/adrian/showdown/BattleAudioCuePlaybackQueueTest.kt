@@ -37,4 +37,12 @@ class BattleAudioCuePlaybackQueueTest {
 
         assertEquals(0L, queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 2_000L).delayMillis)
     }
+
+    @Test
+    fun exposesTheEndOfTheScheduledCueTimeline() {
+        val queue = BattleAudioCuePlaybackQueue()
+        queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L)
+
+        assertEquals(1_724L, queue.availableAtMillis())
+    }
 }
