@@ -20,6 +20,8 @@ object ShowdownChangelog {
                 "Battle audio timing resets at each move boundary so faster playback cannot delay the next move's cue.",
                 "Damage cues also follow health changes represented by set-HP packets without sounding for healing.",
                 "Dynamax and Terastal choices now use the official Showdown command suffixes.",
+                "Consumed items now disappear from Pokémon details and appear in the battle log.",
+                "Battle requests no longer show a Terastal action when the server explicitly disables it.",
                 "Battle challenges announced by Showdown now open the custom accept or reject flow.",
                 "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading.",
                 "Matched battles are recovered after reconnecting, even when the room ID stays the same.",

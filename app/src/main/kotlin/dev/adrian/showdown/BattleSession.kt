@@ -1189,6 +1189,7 @@ class BattleSession {
                     "-ability" -> applyAbility(fields)
                     "-item" -> applyItem(fields)
                     "-enditem" -> applyItem(fields, "No item")
+                    "-eat" -> applyEat(fields)
                     "-weather" -> applyWeather(fields)
                     "-fieldstart" -> applyFieldEffect(fields, true)
                     "-fieldend" -> applyFieldEffect(fields, false)
@@ -2581,6 +2582,16 @@ class BattleSession {
         updateActorDetails(fields[2]) { it.copy(item = item) }
     }
 
+    private fun applyEat(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val item = fields.getOrNull(3)
+            ?.let { itemNameResolver?.invoke(it) ?: it }
+            ?.takeIf(String::isNotBlank)
+            ?: "an item"
+        updateActorDetails(actor) { it.copy(item = "No item") }
+        appendLog("${battleActor(actor)} consumed $item.")
+    }
+
     private fun applyWeather(fields: List<String>) {
         val upkeep = fields.drop(3).any { it.trim().equals("[upkeep]", true) }
         weather = fields.getOrNull(2)?.takeUnless { it.equals("none", true) }.orEmpty()
@@ -2875,7 +2886,10 @@ class BattleSession {
     private fun updateAvailableGimmicks(active: JSONObject) {
         activeGMaxAvailable = active.optBoolean("gigantamax") ||
             active.optJSONObject("maxMoves")?.optBoolean("gigantamax") == true
-        availableTeraType = active.optString("canTerastallize").trim()
+        availableTeraType = when (val value = active.opt("canTerastallize")) {
+            is String -> value.trim().takeUnless { it.equals("false", true) }.orEmpty()
+            else -> ""
+        }
         val updated = mutableListOf<BattleGimmick>()
         val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
         if (zMoves != null && (0 until zMoves.length()).any { !zMoves.isNull(it) }) updated += BattleGimmick.Z_POWER

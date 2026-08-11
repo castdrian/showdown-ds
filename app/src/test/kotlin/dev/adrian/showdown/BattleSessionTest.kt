@@ -624,6 +624,18 @@ class BattleSessionTest {
     }
 
     @Test
+    fun falseTerastallizeCapabilityDoesNotCreateATypeOrGimmick() {
+        val session = BattleSession()
+
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canTerastallize\":false,\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+        )
+
+        assertEquals("", session.terastallizeType())
+        assertFalse(session.availableGimmicks().contains(BattleSession.BattleGimmick.TERASTALLIZATION))
+    }
+
+    @Test
     fun gimmickChoicesUseOfficialDynamaxAndTerastalizeSuffixes() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
@@ -1051,6 +1063,17 @@ class BattleSessionTest {
         assertEquals("Electrium Z", session.opponentDetails().item)
         assertEquals("45/100 brn", session.playerDetails().hp)
         assertEquals("BRN", session.playerDetails().condition)
+    }
+
+    @Test
+    fun consumingAnItemRemovesItFromBattleDetailsAndLogsTheEvent() {
+        val session = BattleSession()
+        session.applyProtocolLine("|-item|p1a: Incineroar|Sitrus Berry")
+
+        session.applyProtocolLine("|-eat|p1a: Incineroar|Sitrus Berry")
+
+        assertEquals("No item", session.playerDetails().item)
+        assertTrue(session.battleLog().any { it.contains("consumed Sitrus Berry") })
     }
 
     @Test
