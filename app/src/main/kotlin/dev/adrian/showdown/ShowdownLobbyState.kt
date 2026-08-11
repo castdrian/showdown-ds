@@ -9,13 +9,14 @@ class ShowdownLobbyState {
     data class LadderEntry(val username: String, val elo: Double, val gxe: Double, val rpr: Double, val rprd: Double, val coil: Double?)
 
     private val activeSearches = mutableSetOf<String>()
-    private val activeBattles = linkedMapOf<String, String>()
+    private val activeGames = linkedMapOf<String, String>()
     private val pendingChallenges = linkedMapOf<String, String>()
     private val publicRooms = mutableListOf<RoomSummary>()
     private val activeBattleRooms = mutableListOf<BattleRoomSummary>()
     private val activeLadder = mutableListOf<LadderEntry>()
 
-    val battles get() = activeBattles.toMap()
+    val games get() = activeGames.toMap()
+    val battles get() = activeGames.filterKeys(::isBattleRoom)
     val incomingChallenges get() = pendingChallenges.toMap()
     val rooms get() = publicRooms.toList()
     val battleRooms get() = activeBattleRooms.toList()
@@ -31,7 +32,7 @@ class ShowdownLobbyState {
 
     fun clear() {
         activeSearches.clear()
-        activeBattles.clear()
+        activeGames.clear()
         pendingChallenges.clear()
         publicRooms.clear()
         activeBattleRooms.clear()
@@ -40,19 +41,19 @@ class ShowdownLobbyState {
     }
 
     fun clearBattle(roomId: String) {
-        activeBattles.remove(roomId)
+        activeGames.remove(roomId)
     }
 
     fun clearLadder() {
         activeLadder.clear()
     }
 
-    fun firstNewBattle(previousRoomIds: Set<String>): String? = activeBattles.keys.firstOrNull { it !in previousRoomIds }
+    fun firstNewBattle(previousRoomIds: Set<String>): String? = battles.keys.firstOrNull { it !in previousRoomIds }
 
     fun battleForReconnect(activeRoomId: String?, pendingRoomId: String?, allowPendingJoinRecovery: Boolean = false): String? {
         if (activeRoomId != null) return null
         if (pendingRoomId != null && !allowPendingJoinRecovery) return null
-        return activeBattles.keys.firstOrNull()
+        return battles.keys.firstOrNull()
     }
 
     fun applyProtocol(lines: List<String>) {
@@ -146,28 +147,29 @@ class ShowdownLobbyState {
         state.optJSONArray("searching")?.let { searches ->
             for (index in 0 until searches.length()) searches.optString(index).takeIf { it.isNotBlank() }?.let(activeSearches::add)
         }
-        activeBattles.clear()
+        activeGames.clear()
         state.optJSONObject("games")?.let { games ->
             games.keys().forEach { roomId ->
-                if (roomId.startsWith("battle-")) {
-                    activeBattles[roomId] = battleDescription(games.opt(roomId))
-                }
+                activeGames[roomId] = gameDescription(roomId, games.opt(roomId))
             }
         }
     }
 
-    private fun battleDescription(value: Any?): String {
+    private fun gameDescription(roomId: String, value: Any?): String {
+        val battleRoom = isBattleRoom(roomId)
         if (value is JSONObject) {
             value.optString("title").trim().takeIf(String::isNotBlank)?.let { return it }
             val players = listOf(value.optString("p1"), value.optString("p2"))
                 .map(String::trim)
                 .filter(String::isNotBlank)
             if (players.isNotEmpty()) return players.joinToString(" vs. ")
-            value.optString("format").trim().takeIf(String::isNotBlank)?.let { return "Battle · $it" }
-            return "Battle room"
+            value.optString("format").trim().takeIf(String::isNotBlank)?.let { return "${if (battleRoom) "Battle" else "Game"} · $it" }
+            return if (battleRoom) "Battle room" else "Game room"
         }
-        return value?.toString()?.trim()?.takeIf(String::isNotBlank) ?: "Battle room"
+        return value?.toString()?.trim()?.takeIf(String::isNotBlank) ?: if (battleRoom) "Battle room" else "Game room"
     }
+
+    private fun isBattleRoom(roomId: String) = roomId.startsWith("battle-")
 
     private fun applyChallenges(payload: String?) {
         val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return

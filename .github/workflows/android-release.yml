@@ -152,7 +152,15 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          previous_tag="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
+          previous_tag=""
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "$RELEASE_TAG" == "${GITHUB_REF_NAME:-}" ]]; then
+            previous_tag="$(git describe --tags --abbrev=0 "$RELEASE_TAG^" 2>/dev/null || true)"
+          else
+            previous_tag="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
+            if [[ "$previous_tag" == "$RELEASE_TAG" ]]; then
+              previous_tag="$(git describe --tags --abbrev=0 "$RELEASE_TAG^" 2>/dev/null || true)"
+            fi
+          fi
           notes_path="$RUNNER_TEMP/showdown-release-notes.md"
           features_path="$RUNNER_TEMP/showdown-release-features.md"
           fixes_path="$RUNNER_TEMP/showdown-release-fixes.md"

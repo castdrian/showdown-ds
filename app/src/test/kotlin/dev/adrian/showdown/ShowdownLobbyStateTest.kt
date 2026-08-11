@@ -28,6 +28,7 @@ class ShowdownLobbyStateTest {
 
         assertEquals("Alice vs. Bob", lobby.battles["battle-gen9ou-1"])
         assertEquals(null, lobby.battles["room-other-1"])
+        assertEquals("Not a battle", lobby.games["room-other-1"])
     }
 
     @Test
@@ -43,6 +44,21 @@ class ShowdownLobbyStateTest {
         assertEquals("Alice vs. Bob", lobby.battles["battle-gen9ou-1"])
         assertEquals("Battle · gen9ou", lobby.battles["battle-gen9ou-2"])
         assertEquals("Battle room", lobby.battles["battle-gen9ou-3"])
+    }
+
+    @Test
+    fun retainsNonBattleGamesWithoutOfferingThemAsBattleRooms() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(
+            listOf(
+                "|updatesearch|{\"games\":{\"battle-gen9ou-1\":\"Alice vs. Bob\",\"game-mafia-1\":{\"format\":\"mafia\"}}}"
+            )
+        )
+
+        assertEquals("Game · mafia", lobby.games["game-mafia-1"])
+        assertEquals(null, lobby.battles["game-mafia-1"])
+        assertEquals(listOf("battle-gen9ou-1"), lobby.battles.keys.toList())
     }
 
     @Test
