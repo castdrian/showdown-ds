@@ -175,7 +175,8 @@ class MainActivity : Activity() {
     private var replayStatus: String? = null
     private var replayPaused = false
     private var replayPausedForLifecycle = false
-    private var liveEffectsPausedForLifecycle = false
+    private var livePlaybackPausedForLifecycle = false
+    private var livePlaybackPausedRemainingMillis: Long? = null
     private var replaySpeed = DEFAULT_BATTLE_SPEED
     private var restoredReplayPaused = false
     private var restoredReplaySpeed = DEFAULT_BATTLE_SPEED
@@ -468,7 +469,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         pauseReplayForLifecycle()
-        pauseLiveEffectsForLifecycle()
+        pauseLivePlaybackForLifecycle()
         if (::battleAudio.isInitialized) {
             battleAudio.resetBattleCues()
             battleAudio.pauseMusic()
@@ -478,7 +479,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         pauseReplayForLifecycle()
-        pauseLiveEffectsForLifecycle()
+        pauseLivePlaybackForLifecycle()
         super.onStop()
     }
 
@@ -492,7 +493,7 @@ class MainActivity : Activity() {
         configureWindow()
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
-        resumeLiveEffectsForLifecycle()
+        resumeLivePlaybackForLifecycle()
         if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
     }
 
@@ -622,7 +623,7 @@ class MainActivity : Activity() {
     }
 
     private fun flushBattlePlayback() {
-        if (replayPaused && session.isReplayMode()) return
+        if ((replayPaused && session.isReplayMode()) || (livePlaybackPausedForLifecycle && !session.isReplayMode())) return
         if (battlePacketPlaybackScheduled || pendingBattlePackets.isEmpty()) {
             if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty()) {
                 replayStatus?.let {
@@ -713,10 +714,10 @@ class MainActivity : Activity() {
         battleEventHandler.removeCallbacksAndMessages(null)
         pendingBattlePackets.clear()
         battlePacketPlaybackScheduled = false
-        showdownMoveEffects?.setPlaybackPaused(false)
         replayPaused = false
         replayPausedForLifecycle = false
-        liveEffectsPausedForLifecycle = false
+        livePlaybackPausedRemainingMillis = null
+        if (!livePlaybackPausedForLifecycle) showdownMoveEffects?.setPlaybackPaused(false)
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         playbackScheduledPauseMillis = 0L
         playbackScheduledAtMillis = 0L
@@ -739,16 +740,33 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun pauseLiveEffectsForLifecycle() {
-        if (!::session.isInitialized || session.isReplayMode() || liveEffectsPausedForLifecycle) return
-        liveEffectsPausedForLifecycle = true
+    private fun pauseLivePlaybackForLifecycle() {
+        if (!::session.isInitialized || session.isReplayMode() || livePlaybackPausedForLifecycle) return
+        livePlaybackPausedForLifecycle = true
         showdownMoveEffects?.setPlaybackPaused(true)
+        if (battlePacketPlaybackScheduled) {
+            livePlaybackPausedRemainingMillis = remainingPlaybackMillis()
+            battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
+            battlePacketPlaybackScheduled = false
+        }
     }
 
-    private fun resumeLiveEffectsForLifecycle() {
-        if (!liveEffectsPausedForLifecycle) return
-        liveEffectsPausedForLifecycle = false
-        if (::session.isInitialized && !session.isReplayMode()) showdownMoveEffects?.setPlaybackPaused(false)
+    private fun resumeLivePlaybackForLifecycle() {
+        if (!livePlaybackPausedForLifecycle) return
+        livePlaybackPausedForLifecycle = false
+        if (::session.isInitialized && !session.isReplayMode()) {
+            showdownMoveEffects?.setPlaybackPaused(false)
+            livePlaybackPausedRemainingMillis?.let { remainingMillis ->
+                livePlaybackPausedRemainingMillis = null
+                scheduleBattlePlayback(remainingMillis)
+            } ?: flushBattlePlayback()
+        }
+    }
+
+    private fun remainingPlaybackMillis(): Long {
+        val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
+        val consumedMillis = (elapsedMillis * playbackScheduledSpeed).toLong()
+        return (playbackScheduledPauseMillis - consumedMillis).coerceAtLeast(0L)
     }
 
     private fun handleAppliedBattlePacket(packet: PendingBattlePacket) {

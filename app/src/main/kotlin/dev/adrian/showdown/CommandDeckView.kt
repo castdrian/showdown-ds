@@ -457,14 +457,14 @@ class CommandDeckView(
             return
         }
         var sectionTop = detailContent.top
-        val infoCellHeight = 128f * scale
+        val infoCellHeight = 136f * scale
         drawMoveMetrics(
             canvas,
             RectF(detailContent.left, sectionTop, detailContent.right, sectionTop + infoCellHeight),
             move,
             scale
         )
-        val metricToContextGap = if (compact) 48f * scale else 56f * scale
+        val metricToContextGap = if (compact) 34f * scale else 48f * scale
         sectionTop += infoCellHeight + metricToContextGap
         drawMoveContext(
             canvas,
@@ -472,7 +472,7 @@ class CommandDeckView(
             move,
             scale
         )
-        sectionTop += infoCellHeight + if (compact) 8f * scale else 12f * scale
+        sectionTop += infoCellHeight + if (compact) 10f * scale else 16f * scale
         if (!compact) drawEffectSummary(canvas, detailContent, scale, sectionTop)
         if (move.disabled) {
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
@@ -543,75 +543,74 @@ class CommandDeckView(
     }
 
     private fun drawMoveInfoCell(canvas: Canvas, bounds: RectF, label: String, value: String, scale: Float) {
+        val radius = 18f * scale
+        val inner = RectF(bounds).apply { inset(2f * scale, 2f * scale) }
         paint.style = Paint.Style.FILL
         paint.shader = LinearGradient(
-            bounds.left,
-            bounds.top,
-            bounds.right,
-            bounds.bottom,
-            Color.argb(214, 19, 55, 70),
-            Color.argb(184, 3, 19, 31),
+            inner.left,
+            inner.top,
+            inner.right,
+            inner.bottom,
+            Color.argb(226, 22, 63, 78),
+            Color.argb(204, 4, 24, 38),
             Shader.TileMode.CLAMP
         )
-        canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
+        canvas.drawRoundRect(inner, radius, radius, paint)
         paint.shader = null
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.5f * scale
-        paint.color = Color.argb(178, 141, 211, 220)
-        canvas.drawRoundRect(bounds, 16f * scale, 16f * scale, paint)
-        paint.style = Paint.Style.FILL
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        paint.strokeWidth = 1.75f * scale
+        paint.color = Color.argb(194, 128, 218, 222)
+        canvas.drawRoundRect(inner, radius, radius, paint)
 
-        val horizontalPadding = 20f * scale
-        val verticalPadding = 12f * scale
-        val rowGap = 4f * scale
-        val contentWidth = bounds.width() - horizontalPadding * 2f
-        val labelArea = RectF(
-            bounds.left + horizontalPadding,
-            bounds.top + verticalPadding,
-            bounds.right - horizontalPadding,
-            bounds.centerY() - rowGap / 2f
+        val horizontalPadding = 24f * scale
+        val verticalPadding = 16f * scale
+        val content = RectF(
+            inner.left + horizontalPadding,
+            inner.top + verticalPadding,
+            inner.right - horizontalPadding,
+            inner.bottom - verticalPadding
         )
-        val valueArea = RectF(
-            bounds.left + horizontalPadding,
-            bounds.centerY() + rowGap / 2f,
-            bounds.right - horizontalPadding,
-            bounds.bottom - verticalPadding
+        val labelHeight = 28f * scale
+        val dividerY = content.top + labelHeight + 8f * scale
+        val valueArea = RectF(content.left, dividerY + 8f * scale, content.right, content.bottom)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(145, 230, 226)
+        canvas.drawRoundRect(
+            RectF(content.left, content.top, content.left + 30f * scale, content.top + 4f * scale),
+            2f * scale,
+            2f * scale,
+            paint
         )
+        paint.color = Color.argb(108, 145, 230, 226)
+        canvas.drawRoundRect(
+            RectF(content.left, dividerY, content.right, dividerY + 1.5f * scale),
+            1f * scale,
+            1f * scale,
+            paint
+        )
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
         val labelSize = fittedTextSize(
             label,
-            contentWidth,
-            readableTextSize(17f, scale, 14f, 12f).coerceAtMost(labelArea.height() * 0.82f),
+            content.width(),
+            readableTextSize(16f, scale, 14f, 12f).coerceAtMost(labelHeight * 0.78f),
             12f * scale
         )
         paint.textSize = labelSize
-        drawOutlinedText(
-            canvas,
-            label,
-            bounds.centerX(),
-            centeredTextBaseline(labelArea.centerY()),
-            Color.rgb(3, 14, 22),
-            Color.rgb(164, 228, 231),
-            1.25f * scale
-        )
+        paint.color = Color.rgb(184, 238, 235)
+        canvas.drawText(label, content.left, centeredTextBaseline(content.top + labelHeight / 2f), paint)
 
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         val valueSize = fittedTextSize(
             value,
-            contentWidth,
-            readableTextSize(29f, scale, 22f, 18f).coerceAtMost(valueArea.height() * 0.82f),
+            valueArea.width(),
+            readableTextSize(29f, scale, 22f, 18f).coerceAtMost(valueArea.height() * 0.72f),
             18f * scale
         )
         paint.textSize = valueSize
-        drawOutlinedText(
-            canvas,
-            value,
-            bounds.centerX(),
-            centeredTextBaseline(valueArea.centerY()),
-            Color.rgb(3, 14, 22),
-            PAPER,
-            1.5f * scale
-        )
+        paint.color = PAPER
+        canvas.drawText(value, valueArea.centerX(), centeredTextBaseline(valueArea.centerY()), paint)
         paint.textAlign = Paint.Align.LEFT
     }
 
