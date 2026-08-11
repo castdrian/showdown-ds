@@ -2991,20 +2991,33 @@ class BattleSession {
         val move = displayedMoves().getOrNull(focusedMove) ?: return
         if (activeRequests.size <= 1 || !requestTargetable) return
         val target = move.target.lowercase()
-        val allySlots = activeSlots(playerActiveCombatants, activeRequests.size).map { -it }
-        val foeSlots = activeSlots(opponentActiveCombatants, activeRequests.size)
-        val selfSlot = -(activeSlotIndex + 1)
-        val options = when (target) {
-            "adjacentally" -> allySlots
-                .filterNot { it == selfSlot }
-                .map { TargetOption("Ally ${-it}", it.toString()) }
-            "adjacentallyorself" -> allySlots.map { slot ->
-                val label = "Ally ${-slot}" + if (slot == selfSlot) " (self)" else ""
-                TargetOption(label, slot.toString())
+        val selfPosition = activeSlotIndex + 1
+        val allyPositions = activeSlots(playerActiveCombatants, activeRequests.size)
+        val foePositions = activeSlots(opponentActiveCombatants, activeRequests.size)
+        fun isAdjacentAlly(position: Int) = kotlin.math.abs(position - selfPosition) <= 1
+        fun isAdjacentFoe(position: Int): Boolean {
+            val mirroredPosition = activeRequests.size + 1 - position
+            return kotlin.math.abs(mirroredPosition - selfPosition) <= 1
+        }
+        fun targetOptions(positions: List<Int>, ally: Boolean, adjacent: Boolean): List<TargetOption> = positions
+            .filter { !adjacent || if (ally) isAdjacentAlly(it) else isAdjacentFoe(it) }
+            .filterNot { ally && it == selfPosition }
+            .map { position ->
+                val choice = if (ally) -position else position
+                val label = if (ally) "Ally $position" else "Foe $position"
+                TargetOption(label + if (ally && position == selfPosition) " (self)" else "", choice.toString())
             }
-            "normal", "adjacentfoe" -> foeSlots.map { TargetOption("Foe $it", it.toString()) }
-            "any" -> (foeSlots.map { TargetOption("Foe $it", it.toString()) } +
-                allySlots.filterNot { it == selfSlot }.map { TargetOption("Ally ${-it}", it.toString()) })
+        val options = when (target) {
+            "adjacentally" -> targetOptions(allyPositions, ally = true, adjacent = true)
+            "adjacentallyorself" -> allyPositions
+                .filter { isAdjacentAlly(it) }
+                .map { position ->
+                    val label = "Ally $position" + if (position == selfPosition) " (self)" else ""
+                    TargetOption(label, (-position).toString())
+                }
+            "normal", "adjacentfoe" -> targetOptions(foePositions, ally = false, adjacent = true)
+            "any" -> targetOptions(foePositions, ally = false, adjacent = false) +
+                targetOptions(allyPositions, ally = true, adjacent = false)
             else -> emptyList()
         }
         targetOptions += options

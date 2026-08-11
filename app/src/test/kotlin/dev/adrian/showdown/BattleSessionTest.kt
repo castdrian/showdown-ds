@@ -909,6 +909,49 @@ class BattleSessionTest {
     }
 
     @Test
+    fun triplesRespectAdjacentTargetRulesAndAutomaticTargetMoves() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|triples",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Naganadel|Naganadel, L50|100/100",
+                "|switch|p1c: Mimikyu|Mimikyu, L50|100/100",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p2b: Druddigon|Druddigon, L50|100/100",
+                "|switch|p2c: Landorus|Landorus, L50|100/100",
+                "|request|{\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Helping Hand\",\"pp\":10,\"target\":\"adjacentAlly\"}]},null,null]}"
+            )
+        )
+
+        assertEquals(listOf("-2"), session.targetOptions().map { it.choice })
+
+        session.applyProtocolLine(
+            "|request|{\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]},null,null]}"
+        )
+
+        assertEquals(listOf("2", "3"), session.targetOptions().map { it.choice })
+
+        session.applyProtocolLine(
+            "|request|{\"targetable\":true,\"active\":[null,{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]},null]}"
+        )
+
+        assertEquals(listOf("1", "2", "3"), session.targetOptions().map { it.choice })
+
+        session.applyProtocolLine(
+            "|request|{\"targetable\":true,\"active\":[null,null,{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"adjacentFoe\"}]}]}"
+        )
+
+        assertEquals(listOf("1", "2"), session.targetOptions().map { it.choice })
+
+        session.applyProtocolLine(
+            "|request|{\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"allAdjacentFoes\"}]},null,null]}"
+        )
+
+        assertTrue(session.targetOptions().isEmpty())
+    }
+
+    @Test
     fun commandingActiveSlotsArePassedAutomatically() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
