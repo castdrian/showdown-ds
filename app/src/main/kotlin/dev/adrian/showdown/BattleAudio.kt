@@ -11,6 +11,7 @@ import android.os.SystemClock
 import java.io.File
 import java.util.ArrayDeque
 import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class BattleAudio(
@@ -34,24 +35,26 @@ class BattleAudio(
         val plannedDelayMillis: Long,
         val remainingDelayMillis: Long
     )
+    private data class PendingTransientSound(
+        val path: String,
+        val volume: Float,
+        val queuedAtMillis: Long
+    )
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioCueThread = HandlerThread("showdown-audio").also { it.start() }
     private val audioCueHandler = Handler(audioCueThread.looper)
-    private val battleSoundPool = SoundPool.Builder()
-        .setMaxStreams(8)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_GAME)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-        )
-        .build()
+    private val battleSoundPool = createSoundPool(8)
+    private var transientSoundPool: SoundPool? = null
     private val battleSoundIds = mutableMapOf<BattleAudioCue, Int>()
     private val loadedBattleSoundIds = Collections.synchronizedSet(mutableSetOf<Int>())
     private val failedBattleCues = Collections.synchronizedSet(mutableSetOf<BattleAudioCue>())
+    private val transientSoundIds = LinkedHashMap<String, Int>(16, 0.75f, true)
+    private val transientSoundPathsById = mutableMapOf<Int, String>()
+    private val loadedTransientSoundIds = mutableSetOf<Int>()
     private val activeBattleStreamIds = mutableSetOf<Int>()
     private val pendingBattleCues = ArrayDeque<PendingBattleCue>()
+    private val pendingTransientSounds = ArrayDeque<PendingTransientSound>()
     private val scheduledBattleCues = mutableListOf<ScheduledBattleCue>()
     private val pausedBattleCues = mutableListOf<PausedBattleCue>()
     private val diagnosticEvents = ArrayDeque<BattleAudioCueEvent>()
@@ -64,7 +67,6 @@ class BattleAudio(
     private val soundEffectsEnabled = AtomicBoolean(true)
     private var musicEnabled = false
     private val released = AtomicBoolean(false)
-    private val transientPlayers = mutableSetOf<MediaPlayer>()
     private val previewRunnables = mutableSetOf<Runnable>()
     private var selectedMusic = MUSIC[session.showdownMusicIndex()]
     private var battleCuesPaused = false
@@ -90,6 +92,7 @@ class BattleAudio(
                 battleSoundIds.entries.firstOrNull { it.value == sampleId }?.key?.let { failedBattleCues += it }
             }
         }
+        audioCueHandler.post(::initializeTransientSoundPool)
         BattleAudioCue.values().forEach { cue ->
             runCatching {
                 context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
@@ -106,7 +109,12 @@ class BattleAudio(
         if (requestedMusic != selectedMusic) selectMusic(requestedMusic)
         val effectsEnabled = session.soundEffectsEnabled
         soundEffectsEnabled.set(effectsEnabled)
-        if (!effectsEnabled) audioCueHandler.post(::clearPendingBattleCues)
+        if (!effectsEnabled) {
+            audioCueHandler.post {
+                clearPendingBattleCues()
+                clearPendingTransientSounds()
+            }
+        }
         musicEnabled = session.musicEnabled
         if (musicEnabled) {
             startMusicIfReady()
@@ -136,10 +144,15 @@ class BattleAudio(
             scheduledBattleCues.clear()
             pausedBattleCues.clear()
             stopActiveBattleStreams()
+            clearPendingTransientSounds()
             battleSoundPool.release()
+            transientSoundIds.clear()
+            transientSoundPathsById.clear()
+            loadedTransientSoundIds.clear()
+            transientSoundPool?.release()
+            transientSoundPool = null
             audioCueThread.quitSafely()
         }
-        transientPlayers.toList().forEach(::finishPlayer)
     }
 
     fun playNavigation() = playNotification(0.35f)
@@ -319,7 +332,7 @@ class BattleAudio(
 
     private fun playBattleCueNow(cue: BattleAudioCue, soundId: Int, queuedAtMillis: Long, plannedDelayMillis: Long) {
         if (released.get() || !soundEffectsEnabled.get()) return
-        val streamId = battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f)
+        val streamId = runCatching { battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f) }.getOrDefault(0)
         val playbackAccepted = streamId != 0
         if (playbackAccepted) activeBattleStreamIds += streamId
         val actualDelayMillis = (SystemClock.elapsedRealtime() - queuedAtMillis).coerceAtLeast(0L)
@@ -340,7 +353,7 @@ class BattleAudio(
     fun playCry(species: String) {
         if (!soundEffectsEnabled.get()) return
         resourceCache.requestAudio("audio/cries/${resourceId(species)}.mp3") { file ->
-            file?.let { playFile(it, 0.60f) }
+            file?.let { audioCueHandler.post { playTransientSound(it.path, 0.60f) } }
         }
     }
 
@@ -388,7 +401,9 @@ class BattleAudio(
     }
 
     private fun playNotification(volume: Float) {
-        if (soundEffectsEnabled.get()) notificationFile?.let { playFile(it, volume) }
+        if (soundEffectsEnabled.get()) notificationFile?.let { file ->
+            audioCueHandler.post { playTransientSound(file.path, volume) }
+        }
     }
 
     private fun postPreview(delayMillis: Long, action: () -> Unit) {
@@ -401,31 +416,91 @@ class BattleAudio(
         mainHandler.postDelayed(runnable, delayMillis)
     }
 
-    private fun playFile(file: File, volume: Float) {
-        playPlayer(volume) { player -> player.setDataSource(file.path) }
-    }
-
-    private fun playPlayer(volume: Float, configure: (MediaPlayer) -> Unit) {
-        if (released.get()) return
-        val player = MediaPlayer()
-        transientPlayers += player
-        runCatching {
-            configure(player)
-            player.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            player.setVolume(volume, volume)
-            player.setOnPreparedListener {
-                if (released.get() || it !in transientPlayers) finishPlayer(it) else it.start()
+    private fun playTransientSound(path: String, volume: Float) {
+        if (released.get() || !soundEffectsEnabled.get()) return
+        val pool = transientSoundPool ?: return
+        val soundId = transientSoundIds[path] ?: runCatching {
+            while (transientSoundIds.size >= MAX_TRANSIENT_SOUND_SAMPLES) evictOldestTransientSound(pool)
+            pool.load(path, 1)
+        }.getOrDefault(0).also { loadedId ->
+            if (loadedId != 0) {
+                transientSoundIds[path] = loadedId
+                transientSoundPathsById[loadedId] = path
             }
-            player.setOnCompletionListener(::finishPlayer)
-            player.setOnErrorListener { failed, _, _ -> finishPlayer(failed); true }
-            player.prepareAsync()
-        }.onFailure { finishPlayer(player) }
+        }
+        if (soundId == 0) return
+        if (soundId !in loadedTransientSoundIds) {
+            if (pendingTransientSounds.size < MAX_PENDING_TRANSIENT_SOUNDS) {
+                pendingTransientSounds.addLast(PendingTransientSound(path, volume, SystemClock.elapsedRealtime()))
+            }
+            return
+        }
+        runCatching { pool.play(soundId, volume, volume, 1, 0, 1f) }
     }
 
-    private fun finishPlayer(player: MediaPlayer) {
-        transientPlayers.remove(player)
-        runCatching { player.release() }
+    private fun flushPendingTransientSounds() {
+        if (released.get() || !soundEffectsEnabled.get()) {
+            clearPendingTransientSounds()
+            return
+        }
+        val pendingCount = pendingTransientSounds.size
+        repeat(pendingCount) {
+            val pending = pendingTransientSounds.removeFirst()
+            if (SystemClock.elapsedRealtime() - pending.queuedAtMillis > MAX_PENDING_TRANSIENT_SOUND_AGE_MILLIS) return@repeat
+            val soundId = transientSoundIds[pending.path]
+            if (soundId == null || soundId !in loadedTransientSoundIds) {
+                pendingTransientSounds.addLast(pending)
+            } else {
+                transientSoundPool?.let { pool ->
+                    runCatching { pool.play(soundId, pending.volume, pending.volume, 1, 0, 1f) }
+                }
+            }
+        }
     }
+
+    private fun clearPendingTransientSounds() {
+        pendingTransientSounds.clear()
+    }
+
+    private fun evictOldestTransientSound(pool: SoundPool) {
+        val eldest = transientSoundIds.entries.firstOrNull() ?: return
+        val path = eldest.key
+        val soundId = eldest.value
+        transientSoundIds.remove(path)
+        transientSoundPathsById.remove(soundId)
+        loadedTransientSoundIds.remove(soundId)
+        pendingTransientSounds.removeIf { it.path == path }
+        runCatching { pool.unload(soundId) }
+    }
+
+    private fun initializeTransientSoundPool() {
+        if (released.get()) return
+        transientSoundPool = createSoundPool(8).also { pool ->
+            pool.setOnLoadCompleteListener { _, sampleId, status ->
+                audioCueHandler.post {
+                    val path = transientSoundPathsById[sampleId] ?: return@post
+                    if (status == 0 && transientSoundIds[path] == sampleId) {
+                        loadedTransientSoundIds += sampleId
+                        flushPendingTransientSounds()
+                    } else if (status != 0) {
+                        transientSoundPathsById.remove(sampleId)
+                        transientSoundIds.remove(path)
+                        pendingTransientSounds.removeIf { it.path == path }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun createSoundPool(maxStreams: Int) = SoundPool.Builder()
+        .setMaxStreams(maxStreams)
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        )
+        .build()
 
     private fun resourceId(value: String) = value.lowercase().replace(Regex("[^a-z0-9]"), "")
 
@@ -451,6 +526,9 @@ class BattleAudio(
         )
         const val MAX_PENDING_BATTLE_CUES = 16
         const val MAX_PENDING_BATTLE_CUE_AGE_MILLIS = 5_000L
+        const val MAX_PENDING_TRANSIENT_SOUNDS = 12
+        const val MAX_PENDING_TRANSIENT_SOUND_AGE_MILLIS = 4_000L
+        const val MAX_TRANSIENT_SOUND_SAMPLES = 24
         const val MAX_DIAGNOSTIC_EVENTS = 24
         const val BATTLE_CUE_GAP_MILLIS = 24L
     }
