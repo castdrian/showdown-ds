@@ -175,6 +175,7 @@ class MainActivity : Activity() {
     private var replayStatus: String? = null
     private var replayPaused = false
     private var replayPausedForLifecycle = false
+    private var liveEffectsPausedForLifecycle = false
     private var replaySpeed = DEFAULT_BATTLE_SPEED
     private var restoredReplayPaused = false
     private var restoredReplaySpeed = DEFAULT_BATTLE_SPEED
@@ -467,6 +468,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         pauseReplayForLifecycle()
+        pauseLiveEffectsForLifecycle()
         if (::battleAudio.isInitialized) {
             battleAudio.resetBattleCues()
             battleAudio.pauseMusic()
@@ -476,6 +478,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         pauseReplayForLifecycle()
+        pauseLiveEffectsForLifecycle()
         super.onStop()
     }
 
@@ -489,6 +492,7 @@ class MainActivity : Activity() {
         configureWindow()
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
+        resumeLiveEffectsForLifecycle()
         if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
     }
 
@@ -712,6 +716,7 @@ class MainActivity : Activity() {
         showdownMoveEffects?.setPlaybackPaused(false)
         replayPaused = false
         replayPausedForLifecycle = false
+        liveEffectsPausedForLifecycle = false
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         playbackScheduledPauseMillis = 0L
         playbackScheduledAtMillis = 0L
@@ -732,6 +737,18 @@ class MainActivity : Activity() {
             replayPausedForLifecycle = false
             setReplayPaused(false)
         }
+    }
+
+    private fun pauseLiveEffectsForLifecycle() {
+        if (!::session.isInitialized || session.isReplayMode() || liveEffectsPausedForLifecycle) return
+        liveEffectsPausedForLifecycle = true
+        showdownMoveEffects?.setPlaybackPaused(true)
+    }
+
+    private fun resumeLiveEffectsForLifecycle() {
+        if (!liveEffectsPausedForLifecycle) return
+        liveEffectsPausedForLifecycle = false
+        if (::session.isInitialized && !session.isReplayMode()) showdownMoveEffects?.setPlaybackPaused(false)
     }
 
     private fun handleAppliedBattlePacket(packet: PendingBattlePacket) {
