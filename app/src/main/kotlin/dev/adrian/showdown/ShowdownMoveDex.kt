@@ -124,7 +124,12 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                             is Number -> value.toString().removeSuffix(".0")
                             else -> "—"
                         }
-                        put(id, BattleSession.MoveInfo(power, accuracy))
+                        val category = move.optString("category").trim().takeIf { it.isNotBlank() } ?: "Status"
+                        val isZMove = move.opt("isZ")?.let { it != JSONObject.NULL && it != false } == true
+                        val maxMode = move.opt("isMax")
+                        val isFixedGimmickPower = (isZMove && power.toIntOrNull()?.let { it > 1 } == true) ||
+                            (maxMode is String && power.toIntOrNull()?.let { it > 10 } == true)
+                        put(id, BattleSession.MoveInfo(power, accuracy, category, isFixedGimmickPower))
                     }
                 }
             }.getOrDefault(emptyMap())

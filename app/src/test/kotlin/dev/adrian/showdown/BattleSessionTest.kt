@@ -650,6 +650,122 @@ class BattleSessionTest {
     }
 
     @Test
+    fun lateMoveDexResolutionUpdatesGimmickMoveDetails() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"zMoves\":[{\"move\":\"Inferno Overdrive\",\"target\":\"normal\"}],\"maxMoves\":[{\"move\":\"Max Flare\",\"target\":\"normal\"}],\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15,\"target\":\"normal\"}]}]}"
+        )
+
+        session.setMoveInfoResolver(
+            mapOf(
+                "Flamethrower" to BattleSession.MoveInfo("90", "100", "Special")
+            )::get
+        )
+        session.setMoveTypeResolver(
+            mapOf(
+                "Flamethrower" to "FIRE"
+            )::get
+        )
+
+        assertEquals("90", session.moves().single().power)
+        assertEquals("100", session.moves().single().accuracy)
+        assertEquals("Special", session.moves().single().category)
+        assertEquals("FIRE", session.moves().single().type)
+        assertTrue(session.availableGimmicks().contains(BattleSession.BattleGimmick.Z_POWER))
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        assertEquals("Inferno Overdrive", session.moves().single().name)
+        assertEquals("175", session.moves().single().power)
+        assertEquals("—", session.moves().single().accuracy)
+        assertEquals("Special", session.moves().single().category)
+        assertEquals("FIRE", session.moves().single().type)
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+        assertEquals("130", session.moves().single().power)
+        assertEquals("—", session.moves().single().accuracy)
+    }
+
+    @Test
+    fun repeatedMoveDexResolutionRefreshesDerivedMoveDetails() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"zMoves\":[{\"move\":\"Inferno Overdrive\",\"target\":\"normal\"}],\"maxMoves\":[{\"move\":\"Max Flare\",\"target\":\"normal\"}],\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15,\"target\":\"normal\"}]}]}"
+        )
+        session.setMoveInfoResolver { BattleSession.MoveInfo("90", "100", "Special") }
+        session.setMoveTypeResolver { "FIRE" }
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+        assertEquals("130", session.moves().single().power)
+
+        session.setMoveInfoResolver { BattleSession.MoveInfo("120", "80", "Special") }
+
+        assertEquals("140", session.moves().single().power)
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        assertEquals("190", session.moves().single().power)
+    }
+
+    @Test
+    fun maxMovePowerUsesVariantTypeWhenBaseTypeIsNotInRequest() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"maxMoves\":[{\"move\":\"Max Knuckle\",\"type\":\"Fighting\",\"target\":\"normal\"}],\"moves\":[{\"move\":\"Focus Blast\",\"pp\":10,\"target\":\"normal\"}]}]}"
+        )
+        session.setMoveInfoResolver { name ->
+            if (name == "Focus Blast") BattleSession.MoveInfo("120", "70", "Special") else null
+        }
+
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+
+        assertEquals("95", session.moves().single().power)
+        assertEquals("—", session.moves().single().accuracy)
+    }
+
+    @Test
+    fun fixedGimmickMovePowerUsesSpecialMoveDexValue() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"zMoves\":[{\"move\":\"Catastropika\",\"target\":\"normal\"}],\"maxMoves\":[{\"move\":\"G-Max Drum Solo\",\"target\":\"normal\"}],\"moves\":[{\"move\":\"Thunderbolt\",\"pp\":15,\"target\":\"normal\"}]}]}"
+        )
+        val moveInfo = mapOf(
+            "Thunderbolt" to BattleSession.MoveInfo("90", "100", "Special"),
+            "Catastropika" to BattleSession.MoveInfo("210", "—", "Physical", true),
+            "G-Max Drum Solo" to BattleSession.MoveInfo("160", "—", "Physical", true)
+        )
+        session.setMoveInfoResolver(moveInfo::get)
+
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        assertEquals("210", session.moves().single().power)
+        session.selectGimmick(BattleSession.BattleGimmick.Z_POWER)
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+        assertEquals("160", session.moves().single().power)
+    }
+
+    @Test
+    fun explicitNonNumericGimmickMetricsRemainDashesAfterDexResolution() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"maxMoves\":[{\"move\":\"Max Flare\",\"basePower\":0,\"accuracy\":true,\"target\":\"normal\"}],\"moves\":[{\"move\":\"Flamethrower\",\"pp\":15,\"target\":\"normal\"}]}]}"
+        )
+        session.setMoveInfoResolver { BattleSession.MoveInfo("90", "100", "Special") }
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+
+        assertEquals("—", session.moves().single().power)
+        assertEquals("—", session.moves().single().accuracy)
+    }
+
+    @Test
+    fun lateMoveDexResolutionPreservesExplicitNonNumericMoveValues() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"basePower\":0,\"accuracy\":true}]}]}"
+        )
+
+        session.setMoveInfoResolver { BattleSession.MoveInfo("90", "100") }
+
+        assertEquals("—", session.moves().single().power)
+        assertEquals("—", session.moves().single().accuracy)
+    }
+
+    @Test
     fun requestExposesMegaVariantsAndUltraBurstWithOfficialChoiceSuffixes() {
         val session = BattleSession()
 

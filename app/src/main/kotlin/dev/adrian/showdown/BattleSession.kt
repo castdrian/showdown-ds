@@ -142,7 +142,9 @@ class BattleSession {
 
     data class MoveInfo(
         val power: String,
-        val accuracy: String
+        val accuracy: String,
+        val category: String = "Status",
+        val fixedGimmickPower: Boolean = false
     )
 
     data class TargetOption(
@@ -212,6 +214,25 @@ class BattleSession {
         var critical: Boolean = false
     )
 
+    private data class ParsedMoveMetric(val value: String, val fromRequest: Boolean)
+
+    private data class MoveResolutionSources(
+        val typeFromRequest: Boolean = false,
+        val powerFromRequest: Boolean = false,
+        val accuracyFromRequest: Boolean = false,
+        val categoryFromRequest: Boolean = false
+    )
+
+    private data class ParsedMoveVariant(
+        val variant: MoveVariant,
+        val sources: MoveResolutionSources
+    )
+
+    private enum class MoveVariantKind {
+        Z_POWER,
+        DYNAMAX
+    }
+
     private val listeners = mutableListOf<Listener>()
     private val feedbackListeners = mutableListOf<FeedbackListener>()
     private val decisionListeners = mutableListOf<DecisionListener>()
@@ -241,8 +262,11 @@ class BattleSession {
         MoveOption("Darkest Lariat", "DARK", 10, 10, "Physical", "85", "100"),
         MoveOption("Parting Shot", "DARK", 20, 20, "Status", "—", "—")
     )
+    private val moveResolutionSources = MutableList(moves.size) { MoveResolutionSources() }
     private val zMoveVariants = mutableListOf<MoveVariant?>()
+    private val zMoveResolutionSources = mutableListOf<MoveResolutionSources?>()
     private val maxMoveVariants = mutableListOf<MoveVariant?>()
+    private val maxMoveResolutionSources = mutableListOf<MoveResolutionSources?>()
     private val team = mutableListOf("Incineroar", "Naganadel", "Mimikyu", "Landorus", "Rotom-Wash", "Ferrothorn")
     private val teamPreviewOrder = mutableListOf<Int>()
     private var teamPreviewRequiredSize = 0
@@ -438,30 +462,94 @@ class BattleSession {
         battleTimerEnabled = false
     }
 
+    private fun clearMoveOptions() {
+        moves.clear()
+        moveResolutionSources.clear()
+        zMoveVariants.clear()
+        zMoveResolutionSources.clear()
+        maxMoveVariants.clear()
+        maxMoveResolutionSources.clear()
+    }
+
     fun setMoveTypeResolver(resolver: (String) -> String?) {
         moveTypeResolver = resolver
-        val resolvedMoves = moves.map { move ->
-            if (move.type != "UNKNOWN") move else move.copy(type = resolver(move.name) ?: move.type)
+        val resolvedMoves = moves.mapIndexed { index, move ->
+            val sources = moveResolutionSources.getOrNull(index) ?: MoveResolutionSources()
+            if (sources.typeFromRequest) move else move.copy(type = resolver(move.name) ?: move.type)
         }
-        if (resolvedMoves == moves) return
+        val resolvedZMoves = zMoveVariants.mapIndexed { index, variant ->
+            variant?.let {
+                resolveVariantType(
+                    it,
+                    zMoveResolutionSources.getOrNull(index) ?: MoveResolutionSources(),
+                    resolvedMoves.getOrNull(index),
+                    MoveVariantKind.Z_POWER,
+                    resolver
+                )
+            }
+        }
+        val resolvedMaxMoves = maxMoveVariants.mapIndexed { index, variant ->
+            variant?.let {
+                resolveVariantType(
+                    it,
+                    maxMoveResolutionSources.getOrNull(index) ?: MoveResolutionSources(),
+                    resolvedMoves.getOrNull(index),
+                    MoveVariantKind.DYNAMAX,
+                    resolver
+                )
+            }
+        }
+        if (resolvedMoves == moves && resolvedZMoves == zMoveVariants && resolvedMaxMoves == maxMoveVariants) return
         moves.clear()
         moves += resolvedMoves
+        zMoveVariants.clear()
+        zMoveVariants += resolvedZMoves
+        maxMoveVariants.clear()
+        maxMoveVariants += resolvedMaxMoves
         playerDetails = playerDetails.copy(moves = moves.map { it.name })
         notifyListeners()
     }
 
     fun setMoveInfoResolver(resolver: (String) -> MoveInfo?) {
         moveInfoResolver = resolver
-        val resolvedMoves = moves.map { move ->
-            val info = resolver(move.name) ?: return@map move
+        val resolvedMoves = moves.mapIndexed { index, move ->
+            val info = resolver(move.name) ?: return@mapIndexed move
+            val sources = moveResolutionSources.getOrNull(index) ?: MoveResolutionSources()
             move.copy(
-                power = info.power,
-                accuracy = info.accuracy
+                power = if (sources.powerFromRequest) move.power else info.power,
+                accuracy = if (sources.accuracyFromRequest) move.accuracy else info.accuracy,
+                category = if (sources.categoryFromRequest) move.category else info.category
             )
         }
-        if (resolvedMoves == moves) return
+        val resolvedZMoves = zMoveVariants.mapIndexed { index, variant ->
+            variant?.let {
+                resolveVariantInfo(
+                    it,
+                    zMoveResolutionSources.getOrNull(index) ?: MoveResolutionSources(),
+                    resolvedMoves.getOrNull(index),
+                    MoveVariantKind.Z_POWER,
+                    resolver
+                )
+            }
+        }
+        val resolvedMaxMoves = maxMoveVariants.mapIndexed { index, variant ->
+            variant?.let {
+                resolveVariantInfo(
+                    it,
+                    maxMoveResolutionSources.getOrNull(index) ?: MoveResolutionSources(),
+                    resolvedMoves.getOrNull(index),
+                    MoveVariantKind.DYNAMAX,
+                    resolver
+                )
+            }
+        }
+        if (resolvedMoves == moves && resolvedZMoves == zMoveVariants && resolvedMaxMoves == maxMoveVariants) return
         moves.clear()
         moves += resolvedMoves
+        zMoveVariants.clear()
+        zMoveVariants += resolvedZMoves
+        maxMoveVariants.clear()
+        maxMoveVariants += resolvedMaxMoves
         playerDetails = playerDetails.copy(moves = moves.map { it.name })
         notifyListeners()
     }
@@ -657,9 +745,7 @@ class BattleSession {
             activeSlotIndex = 0
             requiredSwitches = 0
             requestId = null
-            moves.clear()
-            zMoveVariants.clear()
-            maxMoveVariants.clear()
+            clearMoveOptions()
             availableGimmicks.clear()
             availableTeraType = ""
             activeRequests.clear()
@@ -1272,9 +1358,7 @@ class BattleSession {
         playerEntryAtNanos = 0L
         opponentEntryAtNanos = 0L
         requestId = null
-        moves.clear()
-        zMoveVariants.clear()
-        maxMoveVariants.clear()
+        clearMoveOptions()
         playerDetails = teamDetails.firstOrNull() ?: playerDetails
         playerPokemon = playerDetails.name
         playerHp = playerDetails.hp
@@ -1972,9 +2056,7 @@ class BattleSession {
         teamPreviewRequiredSize = 0
         requestNoCancel = false
         requestTargetable = true
-        moves.clear()
-        zMoveVariants.clear()
-        maxMoveVariants.clear()
+        clearMoveOptions()
         availableGimmicks.clear()
         playerDetails = playerDetails.copy(moves = emptyList())
         activeRequests.clear()
@@ -2073,35 +2155,51 @@ class BattleSession {
 
     private fun applyActiveRequest(active: JSONObject): Boolean {
         val requestMoves = active.optJSONArray("moves") ?: return false
-        moves.clear()
-        zMoveVariants.clear()
-        maxMoveVariants.clear()
+        clearMoveOptions()
         for (index in 0 until requestMoves.length()) {
             val move = requestMoves.getJSONObject(index)
             val pp = move.optInt("pp", 0)
             val name = move.optString("move", "Move ${index + 1}")
             val moveInfo = moveInfoResolver?.invoke(name)
+            val power = movePower(move, moveInfo)
+            val accuracy = moveAccuracy(move, moveInfo?.accuracy)
+            val category = move.optString("category").takeIf { it.isNotBlank() } ?: moveInfo?.category ?: "Status"
+            val type = move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: moveTypeResolver?.invoke(name) ?: "UNKNOWN"
             moves += MoveOption(
                 name,
-                move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: moveTypeResolver?.invoke(name) ?: "UNKNOWN",
+                type,
                 pp,
                 move.optInt("maxpp", pp),
-                move.optString("category", "Status"),
-                movePower(move, moveInfo),
-                moveAccuracy(move, moveInfo?.accuracy),
+                category,
+                power.value,
+                accuracy.value,
                 move.optBoolean("disabled") || pp <= 0,
                 move.optString("target")
+            )
+            moveResolutionSources += MoveResolutionSources(
+                typeFromRequest = move.has("type") && move.optString("type").isNotBlank(),
+                powerFromRequest = power.fromRequest,
+                accuracyFromRequest = accuracy.fromRequest,
+                categoryFromRequest = move.has("category") && move.optString("category").isNotBlank()
             )
         }
         val baseMoves = moves.toList()
         val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
         if (zMoves != null) {
-            baseMoves.forEachIndexed { index, base -> zMoveVariants += parseMoveVariant(zMoves.opt(index), base) }
+            baseMoves.forEachIndexed { index, base ->
+                val parsed = parseMoveVariant(zMoves.opt(index), base, MoveVariantKind.Z_POWER)
+                zMoveVariants += parsed?.variant
+                zMoveResolutionSources += parsed?.sources
+            }
         }
         val maxMoves = active.optJSONArray("maxMoves")
             ?: active.optJSONObject("maxMoves")?.optJSONArray("maxMoves")
         if (maxMoves != null) {
-            baseMoves.forEachIndexed { index, base -> maxMoveVariants += parseMoveVariant(maxMoves.opt(index), base) }
+            baseMoves.forEachIndexed { index, base ->
+                val parsed = parseMoveVariant(maxMoves.opt(index), base, MoveVariantKind.DYNAMAX)
+                maxMoveVariants += parsed?.variant
+                maxMoveResolutionSources += parsed?.sources
+            }
         }
         focusedMove = 0
         selectedTargetIndex = -1
@@ -2120,16 +2218,19 @@ class BattleSession {
         return moves.isNotEmpty()
     }
 
-    private fun movePower(move: JSONObject, info: MoveInfo?): String {
-        return move.optInt("basePower", 0).takeIf { it > 0 }?.toString()
-            ?: numericMoveValue(info?.power)
-            ?: "—"
+    private fun movePower(move: JSONObject, info: MoveInfo?): ParsedMoveMetric {
+        val value = move.opt("basePower")
+        if (move.has("basePower") && value != null && value != JSONObject.NULL) {
+            return ParsedMoveMetric(numericMoveValue(value.toString()) ?: "—", true)
+        }
+        return ParsedMoveMetric(numericMoveValue(info?.power) ?: "—", false)
     }
 
-    private fun moveAccuracy(move: JSONObject, fallback: String?): String {
+    private fun moveAccuracy(move: JSONObject, fallback: String?): ParsedMoveMetric {
         val value = move.opt("accuracy")
-        val displayedValue = if (value == null || value == JSONObject.NULL) fallback else value.toString()
-        return numericMoveValue(displayedValue) ?: "—"
+        val explicit = move.has("accuracy") && value != null && value != JSONObject.NULL
+        val displayedValue = if (explicit) value.toString() else fallback
+        return ParsedMoveMetric(numericMoveValue(displayedValue) ?: "—", explicit)
     }
 
     private fun displayedMoves(): List<MoveOption> {
@@ -2157,19 +2258,112 @@ class BattleSession {
         }
     }
 
-    private fun parseMoveVariant(value: Any?, base: MoveOption): MoveVariant? {
+    private fun parseMoveVariant(value: Any?, base: MoveOption, kind: MoveVariantKind): ParsedMoveVariant? {
         val move = value as? JSONObject ?: return null
         val name = move.optString("move").ifBlank { move.optString("name") }.ifBlank { base.name }
         val info = moveInfoResolver?.invoke(name)
-        return MoveVariant(
-            name,
-            move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: base.type,
-            move.optString("category").takeIf { it.isNotBlank() } ?: base.category,
-            movePower(move, info),
-            moveAccuracy(move, info?.accuracy),
-            base.disabled || move.optBoolean("disabled"),
-            move.optString("target").ifBlank { base.target }
+        val power = movePower(move, null)
+        val accuracy = moveAccuracy(move, info?.accuracy)
+        val category = move.optString("category").takeIf { it.isNotBlank() } ?: base.category
+        val type = move.optString("type").uppercase().takeIf { it.isNotBlank() } ?: base.type
+        return ParsedMoveVariant(
+            MoveVariant(
+                name,
+                type,
+                category,
+                if (power.fromRequest) power.value else variantPower(base, kind, type, info),
+                accuracy.value,
+                base.disabled || move.optBoolean("disabled"),
+                move.optString("target").ifBlank { base.target }
+            ),
+            MoveResolutionSources(
+                typeFromRequest = move.has("type") && move.optString("type").isNotBlank(),
+                powerFromRequest = power.fromRequest,
+                accuracyFromRequest = accuracy.fromRequest,
+                categoryFromRequest = move.has("category") && move.optString("category").isNotBlank()
+            )
         )
+    }
+
+    private fun resolveVariantInfo(
+        variant: MoveVariant,
+        sources: MoveResolutionSources,
+        base: MoveOption?,
+        kind: MoveVariantKind,
+        resolver: (String) -> MoveInfo?
+    ): MoveVariant {
+        val info = resolver(variant.name)
+        return variant.copy(
+            power = if (sources.powerFromRequest) variant.power else base?.let { variantPower(it, kind, variant.type, info) } ?: variant.power,
+            accuracy = if (sources.accuracyFromRequest) variant.accuracy else info?.accuracy ?: variant.accuracy,
+            category = if (sources.categoryFromRequest) variant.category else base?.category ?: variant.category
+        )
+    }
+
+    private fun resolveVariantType(
+        variant: MoveVariant,
+        sources: MoveResolutionSources,
+        base: MoveOption?,
+        kind: MoveVariantKind,
+        resolver: (String) -> String?
+    ): MoveVariant {
+        val resolved = if (sources.typeFromRequest) {
+            variant
+        } else {
+            variant.copy(type = resolver(variant.name) ?: base?.type ?: variant.type)
+        }
+        val info = moveInfoResolver?.invoke(resolved.name)
+        return resolved.copy(
+            category = if (sources.categoryFromRequest) resolved.category else base?.category ?: resolved.category,
+            power = if (sources.powerFromRequest) resolved.power else base?.let { variantPower(it, kind, resolved.type, info) } ?: resolved.power
+        )
+    }
+
+    private fun variantPower(base: MoveOption, kind: MoveVariantKind, type: String, info: MoveInfo?): String {
+        if (info?.fixedGimmickPower == true) return info.power
+        return derivedVariantPower(base, kind, type)
+    }
+
+    private fun derivedVariantPower(base: MoveOption, kind: MoveVariantKind, type: String = base.type): String {
+        val power = base.power.toIntOrNull() ?: return "—"
+        return when (kind) {
+            MoveVariantKind.Z_POWER -> when {
+                power >= 140 -> "200"
+                power >= 130 -> "195"
+                power >= 120 -> "190"
+                power >= 110 -> "185"
+                power >= 100 -> "180"
+                power >= 90 -> "175"
+                power >= 80 -> "160"
+                power >= 70 -> "140"
+                power >= 60 -> "120"
+                else -> "100"
+            }
+            MoveVariantKind.DYNAMAX -> {
+                val fightingOrPoison = type == "FIGHTING" || type == "POISON"
+                if (fightingOrPoison) {
+                    when {
+                        power >= 150 -> "100"
+                        power >= 110 -> "95"
+                        power >= 75 -> "90"
+                        power >= 65 -> "85"
+                        power >= 55 -> "80"
+                        power >= 45 -> "75"
+                        else -> "70"
+                    }
+                } else {
+                    when {
+                        power >= 150 -> "150"
+                        power >= 110 -> "140"
+                        power >= 75 -> "130"
+                        power >= 65 -> "120"
+                        power >= 55 -> "110"
+                        power >= 45 -> "100"
+                        else -> "90"
+                    }
+                }
+            }
+        }
     }
 
     private fun numericMoveValue(value: String?): String? {

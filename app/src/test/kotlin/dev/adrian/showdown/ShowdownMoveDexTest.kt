@@ -1,6 +1,8 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShowdownMoveDexTest {
@@ -45,7 +47,18 @@ class ShowdownMoveDexTest {
         )
 
         assertEquals(BattleSession.MoveInfo("—", "—"), info["splash"])
-        assertEquals(BattleSession.MoveInfo("110", "70"), info["thunder"])
+        assertEquals(BattleSession.MoveInfo("110", "70", "Special"), info["thunder"])
+    }
+
+    @Test
+    fun identifiesFixedGimmickMovePower() {
+        val info = ShowdownMoveDex.parseMoveInfo(
+            """{"catastropika":{"isZ":"pikaniumz","category":"Physical","basePower":210,"accuracy":true},"maxflare":{"isMax":true,"category":"Physical","basePower":100,"accuracy":true},"gmaxdrumsolo":{"isMax":"Rillaboom","category":"Physical","basePower":160,"accuracy":true}}"""
+        )
+
+        assertTrue(info["catastropika"]?.fixedGimmickPower == true)
+        assertFalse(info["maxflare"]?.fixedGimmickPower == true)
+        assertTrue(info["gmaxdrumsolo"]?.fixedGimmickPower == true)
     }
 
     @Test

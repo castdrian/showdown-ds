@@ -11,6 +11,7 @@ object ShowdownChangelog {
             currentVersion,
             listOf(
                 "Move detail panels now focus on readable move names, power, and accuracy while selector cards retain PP.",
+                "Move previews now fill power, accuracy, category, and gimmick power from the official dex while keeping status and always-hit values as dashes.",
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
                 "Battle audio cues now wait for the previous clip to finish, keeping damage and effectiveness sounds synchronized.",
                 "Battle audio timing resets at each move boundary so faster playback cannot delay the next move's cue.",
