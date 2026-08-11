@@ -1251,6 +1251,17 @@ class BattleSessionTest {
     }
 
     @Test
+    fun longFormNamesStayShortInUserFacingBattleMessages() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|switch|p1a: Alcremie-Caramel-Swirl|Alcremie-Caramel-Swirl, L50|100/100")
+        session.selectMoveWithTouch(0)
+
+        assertEquals("Alcremie chose Fake Out.", session.latestBattleEvent)
+        assertEquals("Alcremie chose Fake Out.", session.battleLog().last())
+    }
+
+    @Test
     fun battlePacketEmitsAClassifiedCriticalHitAndCarriesTheRequestId() {
         val session = BattleSession()
         val feedback = mutableListOf<BattleSession.BattleFeedback>()

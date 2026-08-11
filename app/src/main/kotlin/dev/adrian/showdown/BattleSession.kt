@@ -998,7 +998,7 @@ class BattleSession {
                 val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else selectedChoice
                 val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
                 status = "Move sent: ${gimmickLabel?.plus(" ") ?: ""}${move.name}"
-                appendLog("$playerPokemon chose ${gimmickLabel?.plus(" ") ?: ""}${move.name}.")
+                appendLog("${displayPokemonName(playerPokemon)} chose ${gimmickLabel?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
                 choiceCanBeCancelled = !requestNoCancel && !choiceMayNotBeCancelled
@@ -1070,7 +1070,7 @@ class BattleSession {
     fun goBack() {
         if (panel == Panel.TEAM && decisionAvailable && decisionKind == DecisionKind.TEAM_PREVIEW && teamPreviewOrder.isNotEmpty()) {
             val removed = teamPreviewOrder.removeAt(teamPreviewOrder.lastIndex)
-            status = "Removed ${team[removed]} from the order."
+            status = "Removed ${teamDisplayName(removed)} from the order."
             notifyListeners()
             return
         }
@@ -2012,7 +2012,7 @@ class BattleSession {
                 )
             }
         }
-        appendLog("$species changed form.")
+        appendLog("${displayPokemonName(species)} changed form.")
     }
 
     private fun applyTerastallize(fields: List<String>) {
@@ -3123,7 +3123,7 @@ class BattleSession {
         val row = (focusedTeam / 3 + vertical).coerceIn(0, rowCount - 1)
         val column = (focusedTeam % 3 + horizontal).coerceIn(0, 2)
         focusedTeam = (row * 3 + column).coerceIn(0, team.lastIndex)
-        status = "Ready: ${team[focusedTeam]}"
+        status = "Ready: ${teamDisplayName(focusedTeam)}"
         notifyListeners()
     }
 
@@ -3250,7 +3250,7 @@ class BattleSession {
                 return
             }
             if (focusedTeam in teamPreviewOrder) {
-                status = "${team[focusedTeam]} is already in the order."
+                status = "${teamDisplayName(focusedTeam)} is already in the order."
                 return
             }
             teamPreviewOrder += focusedTeam
@@ -3274,12 +3274,12 @@ class BattleSession {
                     return
                 }
                 if (!canSwitchTo(focusedTeam)) {
-                    status = "${team[focusedTeam]} is already active."
+                    status = "${teamDisplayName(focusedTeam)} is already active."
                     return
                 }
                 val switchChoice = "switch ${focusedTeam + 1}"
                 if (switchChoice in forceSwitchChoices) {
-                    status = "${team[focusedTeam]} is already selected."
+                    status = "${teamDisplayName(focusedTeam)} is already selected."
                     return
                 }
                 if (requiredSwitches > 1) {
@@ -3297,7 +3297,7 @@ class BattleSession {
                 }
             }
             else -> {
-                status = "Selected ${team[focusedTeam]}."
+                status = "Selected ${teamDisplayName(focusedTeam)}."
                 return
             }
         }
@@ -3308,6 +3308,11 @@ class BattleSession {
         .filter(::canSwitchTo)
         .map { "switch ${it + 1}" }
         .filterNot(forceSwitchChoices::contains)
+
+    private fun teamDisplayName(index: Int): String {
+        val name = team.getOrNull(index).orEmpty()
+        return displayPokemonName(name, teamDetails.getOrNull(index)?.species ?: name)
+    }
 
     private fun submitAutomaticForcedSwitchPasses() {
         if (requiredSwitches <= 0) return
@@ -3325,7 +3330,7 @@ class BattleSession {
     private fun confirmMoveRequestSwitch() {
         val activeRequest = activeRequests.getOrNull(activeSlotIndex)
         if (activeRequest?.optBoolean("trapped") == true) {
-            status = "$playerPokemon is trapped and cannot switch."
+            status = "${displayPokemonName(playerPokemon)} is trapped and cannot switch."
             notifyListeners()
             return
         }
@@ -3335,7 +3340,7 @@ class BattleSession {
             return
         }
         if (!canSwitchTo(focusedTeam)) {
-            status = "${team[focusedTeam]} is already active."
+            status = "${teamDisplayName(focusedTeam)} is already active."
             notifyListeners()
             return
         }
@@ -3356,8 +3361,8 @@ class BattleSession {
         }
         val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else selectedChoice
         val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
-        status = "Switch sent: ${team[focusedTeam]}"
-        appendLog("$playerPokemon switched to ${team[focusedTeam]}.")
+        status = "Switch sent: ${teamDisplayName(focusedTeam)}"
+        appendLog("${displayPokemonName(playerPokemon)} switched to ${teamDisplayName(focusedTeam)}.")
         chatMessages += "[You] $choice"
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionAvailable = false
@@ -3382,7 +3387,7 @@ class BattleSession {
         val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else "shift"
         val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
         status = "Shift sent."
-        appendLog("$playerPokemon shifted position.")
+        appendLog("${displayPokemonName(playerPokemon)} shifted position.")
         chatMessages += "[You] $choice"
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionAvailable = false
@@ -3393,8 +3398,8 @@ class BattleSession {
     private fun completeTeamSelection(choice: String) {
         decisionAvailable = false
         choiceCanBeCancelled = !requestNoCancel
-        status = "Queued: ${team[focusedTeam]}"
-        appendLog(if (choice.startsWith("/choose team")) "Team order submitted." else "${team[focusedTeam]} was selected.")
+        status = "Queued: ${teamDisplayName(focusedTeam)}"
+        appendLog(if (choice.startsWith("/choose team")) "Team order submitted." else "${teamDisplayName(focusedTeam)} was selected.")
         chatMessages += "[You] $choice"
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionListeners.toList().forEach { it.onDecision(choice) }
