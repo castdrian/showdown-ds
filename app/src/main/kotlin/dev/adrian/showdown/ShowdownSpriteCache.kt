@@ -236,7 +236,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun download(path: String): ByteArray? {
-        val connection = (URL("https://play.pokemonshowdown.com/$path").openConnection() as HttpURLConnection).apply {
+        val url = if (path.startsWith("https://")) path else "https://play.pokemonshowdown.com/$path"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 12000
             instanceFollowRedirects = true

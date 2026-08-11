@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -94,6 +95,9 @@ class ShowdownDialog(context: Context) : Dialog(context) {
         super.onStart()
         val display = context.resources.displayMetrics
         window?.setLayout((display.widthPixels * 0.84f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+        shell?.requestFocus()
+        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.hideSoftInputFromWindow(shell?.windowToken, 0)
     }
 
     private fun setAction(which: Int, text: CharSequence, listener: ((ShowdownDialog, Int) -> Unit)?, kind: Int): ShowdownDialog {
@@ -105,6 +109,10 @@ class ShowdownDialog(context: Context) : Dialog(context) {
         buttonViews.clear()
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            isFocusable = true
+            isFocusableInTouchMode = true
+            descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             background = surface(Color.rgb(17, 35, 53), Color.rgb(47, 105, 119), 28f)
             setPadding(dp(12), dp(12), dp(12), dp(10))
         }

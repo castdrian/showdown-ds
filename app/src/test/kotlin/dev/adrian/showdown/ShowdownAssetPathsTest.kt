@@ -52,6 +52,7 @@ class ShowdownAssetPathsTest {
             listOf(
                 "sprites/xyani-back/ironvaliant.gif",
                 "sprites/gen5ani-back/ironvaliant.gif",
+                "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
                 "sprites/xy-back/ironvaliant.png",
                 "sprites/gen5-back/ironvaliant.png",
                 "sprites/ani-back/substitute.gif"
