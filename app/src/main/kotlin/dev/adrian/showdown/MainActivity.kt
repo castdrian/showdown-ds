@@ -1227,11 +1227,12 @@ class MainActivity : Activity() {
     private fun requestUserDetails(target: String) {
         pendingUserDetailsId = normalizeShowdownId(target)
         userDetailsDialog?.dismiss()
+        val density = resources.displayMetrics.density
         val loading = TextView(this).apply {
             text = "Loading ${target.trim()}…"
             setTextSize(18f)
             setTextColor(0xffd5e9ed.toInt())
-            setPadding(24, 22, 24, 22)
+            setPadding((24f * density).toInt(), (22f * density).toInt(), (24f * density).toInt(), (22f * density).toInt())
         }
         val dialog = ShowdownDialogBuilder(this)
             .setTitle("Player profile")
@@ -2459,6 +2460,7 @@ class MainActivity : Activity() {
 
     private fun showAccountSettings() {
         val credentials = credentialsStore.load()
+        val density = resources.displayMetrics.density
         val username = EditText(this).apply {
             hint = "Username"
             setSingleLine(true)
@@ -2472,7 +2474,7 @@ class MainActivity : Activity() {
         }
         val fields = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(56, 8, 56, 0)
+            setPadding((56f * density).toInt(), (8f * density).toInt(), (56f * density).toInt(), 0)
             addView(username)
             addView(password)
         }
@@ -2511,7 +2513,7 @@ class MainActivity : Activity() {
         }
         val accountTools = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(56, 12, 56, 0)
+            setPadding((56f * density).toInt(), (12f * density).toInt(), (56f * density).toInt(), 0)
             addView(register)
             addView(findUser)
             addView(resources)
@@ -2549,6 +2551,7 @@ class MainActivity : Activity() {
     }
 
     private fun showRegistrationDialog() {
+        val density = resources.displayMetrics.density
         val username = EditText(this).apply {
             hint = "Username"
             setSingleLine(true)
@@ -2575,7 +2578,7 @@ class MainActivity : Activity() {
         }
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(56, 8, 56, 0)
+            setPadding((56f * density).toInt(), (8f * density).toInt(), (56f * density).toInt(), 0)
             addView(details)
             addView(username)
             addView(password)
@@ -3923,7 +3926,8 @@ class MainActivity : Activity() {
         parent.addView(TextView(this).apply {
             text = "Pokémon ${index + 1}"
             textSize = 18f
-            setPadding(0, 20, 0, 4)
+            val density = resources.displayMetrics.density
+            setPadding(0, (20f * density).toInt(), 0, (4f * density).toInt())
         })
         val nickname = teamField("Nickname", set.nickname)
         val species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames())
