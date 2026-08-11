@@ -35,7 +35,9 @@ object ShowdownChangelog {
                 "Fresh installs now default to the current Gen 9 Random Battle format.",
                 "Team JSON import and export now preserve Showdown's advanced set fields.",
                 "Team imports now also accept the beta client's bracketed ability and inline nature format.",
-                "Remote team imports now keep every Pokémon from the selected Showdown export."
+                "Remote team imports now keep every Pokémon from the selected Showdown export.",
+                "Player-side sprite fallbacks now stay back-facing when an animated back asset is unavailable.",
+                "The secondary Thor display keeps controller focus available for touch and hardware input."
             )
         ),
         ShowdownChangelogEntry(
