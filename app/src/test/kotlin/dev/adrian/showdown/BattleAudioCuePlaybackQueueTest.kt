@@ -5,14 +5,23 @@ import org.junit.Test
 
 class BattleAudioCuePlaybackQueueTest {
     @Test
-    fun startsTheNextCueAfterThePreviousSoundFinishes() {
+    fun effectivenessFollowsTheImpactWithoutWaitingForTheFullSample() {
         val queue = BattleAudioCuePlaybackQueue()
 
         assertEquals(0L, queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L).delayMillis)
         assertEquals(
-            BattleAudioCue.GENERIC_DAMAGE.playbackDurationMillis + 24L,
+            180L,
             queue.enqueue(BattleAudioCue.SUPER_EFFECTIVE, 1_000L).delayMillis
         )
+    }
+
+    @Test
+    fun impactAudioIsNotBlockedByAnEarlierStatusCue() {
+        val queue = BattleAudioCuePlaybackQueue()
+
+        queue.enqueue(BattleAudioCue.STAT_BOOST, 1_000L)
+
+        assertEquals(0L, queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L).delayMillis)
     }
 
     @Test

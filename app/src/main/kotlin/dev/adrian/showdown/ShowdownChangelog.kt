@@ -16,7 +16,7 @@ object ShowdownChangelog {
                 "Move detail panels now use matching padded metric cards for large, readable power, accuracy, category, and target values while selector cards retain PP.",
                 "Move previews now fill power, accuracy, category, and gimmick power from the official dex while keeping status and always-hit values as dashes.",
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
-                "Battle audio cues now wait for the previous clip to finish, keeping damage and effectiveness sounds synchronized.",
+                "Impact audio now starts with the damage animation instead of waiting behind longer status clips, with effectiveness cues following the hit.",
                 "Battle audio timing resets at each move boundary so faster playback cannot delay the next move's cue.",
                 "Damage cues also follow health changes represented by set-HP packets without sounding for healing.",
                 "Dynamax and Terastal choices now use the official Showdown command suffixes.",
