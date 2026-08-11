@@ -86,8 +86,8 @@ class BattleSession {
         MEGA_EVOLUTION_X("megax", "Mega X"),
         MEGA_EVOLUTION_Y("megay", "Mega Y"),
         ULTRA_BURST("ultra", "Ultra Burst"),
-        DYNAMAX("dynamax", "Dynamax"),
-        TERASTALLIZATION("terastallize", "Terastallize")
+        DYNAMAX("max", "Dynamax"),
+        TERASTALLIZATION("terastalize", "Terastallize")
     }
 
     fun interface Listener {

@@ -624,6 +624,29 @@ class BattleSessionTest {
     }
 
     @Test
+    fun gimmickChoicesUseOfficialDynamaxAndTerastalizeSuffixes() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"canTerastallize\":\"Water\",\"moves\":[{\"move\":\"Surf\",\"pp\":15}]}]}"
+        )
+
+        session.selectGimmick(BattleSession.BattleGimmick.DYNAMAX)
+        session.confirmSelection()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canTerastallize\":\"Water\",\"moves\":[{\"move\":\"Surf\",\"pp\":14}]}]}"
+        )
+        session.selectGimmick(BattleSession.BattleGimmick.TERASTALLIZATION)
+        session.confirmSelection()
+
+        assertEquals(
+            listOf("/choose move 1 max", "/choose move 1 terastalize"),
+            decisions
+        )
+    }
+
+    @Test
     fun noCancelRequestsDoNotExposeCancellationAfterSubmittingAChoice() {
         val session = BattleSession()
         session.setLiveBattleActive(true)
