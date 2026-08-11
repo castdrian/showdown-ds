@@ -1471,7 +1471,9 @@ class BattleSession {
                 val identifier = fields[2].substringAfter(':').trim()
                 val index = playerPartyIdentifiers.indexOfFirst { it.equals(identifier, true) }
                     .takeIf { it >= 0 }
-                    ?: teamDetails.indexOfFirst { it.name.equals(pokemon, true) || it.species.equals(pokemon, true) }
+                    ?: teamDetails.indexOfFirst {
+                        it.name.equals(identifier, true) || it.name.equals(pokemon, true) || it.species.equals(pokemon, true)
+                    }
                 if (index >= 0) playerActivePartyIndices[slot] = index else playerActivePartyIndices.remove(slot)
                 val activeDetails = if (index >= 0) teamDetails[index] else playerDetails.copy(name = pokemon, species = pokemon, types = resolvedTypes(pokemon))
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
@@ -1647,6 +1649,8 @@ class BattleSession {
         if (playerSide) {
             team.clear()
             team += revealedParty.map { it.name }
+            playerPartyIdentifiers.clear()
+            playerPartyIdentifiers += revealedParty.map { it.name }
             teamDetails.clear()
             teamDetails += revealedParty
             focusedTeam = focusedTeam.coerceIn(0, team.lastIndex)
@@ -3387,7 +3391,9 @@ class BattleSession {
                 playerActivePartyIndices[slot] = index
                 activeIndex += 1
             }
-            val known = teamDetails.firstOrNull { it.name.equals(name, true) }
+            val known = teamDetails.firstOrNull {
+                it.name.equals(identifier, true) || it.name.equals(name, true) || it.species.equals(species, true)
+            }
             val levelGender = parseDetails(details)
             val condition = entry.optString("condition", "100/100")
             if (hasRevivingActive && !entry.optBoolean("active") && condition(condition).contains("FNT", true)) {
