@@ -76,4 +76,28 @@ class ShowdownProtocolContractTest {
         assertEquals("PAR", session.opponentCondition)
         assertEquals("Dragapult-Tera", session.opponentDetails().name)
     }
+
+    @Test
+    fun keepsMegaAndPrimalStonesVisibleAfterGimmickPackets() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN|",
+                "|player|p2|OPPONENT|",
+                "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Charizard\",\"details\":\"Charizard, L50, M\",\"condition\":\"100/100\"}]}}",
+                "|switch|p1a: Charizard|Charizard, L50, M|153/153",
+                "|switch|p2a: Kyogre|Kyogre, L50|175/175",
+                "|detailschange|p1a: Charizard|Charizard-Mega-X, L50, M",
+                "|-mega|p1a: Charizard|Charizardite X",
+                "|detailschange|p2a: Kyogre|Kyogre-Primal, L50",
+                "|-primal|p2a: Kyogre|Blue Orb",
+                "|-mega|p1a: Charizard|[silent]"
+            )
+        )
+
+        assertEquals("Charizardite X", session.playerDetails().item)
+        assertEquals("Blue Orb", session.opponentDetails().item)
+        assertEquals("Charizardite X", session.playerPartyDetails().first().item)
+        assertTrue(session.opponentPartyDetails().any { it.item == "Blue Orb" })
+    }
 }

@@ -34,6 +34,7 @@ object ShowdownChangelog {
                 "Doubles and triples target selection now follows Showdown's adjacent, ally, foe, and area-target rules.",
                 "Matched battles are recovered after reconnecting, even when the room ID stays the same.",
                 "Battle form-change packets now keep the visible HP and status cards in sync.",
+                "Mega and Primal battle packets now keep their revealed stone or orb visible in Pokémon details.",
                 "Fresh installs now default to the current Gen 9 Random Battle format.",
                 "Team JSON import and export now preserve Showdown's advanced set fields.",
                 "Team imports now also accept the beta client's bracketed ability and inline nature format.",

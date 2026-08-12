@@ -1240,8 +1240,8 @@ class BattleSession {
                     "-swapboost" -> swapBoosts(fields)
                     "detailschange", "-formechange", "-burst" -> applyFormChange(fields)
                     "-transform" -> applyTransform(fields)
-                    "-mega" -> appendLog("${battleActor(fields.getOrNull(2))} Mega Evolved.")
-                    "-primal" -> appendLog("${battleActor(fields.getOrNull(2))} reverted to its primal form.")
+                    "-mega" -> applyGimmickFormChange(fields, "Mega Evolved.")
+                    "-primal" -> applyGimmickFormChange(fields, "reverted to its primal form.")
                     "-center" -> appendLog("The remaining Pokémon moved to the center of the field.")
                     "-terastallize" -> applyTerastallize(fields)
                     "-start" -> applyStart(fields)
@@ -2621,6 +2621,15 @@ class BattleSession {
         if (fields.size < 3) return
         val item = replacement ?: fields.getOrNull(3) ?: return
         updateActorDetails(fields[2]) { it.copy(item = item) }
+    }
+
+    private fun applyGimmickFormChange(fields: List<String>, message: String) {
+        fields.getOrNull(3)
+            ?.takeIf(String::isNotBlank)
+            ?.takeUnless { it.trim().startsWith("[") }
+            ?.let { itemNameResolver?.invoke(it) ?: it }
+            ?.let { applyItem(fields, it) }
+        appendLog("${battleActor(fields.getOrNull(2))} $message")
     }
 
     private fun applyEndItem(fields: List<String>) {
