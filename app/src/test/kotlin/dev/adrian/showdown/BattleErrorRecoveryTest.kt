@@ -55,6 +55,19 @@ class BattleErrorRecoveryTest {
     }
 
     @Test
+    fun malformedRequestCannotLeaveOldControlsActionable() {
+        val session = BattleSession()
+        session.applyProtocolLine("|request|{\"rqid\":24,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}")
+
+        session.applyProtocolLine("|request|{not valid json")
+
+        assertEquals(false, session.decisionAvailable)
+        assertEquals(BattleSession.DecisionKind.WAIT, session.decisionKind)
+        assertEquals(BattleSession.Panel.MOVES, session.panel)
+        assertEquals("Waiting for a battle decision…", session.status)
+    }
+
+    @Test
     fun tieAndPrematureEndMarkTheBattleFinished() {
         val session = BattleSession()
 

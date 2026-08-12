@@ -138,6 +138,7 @@ class ShowdownConnection(
 
         override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
             if (!isCurrent(webSocket) || closedSocket === webSocket) return
+            closedSocket = webSocket
             transportReady = false
             listener.onConnectionStateChanged(State.FAILED, throwable.message.orEmpty())
         }

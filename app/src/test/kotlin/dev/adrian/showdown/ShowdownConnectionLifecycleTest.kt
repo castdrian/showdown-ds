@@ -117,6 +117,33 @@ class ShowdownConnectionLifecycleTest {
         }
     }
 
+    @Test
+    fun ignoresLateFramesAfterTransportFailure() {
+        val server = LoopbackWebSocketServer()
+        val listener = RecordingListener()
+        val httpClient = testHttpClient()
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            httpClient
+        )
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+            server.abort(socket)
+
+            assertTrue(listener.failed.await(2, TimeUnit.SECONDS))
+            runCatching { server.sendText(socket, ">lobby\n|late|message") }
+            Thread.sleep(100)
+
+            assertTrue(listener.protocolPackets.isEmpty())
+            assertFalse(connection.sendGlobal("/search gen7randombattle"))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
     private fun testHttpClient() = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(2, TimeUnit.SECONDS)
@@ -128,6 +155,7 @@ class ShowdownConnectionLifecycleTest {
         val protocolPackets = CopyOnWriteArrayList<Pair<String?, List<String>>>()
         val connected = java.util.concurrent.CountDownLatch(1)
         val disconnected = java.util.concurrent.CountDownLatch(1)
+        val failed = java.util.concurrent.CountDownLatch(1)
         val protocol = java.util.concurrent.CountDownLatch(1)
 
         override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
@@ -135,6 +163,7 @@ class ShowdownConnectionLifecycleTest {
             when (state) {
                 ShowdownConnection.State.CONNECTED -> connected.countDown()
                 ShowdownConnection.State.DISCONNECTED -> disconnected.countDown()
+                ShowdownConnection.State.FAILED -> failed.countDown()
                 else -> Unit
             }
         }
@@ -178,6 +207,10 @@ class ShowdownConnectionLifecycleTest {
             }
             output.write(bytes)
             output.flush()
+        }
+
+        fun abort(socket: Socket) {
+            socket.close()
         }
 
         fun readClientText(socket: Socket): String {

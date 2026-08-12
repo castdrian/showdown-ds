@@ -2133,12 +2133,12 @@ class BattleSession {
         activeSlotIndex = 0
         requiredSwitches = 0
         selectedTargetIndex = -1
+        requestId = null
+        decisionAvailable = false
+        decisionKind = DecisionKind.WAIT
+        panel = Panel.MOVES
+        status = "Waiting for a battle decision…"
         if (requestText.trim().equals("null", true)) {
-            requestId = null
-            decisionKind = DecisionKind.WAIT
-            decisionAvailable = false
-            panel = Panel.MOVES
-            status = "Waiting for a battle decision…"
             return
         }
         runCatching {
