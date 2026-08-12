@@ -171,13 +171,16 @@ class ShowdownMoveEffectsView(
                             if (BattleScene.prototype.__showdownNativeAudioHooked) return;
                             var originalRunMoveAnim = BattleScene.prototype.runMoveAnim;
                             BattleScene.prototype.runMoveAnim = function (moveid, participants) {
+                                return originalRunMoveAnim.apply(this, arguments);
+                            };
+                            var originalUseMove = Battle.prototype.useMove;
+                            Battle.prototype.useMove = function (pokemon, move) {
                                 nativeMoveStarted();
-                                var move = this.battle.dex.moves.get(moveid);
                                 this.__showdownNativeDamageArmed = !!move && move.category !== 'Status';
                                 this.__showdownNativeDamagePlayed = false;
                                 this.__showdownNativeDamagePending = false;
                                 this.__showdownNativeResultCues = [];
-                                return originalRunMoveAnim.apply(this, arguments);
+                                return originalUseMove.apply(this, arguments);
                             };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
                             BattleScene.prototype.resultAnim = function () {

@@ -60,7 +60,8 @@ object ShowdownChangelog {
                 "Multi-target set-HP packets now update every active Pokémon and keep each impact feedback event attached to the right target.",
                 "Active form updates and custom end-of-Terastal packets now restore Pokémon details and original types correctly.",
                 "Battle sprite requests now carry their battle side explicitly, keeping player-side Iron Valiant artwork rear-facing in every battle layout.",
-                "Compact doubles and triples HP cards now share the cleaned single-battle layout with readable species names, HP values, and bars."
+                "Compact doubles and triples HP cards now share the cleaned single-battle layout with readable species names, HP values, and bars.",
+                "Damage audio now resets at every official move event, including moves marked [still], so skipped animations cannot leak timing into the next move."
             )
         ),
         ShowdownChangelogEntry(
