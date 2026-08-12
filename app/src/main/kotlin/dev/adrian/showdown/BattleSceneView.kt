@@ -150,7 +150,7 @@ class BattleSceneView(
             inspectedPlayer = null
         }
         if (inspectedPlayer == null) {
-            if (singles || playerCombatants.size <= 1) {
+            if (singles) {
                 if (playerStatusAlpha > 0f) {
                     drawStatusCard(
                         canvas,
@@ -168,7 +168,7 @@ class BattleSceneView(
             } else {
                 drawActiveStatusCards(canvas, width, height, scale, true, fieldCombatants(playerCombatants, true))
             }
-            if (singles || opponentCombatants.size <= 1) {
+            if (singles) {
                 if (opponentStatusAlpha > 0f) {
                     drawStatusCard(
                         canvas,
