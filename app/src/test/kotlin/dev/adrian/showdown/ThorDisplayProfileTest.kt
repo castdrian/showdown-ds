@@ -73,6 +73,9 @@ class ThorDisplayProfileTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 
         assertTrue(source.contains("clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)"))
+        assertTrue(source.contains("context.createDisplayContext(display)"))
+        assertTrue(source.contains("FrameLayout(presentationContext)"))
+        assertTrue(source.contains("CommandDeckView(presentationContext"))
         assertTrue(source.contains("frame.isFocusableInTouchMode = true"))
         assertTrue(source.contains("frame.requestFocus()"))
         assertTrue(source.contains("configurePresentationWindow(presentation.window)"))

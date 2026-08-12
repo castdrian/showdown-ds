@@ -173,7 +173,7 @@ class ShowdownMoveEffectsView(
                             BattleScene.prototype.runMoveAnim = function (moveid, participants) {
                                 nativeMoveStarted();
                                 var move = this.battle.dex.moves.get(moveid);
-                                this.__showdownNativeDamageArmed = !move || move.category !== 'Status';
+                                this.__showdownNativeDamageArmed = !!move && move.category !== 'Status';
                                 this.__showdownNativeDamagePlayed = false;
                                 this.__showdownNativeDamagePending = false;
                                 this.__showdownNativeResultCues = [];

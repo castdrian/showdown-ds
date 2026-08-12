@@ -21,7 +21,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("release: function ()"))
         assertFalse(source.contains("requestAnimationFrame(keepChromeHidden)"))
         assertFalse(source.contains("var hideFrame = 0;"))
-        assertTrue(source.contains("this.__showdownNativeDamageArmed = !move || move.category !== 'Status';"))
+        assertTrue(source.contains("this.__showdownNativeDamageArmed = !!move && move.category !== 'Status';"))
         assertTrue(source.contains("this.__showdownNativeDamagePlayed = false;"))
         assertTrue(source.contains("this.__showdownNativeDamagePending && this.__showdownNativeDamageArmed && !this.__showdownNativeDamagePlayed"))
         assertTrue(source.contains("nativeCue('generic_damage');"))

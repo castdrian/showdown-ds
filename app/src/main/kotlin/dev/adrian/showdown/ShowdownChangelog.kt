@@ -45,8 +45,10 @@ object ShowdownChangelog {
                 "Team imports now also accept the beta client's bracketed ability and inline nature format.",
                 "Remote team imports now keep every Pokémon from the selected Showdown export.",
                 "Custom dialogs no longer open the keyboard automatically, keeping their actions visible until an input is tapped.",
-                "Iron Valiant now uses a true back-facing player sprite instead of the incorrect front-facing animated fallback.",
-                "The secondary Thor display keeps controller focus available for touch and hardware input."
+                "Iron Valiant now uses Showdown's native Gen 5 back sprite on the player side, with a verified back-sprite fallback.",
+                "The secondary Thor display keeps controller focus available for touch and hardware input.",
+                "Lower-screen controls now size themselves from the Thor lower panel's actual display density instead of inheriting the upper-screen metrics.",
+                "Unknown move records no longer arm the generic damage cue, preventing sound effects from being attached to unclassified animations."
             )
         ),
         ShowdownChangelogEntry(

@@ -4527,9 +4527,10 @@ class MainActivity : Activity() {
             super.onCreate(savedInstanceState)
             setCancelable(false)
             configurePresentationWindow(window)
-            val frame = FrameLayout(context)
+            val presentationContext = context.createDisplayContext(display)
+            val frame = FrameLayout(presentationContext)
             controllerFrame = frame
-            commandDeck = CommandDeckView(context, session, spriteCache, object : CommandDeckView.InteractionListener {
+            commandDeck = CommandDeckView(presentationContext, session, spriteCache, object : CommandDeckView.InteractionListener {
                 override fun onNavigation() {
                     battleAudio.playNavigation()
                 }
