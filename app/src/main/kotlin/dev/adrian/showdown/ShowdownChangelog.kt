@@ -47,6 +47,7 @@ object ShowdownChangelog {
                 "Custom dialogs no longer open the keyboard automatically, keeping their actions visible until an input is tapped.",
                 "Iron Valiant now uses verified rear-facing artwork on the player side and never falls back to its front sprite.",
                 "Active battle sprites now resolve from species identifiers while keeping nicknames readable in the battle UI.",
+                "Singles battles now use the same species-resolved active sprite path as multi-Pokémon battles.",
                 "The secondary Thor display keeps controller focus available for touch and hardware input.",
                 "Lower-screen controls now size themselves from the Thor lower panel's actual display density instead of inheriting the upper-screen metrics.",
                 "Unknown move records no longer arm the generic damage cue, preventing sound effects from being attached to unclassified animations.",

@@ -105,7 +105,19 @@ class BattleSceneView(
                 )
             }
         } else {
-            drawCombatant(canvas, opponentX, opponentY, scale * if (singles) 1.30f else 1.05f, false, session.opponentCondition, session.opponentEntryAtNanos, nowNanos)
+            val combatant = opponentCombatants.firstOrNull()
+            drawCombatant(
+                canvas,
+                opponentX,
+                opponentY,
+                scale * if (singles) 1.30f else 1.05f,
+                false,
+                combatant?.condition ?: session.opponentCondition,
+                combatant?.entryAtNanos ?: session.opponentEntryAtNanos,
+                nowNanos,
+                combatant?.let { opponentActiveSprites[it.slot] },
+                combatant?.name
+            )
         }
         if (!singles && playerCombatants.size > 1) {
             playerCombatants.forEachIndexed { index, combatant ->
@@ -123,7 +135,19 @@ class BattleSceneView(
                 )
             }
         } else {
-            drawCombatant(canvas, playerX, playerY, scale * if (singles) 1.50f else 1.16f, true, session.playerCondition, session.playerEntryAtNanos, nowNanos)
+            val combatant = playerCombatants.firstOrNull()
+            drawCombatant(
+                canvas,
+                playerX,
+                playerY,
+                scale * if (singles) 1.50f else 1.16f,
+                true,
+                combatant?.condition ?: session.playerCondition,
+                combatant?.entryAtNanos ?: session.playerEntryAtNanos,
+                nowNanos,
+                combatant?.let { playerActiveSprites[it.slot] },
+                combatant?.name
+            )
         }
         drawHeader(canvas, width, scale)
         if ((inspectedPlayer == true && !session.hasActivePlayerCombatant()) ||
@@ -235,22 +259,28 @@ class BattleSceneView(
                 }
             }
         }
-        val playerKey = "back:${session.spriteStyle}:${session.playerPokemon}"
+        val playerSpecies = session.playerActiveCombatants().firstOrNull()?.species
+            ?.ifBlank { session.playerPokemon }
+            ?: session.playerPokemon
+        val playerKey = "back:${session.spriteStyle}:$playerSpecies"
         if (playerKey != requestedPlayerSprite) {
             requestedPlayerSprite = playerKey
             playerSprite = null
-            spriteCache.requestPokemon(session.playerPokemon, true, session.spriteStyle) { asset ->
+            spriteCache.requestPokemon(playerSpecies, true, session.spriteStyle) { asset ->
                 if (playerKey == requestedPlayerSprite) {
                     playerSprite = asset
                     invalidate()
                 }
             }
         }
-        val opponentKey = "front:${session.spriteStyle}:${session.opponentPokemon}"
+        val opponentSpecies = session.opponentActiveCombatants().firstOrNull()?.species
+            ?.ifBlank { session.opponentPokemon }
+            ?: session.opponentPokemon
+        val opponentKey = "front:${session.spriteStyle}:$opponentSpecies"
         if (opponentKey != requestedOpponentSprite) {
             requestedOpponentSprite = opponentKey
             opponentSprite = null
-            spriteCache.requestPokemon(session.opponentPokemon, false, session.spriteStyle) { asset ->
+            spriteCache.requestPokemon(opponentSpecies, false, session.spriteStyle) { asset ->
                 if (opponentKey == requestedOpponentSprite) {
                     opponentSprite = asset
                     invalidate()
