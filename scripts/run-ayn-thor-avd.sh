@@ -13,6 +13,7 @@ audio_args=()
 vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
 gpu_mode="${AYN_THOR_GPU_MODE:-auto}"
 boot_animation_args=()
+multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
 case "$vsync_rate" in
     60|90|120) ;;
@@ -61,4 +62,5 @@ exec "$emulator" \
     -vsync-rate "$vsync_rate" \
     "${boot_animation_args[@]}" \
     "${audio_args[@]}" \
+    "${multidisplay_args[@]}" \
     "$@"
