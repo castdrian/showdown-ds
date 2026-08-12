@@ -46,7 +46,7 @@ class BattleAudio(
     private val audioCueHandler = Handler(audioCueThread.looper)
     private val battleSoundPool = createSoundPool(8)
     private var transientSoundPool: SoundPool? = null
-    private val battleSoundIds = mutableMapOf<BattleAudioCue, Int>()
+    private val battleSoundIds = Collections.synchronizedMap(mutableMapOf<BattleAudioCue, Int>())
     private val loadedBattleSoundIds = Collections.synchronizedSet(mutableSetOf<Int>())
     private val failedBattleCues = Collections.synchronizedSet(mutableSetOf<BattleAudioCue>())
     private val transientSoundIds = LinkedHashMap<String, Int>(16, 0.75f, true)
@@ -65,9 +65,11 @@ class BattleAudio(
     private var bgmPlayer: MediaPlayer? = null
     private var bgmPrepared = false
     private val soundEffectsEnabled = AtomicBoolean(true)
+    @Volatile
     private var musicEnabled = false
     private val released = AtomicBoolean(false)
     private val previewRunnables = mutableSetOf<Runnable>()
+    @Volatile
     private var selectedMusic = MUSIC[session.showdownMusicIndex()]
     private var battleCuesPaused = false
     private var battleCuesPausedAtMillis = 0L
@@ -76,7 +78,7 @@ class BattleAudio(
             val player = bgmPlayer ?: return
             if (musicEnabled && player.isPlaying) {
                 if (player.currentPosition >= selectedMusic.loopEnd - 750) player.seekTo(selectedMusic.loopStart)
-                mainHandler.postDelayed(this, 500)
+                audioCueHandler.postDelayed(this, 500)
             }
         }
     }
@@ -89,24 +91,23 @@ class BattleAudio(
                     flushPendingBattleCues()
                 }
             } else {
-                battleSoundIds.entries.firstOrNull { it.value == sampleId }?.key?.let { failedBattleCues += it }
+                audioCueHandler.post {
+                    synchronized(battleSoundIds) {
+                        battleSoundIds.entries.firstOrNull { it.value == sampleId }?.key?.let { failedBattleCues += it }
+                    }
+                }
             }
         }
         audioCueHandler.post(::initializeTransientSoundPool)
-        BattleAudioCue.values().forEach { cue ->
-            runCatching {
-                context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
-                    battleSoundIds[cue] = battleSoundPool.load(asset.fileDescriptor, asset.startOffset, asset.length, 1)
-                }
-            }.onFailure { failedBattleCues += cue }
-        }
+        audioCueHandler.post(::loadBattleSounds)
         resourceCache.requestAudio("audio/notification.wav") { notificationFile = it }
         requestMusic(selectedMusic)
     }
 
     fun updateOptions(session: BattleSession) {
+        if (released.get()) return
         val requestedMusic = MUSIC[session.showdownMusicIndex()]
-        if (requestedMusic != selectedMusic) selectMusic(requestedMusic)
+        if (requestedMusic != selectedMusic) audioCueHandler.post { selectMusic(requestedMusic) }
         val effectsEnabled = session.soundEffectsEnabled
         soundEffectsEnabled.set(effectsEnabled)
         if (!effectsEnabled) {
@@ -116,30 +117,33 @@ class BattleAudio(
             }
         }
         musicEnabled = session.musicEnabled
-        if (musicEnabled) {
-            startMusicIfReady()
-            if (bgmPrepared && bgmPlayer?.isPlaying == false) {
-                bgmPlayer?.start()
-                mainHandler.post(loopCheck)
+        audioCueHandler.post {
+            if (musicEnabled) {
+                startMusicIfReady()
+                if (bgmPrepared && bgmPlayer?.isPlaying == false) {
+                    bgmPlayer?.start()
+                    audioCueHandler.post(loopCheck)
+                }
+            } else {
+                bgmPlayer?.pause()
             }
-        } else {
-            bgmPlayer?.pause()
         }
     }
 
     fun pauseMusic() {
-        bgmPlayer?.pause()
+        audioCueHandler.post { bgmPlayer?.pause() }
     }
 
     fun release() {
         if (!released.compareAndSet(false, true)) return
-        mainHandler.removeCallbacks(loopCheck)
+        audioCueHandler.removeCallbacks(loopCheck)
         previewRunnables.toList().forEach(mainHandler::removeCallbacks)
         previewRunnables.clear()
-        bgmPlayer?.release()
-        bgmPlayer = null
         audioCueHandler.removeCallbacksAndMessages(null)
         audioCueHandler.post {
+            bgmPlayer?.release()
+            bgmPlayer = null
+            bgmPrepared = false
             pendingBattleCues.clear()
             scheduledBattleCues.clear()
             pausedBattleCues.clear()
@@ -177,7 +181,9 @@ class BattleAudio(
     }
 
     fun diagnosticSnapshot(): BattleAudioDiagnosticSnapshot {
-        val loaded = battleSoundIds.filterValues { it in loadedBattleSoundIds }.keys.toSet()
+        val loaded = synchronized(battleSoundIds) {
+            battleSoundIds.filterValues { it in loadedBattleSoundIds }.keys.toSet()
+        }
         val failed = synchronized(failedBattleCues) { failedBattleCues.toSet() }
         val events = synchronized(diagnosticEvents) { diagnosticEvents.toList() }
         return BattleAudioDiagnosticSnapshot(loaded, failed, events)
@@ -369,12 +375,13 @@ class BattleAudio(
                 if (!musicEnabled) return@setOnPreparedListener
                 seekTo(selectedMusic.loopStart)
                 start()
-                mainHandler.post(loopCheck)
+                audioCueHandler.post(loopCheck)
             }
             setOnCompletionListener {
                 if (musicEnabled) {
                     seekTo(selectedMusic.loopStart)
                     start()
+                    audioCueHandler.post(loopCheck)
                 }
             }
             prepareAsync()
@@ -382,7 +389,7 @@ class BattleAudio(
     }
 
     private fun selectMusic(music: Music) {
-        mainHandler.removeCallbacks(loopCheck)
+        audioCueHandler.removeCallbacks(loopCheck)
         bgmPlayer?.release()
         bgmPlayer = null
         bgmPrepared = false
@@ -393,7 +400,9 @@ class BattleAudio(
 
     private fun requestMusic(music: Music) {
         resourceCache.requestAudio(music.path) { file ->
-            if (music == selectedMusic) {
+            file ?: return@requestAudio
+            audioCueHandler.post {
+                if (released.get() || music != selectedMusic) return@post
                 bgmFile = file
                 startMusicIfReady()
             }
@@ -403,6 +412,17 @@ class BattleAudio(
     private fun playNotification(volume: Float) {
         if (soundEffectsEnabled.get()) notificationFile?.let { file ->
             audioCueHandler.post { playTransientSound(file.path, volume) }
+        }
+    }
+
+    private fun loadBattleSounds() {
+        if (released.get()) return
+        BattleAudioCue.values().forEach { cue ->
+            runCatching {
+                context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
+                    battleSoundIds[cue] = battleSoundPool.load(asset.fileDescriptor, asset.startOffset, asset.length, 1)
+                }
+            }.onFailure { failedBattleCues += cue }
         }
     }
 
