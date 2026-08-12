@@ -13,5 +13,7 @@ class BattleSceneViewContractTest {
         assertTrue(source.contains("spriteCache.requestPokemon(session.opponentPokemon, false, session.spriteStyle)"))
         assertTrue(source.contains("requestActiveSprites(session.playerActiveCombatants(), true"))
         assertTrue(source.contains("requestActiveSprites(session.opponentActiveCombatants(), false"))
+        assertTrue(source.contains("combatant.species.ifBlank { combatant.name }"))
+        assertTrue(source.contains("spriteCache.requestPokemon(species, back, session.spriteStyle)"))
     }
 }

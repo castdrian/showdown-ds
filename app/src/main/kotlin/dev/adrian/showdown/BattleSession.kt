@@ -190,7 +190,8 @@ class BattleSession {
         val gMaxed: Boolean = false,
         val volatileEffects: List<String> = emptyList(),
         val turnEffects: List<String> = emptyList(),
-        val moveEffects: List<String> = emptyList()
+        val moveEffects: List<String> = emptyList(),
+        val species: String = name
     )
 
     data class BattleInfo(
@@ -1521,7 +1522,17 @@ class BattleSession {
                     condition = currentCondition
                 )
                 if (index >= 0) teamDetails[index] = updatedDetails
-                playerActiveCombatants[slot] = ActiveCombatant(slot, pokemon, updatedDetails.types, parsedDetails.first, parsedDetails.second, hp, currentCondition, playerEntryAtNanos)
+                playerActiveCombatants[slot] = ActiveCombatant(
+                    slot,
+                    pokemon,
+                    updatedDetails.types,
+                    parsedDetails.first,
+                    parsedDetails.second,
+                    hp,
+                    currentCondition,
+                    playerEntryAtNanos,
+                    species = updatedDetails.species
+                )
                 if (primary) {
                     playerPokemon = pokemon
                     playerHp = hp
@@ -1564,7 +1575,17 @@ class BattleSession {
                 }
                 opponentPartyIdentifiers[identifier] = resolvedIndex
                 opponentActivePartyIndices[slot] = resolvedIndex
-                opponentActiveCombatants[slot] = ActiveCombatant(slot, activeName, updatedDetails.types, parsedDetails.first, parsedDetails.second, hp, currentCondition, opponentEntryAtNanos)
+                opponentActiveCombatants[slot] = ActiveCombatant(
+                    slot,
+                    activeName,
+                    updatedDetails.types,
+                    parsedDetails.first,
+                    parsedDetails.second,
+                    hp,
+                    currentCondition,
+                    opponentEntryAtNanos,
+                    species = updatedDetails.species
+                )
                 if (primary) {
                     opponentPokemon = activeName
                     opponentHp = hp
@@ -1732,6 +1753,7 @@ class BattleSession {
             baseTypesBySlot[slot] = baseTypes
             activeCombatants[slot] = combatant.copy(
                 name = details.name,
+                species = details.species,
                 types = displayedTypes,
                 level = details.level,
                 gender = details.gender
@@ -2039,6 +2061,7 @@ class BattleSession {
                 val status = formCondition ?: it.condition
                 playerActiveCombatants[slot] = it.copy(
                     name = species,
+                    species = species,
                     types = types,
                     level = parsed.first,
                     gender = parsed.second,
@@ -2088,6 +2111,7 @@ class BattleSession {
                 val status = formCondition ?: it.condition
                 opponentActiveCombatants[slot] = it.copy(
                     name = species,
+                    species = species,
                     types = types,
                     level = parsed.first,
                     gender = parsed.second,
@@ -3855,6 +3879,7 @@ class BattleSession {
                     playerActiveCombatants[slot] = ActiveCombatant(
                         slot = slot,
                         name = details.name,
+                        species = details.species,
                         types = previous?.types ?: details.types,
                         level = details.level,
                         gender = details.gender,

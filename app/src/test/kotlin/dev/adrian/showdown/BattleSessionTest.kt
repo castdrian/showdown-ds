@@ -1194,6 +1194,17 @@ class BattleSessionTest {
     }
 
     @Test
+    fun activeCombatantsKeepSpeciesSeparateFromNicknames() {
+        val session = BattleSession()
+        val packed = ShowdownTeamCodec.pack(listOf(ShowdownTeamSet(nickname = "Sparky", species = "Pikachu")))
+        session.applyProtocolLine("|showteam|p2|$packed")
+        session.applyProtocolLine("|switch|p2a: Sparky|Pikachu, L50|100/100")
+
+        assertEquals("Sparky", session.opponentActiveCombatants().single().name)
+        assertEquals("Pikachu", session.opponentActiveCombatants().single().species)
+    }
+
+    @Test
     fun duplicateSpeciesKeepNicknameSpecificPartyDetailsSeparated() {
         val session = BattleSession()
         session.applyProtocolLine(

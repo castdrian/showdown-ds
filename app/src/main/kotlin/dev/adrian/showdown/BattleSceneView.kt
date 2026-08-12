@@ -302,11 +302,12 @@ class BattleSceneView(
             assets.remove(it)
         }
         combatants.forEach { combatant ->
-            val key = "${if (back) "back" else "front"}:${session.spriteStyle}:${combatant.name}"
+            val species = combatant.species.ifBlank { combatant.name }
+            val key = "${if (back) "back" else "front"}:${session.spriteStyle}:$species"
             if (requests[combatant.slot] == key) return@forEach
             requests[combatant.slot] = key
             assets[combatant.slot] = null
-            spriteCache.requestPokemon(combatant.name, back, session.spriteStyle) { asset ->
+            spriteCache.requestPokemon(species, back, session.spriteStyle) { asset ->
                 if (requests[combatant.slot] == key) {
                     assets[combatant.slot] = asset
                     invalidate()
