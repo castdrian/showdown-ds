@@ -804,35 +804,35 @@ class BattleSceneView(
         val height = bounds.height()
         val content = BattleCardContent.from(combatant)
         paint.color = Color.argb(238, 16, 20, 26)
-        canvas.drawRoundRect(bounds, height * 0.16f, height * 0.16f, paint)
+        canvas.drawRoundRect(bounds, height * 0.15f, height * 0.15f, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2f * scale
         paint.color = Color.rgb(104, 111, 120)
-        canvas.drawRoundRect(RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale), height * 0.16f, height * 0.16f, paint)
+        canvas.drawRoundRect(RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale), height * 0.15f, height * 0.15f, paint)
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.LEFT
         val left = bounds.left + 20f * scale
         val right = bounds.right - 20f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(height * 0.25f, scale, 10.5f)
+        paint.textSize = readableTextSize(height * 0.27f, scale, 10.5f)
         paint.color = INK
         val titleSize = paint.textSize
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
         val levelWidth = paint.measureText(content.levelLabel)
-        paint.color = INK
-        canvas.drawText(content.levelLabel, right, bounds.top + height * 0.34f, paint)
+        paint.color = Color.rgb(232, 232, 232)
+        canvas.drawText(content.levelLabel, right, bounds.top + height * 0.29f, paint)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = titleSize
         val titleWidth = (right - left - levelWidth - 16f * scale).coerceAtLeast(0f)
-        canvas.drawText(ellipsizeToWidth(content.title, titleWidth, paint), left, bounds.top + height * 0.34f, paint)
+        canvas.drawText(ellipsizeToWidth(content.title, titleWidth, paint), left, bounds.top + height * 0.29f, paint)
         paint.textAlign = Paint.Align.RIGHT
-        paint.textSize = readableTextSize(height * 0.18f, scale, 9.5f)
-        paint.color = INK
-        canvas.drawText(content.hpLabel, right, bounds.top + height * 0.54f, paint)
+        paint.textSize = readableTextSize(height * 0.17f, scale, 9.5f)
+        paint.color = Color.rgb(238, 238, 238)
+        canvas.drawText(content.hpLabel, right, bounds.top + height * 0.51f, paint)
         paint.textAlign = Paint.Align.LEFT
-        val track = RectF(left, bounds.top + height * 0.60f, right, bounds.top + height * 0.76f)
-        drawHealthBar(canvas, track, content.fraction, scale, height * 0.08f)
+        val track = RectF(left, bounds.top + height * 0.55f, right, bounds.top + height * 0.70f)
+        drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
         canvas.restoreToCount(layer)
     }
 
