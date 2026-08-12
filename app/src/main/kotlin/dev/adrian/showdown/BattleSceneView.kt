@@ -156,12 +156,8 @@ class BattleSceneView(
                         canvas,
                         RectF(width * 0.015f, height * 0.80f, width * 0.315f, height * 0.98f),
                         session.playerName,
-                        BattleSession.displayPokemonName(session.playerDetails().name, session.playerDetails().species),
-                        session.playerLevel,
-                        session.playerGender,
+                        session.playerDetails(),
                         session.playerHp,
-                        session.playerCondition,
-                        session.playerHealthFraction(),
                         scale,
                         playerStatusAlpha,
                         playerTrainerSprite,
@@ -178,12 +174,8 @@ class BattleSceneView(
                         canvas,
                         RectF(width * 0.685f, height * 0.02f, width * 0.985f, height * 0.20f),
                         session.opponentName,
-                        BattleSession.displayPokemonName(session.opponentDetails().name, session.opponentDetails().species),
-                        session.opponentLevel,
-                        session.opponentGender,
+                        session.opponentDetails(),
                         session.opponentHp,
-                        session.opponentCondition,
-                        session.opponentHealthFraction(),
                         scale,
                         opponentStatusAlpha,
                         opponentTrainerSprite,
@@ -695,12 +687,8 @@ class BattleSceneView(
         canvas: Canvas,
         bounds: RectF,
         trainer: String,
-        pokemon: String,
-        level: String,
-        gender: String,
+        details: BattleSession.PokemonDetails,
         hp: String,
-        condition: String,
-        fraction: Float,
         scale: Float,
         alpha: Float,
         trainerSprite: ShowdownSpriteCache.SpriteAsset?,
@@ -709,6 +697,7 @@ class BattleSceneView(
     ) {
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
         val height = bounds.height()
+        val content = BattleCardContent.from(details, hp)
         paint.color = Color.argb(232, 16, 20, 26)
         canvas.drawRoundRect(bounds, height * 0.15f, height * 0.15f, paint)
         paint.style = Paint.Style.STROKE
@@ -728,18 +717,18 @@ class BattleSceneView(
         val textLeft = if (trainerAtStart) portraitBounds.right + 10f * scale else bounds.left + 20f * scale
         val textRight = if (trainerAtStart) bounds.right - 20f * scale else portraitBounds.left - 10f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        val levelLabel = "Lv.$level$gender"
+        val levelLabel = content.levelLabel
         paint.textSize = height * 0.19f
         val levelWidth = paint.measureText(levelLabel)
         val nameAvailableWidth = (textRight - textLeft - levelWidth - 12f * scale).coerceAtLeast(0f)
         var nameTextSize = height * 0.27f
         while (nameTextSize > height * 0.15f) {
             paint.textSize = nameTextSize
-            if (paint.measureText(pokemon) <= nameAvailableWidth) break
+            if (paint.measureText(content.title) <= nameAvailableWidth) break
             nameTextSize -= scale
         }
         paint.textSize = nameTextSize
-        val displayedPokemon = ellipsizeToWidth(pokemon, nameAvailableWidth, paint)
+        val displayedPokemon = ellipsizeToWidth(content.title, nameAvailableWidth, paint)
         paint.color = INK
         canvas.drawText(displayedPokemon, textLeft, bounds.top + height * 0.29f, paint)
         paint.textAlign = Paint.Align.RIGHT
@@ -750,7 +739,7 @@ class BattleSceneView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = height * 0.17f
         paint.color = MUTED
-        val hpLabel = hp.substringBefore(' ')
+        val hpLabel = content.hpLabel
         val hpWidth = paint.measureText(hpLabel)
         val trainerAvailableWidth = (textRight - textLeft - hpWidth - 12f * scale).coerceAtLeast(0f)
         canvas.drawText(
@@ -766,31 +755,7 @@ class BattleSceneView(
         val barTop = bounds.top + height * 0.55f
         val barBottom = barTop + height * 0.15f
         val track = RectF(textLeft, barTop, textRight, barBottom)
-        paint.shader = LinearGradient(track.left, track.top, track.left, track.bottom, Color.rgb(55, 63, 72), Color.rgb(12, 17, 22), Shader.TileMode.CLAMP)
-        canvas.drawRoundRect(track, height * 0.07f, height * 0.07f, paint)
-        paint.shader = null
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f * scale
-        paint.color = Color.argb(150, 229, 238, 245)
-        canvas.drawRoundRect(RectF(track.left + scale, track.top + scale, track.right - scale, track.bottom - scale), height * 0.06f, height * 0.06f, paint)
-        paint.style = Paint.Style.FILL
-        val inner = RectF(track.left + 3f * scale, track.top + 3f * scale, track.right - 3f * scale, track.bottom - 3f * scale)
-        val colors = healthColors(fraction)
-        val hpRight = inner.left + inner.width() * fraction
-        if (hpRight > inner.left) {
-            val fill = RectF(inner.left, inner.top, hpRight, inner.bottom)
-            paint.shader = LinearGradient(
-                fill.left,
-                fill.top,
-                fill.left,
-                fill.bottom,
-                intArrayOf(colors.highlight, colors.fill, colors.shadow),
-                floatArrayOf(0f, 0.54f, 1f),
-                Shader.TileMode.CLAMP
-            )
-            canvas.drawRoundRect(fill, height * 0.045f, height * 0.045f, paint)
-            paint.shader = null
-        }
+        drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
         val ballSize = height * 0.17f
         val ballGap = ballSize * 0.12f
         val ballStart = textRight - ballSize * 6f - ballGap * 5f
@@ -821,8 +786,6 @@ class BattleSceneView(
                     canvas,
                     RectF(cardLeft, firstTop + index * (cardHeight + cardGap), cardRight, firstTop + index * (cardHeight + cardGap) + cardHeight),
                     combatant,
-                    index,
-                    player,
                     scale,
                     alpha
                 )
@@ -834,64 +797,72 @@ class BattleSceneView(
         canvas: Canvas,
         bounds: RectF,
         combatant: BattleSession.ActiveCombatant,
-        index: Int,
-        player: Boolean,
         scale: Float,
         alpha: Float
     ) {
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
-        val accent = if (player) CYAN else MAGENTA
         val height = bounds.height()
+        val content = BattleCardContent.from(combatant)
         paint.color = Color.argb(238, 16, 20, 26)
         canvas.drawRoundRect(bounds, height * 0.16f, height * 0.16f, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2f * scale
-        paint.color = Color.argb(220, Color.red(accent), Color.green(accent), Color.blue(accent))
+        paint.color = Color.rgb(104, 111, 120)
         canvas.drawRoundRect(RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale), height * 0.16f, height * 0.16f, paint)
         paint.style = Paint.Style.FILL
-        val left = bounds.left + 14f * scale
-        val right = bounds.right - 14f * scale
-        val label = "${index + 1}  ${BattleSession.displayPokemonName(combatant.name, combatant.species)}${when {
-            combatant.gMaxed -> " · G-MAX"
-            combatant.dynamaxed -> " · MAX"
-            else -> ""
-        }}"
+        paint.textAlign = Paint.Align.LEFT
+        val left = bounds.left + 20f * scale
+        val right = bounds.right - 20f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(height * 0.25f, scale, 10.5f)
         paint.color = INK
-        canvas.drawText(ellipsizeToWidth(label, right - left - 92f * scale, paint), left, bounds.top + height * 0.34f, paint)
+        val titleSize = paint.textSize
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
-        paint.color = accent
-        canvas.drawText("Lv.${combatant.level}${combatant.gender}", right, bounds.top + height * 0.34f, paint)
+        val levelWidth = paint.measureText(content.levelLabel)
+        paint.color = INK
+        canvas.drawText(content.levelLabel, right, bounds.top + height * 0.34f, paint)
         paint.textAlign = Paint.Align.LEFT
-        val track = RectF(left, bounds.top + height * 0.56f, right - 66f * scale, bounds.top + height * 0.70f)
-        paint.color = Color.rgb(47, 55, 65)
-        canvas.drawRoundRect(track, height * 0.08f, height * 0.08f, paint)
-        val fraction = healthFraction(combatant.hp)
-        val colors = healthColors(fraction)
-        val fill = RectF(track.left, track.top, track.left + track.width() * fraction, track.bottom)
-        if (fill.right > fill.left) {
-            paint.shader = LinearGradient(fill.left, fill.top, fill.left, fill.bottom, colors.highlight, colors.shadow, Shader.TileMode.CLAMP)
-            canvas.drawRoundRect(fill, height * 0.08f, height * 0.08f, paint)
-            paint.shader = null
-        }
-        paint.textSize = readableTextSize(height * 0.18f, scale, 9.5f)
-        paint.color = if (combatant.condition == "READY") MUTED else Color.rgb(255, 192, 103)
-        canvas.drawText(combatant.condition, left, bounds.top + height * 0.89f, paint)
+        paint.textSize = titleSize
+        val titleWidth = (right - left - levelWidth - 16f * scale).coerceAtLeast(0f)
+        canvas.drawText(ellipsizeToWidth(content.title, titleWidth, paint), left, bounds.top + height * 0.34f, paint)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.18f, scale, 9.5f)
         paint.color = INK
-        canvas.drawText(combatant.hp.substringBefore(' '), right, bounds.top + height * 0.89f, paint)
+        canvas.drawText(content.hpLabel, right, bounds.top + height * 0.54f, paint)
         paint.textAlign = Paint.Align.LEFT
+        val track = RectF(left, bounds.top + height * 0.60f, right, bounds.top + height * 0.76f)
+        drawHealthBar(canvas, track, content.fraction, scale, height * 0.08f)
         canvas.restoreToCount(layer)
     }
 
-    private fun healthFraction(condition: String): Float {
-        val values = condition.substringBefore(' ').split('/', limit = 2)
-        val current = values.getOrNull(0)?.toFloatOrNull() ?: return if (condition.contains("FNT", true)) 0f else 1f
-        val maximum = values.getOrNull(1)?.toFloatOrNull() ?: return 1f
-        return if (maximum > 0f) (current / maximum).coerceIn(0f, 1f) else 0f
+    private fun drawHealthBar(canvas: Canvas, track: RectF, fraction: Float, scale: Float, radius: Float) {
+        paint.style = Paint.Style.FILL
+        paint.shader = LinearGradient(track.left, track.top, track.left, track.bottom, Color.rgb(55, 63, 72), Color.rgb(12, 17, 22), Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(track, radius, radius, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb(150, 229, 238, 245)
+        canvas.drawRoundRect(RectF(track.left + scale, track.top + scale, track.right - scale, track.bottom - scale), radius * 0.86f, radius * 0.86f, paint)
+        paint.style = Paint.Style.FILL
+        val inner = RectF(track.left + 3f * scale, track.top + 3f * scale, track.right - 3f * scale, track.bottom - 3f * scale)
+        val colors = healthColors(fraction)
+        val hpRight = inner.left + inner.width() * fraction
+        if (hpRight > inner.left) {
+            val fill = RectF(inner.left, inner.top, hpRight, inner.bottom)
+            paint.shader = LinearGradient(
+                fill.left,
+                fill.top,
+                fill.left,
+                fill.bottom,
+                intArrayOf(colors.highlight, colors.fill, colors.shadow),
+                floatArrayOf(0f, 0.54f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawRoundRect(fill, radius * 0.65f, radius * 0.65f, paint)
+            paint.shader = null
+        }
     }
 
     private fun readableTextSize(designPixels: Float, scale: Float, minimumSp: Float = 12f): Float = maxOf(
