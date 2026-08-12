@@ -19,20 +19,24 @@ object ShowdownAssetPaths {
             add(if (style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani")
             if (style == BattleSession.SpriteStyle.MODERN_3D) add("gen5ani")
         }
-        if (back) {
-            trueBackSpritePaths(species).forEach { candidates += it }
-        }
-        collections.forEach { collection ->
-            speciesNames.forEach { name -> candidates += battleSprite(name, back, collection) }
-        }
-        if (back) {
-            val staticCollections = if (style == BattleSession.SpriteStyle.MODERN_3D) {
-                listOf("xy", "gen5")
-            } else {
-                listOf("gen5")
+        val verifiedBackPaths = if (back) trueBackSpritePaths(species) else emptyList()
+        verifiedBackPaths.forEach { candidates += it }
+        val hasVerifiedBackSprite = verifiedBackPaths.isNotEmpty()
+        if (!hasVerifiedBackSprite) {
+            collections.forEach { collection ->
+                speciesNames.forEach { name -> candidates += battleSprite(name, back, collection) }
             }
-            staticCollections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += staticBattleSprite(name, true, collection) }
+        }
+        if (back) {
+            if (!hasVerifiedBackSprite) {
+                val staticCollections = if (style == BattleSession.SpriteStyle.MODERN_3D) {
+                    listOf("xy", "gen5")
+                } else {
+                    listOf("gen5")
+                }
+                staticCollections.forEach { collection ->
+                    speciesNames.forEach { name -> candidates += staticBattleSprite(name, true, collection) }
+                }
             }
             candidates += placeholder(true)
         } else {
@@ -44,8 +48,7 @@ object ShowdownAssetPaths {
 
     private fun trueBackSpritePaths(species: String): List<String> = when (animationId(species)) {
         "ironvaliant" -> listOf(
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
-            "sprites/gen5-back/ironvaliant.png"
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
         )
         else -> emptyList()
     }
