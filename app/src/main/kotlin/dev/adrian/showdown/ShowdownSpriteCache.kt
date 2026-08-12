@@ -108,8 +108,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val downloadExecutor = Executors.newFixedThreadPool(2)
     private val memoryCache = LruCache<String, SpriteAsset>(16)
-    private val pendingPaths = ConcurrentHashMap.newKeySet<String>()
     private val pendingSpriteReceivers = ConcurrentHashMap<String, MutableList<(SpriteAsset?) -> Unit>>()
+    private val pendingFileReceivers = ConcurrentHashMap<String, MutableList<(File?) -> Unit>>()
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
 
     fun requestPokemon(species: String, back: Boolean, style: BattleSession.SpriteStyle, receiver: (SpriteAsset?) -> Unit) {
@@ -170,6 +170,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         downloadExecutor.shutdownNow()
         memoryCache.evictAll()
         pendingSpriteReceivers.clear()
+        pendingFileReceivers.clear()
     }
 
     private fun requestSprite(path: String, receiver: (SpriteAsset?) -> Unit) {
@@ -177,10 +178,16 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             mainHandler.post { receiver(it) }
             return
         }
-        val callbacks = pendingSpriteReceivers.compute(path) { _, existing ->
-            (existing ?: mutableListOf()).apply { add(receiver) }
+        var shouldStart = false
+        pendingSpriteReceivers.compute(path) { _, existing ->
+            if (existing == null) {
+                shouldStart = true
+                mutableListOf(receiver)
+            } else {
+                existing.apply { add(receiver) }
+            }
         } ?: return
-        if (callbacks.size > 1) return
+        if (!shouldStart) return
         downloadExecutor.execute {
             val asset = loadBytes(path)?.let { decodeSprite(it, path) }
             if (asset != null) memoryCache.put(path, asset)
@@ -203,11 +210,25 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestBytes(path: String, receiver: (File?) -> Unit) {
-        if (!pendingPaths.add(path)) return
-        downloadExecutor.execute {
-            val file = loadBytes(path)
-            pendingPaths.remove(path)
-            mainHandler.post { receiver(file) }
+        var shouldStart = false
+        pendingFileReceivers.compute(path) { _, existing ->
+            if (existing == null) {
+                shouldStart = true
+                mutableListOf(receiver)
+            } else {
+                existing.apply { add(receiver) }
+            }
+        } ?: return
+        if (!shouldStart) return
+        runCatching {
+            downloadExecutor.execute {
+                val file = loadBytes(path)
+                val receivers = pendingFileReceivers.remove(path).orEmpty()
+                mainHandler.post { receivers.forEach { it(file) } }
+            }
+        }.onFailure {
+            val receivers = pendingFileReceivers.remove(path).orEmpty()
+            mainHandler.post { receivers.forEach { it(null) } }
         }
     }
 

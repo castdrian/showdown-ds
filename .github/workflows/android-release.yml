@@ -221,7 +221,6 @@ jobs:
             --verify-tag
             --title "$RELEASE_TAG"
             --notes-file "$RELEASE_NOTES_PATH"
-            --generate-notes
             --fail-on-no-commits
           )
           if [[ "$RELEASE_PRERELEASE" == "true" ]]; then

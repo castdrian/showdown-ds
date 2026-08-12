@@ -17,6 +17,7 @@ class BattleSceneViewContractTest {
         assertTrue(source.contains("spriteCache.requestPokemon(species, back, session.spriteStyle)"))
         assertTrue(source.contains("combatant?.let { playerActiveSprites[it.slot] }"))
         assertTrue(source.contains("combatant?.let { opponentActiveSprites[it.slot] }"))
+        assertTrue(source.contains("if (pokemonOverride != null)"))
         assertTrue(source.contains("val playerSpecies = session.playerActiveCombatants().firstOrNull()?.species"))
         assertTrue(source.contains("val opponentSpecies = session.opponentActiveCombatants().firstOrNull()?.species"))
     }

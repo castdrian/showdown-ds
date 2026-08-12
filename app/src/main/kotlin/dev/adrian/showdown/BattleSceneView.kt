@@ -457,7 +457,13 @@ class BattleSceneView(
         val pokemon = pokemonOverride ?: if (player) session.playerPokemon else session.opponentPokemon
         val faintProgress = faintProgress(pokemon, condition, nowNanos)
         if (faintProgress >= 1f) return
-        val sprite = spriteOverride ?: if (player) playerSprite ?: playerPlaceholder else opponentSprite ?: opponentPlaceholder
+        val sprite = if (pokemonOverride != null) {
+            spriteOverride ?: if (player) playerPlaceholder else opponentPlaceholder
+        } else if (player) {
+            playerSprite ?: playerPlaceholder
+        } else {
+            opponentSprite ?: opponentPlaceholder
+        }
         sprite ?: return
         drawSummonBall(canvas, centerX, centerY, scale, summonAtNanos, nowNanos)
         val summonAlpha = BattleSceneTiming.summonSpriteAlpha(summonAtNanos, nowNanos)

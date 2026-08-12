@@ -6,6 +6,6 @@
 
 `ShowdownSpriteCache` loads animated front and back Pokémon GIFs from `https://play.pokemonshowdown.com/sprites/xyani/` and `https://play.pokemonshowdown.com/sprites/xyani-back/` by default, plus static Gen 5 back sprites where Showdown does not publish an animated back asset, trainer PNGs from `https://play.pokemonshowdown.com/sprites/trainers/`, the `sprites/gen6bgs/bg-aquacordetown.jpg` battle backdrop, `audio/sm-trainer.mp3`, `audio/notification.wav`, and species cries from `audio/cries/`. The classic setting uses the Gen 5 animation collections. These files are fetched at runtime and are not bundled in the APK. The app keeps an internal 96 MB least-recently-used disk cache and a 16-entry memory cache.
 
-Iron Valiant prefers Showdown's `sprites/gen5-back/ironvaliant.png` player-side asset and uses the [PokeAPI sprites repository](https://github.com/PokeAPI/sprites) only as a verified fallback.
+Iron Valiant uses the verified rear-facing [PokeAPI back sprite](https://github.com/PokeAPI/sprites/blob/master/sprites/pokemon/back/1006.png) on the player side because Showdown does not publish an animated back asset for this species.
 
 The local HD texture collection was inspected but is not bundled. It contains hash-named texture dumps without a title-to-file mapping, so its contents cannot be attributed or selected reproducibly yet.
