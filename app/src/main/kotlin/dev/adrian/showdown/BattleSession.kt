@@ -1191,13 +1191,15 @@ class BattleSession {
                         if (!isSilent(fields)) appendLog("${battleActor(fields.getOrNull(2))} recovered health.")
                     }
                     "-sethp" -> {
-                        val target = protocolTarget(fields)
-                        val previousHealth = fields.getOrNull(2)?.let(::healthForActor)?.let(::healthFractionOrNull)
-                        val nextHealth = fields.getOrNull(3)?.let(::healthFractionOrNull)
-                        if (target != null && pendingHit != null && pendingHit?.target != target) publishPendingHit()
-                        applyHealth(fields)
-                        if (target != null && previousHealth != null && nextHealth != null && nextHealth < previousHealth && !hasProtocolSource(fields)) {
-                            if (pendingHit == null) pendingHit = PendingHit(target, target)
+                        healthUpdateTargetIndices(fields).forEach { targetIndex ->
+                            val target = protocolTarget(fields, targetIndex)
+                            val previousHealth = fields.getOrNull(targetIndex)?.let(::healthForActor)?.let(::healthFractionOrNull)
+                            val nextHealth = fields.getOrNull(targetIndex + 1)?.let(::healthFractionOrNull)
+                            if (target != null && pendingHit != null && pendingHit?.target != target) publishPendingHit()
+                            applyHealth(fields, targetIndex)
+                            if (target != null && previousHealth != null && nextHealth != null && nextHealth < previousHealth && !hasProtocolSource(fields)) {
+                                if (pendingHit == null) pendingHit = PendingHit(target, target)
+                            }
                         }
                     }
                     "-status" -> applyStatus(fields)
@@ -1766,15 +1768,15 @@ class BattleSession {
         publishFeedback(BattleFeedback(FeedbackType.MOVE, actor = actor, target = fields.getOrNull(4)?.substringAfter(':')?.trim().orEmpty(), move = fields[3]))
     }
 
-    private fun applyHealth(fields: List<String>) {
-        if (fields.size < 4) return
-        val actor = fields[2]
+    private fun applyHealth(fields: List<String>, targetIndex: Int = 2) {
+        if (fields.size <= targetIndex + 1) return
+        val actor = fields[targetIndex]
         val slot = actor.substringBefore(":").trim()
         val pokemon = actor.substringAfter(':').trim()
-        val hp = fields[3]
+        val hp = fields[targetIndex + 1]
         val currentCondition = condition(hp)
         when {
-            isPlayerSide(fields[2]) -> {
+            isPlayerSide(actor) -> {
                 playerActiveCombatants[slot]?.let {
                     playerActiveCombatants[slot] = it.copy(hp = hp, condition = currentCondition)
                 }
@@ -2960,10 +2962,30 @@ class BattleSession {
 
     private fun hasProtocolSource(fields: List<String>) = fields.drop(4).any { it.trim().startsWith("[from]", true) }
 
-    private fun protocolTarget(fields: List<String>) = fields.getOrNull(2)
+    private fun protocolTarget(fields: List<String>, targetIndex: Int = 2) = fields.getOrNull(targetIndex)
         ?.substringAfter(':')
         ?.trim()
         ?.takeIf { it.isNotBlank() }
+
+    private fun healthUpdateTargetIndices(fields: List<String>): List<Int> {
+        val indices = mutableListOf<Int>()
+        var targetIndex = 2
+        while (targetIndex + 1 < fields.size && isProtocolActor(fields[targetIndex]) && isHealthToken(fields[targetIndex + 1])) {
+            indices += targetIndex
+            targetIndex += 2
+        }
+        return indices
+    }
+
+    private fun isProtocolActor(value: String): Boolean {
+        val actor = value.trim()
+        return actor.contains(':') && actor.substringBefore(':').trim().matches(Regex("p\\d+[a-z]?"))
+    }
+
+    private fun isHealthToken(value: String): Boolean {
+        val token = value.trim().substringBefore(' ')
+        return token.contains('/') || token.endsWith('%') || token.equals("fnt", true) || token.toFloatOrNull() != null
+    }
 
     private fun healthForActor(actor: String): String? {
         val slot = actor.substringBefore(':').trim()

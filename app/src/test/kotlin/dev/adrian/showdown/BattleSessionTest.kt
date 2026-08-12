@@ -1383,6 +1383,25 @@ class BattleSessionTest {
     }
 
     @Test
+    fun multiTargetSetHpUpdatesEveryTargetAndEmitsOneHitPerTarget() {
+        val session = BattleSession()
+        val feedback = mutableListOf<BattleSession.BattleFeedback>()
+        session.addFeedbackListener { feedback += it }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p2b: Garchomp|Garchomp, L50|100/100",
+                "|-sethp|p2a: Tapu Koko|40/100|p2b: Garchomp|60/100"
+            )
+        )
+
+        assertEquals("40/100", session.opponentHp)
+        assertEquals("60/100", session.opponentActiveCombatants().first { it.slot == "p2b" }.hp)
+        assertEquals(2, feedback.count { it.type == BattleSession.FeedbackType.HIT })
+    }
+
+    @Test
     fun faintedCombatantIsRemovedFromTheBattlePresentation() {
         val session = BattleSession()
 
