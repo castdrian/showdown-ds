@@ -55,4 +55,16 @@ class MainActivityLifecycleContractTest {
         assertTrue(listener.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
         assertTrue(listener.contains("if (!effectsAlreadyCreated && lines.any { it.startsWith(\"|init|battle\") }) return@runOnUiThread"))
     }
+
+    @Test
+    fun keepsLiveChoicesUntilShowdownAcknowledgesThem() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("pendingDecisionCommand = command"))
+        assertTrue(source.contains("pendingDecisionSentConnection = connection"))
+        assertTrue(source.contains("pendingDecisionCommand = savedInstanceState?.getString(\"pending_decision_command\")"))
+        assertTrue(source.contains("preferences.getString(\"pending_decision_command\", null)"))
+        assertTrue(source.contains("reconcilePendingDecisionCommand(lines)"))
+        assertFalse(source.contains("if (packet.connection.send(roomId, command)) pendingDecisionCommand = null"))
+    }
 }

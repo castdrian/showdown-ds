@@ -108,6 +108,7 @@ class MainActivity : Activity() {
     private var pendingBattleSearchTeamPacked: String? = null
     private var battleProtocolReady = false
     private var pendingDecisionCommand: String? = null
+    private var pendingDecisionSentConnection: ShowdownConnection? = null
     private var displayedOutgoingChallenge: ShowdownLobbyState.OutgoingChallenge? = null
     private var displayedIncomingChallenge: String? = null
     private var roomListDialog: ShowdownDialog? = null
@@ -212,15 +213,19 @@ class MainActivity : Activity() {
         }
         clearBattlePlayback()
         val roomId = activeBattleRoomId
-        if (roomId != null) {
-            if (showdownConnection?.send(roomId, command) == true) {
-                pendingDecisionCommand = null
-            } else {
-                pendingDecisionCommand = command
-                session.handleDecisionSendFailure()
-            }
+        pendingDecisionCommand = command
+        pendingDecisionSentConnection = null
+        persistLobbyState()
+        val connection = showdownConnection
+        if (roomId != null && connection?.send(roomId, command) == true) {
+            pendingDecisionSentConnection = connection
+            persistLobbyState()
         } else {
-            pendingDecisionCommand = null
+            if (roomId == null) {
+                pendingDecisionCommand = null
+                pendingDecisionSentConnection = null
+                persistLobbyState()
+            }
             session.handleDecisionSendFailure()
         }
     }
@@ -798,16 +803,25 @@ class MainActivity : Activity() {
             pendingBattleSearchTeamPacked = null
             battleProtocolReady = false
             pendingDecisionCommand = null
+            pendingDecisionSentConnection = null
             clearPersistedLobbyState()
             session.setLiveBattleActive(false)
             return
         }
         persistLobbyState()
-        if (activeBattleRoomId == roomId && battleProtocolReady && session.decisionAvailable) {
+        if (activeBattleRoomId == roomId && battleProtocolReady && session.decisionAvailable && pendingDecisionSentConnection !== packet.connection) {
             pendingDecisionCommand?.let { command ->
-                if (packet.connection.send(roomId, command)) pendingDecisionCommand = null
+                if (packet.connection.send(roomId, command)) pendingDecisionSentConnection = packet.connection
             }
         }
+    }
+
+    private fun reconcilePendingDecisionCommand(lines: List<String>) {
+        val command = pendingDecisionCommand ?: return
+        if (!ShowdownDecisionDelivery.shouldClearPendingCommand(command, lines)) return
+        pendingDecisionCommand = null
+        pendingDecisionSentConnection = null
+        persistLobbyState()
     }
 
     private fun findBattle() {
@@ -1906,6 +1920,8 @@ class MainActivity : Activity() {
         if (activeBattleRoomId != null) session.restoreBattlePlayerSlot(battlePlayerSlot)
         completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
         pendingDecisionCommand = savedInstanceState?.getString("pending_decision_command")
+            ?: preferences.getString("pending_decision_command", null)
+        pendingDecisionSentConnection = null
         battleProtocolReady = false
         session.setLiveBattleActive(false)
         connectLobbySocket()
@@ -1926,6 +1942,7 @@ class MainActivity : Activity() {
             .putBoolean("pending_battle_search_random", pendingBattleSearchUsesRandomTeams == true)
             .putString("pending_battle_search_team", pendingBattleSearchTeamPacked)
             .putString("battle_player_slot", activeBattleRoomId?.let { session.battlePlayerSlot() })
+            .putString("pending_decision_command", pendingDecisionCommand)
             .apply()
     }
 
@@ -1943,6 +1960,7 @@ class MainActivity : Activity() {
         pendingBattleSearchTeamPacked = null
         battleProtocolReady = false
         pendingDecisionCommand = null
+        pendingDecisionSentConnection = null
         activeSearchFormat = null
         pendingSearch = false
         pendingSearchTeamPacked = null
@@ -1972,6 +1990,7 @@ class MainActivity : Activity() {
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
                         val preserveBattleSurface = activeBattleRoomId != null && session.isLiveBattleActive() && !session.isBattleFinished()
                         battleProtocolReady = false
+                        pendingDecisionSentConnection = null
                         if (!preserveBattleSurface) {
                             pendingDecisionCommand = null
                             session.setLiveBattleActive(false)
@@ -2210,12 +2229,12 @@ class MainActivity : Activity() {
                             pendingBattleSearchTeamPacked = null
                         }
                         if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
-                        if (lines.any { it.startsWith("|sentchoice|") }) pendingDecisionCommand = null
                         activeBattleRoomId = roomId
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
                         if (startsBattle) battleProtocolReady = true
                         session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
+                        reconcilePendingDecisionCommand(lines)
                         enqueueBattlePlayback(connection, roomId, lines)
                     }
                     if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && !roomId.startsWith("view-tournaments") && !roomId.startsWith("view-teams-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
@@ -2253,6 +2272,7 @@ class MainActivity : Activity() {
         activeBattleRoomId = roomId
         battleProtocolReady = false
         pendingDecisionCommand = null
+        pendingDecisionSentConnection = null
         session.setLiveBattleActive(false)
         session.setConnectionStatus("Joining battle…")
         persistLobbyState()
