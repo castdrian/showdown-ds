@@ -25,6 +25,8 @@ object ShowdownChangelog {
                 "Doubles item and ability updates now stay on the correct active Pokémon.",
                 "Battle details now resolve nickname-based protocol identifiers to the active species.",
                 "Active Pokémon details now track readable temporary battle effects until Showdown ends them.",
+                "Battle inspections now distinguish turn-scoped protections from move-scoped effects and clear them on the same boundaries as Showdown.",
+                "Protection blocks and Roost now update active battle state and displayed types like Showdown.",
                 "Duplicate species with different nicknames now keep separate party details.",
                 "Duplicate opponent species now keep item, status, and form updates on the correct party member.",
                 "Long multi-part form identifiers such as Alcremie-Caramel-Swirl now use the base species in readable battle labels while retaining the full form for sprites and battle state.",

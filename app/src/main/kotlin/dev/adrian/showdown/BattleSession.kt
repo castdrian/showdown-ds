@@ -188,7 +188,9 @@ class BattleSession {
         val entryAtNanos: Long,
         val dynamaxed: Boolean = false,
         val gMaxed: Boolean = false,
-        val volatileEffects: List<String> = emptyList()
+        val volatileEffects: List<String> = emptyList(),
+        val turnEffects: List<String> = emptyList(),
+        val moveEffects: List<String> = emptyList()
     )
 
     data class BattleInfo(
@@ -309,6 +311,7 @@ class BattleSession {
     private val typeChangeBySlot = mutableMapOf<String, List<String>>()
     private val typeAdditionsBySlot = mutableMapOf<String, MutableList<String>>()
     private val terastallizedSlots = mutableSetOf<String>()
+    private val teraTypesBySlot = mutableMapOf<String, String>()
     private var battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
     private var pendingHit: PendingHit? = null
     private var requestId: Int? = null
@@ -1224,7 +1227,8 @@ class BattleSession {
                     "-hint", "-message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "-waiting" -> appendLog("${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}.")
                     "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
-                    "-singlemove", "-singleturn" -> appendLog("${battleActor(fields.getOrNull(2))}: ${battleEffectName(fields.getOrNull(3))}.")
+                    "-singleturn" -> applySingleBattleEffect(fields, turnScoped = true)
+                    "-singlemove" -> applySingleBattleEffect(fields, turnScoped = false)
                     "-activate" -> applyActivate(fields)
                     "-ohko" -> appendLog("It's a one-hit KO!")
                     "-combine" -> appendLog("The move effects combined.")
@@ -1390,6 +1394,7 @@ class BattleSession {
         typeChangeBySlot.clear()
         typeAdditionsBySlot.clear()
         terastallizedSlots.clear()
+        teraTypesBySlot.clear()
         playerSlot = restoredPlayerSlot ?: "p1"
         activeRequests.clear()
         activeChoices.clear()
@@ -1455,6 +1460,7 @@ class BattleSession {
 
     private fun applyTurn(fields: List<String>) {
         turn = fields.getOrNull(2)?.toIntOrNull() ?: return
+        clearTurnEffects()
         appendLog("Turn $turn.")
     }
 
@@ -1492,6 +1498,7 @@ class BattleSession {
                 typeChangeBySlot.remove(slot)
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
+                teraTypesBySlot.remove(slot)
                 playerBoostsBySlot.remove(slot)
                 if (!passedBoosts.isNullOrEmpty()) playerBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val updatedDetails = activeDetails.copy(
@@ -1525,6 +1532,7 @@ class BattleSession {
                 typeChangeBySlot.remove(slot)
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
+                teraTypesBySlot.remove(slot)
                 opponentBoostsBySlot.remove(slot)
                 if (!passedBoosts.isNullOrEmpty()) opponentBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val activeName = existing?.name?.takeIf { it.equals(identifier, true) } ?: pokemon
@@ -1743,6 +1751,7 @@ class BattleSession {
 
     private fun applyMove(fields: List<String>) {
         if (fields.size <= 3) return
+        clearMoveEffects(fields[2])
         val actor = fields[2].substringAfter(':').trim()
         val event = "${displayPokemonName(actor)} used ${fields[3]}!"
         latestMoveEvent = event
@@ -2021,20 +2030,22 @@ class BattleSession {
         val teraType = fields.getOrNull(3)?.uppercase()?.takeIf { it.isNotBlank() } ?: return
         val slot = actor.substringBefore(":").trim()
         terastallizedSlots += slot
+        if (teraType == "STELLAR") teraTypesBySlot.remove(slot) else teraTypesBySlot[slot] = teraType
         typeChangeBySlot.remove(slot)
         typeAdditionsBySlot.remove(slot)
+        val displayedTypes = if (teraType == "STELLAR") currentTypesForSlot(slot) else listOf(teraType)
         if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let {
-                playerActiveCombatants[slot] = it.copy(types = listOf(teraType))
-                updatePlayerPartyMemberForSlot(slot, it.name) { details -> details.copy(types = listOf(teraType)) }
+                playerActiveCombatants[slot] = it.copy(types = displayedTypes)
+                updatePlayerPartyMemberForSlot(slot, it.name) { details -> details.copy(types = displayedTypes) }
             }
-            if (slot.endsWith('a')) updatePlayerDetails { it.copy(types = listOf(teraType)) }
+            if (slot.endsWith('a')) updatePlayerDetails { it.copy(types = displayedTypes) }
         } else {
             opponentActiveCombatants[slot]?.let {
-                opponentActiveCombatants[slot] = it.copy(types = listOf(teraType))
-                updateOpponentPartyForSlot(slot) { details -> details.copy(types = listOf(teraType)) }
+                opponentActiveCombatants[slot] = it.copy(types = displayedTypes)
+                updateOpponentPartyForSlot(slot) { details -> details.copy(types = displayedTypes) }
             }
-            if (slot.endsWith('a')) opponentDetails = opponentDetails.copy(types = listOf(teraType))
+            if (slot.endsWith('a')) opponentDetails = opponentDetails.copy(types = displayedTypes)
         }
         appendLog("${actor.substringAfter(':').trim()} Terastallized into $teraType.")
     }
@@ -2597,7 +2608,9 @@ class BattleSession {
     }
 
     private fun applyCant(fields: List<String>) {
-        val actor = battleActor(fields.getOrNull(2))
+        val actorId = fields.getOrNull(2) ?: return
+        clearMoveEffects(actorId)
+        val actor = battleActor(actorId)
         val reason = battleEffectName(fields.getOrNull(3)).ifBlank { "that status" }
         appendLog("$actor couldn't move because of $reason.")
     }
@@ -2605,6 +2618,10 @@ class BattleSession {
     private fun applyBlock(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         val effect = battleEffectName(fields.getOrNull(3))
+        val normalizedEffect = effect.lowercase().filter(Char::isLetterOrDigit)
+        if (normalizedEffect in setOf("quickguard", "wideguard", "craftyshield", "protect")) {
+            updateSingleBattleEffect(actor, normalizedEffect, turnScoped = true)
+        }
         val item = when (effect.lowercase()) {
             "safety goggles" -> "Safety Goggles"
             "protective pads" -> "Protective Pads"
@@ -2614,7 +2631,7 @@ class BattleSession {
         item?.let { revealedItem ->
             updateActorDetails(actor) { details -> details.copy(item = revealedItem) }
         }
-        appendLog("${battleActor(actor)} was blocked by $effect.")
+        if (!isSilent(fields)) appendLog("${battleActor(actor)} was blocked by $effect.")
     }
 
     private fun applyAbility(fields: List<String>) {
@@ -2969,6 +2986,106 @@ class BattleSession {
         else opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = update(it) }
     }
 
+    private fun applySingleBattleEffect(fields: List<String>, turnScoped: Boolean) {
+        val actor = fields.getOrNull(2).orEmpty()
+        val effect = battleEffectName(fields.getOrNull(3)).lowercase().filter(Char::isLetterOrDigit)
+        if (singleBattleEffectLabel(effect) == null) return
+        val slot = actor.substringBefore(":").trim()
+        if (effect == "roost" && "FLYING" !in currentTypesForSlot(slot)) return
+        updateSingleBattleEffect(actor, effect, turnScoped)
+        if (effect == "roost") removeFlyingType(actor)
+        if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))}.")
+    }
+
+    private fun updateSingleBattleEffect(actor: String, effect: String, turnScoped: Boolean) {
+        val label = singleBattleEffectLabel(effect) ?: return
+        val slot = actor.substringBefore(":").trim()
+        val update = { combatant: ActiveCombatant ->
+            if (turnScoped) {
+                combatant.copy(turnEffects = (combatant.turnEffects + label).distinct())
+            } else {
+                combatant.copy(moveEffects = (combatant.moveEffects + label).distinct())
+            }
+        }
+        if (isPlayerSide(actor)) playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = update(it) }
+        else opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = update(it) }
+    }
+
+    private fun removeFlyingType(actor: String) {
+        val slot = actor.substringBefore(":").trim()
+        val types = currentTypesForSlot(slot).filterNot { it == "FLYING" }.ifEmpty { listOf("NORMAL") }
+        updateActiveTypes(actor, types)
+    }
+
+    private fun restoreTypesAfterRoost(slot: String, playerSide: Boolean) {
+        val combatant = (if (playerSide) playerActiveCombatants else opponentActiveCombatants)[slot] ?: return
+        val types = teraTypesBySlot[slot]?.let(::listOf) ?: effectiveTypes(slot)
+        updateActiveTypes("$slot: ${combatant.name}", types)
+    }
+
+    private fun clearTurnEffects() {
+        playerActiveCombatants.keys.toList().forEach { slot ->
+            playerActiveCombatants[slot]?.let {
+                val roostActive = it.turnEffects.contains("Roost")
+                playerActiveCombatants[slot] = it.copy(turnEffects = emptyList())
+                if (roostActive) restoreTypesAfterRoost(slot, true)
+            }
+        }
+        opponentActiveCombatants.keys.toList().forEach { slot ->
+            opponentActiveCombatants[slot]?.let {
+                val roostActive = it.turnEffects.contains("Roost")
+                opponentActiveCombatants[slot] = it.copy(turnEffects = emptyList())
+                if (roostActive) restoreTypesAfterRoost(slot, false)
+            }
+        }
+    }
+
+    private fun clearMoveEffects(actor: String) {
+        val slot = actor.substringBefore(":").trim()
+        if (isPlayerSide(actor)) {
+            playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = it.copy(moveEffects = emptyList()) }
+        } else {
+            opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = it.copy(moveEffects = emptyList()) }
+        }
+    }
+
+    private fun currentTypesForSlot(slot: String): List<String> {
+        val activeTypes = if (isPlayerSide(slot)) {
+            playerActiveCombatants[slot]?.types
+        } else {
+            opponentActiveCombatants[slot]?.types
+        }
+        return activeTypes ?: effectiveTypes(slot)
+    }
+
+    private fun singleBattleEffectLabel(effect: String): String? = when (effect) {
+        "banefulbunker" -> "Baneful Bunker"
+        "beakblast" -> "Beak Blast"
+        "burningbulwark" -> "Burning Bulwark"
+        "craftyshield" -> "Crafty Shield"
+        "destinybond" -> "Destiny Bond"
+        "endure" -> "Endure"
+        "followme" -> "Follow Me"
+        "focuspunch" -> "Focus Punch"
+        "grudge" -> "Grudge"
+        "helpinghand" -> "Helping Hand"
+        "kingsshield" -> "King's Shield"
+        "matblock" -> "Mat Block"
+        "maxguard" -> "Max Guard"
+        "obstruct" -> "Obstruct"
+        "powder" -> "Powder"
+        "protect" -> "Protect"
+        "quickguard" -> "Quick Guard"
+        "ragepowder" -> "Rage Powder"
+        "roost" -> "Roost"
+        "shelltrap" -> "Shell Trap"
+        "silktrap" -> "Silk Trap"
+        "spikyshield" -> "Spiky Shield"
+        "spotlight" -> "Spotlight"
+        "wideguard" -> "Wide Guard"
+        else -> effect.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
+    }
+
     private fun volatileEffectLabel(effect: String): String? {
         if (effect.startsWith("fallen") || effect.startsWith("protosynthesis") || effect.startsWith("quarkdrive")) return null
         return when (effect) {
@@ -3017,6 +3134,7 @@ class BattleSession {
         swap(baseTypesBySlot)
         swap(typeChangeBySlot)
         swap(typeAdditionsBySlot)
+        swap(teraTypesBySlot)
         if (isPlayerSide(oldSlot)) swap(playerBoostsBySlot) else swap(opponentBoostsBySlot)
         if (isPlayerSide(oldSlot)) swap(playerActivePartyIndices) else swap(opponentActivePartyIndices)
         val oldTera = terastallizedSlots.remove(oldSlot)
@@ -3579,7 +3697,9 @@ class BattleSession {
                         entryAtNanos = playerEntryAtNanos,
                         dynamaxed = previous?.dynamaxed ?: false,
                         gMaxed = previous?.gMaxed ?: false,
-                        volatileEffects = previous?.volatileEffects.orEmpty()
+                        volatileEffects = previous?.volatileEffects.orEmpty(),
+                        turnEffects = previous?.turnEffects.orEmpty(),
+                        moveEffects = previous?.moveEffects.orEmpty()
                     )
                 }
             }

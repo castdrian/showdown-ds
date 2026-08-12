@@ -540,7 +540,10 @@ class BattleSceneView(
         val playerSide = inspectedPlayer ?: return
         val details = if (playerSide) session.playerDetails() else session.opponentDetails()
         val activeEffects = (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
-            .flatMap { it.volatileEffects }
+            .flatMap { combatant ->
+                val effects = combatant.volatileEffects + combatant.turnEffects + combatant.moveEffects
+                effects.map { effect -> "${combatant.name}: $effect" }
+            }
             .distinct()
         val bounds = if (playerSide) {
             RectF(width * 0.025f, height * 0.14f, width * 0.49f, height * 0.85f)

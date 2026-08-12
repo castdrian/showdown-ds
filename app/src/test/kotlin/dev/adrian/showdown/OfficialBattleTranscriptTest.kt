@@ -225,6 +225,7 @@ class OfficialBattleTranscriptTest {
 
         assertEquals("Ability Shield", session.playerDetails().item)
         assertEquals("Protective Pads", session.opponentDetails().item)
+        assertEquals(listOf("Protect"), session.opponentActiveCombatants().single().turnEffects)
         assertTrue(session.battleLog().any { it.contains("Gliscor was blocked by Protect.") })
     }
 
@@ -287,11 +288,86 @@ class OfficialBattleTranscriptTest {
         val session = BattleSession()
         session.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
         session.applyProtocolLine("|-start|p1a: Mewtwo|move: Substitute")
+        session.applyProtocolLine("|-singleturn|p1a: Mewtwo|Protect")
+        session.applyProtocolLine("|-singlemove|p1a: Mewtwo|Destiny Bond")
         session.applyProtocolLine(
             "|request|{\"active\":[{\"moves\":[{\"move\":\"Psychic\",\"pp\":10}]}],\"side\":{\"pokemon\":[{\"ident\":\"p1: Mewtwo\",\"details\":\"Mewtwo, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
         )
 
         assertEquals(listOf("Substitute"), session.playerActiveCombatants().single().volatileEffects)
+        assertEquals(listOf("Protect"), session.playerActiveCombatants().single().turnEffects)
+        assertEquals(listOf("Destiny Bond"), session.playerActiveCombatants().single().moveEffects)
+    }
+
+    @Test
+    fun tracksOfficialTurnAndMoveEffectsUntilTheirProtocolBoundaries() {
+        val session = BattleSession()
+        session.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        session.applyProtocolLine("|-singleturn|p1a: Mewtwo|Protect")
+        session.applyProtocolLine("|-singlemove|p1a: Mewtwo|Destiny Bond")
+
+        assertEquals(listOf("Protect"), session.playerActiveCombatants().single().turnEffects)
+        assertEquals(listOf("Destiny Bond"), session.playerActiveCombatants().single().moveEffects)
+
+        session.applyProtocolLine("|turn|2")
+
+        assertTrue(session.playerActiveCombatants().single().turnEffects.isEmpty())
+        assertEquals(listOf("Destiny Bond"), session.playerActiveCombatants().single().moveEffects)
+
+        session.applyProtocolLine("|move|p1a: Mewtwo|Psychic|p2a: Dragapult")
+
+        assertTrue(session.playerActiveCombatants().single().moveEffects.isEmpty())
+    }
+
+    @Test
+    fun clearsMoveEffectsWhenShowdownReportsAFailedMove() {
+        val session = BattleSession()
+        session.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        session.applyProtocolLine("|-singlemove|p1a: Mewtwo|Destiny Bond")
+        session.applyProtocolLine("|cant|p1a: Mewtwo|par")
+
+        assertTrue(session.playerActiveCombatants().single().moveEffects.isEmpty())
+    }
+
+    @Test
+    fun validatesRoostAgainstCurrentTerastallizedTypes() {
+        val flyingSession = BattleSession()
+        flyingSession.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("FLYING", "PSYCHIC"))::get)
+        flyingSession.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        flyingSession.applyProtocolLine("|-terastallize|p1a: Mewtwo|FIRE")
+        flyingSession.applyProtocolLine("|-singleturn|p1a: Mewtwo|Roost")
+
+        assertTrue(flyingSession.playerActiveCombatants().single().turnEffects.isEmpty())
+
+        val normalFlyingSession = BattleSession()
+        normalFlyingSession.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("FLYING", "PSYCHIC"))::get)
+        normalFlyingSession.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        normalFlyingSession.applyProtocolLine("|-singleturn|p1a: Mewtwo|Roost")
+
+        assertEquals(listOf("PSYCHIC"), normalFlyingSession.playerActiveCombatants().single().types)
+        normalFlyingSession.applyProtocolLine("|turn|2")
+        assertEquals(listOf("FLYING", "PSYCHIC"), normalFlyingSession.playerActiveCombatants().single().types)
+
+        val teraFlyingSession = BattleSession()
+        teraFlyingSession.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("PSYCHIC"))::get)
+        teraFlyingSession.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        teraFlyingSession.applyProtocolLine("|-terastallize|p1a: Mewtwo|FLYING")
+        teraFlyingSession.applyProtocolLine("|-singleturn|p1a: Mewtwo|Roost")
+
+        assertEquals(listOf("Roost"), teraFlyingSession.playerActiveCombatants().single().turnEffects)
+        assertEquals(listOf("NORMAL"), teraFlyingSession.playerActiveCombatants().single().types)
+        teraFlyingSession.applyProtocolLine("|turn|2")
+        assertEquals(listOf("FLYING"), teraFlyingSession.playerActiveCombatants().single().types)
+
+        val stellarSession = BattleSession()
+        stellarSession.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("FLYING", "PSYCHIC"))::get)
+        stellarSession.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        stellarSession.applyProtocolLine("|-terastallize|p1a: Mewtwo|STELLAR")
+        stellarSession.applyProtocolLine("|-singleturn|p1a: Mewtwo|Roost")
+
+        assertEquals(listOf("PSYCHIC"), stellarSession.playerActiveCombatants().single().types)
+        stellarSession.applyProtocolLine("|turn|2")
+        assertEquals(listOf("FLYING", "PSYCHIC"), stellarSession.playerActiveCombatants().single().types)
     }
 
     @Test
@@ -307,9 +383,11 @@ class OfficialBattleTranscriptTest {
         session.applyProtocolLine("|-start|p1a: Mewtwo|Focus Energy|[silent]")
         session.applyProtocolLine("|-end|p1a: Mewtwo|typeadd|[silent]")
         session.applyProtocolLine("|-end|p1a: Mewtwo|typechange|[silent]")
+        session.applyProtocolLine("|-block|p1a: Mewtwo|Protect|[silent]")
 
         assertEquals("100/100", session.playerHp)
         assertEquals(listOf("PSYCHIC"), session.playerActiveCombatants().single().types)
+        assertEquals(listOf("Protect"), session.playerActiveCombatants().single().turnEffects)
         assertEquals(initialLogSize, session.battleLog().size)
     }
 
