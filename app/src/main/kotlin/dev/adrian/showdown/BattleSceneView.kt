@@ -235,7 +235,7 @@ class BattleSceneView(
                 }
             }
         }
-        val playerKey = "${session.spriteStyle}:${session.playerPokemon}"
+        val playerKey = "back:${session.spriteStyle}:${session.playerPokemon}"
         if (playerKey != requestedPlayerSprite) {
             requestedPlayerSprite = playerKey
             playerSprite = null
@@ -246,7 +246,7 @@ class BattleSceneView(
                 }
             }
         }
-        val opponentKey = "${session.spriteStyle}:${session.opponentPokemon}"
+        val opponentKey = "front:${session.spriteStyle}:${session.opponentPokemon}"
         if (opponentKey != requestedOpponentSprite) {
             requestedOpponentSprite = opponentKey
             opponentSprite = null
@@ -302,7 +302,7 @@ class BattleSceneView(
             assets.remove(it)
         }
         combatants.forEach { combatant ->
-            val key = "${session.spriteStyle}:${combatant.name}"
+            val key = "${if (back) "back" else "front"}:${session.spriteStyle}:${combatant.name}"
             if (requests[combatant.slot] == key) return@forEach
             requests[combatant.slot] = key
             assets[combatant.slot] = null
