@@ -267,6 +267,34 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun tracksOfficialVolatileEffectsUntilTheirEndPackets() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|-start|p1a: Mewtwo|confusion",
+                "|-start|p1a: Mewtwo|move: Substitute",
+                "|-start|p1a: Mewtwo|move: Focus Energy",
+                "|-end|p1a: Mewtwo|confusion"
+            )
+        )
+
+        assertEquals(listOf("Substitute", "Focus Energy"), session.playerActiveCombatants().single().volatileEffects)
+    }
+
+    @Test
+    fun keepsOfficialVolatileEffectsAcrossBattleRequests() {
+        val session = BattleSession()
+        session.applyProtocolLine("|switch|p1a: Mewtwo|Mewtwo, L50|100/100")
+        session.applyProtocolLine("|-start|p1a: Mewtwo|move: Substitute")
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Psychic\",\"pp\":10}]}],\"side\":{\"pokemon\":[{\"ident\":\"p1: Mewtwo\",\"details\":\"Mewtwo, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
+        )
+
+        assertEquals(listOf("Substitute"), session.playerActiveCombatants().single().volatileEffects)
+    }
+
+    @Test
     fun keepsSilentProtocolStateChangesOutOfTheBattleLog() {
         val session = BattleSession()
         session.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("PSYCHIC"))::get)

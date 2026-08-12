@@ -187,7 +187,8 @@ class BattleSession {
         val condition: String,
         val entryAtNanos: Long,
         val dynamaxed: Boolean = false,
-        val gMaxed: Boolean = false
+        val gMaxed: Boolean = false,
+        val volatileEffects: List<String> = emptyList()
     )
 
     data class BattleInfo(
@@ -2041,7 +2042,7 @@ class BattleSession {
     private fun applyStart(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         val slot = actor.substringBefore(":").trim()
-        val effect = fields.getOrNull(3).orEmpty().substringAfter(": ").lowercase()
+        val effect = battleEffectName(fields.getOrNull(3)).lowercase().filter(Char::isLetterOrDigit)
         when (effect) {
             "typechange" -> {
                 if (slot in terastallizedSlots) return
@@ -2064,14 +2065,17 @@ class BattleSession {
                 updateDynamaxState(actor, true, fields.drop(4).any { it.equals("Gmax", true) })
                 if (!isSilent(fields)) appendLog("${battleActor(actor)} Dynamaxed.")
             }
-            else -> if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
+            else -> {
+                updateVolatileEffect(actor, effect, true)
+                if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
+            }
         }
     }
 
     private fun applyEnd(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         val slot = actor.substringBefore(":").trim()
-        val effect = fields.getOrNull(3).orEmpty().substringAfter(": ").lowercase()
+        val effect = battleEffectName(fields.getOrNull(3)).lowercase().filter(Char::isLetterOrDigit)
         when (effect) {
             "typechange" -> {
                 typeChangeBySlot.remove(slot)
@@ -2087,7 +2091,10 @@ class BattleSession {
                 updateDynamaxState(actor, false)
                 if (!isSilent(fields)) appendLog("${battleActor(actor)} returned to normal size.")
             }
-            else -> if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
+            else -> {
+                updateVolatileEffect(actor, effect, false)
+                if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
+            }
         }
     }
 
@@ -2946,6 +2953,60 @@ class BattleSession {
         else opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = update(it) }
     }
 
+    private fun updateVolatileEffect(actor: String, effect: String, started: Boolean) {
+        val slot = actor.substringBefore(":").trim()
+        val label = volatileEffectLabel(effect) ?: return
+        val update = { combatant: ActiveCombatant ->
+            val effects = combatant.volatileEffects.toMutableList()
+            if (started) {
+                if (label !in effects) effects += label
+            } else {
+                effects.removeAll { it == label }
+            }
+            combatant.copy(volatileEffects = effects)
+        }
+        if (isPlayerSide(actor)) playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = update(it) }
+        else opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = update(it) }
+    }
+
+    private fun volatileEffectLabel(effect: String): String? {
+        if (effect.startsWith("fallen") || effect.startsWith("protosynthesis") || effect.startsWith("quarkdrive")) return null
+        return when (effect) {
+            "aquaring" -> "Aqua Ring"
+            "attract" -> "Attract"
+            "autotomize" -> "Autotomize"
+            "bind", "partiallytrapped", "wrap" -> "Bound"
+            "confusion" -> "Confusion"
+            "curse" -> "Curse"
+            "disable" -> "Disable"
+            "embargo" -> "Embargo"
+            "encore" -> "Encore"
+            "focusenergy" -> "Focus Energy"
+            "foresight", "miracleeye" -> "Identified"
+            "healblock" -> "Heal Block"
+            "imprison" -> "Imprison"
+            "ingrain" -> "Ingrain"
+            "laserfocus" -> "Laser Focus"
+            "leechseed" -> "Leech Seed"
+            "lightscreen" -> "Light Screen"
+            "luckychant" -> "Lucky Chant"
+            "magnetrise" -> "Magnet Rise"
+            "nightmare" -> "Nightmare"
+            "perish0", "perish1", "perish2", "perish3", "perishsong" -> "Perish Song"
+            "powertrick" -> "Power Trick"
+            "safeguard" -> "Safeguard"
+            "smackdown" -> "Smack Down"
+            "slowstart" -> "Slow Start"
+            "stockpile" -> "Stockpile"
+            "substitute" -> "Substitute"
+            "taunt" -> "Taunt"
+            "telekinesis" -> "Telekinesis"
+            "torment" -> "Torment"
+            "yawn" -> "Drowsy"
+            else -> effect.replaceFirstChar { it.uppercase() }
+        }
+    }
+
     private fun swapSlotState(oldSlot: String, newSlot: String) {
         fun <T> swap(map: MutableMap<String, T>) {
             val oldValue = map.remove(oldSlot)
@@ -3439,6 +3500,7 @@ class BattleSession {
         val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon") ?: return
         val synced = mutableListOf<PokemonDetails>()
         val identifiers = mutableListOf<String>()
+        val previousActiveCombatants = playerActiveCombatants.toMap()
         activeTeamNames.clear()
         activeSlotNames.clear()
         playerActivePartyIndices.clear()
@@ -3505,7 +3567,20 @@ class BattleSession {
                     .takeIf { it >= 0 }
                     ?.let { synced[it] }
                     ?.let { details ->
-                    playerActiveCombatants[slot] = ActiveCombatant(slot, details.name, details.types, details.level, details.gender, details.hp, details.condition, playerEntryAtNanos)
+                    val previous = previousActiveCombatants[slot]?.takeIf { it.name.equals(details.name, true) }
+                    playerActiveCombatants[slot] = ActiveCombatant(
+                        slot = slot,
+                        name = details.name,
+                        types = previous?.types ?: details.types,
+                        level = details.level,
+                        gender = details.gender,
+                        hp = details.hp,
+                        condition = details.condition,
+                        entryAtNanos = playerEntryAtNanos,
+                        dynamaxed = previous?.dynamaxed ?: false,
+                        gMaxed = previous?.gMaxed ?: false,
+                        volatileEffects = previous?.volatileEffects.orEmpty()
+                    )
                 }
             }
         }

@@ -24,6 +24,7 @@ object ShowdownChangelog {
                 "Battle requests no longer show a Terastal action when the server explicitly disables it.",
                 "Doubles item and ability updates now stay on the correct active Pokémon.",
                 "Battle details now resolve nickname-based protocol identifiers to the active species.",
+                "Active Pokémon details now track readable temporary battle effects until Showdown ends them.",
                 "Duplicate species with different nicknames now keep separate party details.",
                 "Duplicate opponent species now keep item, status, and form updates on the correct party member.",
                 "Long multi-part form identifiers such as Alcremie-Caramel-Swirl now use the base species in readable battle labels while retaining the full form for sprites and battle state.",

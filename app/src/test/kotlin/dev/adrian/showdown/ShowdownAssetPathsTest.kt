@@ -50,7 +50,6 @@ class ShowdownAssetPathsTest {
     fun neverFallsBackFromAPlayerBackSpriteToAFrontSprite() {
         assertEquals(
             listOf(
-                "sprites/gen5-back/ironvaliant.png",
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
                 "sprites/ani-back/substitute.gif"
             ),

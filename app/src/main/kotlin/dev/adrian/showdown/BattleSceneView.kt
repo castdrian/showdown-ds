@@ -539,6 +539,9 @@ class BattleSceneView(
     private fun drawInspectSheet(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val playerSide = inspectedPlayer ?: return
         val details = if (playerSide) session.playerDetails() else session.opponentDetails()
+        val activeEffects = (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+            .flatMap { it.volatileEffects }
+            .distinct()
         val bounds = if (playerSide) {
             RectF(width * 0.025f, height * 0.14f, width * 0.49f, height * 0.85f)
         } else {
@@ -604,9 +607,21 @@ class BattleSceneView(
         canvas.drawText(ellipsizeToWidth(details.item, right - left - 110f * scale, paint), right, row, paint)
         paint.textAlign = Paint.Align.LEFT
         row += 62f * scale
-        paint.color = MUTED
         paint.textSize = readableTextSize(36f, scale, 16f)
+        paint.color = MUTED
         canvas.drawText(ellipsizeToWidth(details.stats, right - left, paint), left, row, paint)
+        if (activeEffects.isNotEmpty()) {
+            row += 42f * scale
+            paint.color = MUTED
+            canvas.drawText("Effects", left, row, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            paint.color = INK
+            val effectText = activeEffects.take(3).joinToString(" · ").let { text ->
+                if (activeEffects.size > 3) "$text +${activeEffects.size - 3}" else text
+            }
+            canvas.drawText(ellipsizeToWidth(effectText, right - left - 150f * scale, paint), right, row, paint)
+            paint.textAlign = Paint.Align.LEFT
+        }
         row += 50f * scale
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(40f, scale, 18f)
