@@ -2078,7 +2078,9 @@ class BattleSession {
             }
             else -> {
                 updateVolatileEffect(actor, effect, true)
-                if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
+                if (!isSilent(fields) && !isHiddenAbilityStateEffect(effect)) {
+                    appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
+                }
             }
         }
     }
@@ -2104,7 +2106,9 @@ class BattleSession {
             }
             else -> {
                 updateVolatileEffect(actor, effect, false)
-                if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
+                if (!isSilent(fields) && !isHiddenAbilityStateEffect(effect)) {
+                    appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
+                }
             }
         }
     }
@@ -3095,7 +3099,7 @@ class BattleSession {
     }
 
     private fun volatileEffectLabel(effect: String): String? {
-        if (effect.startsWith("fallen") || effect.startsWith("protosynthesis") || effect.startsWith("quarkdrive")) return null
+        if (isHiddenAbilityStateEffect(effect)) return null
         return when (effect) {
             "aquaring" -> "Aqua Ring"
             "attract" -> "Attract"
@@ -3131,6 +3135,9 @@ class BattleSession {
             else -> effect.replaceFirstChar { it.uppercase() }
         }
     }
+
+    private fun isHiddenAbilityStateEffect(effect: String): Boolean =
+        effect.startsWith("fallen") || effect.startsWith("protosynthesis") || effect.startsWith("quarkdrive")
 
     private fun swapSlotState(oldSlot: String, newSlot: String) {
         fun <T> swap(map: MutableMap<String, T>) {

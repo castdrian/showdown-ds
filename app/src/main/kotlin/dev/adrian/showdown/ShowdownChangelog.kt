@@ -28,6 +28,7 @@ object ShowdownChangelog {
                 "Battle inspections now distinguish turn-scoped protections from move-scoped effects and clear them on the same boundaries as Showdown.",
                 "Protection blocks and Roost now update active battle state and displayed types like Showdown.",
                 "Ability activations now reveal the correct ability in the active Pokémon details.",
+                "Internal ability boost tokens no longer appear as unreadable battle-feed text.",
                 "Duplicate species with different nicknames now keep separate party details.",
                 "Duplicate opponent species now keep item, status, and form updates on the correct party member.",
                 "Long multi-part form identifiers such as Alcremie-Caramel-Swirl now use the base species in readable battle labels while retaining the full form for sprites and battle state.",

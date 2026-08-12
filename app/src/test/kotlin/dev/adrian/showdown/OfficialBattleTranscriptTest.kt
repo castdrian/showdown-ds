@@ -247,6 +247,21 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun hidesInternalAbilityStateTokensFromTheBattleFeed() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Iron Valiant|Iron Valiant|100/100",
+                "|-activate|p1a: Iron Valiant|ability: Quark Drive|[fromitem]",
+                "|-start|p1a: Iron Valiant|quarkdrivespa",
+                "|-end|p1a: Iron Valiant|quarkdrivespa"
+            )
+        )
+
+        assertFalse(session.battleLog().any { it.contains("quarkdrivespa", true) })
+    }
+
+    @Test
     fun appliesTemporaryTypesDynamaxAndOneLineBattleResults() {
         val session = BattleSession()
         session.setPokemonTypeResolver(
