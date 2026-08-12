@@ -90,7 +90,7 @@ class BattleSceneView(
         requestResources()
         drawBackdrop(canvas, width, height)
         if (!singles && opponentCombatants.size > 1) {
-            opponentCombatants.forEachIndexed { index, combatant ->
+            fieldCombatants(opponentCombatants, false).forEachIndexed { index, combatant ->
                 drawCombatant(
                     canvas,
                     multiCombatantX(width, false, index, opponentCombatants.size),
@@ -120,7 +120,7 @@ class BattleSceneView(
             )
         }
         if (!singles && playerCombatants.size > 1) {
-            playerCombatants.forEachIndexed { index, combatant ->
+            fieldCombatants(playerCombatants, true).forEachIndexed { index, combatant ->
                 drawCombatant(
                     canvas,
                     multiCombatantX(width, true, index, playerCombatants.size),
@@ -176,7 +176,7 @@ class BattleSceneView(
                     )
                 }
             } else {
-                drawActiveStatusCards(canvas, width, height, scale, true, playerCombatants)
+                drawActiveStatusCards(canvas, width, height, scale, true, fieldCombatants(playerCombatants, true))
             }
             if (singles || opponentCombatants.size <= 1) {
                 if (opponentStatusAlpha > 0f) {
@@ -198,7 +198,7 @@ class BattleSceneView(
                     )
                 }
             } else {
-                drawActiveStatusCards(canvas, width, height, scale, false, opponentCombatants)
+                drawActiveStatusCards(canvas, width, height, scale, false, fieldCombatants(opponentCombatants, false))
             }
             drawBattleFeed(canvas, width, height, scale)
         }
@@ -441,6 +441,9 @@ class BattleSceneView(
         val base = if (player) 0.20f else 0.64f
         return width * (base + index * step)
     }
+
+    private fun fieldCombatants(combatants: List<BattleSession.ActiveCombatant>, player: Boolean) =
+        if (player) combatants else combatants.asReversed()
 
     private fun drawCombatant(
         canvas: Canvas,

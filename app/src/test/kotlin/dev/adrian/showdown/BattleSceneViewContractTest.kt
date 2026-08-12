@@ -23,5 +23,6 @@ class BattleSceneViewContractTest {
         assertTrue(source.contains("BattleSession.displayPokemonName(session.playerDetails().name, session.playerDetails().species)"))
         assertTrue(source.contains("BattleSession.displayPokemonName(session.opponentDetails().name, session.opponentDetails().species)"))
         assertTrue(source.contains("BattleSession.displayPokemonName(combatant.name, combatant.species)"))
+        assertTrue(source.contains("if (player) combatants else combatants.asReversed()"))
     }
 }
