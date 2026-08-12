@@ -162,7 +162,7 @@ class BattleSceneView(
                         canvas,
                         RectF(width * 0.015f, height * 0.80f, width * 0.315f, height * 0.98f),
                         session.playerName,
-                        BattleSession.displayPokemonName(session.playerPokemon),
+                        BattleSession.displayPokemonName(session.playerDetails().name, session.playerDetails().species),
                         session.playerLevel,
                         session.playerGender,
                         session.playerHp,
@@ -184,7 +184,7 @@ class BattleSceneView(
                         canvas,
                         RectF(width * 0.685f, height * 0.02f, width * 0.985f, height * 0.20f),
                         session.opponentName,
-                        BattleSession.displayPokemonName(session.opponentPokemon),
+                        BattleSession.displayPokemonName(session.opponentDetails().name, session.opponentDetails().species),
                         session.opponentLevel,
                         session.opponentGender,
                         session.opponentHp,
@@ -579,7 +579,7 @@ class BattleSceneView(
         val activeEffects = (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
             .flatMap { combatant ->
                 val effects = combatant.volatileEffects + combatant.turnEffects + combatant.moveEffects
-                effects.map { effect -> "${combatant.name}: $effect" }
+                effects.map { effect -> "${BattleSession.displayPokemonName(combatant.name, combatant.species)}: $effect" }
             }
             .distinct()
         val bounds = if (playerSide) {
@@ -856,7 +856,7 @@ class BattleSceneView(
         paint.style = Paint.Style.FILL
         val left = bounds.left + 14f * scale
         val right = bounds.right - 14f * scale
-        val label = "${index + 1}  ${BattleSession.displayPokemonName(combatant.name)}${when {
+        val label = "${index + 1}  ${BattleSession.displayPokemonName(combatant.name, combatant.species)}${when {
             combatant.gMaxed -> " · G-MAX"
             combatant.dynamaxed -> " · MAX"
             else -> ""

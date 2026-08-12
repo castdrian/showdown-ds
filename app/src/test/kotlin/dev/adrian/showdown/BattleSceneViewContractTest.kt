@@ -20,5 +20,8 @@ class BattleSceneViewContractTest {
         assertTrue(source.contains("if (pokemonOverride != null)"))
         assertTrue(source.contains("val playerSpecies = session.playerActiveCombatants().firstOrNull()?.species"))
         assertTrue(source.contains("val opponentSpecies = session.opponentActiveCombatants().firstOrNull()?.species"))
+        assertTrue(source.contains("BattleSession.displayPokemonName(session.playerDetails().name, session.playerDetails().species)"))
+        assertTrue(source.contains("BattleSession.displayPokemonName(session.opponentDetails().name, session.opponentDetails().species)"))
+        assertTrue(source.contains("BattleSession.displayPokemonName(combatant.name, combatant.species)"))
     }
 }
