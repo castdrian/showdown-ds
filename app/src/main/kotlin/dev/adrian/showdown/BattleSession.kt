@@ -2648,7 +2648,15 @@ class BattleSession {
     private fun applyActivate(fields: List<String>) {
         val actor = fields.getOrNull(2).orEmpty()
         val hasActor = fields.size > 3 && actor.contains(":")
-        val effect = battleEffectName(fields.getOrNull(if (hasActor) 3 else 2)).ifBlank { "an effect" }
+        val rawEffect = fields.getOrNull(if (hasActor) 3 else 2).orEmpty()
+        val effect = battleEffectName(rawEffect).ifBlank { "an effect" }
+        if (hasActor && rawEffect.substringBefore(":").equals("ability", true)) {
+            rawEffect.substringAfter(":", "").trim().takeIf { it.isNotBlank() }?.let { ability ->
+                updateActorDetails(actor) { details ->
+                    details.copy(ability = abilityNameResolver?.invoke(ability) ?: ability)
+                }
+            }
+        }
         if (hasActor && effect.equals("Baton Pass", true)) {
             val slot = targetSlot(actor)
             pendingBatonPassBySide[sideForSlot(slot)] = slot

@@ -230,6 +230,23 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun revealsAbilitiesFromOfficialActivatePackets() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Iron Valiant|Iron Valiant|100/100",
+                "|-activate|p1a: Iron Valiant|ability: Quark Drive|[fromitem]",
+                "|switch|p2a: Kingambit|Kingambit, L50, M|100/100",
+                "|-activate|p2a: Kingambit|ability: Supreme Overlord"
+            )
+        )
+
+        assertEquals("Quark Drive", session.playerDetails().ability)
+        assertEquals("Supreme Overlord", session.opponentDetails().ability)
+        assertTrue(session.battleLog().any { it.contains("Iron Valiant activated Quark Drive.") })
+    }
+
+    @Test
     fun appliesTemporaryTypesDynamaxAndOneLineBattleResults() {
         val session = BattleSession()
         session.setPokemonTypeResolver(
