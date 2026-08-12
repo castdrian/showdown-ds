@@ -1179,10 +1179,7 @@ class BattleSession {
                         applyMove(fields)
                     }
                     "-damage" -> {
-                        val target = fields.getOrNull(2)
-                            ?.substringAfter(':')
-                            ?.trim()
-                            ?.takeIf { it.isNotBlank() }
+                        val target = protocolTarget(fields)
                         if (target != null && pendingHit != null && pendingHit?.target != target) publishPendingHit()
                         applyHealth(fields)
                         target?.takeUnless { hasProtocolSource(fields) }?.let {
@@ -1193,7 +1190,16 @@ class BattleSession {
                         applyHealth(fields)
                         if (!isSilent(fields)) appendLog("${battleActor(fields.getOrNull(2))} recovered health.")
                     }
-                    "-sethp" -> applyHealth(fields)
+                    "-sethp" -> {
+                        val target = protocolTarget(fields)
+                        val previousHealth = fields.getOrNull(2)?.let(::healthForActor)?.let(::healthFractionOrNull)
+                        val nextHealth = fields.getOrNull(3)?.let(::healthFractionOrNull)
+                        if (target != null && pendingHit != null && pendingHit?.target != target) publishPendingHit()
+                        applyHealth(fields)
+                        if (target != null && previousHealth != null && nextHealth != null && nextHealth < previousHealth && !hasProtocolSource(fields)) {
+                            if (pendingHit == null) pendingHit = PendingHit(target, target)
+                        }
+                    }
                     "-status" -> applyStatus(fields)
                     "-curestatus" -> applyStatus(fields, cured = true)
                     "-cureteam" -> cureTeam(fields)
@@ -2953,6 +2959,32 @@ class BattleSession {
     private fun isSilent(fields: List<String>) = fields.drop(2).any { it.trim().equals("[silent]", true) }
 
     private fun hasProtocolSource(fields: List<String>) = fields.drop(4).any { it.trim().startsWith("[from]", true) }
+
+    private fun protocolTarget(fields: List<String>) = fields.getOrNull(2)
+        ?.substringAfter(':')
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+
+    private fun healthForActor(actor: String): String? {
+        val slot = actor.substringBefore(':').trim()
+        return if (isPlayerSide(actor)) {
+            playerActiveCombatants[slot]?.hp ?: playerHp.takeIf { slot.endsWith('a') }
+        } else {
+            opponentActiveCombatants[slot]?.hp ?: opponentHp.takeIf { slot.endsWith('a') }
+        }
+    }
+
+    private fun healthFractionOrNull(hp: String): Float? {
+        if (hp.contains("fnt", true)) return 0f
+        val value = hp.substringBefore(' ')
+        if (value.endsWith('%')) return value.dropLast(1).toFloatOrNull()?.div(100f)
+        if ('/' !in value) return null
+        val values = value.split('/')
+        val current = values.getOrNull(0)?.toFloatOrNull() ?: return null
+        val maximum = values.getOrNull(1)?.toFloatOrNull() ?: return null
+        if (maximum <= 0f) return 0f
+        return (current / maximum).coerceIn(0f, 1f)
+    }
 
     private fun effectiveTypes(slot: String): List<String> {
         val base = typeChangeBySlot[slot] ?: baseTypesBySlot[slot].orEmpty()

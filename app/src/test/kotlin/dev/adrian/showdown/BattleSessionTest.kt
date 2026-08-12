@@ -1334,6 +1334,55 @@ class BattleSessionTest {
     }
 
     @Test
+    fun directSetHpDamageEmitsOneHitFeedbackEvent() {
+        val session = BattleSession()
+        val feedback = mutableListOf<BattleSession.BattleFeedback>()
+        session.addFeedbackListener { feedback += it }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|move|p1a: Incineroar|Pain Split|p2a: Tapu Koko",
+                "|-sethp|p2a: Tapu Koko|40/100"
+            )
+        )
+
+        assertEquals(1, feedback.count { it.type == BattleSession.FeedbackType.HIT })
+    }
+
+    @Test
+    fun healingSetHpDoesNotEmitHitFeedbackEvent() {
+        val session = BattleSession()
+        val feedback = mutableListOf<BattleSession.BattleFeedback>()
+        session.addFeedbackListener { feedback += it }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|40/100",
+                "|-sethp|p2a: Tapu Koko|100/100"
+            )
+        )
+
+        assertFalse(feedback.any { it.type == BattleSession.FeedbackType.HIT })
+    }
+
+    @Test
+    fun sourcedSetHpDamageDoesNotEmitHitFeedbackEvent() {
+        val session = BattleSession()
+        val feedback = mutableListOf<BattleSession.BattleFeedback>()
+        session.addFeedbackListener { feedback += it }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|-sethp|p2a: Tapu Koko|40/100|[from] move: Pain Split"
+            )
+        )
+
+        assertFalse(feedback.any { it.type == BattleSession.FeedbackType.HIT })
+    }
+
+    @Test
     fun faintedCombatantIsRemovedFromTheBattlePresentation() {
         val session = BattleSession()
 
