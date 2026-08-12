@@ -50,7 +50,8 @@ object ShowdownChangelog {
                 "Lower-screen controls now size themselves from the Thor lower panel's actual display density instead of inheriting the upper-screen metrics.",
                 "Unknown move records no longer arm the generic damage cue, preventing sound effects from being attached to unclassified animations.",
                 "Residual damage from status effects, items, and hazards no longer produces a false direct-hit haptic.",
-                "Direct HP changes now trigger one impact feedback only when the target actually loses HP, including set-HP damage packets."
+                "Direct HP changes now trigger one impact feedback only when the target actually loses HP, including set-HP damage packets.",
+                "Native battle effects now use Showdown's set-HP delta when deciding whether to play direct damage audio, keeping healing silent."
             )
         ),
         ShowdownChangelogEntry(

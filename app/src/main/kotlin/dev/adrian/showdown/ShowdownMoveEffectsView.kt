@@ -217,7 +217,15 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-clearpositiveboost') resultCue = 'stat_drop';
                                     if (args[0] === '-clearnegativeboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
-                                    if ((args[0] === '-damage' || args[0] === '-sethp') && !kwArgs.from && this.scene.__showdownNativeDamageArmed) this.scene.__showdownNativeDamagePending = true;
+                                    var directDamage = args[0] === '-damage' && !kwArgs.from;
+                                    if (args[0] === '-sethp' && !kwArgs.from) {
+                                        for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
+                                            var setHpTarget = this.getPokemon(args[setHpIndex]);
+                                            var setHpChange = setHpTarget && setHpTarget.healthParse(args[setHpIndex + 1]);
+                                            if (setHpChange && setHpChange[0] < 0) directDamage = true;
+                                        }
+                                    }
+                                    if (directDamage && this.scene.__showdownNativeDamageArmed) this.scene.__showdownNativeDamagePending = true;
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
                                 this.scene.__showdownNativeAudioSilent = false;
