@@ -1244,10 +1244,7 @@ class BattleSessionTest {
         assertEquals("Alcremie", BattleSession.displayPokemonName("Alcremie-Caramel-Swirl", "Alcremie"))
         assertEquals("Rotom-Wash", BattleSession.displayPokemonName("Rotom-Wash"))
         assertEquals("Creamy", BattleSession.displayPokemonName("Creamy", "Alcremie-Caramel-Swirl"))
-        assertEquals(
-            "Alcremie-Caramel-Swirl",
-            BattleSession.displayPokemonName("Alcremie-Caramel-Swirl", "Alcremie-Mint-Cream")
-        )
+        assertEquals("Alcremie", BattleSession.displayPokemonName("Alcremie-Caramel-Swirl", "Alcremie-Mint-Cream"))
     }
 
     @Test

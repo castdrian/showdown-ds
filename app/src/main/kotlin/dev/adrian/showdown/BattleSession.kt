@@ -4095,8 +4095,7 @@ class BattleSession {
             val canonicalSpecies = species.trim().ifBlank { label }
             val readableLabel = readableSpeciesName(label)
             val readableSpecies = readableSpeciesName(canonicalSpecies)
-            val sameBaseSpecies = canonicalSpecies.equals(readableSpecies, true) &&
-                readableLabel.equals(readableSpecies, true)
+            val sameBaseSpecies = readableLabel.equals(readableSpecies, true)
             return if (label.equals(canonicalSpecies, true) || sameBaseSpecies) {
                 readableSpecies
             } else {
