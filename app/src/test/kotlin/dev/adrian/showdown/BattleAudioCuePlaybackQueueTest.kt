@@ -25,6 +25,22 @@ class BattleAudioCuePlaybackQueueTest {
     }
 
     @Test
+    fun statCuesStartAtTheirBattleEventEvenWhileImpactAudioIsPlaying() {
+        val queue = BattleAudioCuePlaybackQueue()
+
+        queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L)
+
+        assertEquals(
+            0L,
+            queue.enqueue(BattleAudioCue.STAT_BOOST, 1_100L).delayMillis
+        )
+        assertEquals(
+            0L,
+            queue.enqueue(BattleAudioCue.STAT_DROP, 1_200L).delayMillis
+        )
+    }
+
+    @Test
     fun startsLaterRequestsWhenTheQueueIsFree() {
         val queue = BattleAudioCuePlaybackQueue()
         queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L)

@@ -24,7 +24,8 @@ class BattleAudioCuePlaybackQueue {
                 requestedAtMillis,
                 lastImpactAtMillis + IMPACT_RESULT_DELAY_MILLIS
             )
-            else -> maxOf(requestedAtMillis, nextStandardAvailableAtMillis)
+            BattleAudioCue.STAT_BOOST,
+            BattleAudioCue.STAT_DROP -> requestedAtMillis
         }
         if (cue == BattleAudioCue.GENERIC_DAMAGE) lastImpactAtMillis = startAtMillis
         nextStandardAvailableAtMillis = maxOf(

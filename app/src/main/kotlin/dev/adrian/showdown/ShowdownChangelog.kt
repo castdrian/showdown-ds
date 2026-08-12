@@ -17,6 +17,7 @@ object ShowdownChangelog {
                 "Move previews now fill power, accuracy, category, and gimmick power from the official dex while keeping status and always-hit values as dashes.",
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
                 "Impact audio now starts with the damage animation instead of waiting behind longer status clips, with effectiveness cues following the hit.",
+                "Stat boost and drop audio now starts at the corresponding battle event instead of waiting for an earlier cue to finish.",
                 "Battle audio timing resets at each move boundary so faster playback cannot delay the next move's cue.",
                 "Damage cues also follow health changes represented by set-HP packets without sounding for healing.",
                 "Dynamax and Terastal choices now use the official Showdown command suffixes.",
