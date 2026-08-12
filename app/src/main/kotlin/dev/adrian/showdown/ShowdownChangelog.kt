@@ -48,7 +48,8 @@ object ShowdownChangelog {
                 "Iron Valiant now uses Showdown's native Gen 5 back sprite on the player side, with a verified back-sprite fallback.",
                 "The secondary Thor display keeps controller focus available for touch and hardware input.",
                 "Lower-screen controls now size themselves from the Thor lower panel's actual display density instead of inheriting the upper-screen metrics.",
-                "Unknown move records no longer arm the generic damage cue, preventing sound effects from being attached to unclassified animations."
+                "Unknown move records no longer arm the generic damage cue, preventing sound effects from being attached to unclassified animations.",
+                "Residual damage from status effects, items, and hazards no longer produces a false direct-hit haptic."
             )
         ),
         ShowdownChangelogEntry(

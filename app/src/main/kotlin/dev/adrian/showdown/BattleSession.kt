@@ -1185,7 +1185,7 @@ class BattleSession {
                             ?.takeIf { it.isNotBlank() }
                         if (target != null && pendingHit != null && pendingHit?.target != target) publishPendingHit()
                         applyHealth(fields)
-                        target?.let {
+                        target?.takeUnless { hasProtocolSource(fields) }?.let {
                             if (pendingHit == null) pendingHit = PendingHit(it, it)
                         }
                     }
@@ -2951,6 +2951,8 @@ class BattleSession {
         .distinct()
 
     private fun isSilent(fields: List<String>) = fields.drop(2).any { it.trim().equals("[silent]", true) }
+
+    private fun hasProtocolSource(fields: List<String>) = fields.drop(4).any { it.trim().startsWith("[from]", true) }
 
     private fun effectiveTypes(slot: String): List<String> {
         val base = typeChangeBySlot[slot] ?: baseTypesBySlot[slot].orEmpty()

@@ -1318,6 +1318,22 @@ class BattleSessionTest {
     }
 
     @Test
+    fun indirectDamageDoesNotEmitAHitFeedbackEvent() {
+        val session = BattleSession()
+        val feedback = mutableListOf<BattleSession.BattleFeedback>()
+        session.addFeedbackListener { feedback += it }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-damage|p2a: Tapu Koko|90/100 brn|[from] status: brn",
+                "|-damage|p2a: Tapu Koko|80/100|[from] item: Life Orb"
+            )
+        )
+
+        assertFalse(feedback.any { it.type == BattleSession.FeedbackType.HIT })
+    }
+
+    @Test
     fun faintedCombatantIsRemovedFromTheBattlePresentation() {
         val session = BattleSession()
 
