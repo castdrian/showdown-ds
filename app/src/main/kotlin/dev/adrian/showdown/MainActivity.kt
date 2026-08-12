@@ -59,6 +59,7 @@ class MainActivity : Activity() {
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
     private var battleScene: BattleSceneView? = null
+    private var primaryFrame: FrameLayout? = null
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
     private var commandDeck: CommandDeckView? = null
     private lateinit var session: BattleSession
@@ -198,6 +199,7 @@ class MainActivity : Activity() {
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread {
+            if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
             showdownMoveEffects?.applyProtocol(lines)
         }
     }
@@ -443,6 +445,7 @@ class MainActivity : Activity() {
         if (::replayFetcher.isInitialized) replayFetcher.close()
         showdownMoveEffects?.release()
         showdownMoveEffects = null
+        primaryFrame = null
         super.onDestroy()
     }
 
@@ -531,21 +534,28 @@ class MainActivity : Activity() {
     }
 
     private fun createPrimaryScreen(): View {
-        val frame = FrameLayout(this)
+        val frame = FrameLayout(this).also { primaryFrame = it }
         battleScene = BattleSceneView(this, session, spriteCache)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
-        showdownMoveEffects = ShowdownMoveEffectsView(
+        return frame
+    }
+
+    private fun ensureShowdownMoveEffects(): ShowdownMoveEffectsView? {
+        showdownMoveEffects?.let { return it }
+        val frame = primaryFrame ?: return null
+        val effects = ShowdownMoveEffectsView(
             this,
             battleAudio::playBattleCue,
             battleAudio::resetBattleCues,
             protocolHistoryProvider = { session.protocolHistory() },
             audioMoveResetter = battleAudio::beginBattleMove
-        ).also { effects ->
-            frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
-            effects.setPlaybackSpeed(replaySpeed)
-            effects.seed(session.protocolHistory())
-        }
-        return frame
+        )
+        showdownMoveEffects = effects
+        frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
+        effects.setPlaybackSpeed(replaySpeed)
+        effects.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
+        effects.seed(session.protocolHistory())
+        return effects
     }
 
     private fun showSecondaryDisplay() {
@@ -4279,6 +4289,7 @@ class MainActivity : Activity() {
         replayPaused = false
         replayPausedForLifecycle = false
         replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
+        ensureShowdownMoveEffects()
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         showdownMoveEffects?.setPlaybackPaused(false)
         enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)

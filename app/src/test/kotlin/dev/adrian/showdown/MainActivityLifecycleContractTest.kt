@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -31,5 +32,18 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(resume.contains("showSecondaryDisplay()"))
         assertTrue(source.contains("secondaryPresentation?.isShowing == false"))
+    }
+
+    @Test
+    fun defersTheAnimationWebViewUntilBattlePlaybackStarts() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val screenFactory = source.substringAfter("private fun createPrimaryScreen()").substringBefore("private fun ensureShowdownMoveEffects()")
+
+        assertTrue(screenFactory.contains("primaryFrame = it"))
+        assertTrue(source.contains("private fun ensureShowdownMoveEffects(): ShowdownMoveEffectsView?"))
+        assertTrue(source.contains("if (lines.any { it.startsWith(\"|init|battle\") }) ensureShowdownMoveEffects()"))
+        assertTrue(source.contains("frame.addView(effects, FrameLayout.LayoutParams(-1, -1))"))
+        assertTrue(screenFactory.contains("frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))"))
+        assertFalse(screenFactory.contains("ShowdownMoveEffectsView("))
     }
 }
