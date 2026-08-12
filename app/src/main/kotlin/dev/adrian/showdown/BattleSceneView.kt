@@ -32,14 +32,14 @@ class BattleSceneView(
     private var opponentSprite: ShowdownSpriteCache.SpriteAsset? = null
     private val playerActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
     private val opponentActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
-    private val requestedPlayerActiveSprites = mutableMapOf<String, String>()
-    private val requestedOpponentActiveSprites = mutableMapOf<String, String>()
+    private val requestedPlayerActiveSprites = mutableMapOf<String, BattleSpriteRequest>()
+    private val requestedOpponentActiveSprites = mutableMapOf<String, BattleSpriteRequest>()
     private var playerPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
     private var opponentPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
     private var playerTrainerSprite: ShowdownSpriteCache.SpriteAsset? = null
     private var opponentTrainerSprite: ShowdownSpriteCache.SpriteAsset? = null
-    private var requestedPlayerSprite = ""
-    private var requestedOpponentSprite = ""
+    private var requestedPlayerSprite: BattleSpriteRequest? = null
+    private var requestedOpponentSprite: BattleSpriteRequest? = null
     private var requestedPlayerTrainer = false
     private var requestedOpponentTrainer = false
     private var requestedBackdrop = ""
@@ -54,11 +54,11 @@ class BattleSceneView(
 
     init {
         setWillNotDraw(false)
-        spriteCache.requestPlaceholder(true) {
+        spriteCache.requestPlaceholder(BattleSpriteSide.PLAYER) {
             playerPlaceholder = it
             invalidate()
         }
-        spriteCache.requestPlaceholder(false) {
+        spriteCache.requestPlaceholder(BattleSpriteSide.OPPONENT) {
             opponentPlaceholder = it
             invalidate()
         }
@@ -256,12 +256,12 @@ class BattleSceneView(
         val playerSpecies = session.playerActiveCombatants().firstOrNull()?.species
             ?.ifBlank { session.playerPokemon }
             ?: session.playerPokemon
-        val playerKey = "back:${session.spriteStyle}:$playerSpecies"
-        if (playerKey != requestedPlayerSprite) {
-            requestedPlayerSprite = playerKey
+        val playerRequest = BattleSpriteRequests.single(playerSpecies, BattleSpriteSide.PLAYER, session.spriteStyle)
+        if (playerRequest != requestedPlayerSprite) {
+            requestedPlayerSprite = playerRequest
             playerSprite = null
-            spriteCache.requestPokemon(playerSpecies, true, session.spriteStyle) { asset ->
-                if (playerKey == requestedPlayerSprite) {
+            spriteCache.requestPokemon(playerRequest) { asset ->
+                if (playerRequest == requestedPlayerSprite) {
                     playerSprite = asset
                     invalidate()
                 }
@@ -270,19 +270,27 @@ class BattleSceneView(
         val opponentSpecies = session.opponentActiveCombatants().firstOrNull()?.species
             ?.ifBlank { session.opponentPokemon }
             ?: session.opponentPokemon
-        val opponentKey = "front:${session.spriteStyle}:$opponentSpecies"
-        if (opponentKey != requestedOpponentSprite) {
-            requestedOpponentSprite = opponentKey
+        val opponentRequest = BattleSpriteRequests.single(opponentSpecies, BattleSpriteSide.OPPONENT, session.spriteStyle)
+        if (opponentRequest != requestedOpponentSprite) {
+            requestedOpponentSprite = opponentRequest
             opponentSprite = null
-            spriteCache.requestPokemon(opponentSpecies, false, session.spriteStyle) { asset ->
-                if (opponentKey == requestedOpponentSprite) {
+            spriteCache.requestPokemon(opponentRequest) { asset ->
+                if (opponentRequest == requestedOpponentSprite) {
                     opponentSprite = asset
                     invalidate()
                 }
             }
         }
-        requestActiveSprites(session.playerActiveCombatants(), true, playerActiveSprites, requestedPlayerActiveSprites)
-        requestActiveSprites(session.opponentActiveCombatants(), false, opponentActiveSprites, requestedOpponentActiveSprites)
+        requestActiveSprites(
+            BattleSpriteRequests.active(session.playerActiveCombatants(), BattleSpriteSide.PLAYER, session.spriteStyle),
+            playerActiveSprites,
+            requestedPlayerActiveSprites
+        )
+        requestActiveSprites(
+            BattleSpriteRequests.active(session.opponentActiveCombatants(), BattleSpriteSide.OPPONENT, session.spriteStyle),
+            opponentActiveSprites,
+            requestedOpponentActiveSprites
+        )
         if (!requestedPlayerTrainer) {
             requestedPlayerTrainer = true
             spriteCache.requestTrainer("red") { asset ->
@@ -315,25 +323,24 @@ class BattleSceneView(
     }
 
     private fun requestActiveSprites(
-        combatants: List<BattleSession.ActiveCombatant>,
-        back: Boolean,
+        plannedRequests: List<BattleSpriteSlotRequest>,
         assets: MutableMap<String, ShowdownSpriteCache.SpriteAsset?>,
-        requests: MutableMap<String, String>
+        requests: MutableMap<String, BattleSpriteRequest>
     ) {
-        val activeSlots = combatants.map { it.slot }.toSet()
+        val activeSlots = plannedRequests.map { it.slot }.toSet()
         requests.keys.filterNot(activeSlots::contains).toList().forEach {
             requests.remove(it)
             assets.remove(it)
         }
-        combatants.forEach { combatant ->
-            val species = combatant.species.ifBlank { combatant.name }
-            val key = "${if (back) "back" else "front"}:${session.spriteStyle}:$species"
-            if (requests[combatant.slot] == key) return@forEach
-            requests[combatant.slot] = key
-            assets[combatant.slot] = null
-            spriteCache.requestPokemon(species, back, session.spriteStyle) { asset ->
-                if (requests[combatant.slot] == key) {
-                    assets[combatant.slot] = asset
+        plannedRequests.forEach { plannedRequest ->
+            val slot = plannedRequest.slot
+            val request = plannedRequest.request
+            if (requests[slot] == request) return@forEach
+            requests[slot] = request
+            assets[slot] = null
+            spriteCache.requestPokemon(request) { asset ->
+                if (requests[slot] == request) {
+                    assets[slot] = asset
                     invalidate()
                 }
             }

@@ -3,45 +3,45 @@ package dev.adrian.showdown
 import java.util.Locale
 
 object ShowdownAssetPaths {
-    fun battleSprite(species: String, back: Boolean, style: BattleSession.SpriteStyle): String {
-        val collection = if (style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani"
-        return "sprites/${if (back) "$collection-back" else collection}/${animationId(species)}.gif"
+    fun battleSprite(request: BattleSpriteRequest): String {
+        val collection = if (request.style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani"
+        return "sprites/${if (request.backFacing) "$collection-back" else collection}/${animationId(request.species)}.gif"
     }
 
-    fun battleSpriteCandidates(species: String, back: Boolean, style: BattleSession.SpriteStyle): List<String> {
+    fun battleSpriteCandidates(request: BattleSpriteRequest): List<String> {
         val candidates = linkedSetOf<String>()
-        val baseSpecies = species.substringBefore('-').trim()
+        val baseSpecies = request.species.substringBefore('-').trim()
         val speciesNames = buildList {
-            add(species)
-            if (baseSpecies.isNotEmpty() && !baseSpecies.equals(species.trim(), ignoreCase = true)) add(baseSpecies)
+            add(request.species)
+            if (baseSpecies.isNotEmpty() && !baseSpecies.equals(request.species.trim(), ignoreCase = true)) add(baseSpecies)
         }
         val collections = buildList {
-            add(if (style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani")
-            if (style == BattleSession.SpriteStyle.MODERN_3D) add("gen5ani")
+            add(if (request.style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani")
+            if (request.style == BattleSession.SpriteStyle.MODERN_3D) add("gen5ani")
         }
-        val verifiedBackPaths = if (back) trueBackSpritePaths(species) else emptyList()
+        val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
         verifiedBackPaths.forEach { candidates += it }
         val hasVerifiedBackSprite = verifiedBackPaths.isNotEmpty()
         if (!hasVerifiedBackSprite) {
             collections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += battleSprite(name, back, collection) }
+                speciesNames.forEach { name -> candidates += battleSprite(name, request.side, collection) }
             }
         }
-        if (back) {
+        if (request.backFacing) {
             if (!hasVerifiedBackSprite) {
-                val staticCollections = if (style == BattleSession.SpriteStyle.MODERN_3D) {
+                val staticCollections = if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
                     listOf("xy", "gen5")
                 } else {
                     listOf("gen5")
                 }
                 staticCollections.forEach { collection ->
-                    speciesNames.forEach { name -> candidates += staticBattleSprite(name, true, collection) }
+                    speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection) }
                 }
             }
-            candidates += placeholder(true)
+            candidates += placeholder(BattleSpriteSide.PLAYER)
         } else {
-            candidates += dexSprite(species)
-            candidates += "sprites/dex/${animationId(species)}.png"
+            candidates += dexSprite(request.species)
+            candidates += "sprites/dex/${animationId(request.species)}.png"
         }
         return candidates.toList()
     }
@@ -53,15 +53,15 @@ object ShowdownAssetPaths {
         else -> emptyList()
     }
 
-    private fun battleSprite(species: String, back: Boolean, collection: String) =
-        "sprites/${if (back) "$collection-back" else collection}/${animationId(species)}.gif"
+    private fun battleSprite(species: String, side: BattleSpriteSide, collection: String) =
+        "sprites/${if (side == BattleSpriteSide.PLAYER) "$collection-back" else collection}/${animationId(species)}.gif"
 
-    private fun staticBattleSprite(species: String, back: Boolean, collection: String) =
-        "sprites/${if (back) "$collection-back" else collection}/${animationId(species)}.png"
+    private fun staticBattleSprite(species: String, side: BattleSpriteSide, collection: String) =
+        "sprites/${if (side == BattleSpriteSide.PLAYER) "$collection-back" else collection}/${animationId(species)}.png"
 
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
 
-    fun placeholder(back: Boolean) = "sprites/${if (back) "ani-back" else "ani"}/substitute.gif"
+    fun placeholder(side: BattleSpriteSide) = "sprites/${if (side == BattleSpriteSide.PLAYER) "ani-back" else "ani"}/substitute.gif"
 
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
 

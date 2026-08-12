@@ -1,21 +1,23 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShowdownAssetPathsTest {
     @Test
     fun usesShowdownsDistinctDexAndAnimatedSpriteIdentifiers() {
         assertEquals("sprites/dex/rotom-wash.png", ShowdownAssetPaths.dexSprite("Rotom-Wash"))
-        assertEquals("sprites/xyani/rotomwash.gif", ShowdownAssetPaths.battleSprite("Rotom-Wash", false, BattleSession.SpriteStyle.MODERN_3D))
-        assertEquals("sprites/xyani-back/rotomwash.gif", ShowdownAssetPaths.battleSprite("Rotom-Wash", true, BattleSession.SpriteStyle.MODERN_3D))
+        assertEquals("sprites/xyani/rotomwash.gif", ShowdownAssetPaths.battleSprite(BattleSpriteRequest.forOpponent("Rotom-Wash", BattleSession.SpriteStyle.MODERN_3D)))
+        assertEquals("sprites/xyani-back/rotomwash.gif", ShowdownAssetPaths.battleSprite(BattleSpriteRequest.forPlayer("Rotom-Wash", BattleSession.SpriteStyle.MODERN_3D)))
     }
 
     @Test
     fun keepsHyphenatedDexFormsAndNormalizesAnimatedSprites() {
         assertEquals("sprites/dex/ho-oh.png", ShowdownAssetPaths.dexSprite("Ho-Oh"))
         assertEquals("sprites/dex/nidoran-m.png", ShowdownAssetPaths.dexSprite("Nidoran♂"))
-        assertEquals("sprites/gen5ani/hooh.gif", ShowdownAssetPaths.battleSprite("Ho-Oh", false, BattleSession.SpriteStyle.CLASSIC_2D))
+        assertEquals("sprites/gen5ani/hooh.gif", ShowdownAssetPaths.battleSprite(BattleSpriteRequest.forOpponent("Ho-Oh", BattleSession.SpriteStyle.CLASSIC_2D)))
     }
 
     @Test
@@ -29,7 +31,7 @@ class ShowdownAssetPathsTest {
                 "sprites/dex/furfrou-la-reine.png",
                 "sprites/dex/furfroulareine.png"
             ),
-            ShowdownAssetPaths.battleSpriteCandidates("Furfrou-La Reine", false, BattleSession.SpriteStyle.MODERN_3D)
+            ShowdownAssetPaths.battleSpriteCandidates(BattleSpriteRequest.forOpponent("Furfrou-La Reine", BattleSession.SpriteStyle.MODERN_3D))
         )
     }
 
@@ -42,7 +44,7 @@ class ShowdownAssetPathsTest {
                 "sprites/dex/iron-hands.png",
                 "sprites/dex/ironhands.png"
             ),
-            ShowdownAssetPaths.battleSpriteCandidates("Iron Hands", false, BattleSession.SpriteStyle.MODERN_3D)
+            ShowdownAssetPaths.battleSpriteCandidates(BattleSpriteRequest.forOpponent("Iron Hands", BattleSession.SpriteStyle.MODERN_3D))
         )
     }
 
@@ -53,7 +55,23 @@ class ShowdownAssetPathsTest {
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
                 "sprites/ani-back/substitute.gif"
             ),
-            ShowdownAssetPaths.battleSpriteCandidates("Iron Valiant", true, BattleSession.SpriteStyle.MODERN_3D)
+            ShowdownAssetPaths.battleSpriteCandidates(BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D))
+        )
+    }
+
+    @Test
+    fun keepsIronValiantFrontAndBackCandidatesSeparate() {
+        val frontCandidates = ShowdownAssetPaths.battleSpriteCandidates(BattleSpriteRequest.forOpponent("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D))
+        val backCandidates = ShowdownAssetPaths.battleSpriteCandidates(BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D))
+
+        assertTrue(frontCandidates.contains("sprites/gen5ani/ironvaliant.gif"))
+        assertFalse(frontCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
+        assertEquals(
+            listOf(
+                "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
+                "sprites/ani-back/substitute.gif"
+            ),
+            backCandidates
         )
     }
 }

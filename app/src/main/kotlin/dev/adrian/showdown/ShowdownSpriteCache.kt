@@ -112,16 +112,16 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val pendingFileReceivers = ConcurrentHashMap<String, MutableList<(File?) -> Unit>>()
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
 
-    fun requestPokemon(species: String, back: Boolean, style: BattleSession.SpriteStyle, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(ShowdownAssetPaths.battleSpriteCandidates(species, back, style), receiver)
+    fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        requestSpriteCandidates(ShowdownAssetPaths.battleSpriteCandidates(request), receiver)
     }
 
     fun requestDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
         requestSprite(ShowdownAssetPaths.dexSprite(species), receiver)
     }
 
-    fun requestPlaceholder(back: Boolean, receiver: (SpriteAsset?) -> Unit) {
-        requestSprite(ShowdownAssetPaths.placeholder(back), receiver)
+    fun requestPlaceholder(side: BattleSpriteSide, receiver: (SpriteAsset?) -> Unit) {
+        requestSprite(ShowdownAssetPaths.placeholder(side), receiver)
     }
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {

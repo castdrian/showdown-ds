@@ -112,6 +112,23 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun keepsTheViewerSideAsThePlayerWhenTheViewerIsP2() {
+        val session = BattleSession().apply { setLocalUsername("OPPONENT") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Dragonite|Dragonite, L50|100/100",
+                "|switch|p2a: Iron Valiant|Iron Valiant, L50|100/100"
+            )
+        )
+
+        assertEquals("p2", session.battlePlayerSlot())
+        assertEquals("Iron Valiant", session.playerActiveCombatants().single().species)
+        assertEquals("Dragonite", session.opponentActiveCombatants().single().species)
+    }
+
+    @Test
     fun tracksOfficialBattlePhasesAndClearsTheMessageFeedMarker() {
         val session = BattleSession()
 
