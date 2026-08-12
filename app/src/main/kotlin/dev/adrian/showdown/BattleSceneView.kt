@@ -105,18 +105,15 @@ class BattleSceneView(
                 )
             }
         } else {
-            val combatant = opponentCombatants.firstOrNull()
             drawCombatant(
                 canvas,
                 opponentX,
                 opponentY,
                 scale * if (singles) 1.30f else 1.05f,
                 false,
-                combatant?.condition ?: session.opponentCondition,
-                combatant?.entryAtNanos ?: session.opponentEntryAtNanos,
-                nowNanos,
-                combatant?.let { opponentActiveSprites[it.slot] },
-                combatant?.name
+                session.opponentCondition,
+                session.opponentEntryAtNanos,
+                nowNanos
             )
         }
         if (!singles && playerCombatants.size > 1) {
@@ -135,18 +132,15 @@ class BattleSceneView(
                 )
             }
         } else {
-            val combatant = playerCombatants.firstOrNull()
             drawCombatant(
                 canvas,
                 playerX,
                 playerY,
                 scale * if (singles) 1.50f else 1.16f,
                 true,
-                combatant?.condition ?: session.playerCondition,
-                combatant?.entryAtNanos ?: session.playerEntryAtNanos,
-                nowNanos,
-                combatant?.let { playerActiveSprites[it.slot] },
-                combatant?.name
+                session.playerCondition,
+                session.playerEntryAtNanos,
+                nowNanos
             )
         }
         drawHeader(canvas, width, scale)
