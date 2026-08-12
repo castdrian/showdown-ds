@@ -96,12 +96,11 @@ class BattleSceneView(
                     multiCombatantX(width, false, index, opponentCombatants.size),
                     opponentY,
                     scale * 0.92f,
-                    false,
+                    combatant.name,
                     combatant.condition,
                     combatant.entryAtNanos,
                     nowNanos,
-                    opponentActiveSprites[combatant.slot],
-                    combatant.name
+                    opponentActiveSprites[combatant.slot] ?: opponentPlaceholder
                 )
             }
         } else {
@@ -110,10 +109,11 @@ class BattleSceneView(
                 opponentX,
                 opponentY,
                 scale * if (singles) 1.30f else 1.05f,
-                false,
+                session.opponentPokemon,
                 session.opponentCondition,
                 session.opponentEntryAtNanos,
-                nowNanos
+                nowNanos,
+                opponentSprite ?: opponentPlaceholder
             )
         }
         if (!singles && playerCombatants.size > 1) {
@@ -123,12 +123,11 @@ class BattleSceneView(
                     multiCombatantX(width, true, index, playerCombatants.size),
                     playerY,
                     scale * 1.02f,
-                    true,
+                    combatant.name,
                     combatant.condition,
                     combatant.entryAtNanos,
                     nowNanos,
-                    playerActiveSprites[combatant.slot],
-                    combatant.name
+                    playerActiveSprites[combatant.slot] ?: playerPlaceholder
                 )
             }
         } else {
@@ -137,10 +136,11 @@ class BattleSceneView(
                 playerX,
                 playerY,
                 scale * if (singles) 1.50f else 1.16f,
-                true,
+                session.playerPokemon,
                 session.playerCondition,
                 session.playerEntryAtNanos,
-                nowNanos
+                nowNanos,
+                playerSprite ?: playerPlaceholder
             )
         }
         drawHeader(canvas, width, scale)
@@ -444,23 +444,14 @@ class BattleSceneView(
         centerX: Float,
         centerY: Float,
         scale: Float,
-        player: Boolean,
+        pokemon: String,
         condition: String,
         summonAtNanos: Long,
         nowNanos: Long,
-        spriteOverride: ShowdownSpriteCache.SpriteAsset? = null,
-        pokemonOverride: String? = null
+        sprite: ShowdownSpriteCache.SpriteAsset?
     ) {
-        val pokemon = pokemonOverride ?: if (player) session.playerPokemon else session.opponentPokemon
         val faintProgress = faintProgress(pokemon, condition, nowNanos)
         if (faintProgress >= 1f) return
-        val sprite = if (pokemonOverride != null) {
-            spriteOverride ?: if (player) playerPlaceholder else opponentPlaceholder
-        } else if (player) {
-            playerSprite ?: playerPlaceholder
-        } else {
-            opponentSprite ?: opponentPlaceholder
-        }
         sprite ?: return
         drawSummonBall(canvas, centerX, centerY, scale, summonAtNanos, nowNanos)
         val summonAlpha = BattleSceneTiming.summonSpriteAlpha(summonAtNanos, nowNanos)
