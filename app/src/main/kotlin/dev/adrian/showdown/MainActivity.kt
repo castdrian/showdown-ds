@@ -199,7 +199,9 @@ class MainActivity : Activity() {
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread {
+            val effectsAlreadyCreated = showdownMoveEffects != null
             if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
+            if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return@runOnUiThread
             showdownMoveEffects?.applyProtocol(lines)
         }
     }

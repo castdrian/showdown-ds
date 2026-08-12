@@ -46,4 +46,13 @@ class MainActivityLifecycleContractTest {
         assertTrue(screenFactory.contains("frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))"))
         assertFalse(screenFactory.contains("ShowdownMoveEffectsView("))
     }
+
+    @Test
+    fun doesNotFeedInitialBattlePacketToFreshlySeededEffectsViewTwice() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
+
+        assertTrue(listener.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
+        assertTrue(listener.contains("if (!effectsAlreadyCreated && lines.any { it.startsWith(\"|init|battle\") }) return@runOnUiThread"))
+    }
 }
