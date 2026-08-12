@@ -89,7 +89,7 @@ class BattleSceneView(
         opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
         requestResources()
         drawBackdrop(canvas, width, height)
-        if (!singles && opponentCombatants.size > 1) {
+        if (!singles && opponentCombatants.isNotEmpty()) {
             fieldCombatants(opponentCombatants, false).forEachIndexed { index, combatant ->
                 drawCombatant(
                     canvas,
@@ -116,7 +116,7 @@ class BattleSceneView(
                 opponentSprite ?: opponentPlaceholder
             )
         }
-        if (!singles && playerCombatants.size > 1) {
+        if (!singles && playerCombatants.isNotEmpty()) {
             fieldCombatants(playerCombatants, true).forEachIndexed { index, combatant ->
                 drawCombatant(
                     canvas,
