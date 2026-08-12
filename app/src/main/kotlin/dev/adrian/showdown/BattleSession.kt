@@ -1174,6 +1174,7 @@ class BattleSession {
                     "switch", "drag", "replace" -> applySwitch(fields)
                     "swap" -> applySwap(fields)
                     "poke" -> applyPoke(fields)
+                    "updatepoke" -> applyUpdatePoke(fields)
                     "move" -> {
                         publishPendingHit()
                         applyMove(fields)
@@ -1257,6 +1258,7 @@ class BattleSession {
                     "-primal" -> applyGimmickFormChange(fields, "reverted to its primal form.")
                     "-center" -> appendLog("The remaining Pokémon moved to the center of the field.")
                     "-terastallize" -> applyTerastallize(fields)
+                    "custom" -> applyCustom(fields)
                     "-start" -> applyStart(fields)
                     "faint" -> applyFaint(fields)
                     "request" -> applyRequest(fields)
@@ -1610,6 +1612,10 @@ class BattleSession {
 
     private fun refreshPlayerPrimary() {
         val primary = playerActiveCombatants.entries.firstOrNull { it.key.endsWith('a') }?.value ?: return
+        val primarySpecies = playerActivePartyIndices[primary.slot]
+            ?.let { teamDetails.getOrNull(it)?.species }
+            ?.takeIf(String::isNotBlank)
+            ?: primary.name
         playerPokemon = primary.name
         playerHp = primary.hp
         playerLevel = primary.level
@@ -1618,6 +1624,7 @@ class BattleSession {
         updatePlayerDetails {
             it.copy(
                 name = primary.name,
+                species = primarySpecies,
                 types = primary.types,
                 level = primary.level,
                 gender = primary.gender,
@@ -1629,6 +1636,10 @@ class BattleSession {
 
     private fun refreshOpponentPrimary() {
         val primary = opponentActiveCombatants.entries.firstOrNull { it.key.endsWith('a') }?.value ?: return
+        val primarySpecies = opponentActivePartyIndices[primary.slot]
+            ?.let { opponentTeamDetails.getOrNull(it)?.species }
+            ?.takeIf(String::isNotBlank)
+            ?: primary.name
         opponentPokemon = primary.name
         opponentHp = primary.hp
         opponentLevel = primary.level
@@ -1636,6 +1647,7 @@ class BattleSession {
         opponentCondition = primary.condition
         opponentDetails = opponentDetails.copy(
             name = primary.name,
+            species = primarySpecies,
             types = primary.types,
             level = primary.level,
             gender = primary.gender,
@@ -1665,6 +1677,81 @@ class BattleSession {
                 species = pokemon
             )
         )
+    }
+
+    private fun applyUpdatePoke(fields: List<String>) {
+        val actor = fields.getOrNull(2)?.takeIf(String::isNotBlank) ?: return
+        val identifier = actor.substringAfter(':').trim().takeIf(String::isNotBlank) ?: return
+        val details = fields.getOrNull(3)?.takeIf(String::isNotBlank) ?: return
+        val species = details.substringBefore(',').trim().takeIf(String::isNotBlank) ?: return
+        val playerSide = isPlayerSide(actor)
+        val party = if (playerSide) teamDetails else opponentTeamDetails
+        val index = if (playerSide) {
+            playerPartyIdentifiers.indexOfFirst { it.equals(identifier, true) }
+                .takeIf { it >= 0 }
+                ?: party.indexOfFirst { it.matchesIdentifier(identifier) || it.species.equals(species, true) }
+        } else {
+            opponentPartyIdentifiers[identifier]
+                ?.takeIf { it in party.indices }
+                ?: party.indexOfFirst { it.matchesIdentifier(identifier) || it.species.equals(species, true) }
+        }
+        if (index !in party.indices) return
+
+        val previous = party[index]
+        val parsed = parseDetails(details)
+        val updatedTypes = if (previous.species.equals(species, true)) {
+            previous.types
+        } else {
+            resolvedTypes(species).ifEmpty { previous.types }
+        }
+        val updated = previous.copy(
+            name = previous.name.takeIf { !it.equals(previous.species, true) && !it.equals(identifier, true) } ?: species,
+            species = species,
+            types = updatedTypes,
+            level = parsed.first,
+            gender = parsed.second
+        )
+        party[index] = updated
+        updateActivePartyMember(playerSide, index, updated)
+    }
+
+    private fun updateActivePartyMember(playerSide: Boolean, index: Int, details: PokemonDetails) {
+        val activeIndices = if (playerSide) playerActivePartyIndices else opponentActivePartyIndices
+        val activeCombatants = if (playerSide) playerActiveCombatants else opponentActiveCombatants
+        activeIndices.filterValues { it == index }.keys.toList().forEach { slot ->
+            val combatant = activeCombatants[slot] ?: return@forEach
+            val displayedTypes = if (slot in terastallizedSlots) combatant.types else details.types
+            baseTypesBySlot[slot] = details.types
+            activeCombatants[slot] = combatant.copy(
+                name = details.name,
+                types = displayedTypes,
+                level = details.level,
+                gender = details.gender
+            )
+            if (playerSide) activeSlotNames[slot] = details.name
+        }
+        if (playerSide) {
+            activeTeamNames.clear()
+            activeTeamNames += activeSlotNames.values
+            if (activeIndices.keys.any { it.endsWith('a') && activeIndices[it] == index }) refreshPlayerPrimary()
+        } else if (activeIndices.keys.any { it.endsWith('a') && activeIndices[it] == index }) {
+            refreshOpponentPrimary()
+        }
+    }
+
+    private fun applyCustom(fields: List<String>) {
+        if (!fields.getOrNull(2).equals("-endterastallize", true)) return
+        val actor = fields.getOrNull(3)?.takeIf(String::isNotBlank) ?: return
+        val slot = actor.substringBefore(':').trim()
+        val wasTerastallized = slot in terastallizedSlots || slot in teraTypesBySlot
+        terastallizedSlots.remove(slot)
+        teraTypesBySlot.remove(slot)
+        typeChangeBySlot.remove(slot)
+        typeAdditionsBySlot.remove(slot)
+        if (!wasTerastallized) return
+        val baseTypes = baseTypesBySlot[slot].orEmpty().ifEmpty { effectiveTypes(slot) }
+        updateActiveTypes(actor, baseTypes)
+        appendLog("${battleActor(actor)} returned to its original types.")
     }
 
     private fun applyShowTeam(fields: List<String>) {

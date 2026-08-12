@@ -51,7 +51,9 @@ object ShowdownChangelog {
                 "Unknown move records no longer arm the generic damage cue, preventing sound effects from being attached to unclassified animations.",
                 "Residual damage from status effects, items, and hazards no longer produces a false direct-hit haptic.",
                 "Direct HP changes now trigger one impact feedback only when the target actually loses HP, including set-HP damage packets.",
-                "Native battle effects now use Showdown's set-HP delta when deciding whether to play direct damage audio, keeping healing silent."
+                "Native battle effects now use Showdown's set-HP delta when deciding whether to play direct damage audio, keeping healing silent.",
+                "Multi-target set-HP packets now update every active Pokémon and keep each impact feedback event attached to the right target.",
+                "Active form updates and custom end-of-Terastal packets now restore Pokémon details and original types correctly."
             )
         ),
         ShowdownChangelogEntry(

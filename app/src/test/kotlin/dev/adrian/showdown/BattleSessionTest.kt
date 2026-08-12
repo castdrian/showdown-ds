@@ -1262,6 +1262,41 @@ class BattleSessionTest {
     }
 
     @Test
+    fun updatePokeReplacesAnActiveFormWithoutDroppingItsPartyState() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver { species ->
+            when (species) {
+                "Zoroark" -> listOf("DARK")
+                "Zoroark-Hisui" -> listOf("NORMAL", "GHOST")
+                else -> null
+            }
+        }
+
+        session.applyProtocolLine(
+            "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Zoro\",\"details\":\"Zoroark, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
+        )
+        session.applyProtocolLine("|updatepoke|p1: Zoro|Zoroark-Hisui, L50")
+
+        assertEquals("Zoroark-Hisui", session.playerActiveCombatants().single().name)
+        assertEquals(listOf("NORMAL", "GHOST"), session.playerActiveCombatants().single().types)
+        assertEquals("Zoroark-Hisui", session.playerDetails().species)
+    }
+
+    @Test
+    fun customEndTerastallizeRestoresTheOriginalTypes() {
+        val session = BattleSession()
+        session.applyProtocolLine("|switch|p1a: Incineroar|Incineroar, L50|100/100")
+        session.applyProtocolLine("|-terastallize|p1a: Incineroar|WATER")
+
+        assertEquals(listOf("WATER"), session.playerActiveCombatants().single().types)
+
+        session.applyProtocolLine("|custom|-endterastallize|p1a: Incineroar")
+
+        assertEquals(listOf("FIRE", "DARK"), session.playerActiveCombatants().single().types)
+        assertEquals(listOf("FIRE", "DARK"), session.playerDetails().types)
+    }
+
+    @Test
     fun battlePacketEmitsAClassifiedCriticalHitAndCarriesTheRequestId() {
         val session = BattleSession()
         val feedback = mutableListOf<BattleSession.BattleFeedback>()
