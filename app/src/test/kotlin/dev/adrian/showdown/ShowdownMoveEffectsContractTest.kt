@@ -17,6 +17,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("nativeBattleStarted();"))
         assertTrue(source.contains("new MutationObserver(function ()"))
         assertTrue(source.contains("chromeObserver.observe(document.getElementById('battle'), { childList: true, subtree: true });"))
+        assertTrue(source.contains(".result { display: none !important; }"))
         assertTrue(source.contains("release: function ()"))
         assertFalse(source.contains("requestAnimationFrame(keepChromeHidden)"))
         assertFalse(source.contains("var hideFrame = 0;"))

@@ -137,6 +137,7 @@ class ShowdownMoveEffectsView(
                     #battle { position: absolute; top: 0; left: 0; width: 640px; height: 360px; transform-origin: top left; overflow: hidden; border: 0; background: transparent !important; }
                     #log { display: none; }
                     .battle, .innerbattle { border: 0 !important; background: transparent !important; }
+                    .result { display: none !important; }
                     .native-effects-hidden { visibility: hidden !important; }
                 </style>
                 <script src="https://play.pokemonshowdown.com/config/config.js"></script>

@@ -44,8 +44,8 @@ object ShowdownAssetPaths {
 
     private fun trueBackSpritePaths(species: String): List<String> = when (animationId(species)) {
         "ironvaliant" -> listOf(
-            "sprites/gen5-back/ironvaliant.png",
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
+            "sprites/gen5-back/ironvaliant.png"
         )
         else -> emptyList()
     }
