@@ -1699,29 +1699,37 @@ class BattleSession {
 
         val previous = party[index]
         val parsed = parseDetails(details)
-        val updatedTypes = if (previous.species.equals(species, true)) {
-            previous.types
-        } else {
-            resolvedTypes(species).ifEmpty { previous.types }
-        }
+        val activeIndices = if (playerSide) playerActivePartyIndices else opponentActivePartyIndices
+        val activeSlots = activeIndices.filterValues { it == index }.keys
+        val fallbackBaseTypes = activeSlots.asSequence()
+            .mapNotNull { baseTypesBySlot[it]?.takeIf(List<String>::isNotEmpty) }
+            .firstOrNull()
+            ?: previous.types
+        val updatedBaseTypes = baseTypesFor(species, fallbackBaseTypes)
+        val activeCombatants = if (playerSide) playerActiveCombatants else opponentActiveCombatants
+        val updatedTypes = activeSlots.asSequence()
+            .filter { it in terastallizedSlots }
+            .mapNotNull { activeCombatants[it]?.types }
+            .firstOrNull()
+            ?: updatedBaseTypes
         val updated = previous.copy(
-            name = previous.name.takeIf { !it.equals(previous.species, true) && !it.equals(identifier, true) } ?: species,
+            name = previous.name.takeIf { !it.equals(previous.species, true) } ?: species,
             species = species,
             types = updatedTypes,
             level = parsed.first,
             gender = parsed.second
         )
         party[index] = updated
-        updateActivePartyMember(playerSide, index, updated)
+        updateActivePartyMember(playerSide, index, updated, updatedBaseTypes)
     }
 
-    private fun updateActivePartyMember(playerSide: Boolean, index: Int, details: PokemonDetails) {
+    private fun updateActivePartyMember(playerSide: Boolean, index: Int, details: PokemonDetails, baseTypes: List<String>) {
         val activeIndices = if (playerSide) playerActivePartyIndices else opponentActivePartyIndices
         val activeCombatants = if (playerSide) playerActiveCombatants else opponentActiveCombatants
         activeIndices.filterValues { it == index }.keys.toList().forEach { slot ->
             val combatant = activeCombatants[slot] ?: return@forEach
             val displayedTypes = if (slot in terastallizedSlots) combatant.types else details.types
-            baseTypesBySlot[slot] = details.types
+            baseTypesBySlot[slot] = baseTypes
             activeCombatants[slot] = combatant.copy(
                 name = details.name,
                 types = displayedTypes,
