@@ -163,6 +163,13 @@ class MainActivity : Activity() {
     private val battleAudioHandler = Handler(Looper.getMainLooper())
     private val battleEventHandler = Handler(Looper.getMainLooper())
     private val reconnectHandler = Handler(Looper.getMainLooper())
+    private val displayRefreshScheduler = BattleDisplayRefreshScheduler(
+        schedule = { runnable -> battleEventHandler.post(runnable) },
+        refresh = {
+            battleScene?.invalidate()
+            commandDeck?.invalidate()
+        }
+    )
     private val battleRejoinTimeout = Runnable {
         if (activeBattleRoomId != null && !battleProtocolReady && shouldMaintainConnection) {
             shouldMaintainConnection = false
@@ -199,12 +206,7 @@ class MainActivity : Activity() {
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
-        runOnUiThread {
-            val effectsAlreadyCreated = showdownMoveEffects != null
-            if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
-            if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return@runOnUiThread
-            showdownMoveEffects?.applyProtocol(lines)
-        }
+        runOnUiThread { applyBattleProtocolToEffects(lines) }
     }
     private val decisionListener = BattleSession.DecisionListener { command ->
         if (session.isReplayMode()) {
@@ -439,6 +441,7 @@ class MainActivity : Activity() {
         if (::session.isInitialized) session.removeFeedbackListener(feedbackListener)
         if (::session.isInitialized) session.removeClientActionListener(clientActionListener)
         battleAudioHandler.removeCallbacksAndMessages(null)
+        displayRefreshScheduler.cancel()
         reconnectHandler.removeCallbacksAndMessages(null)
         shouldMaintainConnection = false
         clearBattlePlayback()
@@ -639,8 +642,14 @@ class MainActivity : Activity() {
         if (::battleAudio.isInitialized && ::session.isInitialized) {
             battleAudio.updateOptions(session)
         }
-        battleScene?.invalidate()
-        commandDeck?.invalidate()
+        displayRefreshScheduler.request()
+    }
+
+    private fun applyBattleProtocolToEffects(lines: List<String>) {
+        val effectsAlreadyCreated = showdownMoveEffects != null
+        if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
+        if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return
+        showdownMoveEffects?.applyProtocol(lines)
     }
 
     private fun flushBattlePlayback() {
@@ -733,6 +742,7 @@ class MainActivity : Activity() {
 
     private fun clearBattlePlayback() {
         battleEventHandler.removeCallbacksAndMessages(null)
+        displayRefreshScheduler.cancel()
         pendingBattlePackets.clear()
         battlePacketPlaybackScheduled = false
         replayPaused = false

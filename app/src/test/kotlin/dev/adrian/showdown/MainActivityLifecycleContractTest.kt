@@ -19,6 +19,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("livePlaybackPausedForLifecycle = false"))
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(true)"))
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(false)"))
+        assertTrue(source.contains("displayRefreshScheduler.cancel()"))
         assertTrue(source.contains("battleAudio.pauseBattleCues()"))
         assertTrue(source.contains("battleAudio.resumeBattleCues()"))
         assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::pause)"))
@@ -52,8 +53,9 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
 
-        assertTrue(listener.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
-        assertTrue(listener.contains("if (!effectsAlreadyCreated && lines.any { it.startsWith(\"|init|battle\") }) return@runOnUiThread"))
+        assertTrue(listener.contains("runOnUiThread { applyBattleProtocolToEffects(lines) }"))
+        assertTrue(source.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
+        assertTrue(source.contains("if (!effectsAlreadyCreated && lines.any { it.startsWith(\"|init|battle\") }) return"))
     }
 
     @Test
