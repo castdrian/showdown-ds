@@ -1212,7 +1212,7 @@ class BattleSession {
                     "-setboost" -> applySetBoost(fields)
                     "cant" -> applyCant(fields)
                     "-fail" -> appendLog("${battleActor(fields.getOrNull(2))} failed to use ${battleEffectName(fields.getOrNull(3))}.")
-                    "-block" -> appendLog("${battleActor(fields.getOrNull(2))} was blocked by ${battleEffectName(fields.getOrNull(3))}.")
+                    "-block" -> applyBlock(fields)
                     "-notarget" -> appendLog("${battleActor(fields.getOrNull(2))} had no target.")
                     "-miss" -> appendLog("${battleActor(fields.getOrNull(2))}'s attack missed ${battleActor(fields.getOrNull(3))}.")
                     "-immune" -> appendLog("${battleActor(fields.getOrNull(2))} is immune.")
@@ -2593,6 +2593,21 @@ class BattleSession {
         val actor = battleActor(fields.getOrNull(2))
         val reason = battleEffectName(fields.getOrNull(3)).ifBlank { "that status" }
         appendLog("$actor couldn't move because of $reason.")
+    }
+
+    private fun applyBlock(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val effect = battleEffectName(fields.getOrNull(3))
+        val item = when (effect.lowercase()) {
+            "safety goggles" -> "Safety Goggles"
+            "protective pads" -> "Protective Pads"
+            "ability shield" -> "Ability Shield"
+            else -> null
+        }
+        item?.let { revealedItem ->
+            updateActorDetails(actor) { details -> details.copy(item = revealedItem) }
+        }
+        appendLog("${battleActor(actor)} was blocked by $effect.")
     }
 
     private fun applyAbility(fields: List<String>) {

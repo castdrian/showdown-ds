@@ -210,6 +210,25 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun revealsBarrierItemsFromOfficialBlockPackets() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Gholdengo|Gholdengo, L50|100/100",
+                "|switch|p2a: Gliscor|Gliscor, L50|100/100",
+                "|-block|p1a: Gholdengo|item: Safety Goggles",
+                "|-block|p2a: Gliscor|item: Protective Pads",
+                "|-block|p1a: Gholdengo|item: Ability Shield",
+                "|-block|p2a: Gliscor|Protect"
+            )
+        )
+
+        assertEquals("Ability Shield", session.playerDetails().item)
+        assertEquals("Protective Pads", session.opponentDetails().item)
+        assertTrue(session.battleLog().any { it.contains("Gliscor was blocked by Protect.") })
+    }
+
+    @Test
     fun appliesTemporaryTypesDynamaxAndOneLineBattleResults() {
         val session = BattleSession()
         session.setPokemonTypeResolver(
