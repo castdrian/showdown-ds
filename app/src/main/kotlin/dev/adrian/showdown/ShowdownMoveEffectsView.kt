@@ -277,7 +277,7 @@ class ShowdownMoveEffectsView(
                             var updateAcceleration = scene.updateAcceleration;
                             scene.updateAcceleration = function () {
                                 updateAcceleration.call(scene);
-                                scene.acceleration *= animationSpeed;
+                                scene.acceleration = animationSpeed;
                             };
                             scene.acceleration = animationSpeed;
                             observeChrome();
