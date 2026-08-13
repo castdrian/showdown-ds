@@ -36,6 +36,19 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun keepsTheThorPresentationFocusableAndTouchableAfterItsContentIsAttached() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val presentation = source.substringAfter("private inner class ThorPresentation")
+            .substringBefore("private fun configurePresentationWindow")
+
+        assertTrue(presentation.contains("setContentView(frame)"))
+        assertTrue(presentation.contains("configurePresentationWindow(window)"))
+        assertTrue(presentation.contains("window?.takeKeyEvents(true)"))
+        assertTrue(source.contains("FLAG_NOT_FOCUSABLE or"))
+        assertTrue(source.contains("FLAG_NOT_TOUCHABLE"))
+    }
+
+    @Test
     fun defersTheAnimationWebViewUntilBattlePlaybackStarts() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val screenFactory = source.substringAfter("private fun createPrimaryScreen()").substringBefore("private fun ensureShowdownMoveEffects()")

@@ -859,7 +859,7 @@ class MainActivity : Activity() {
                     id = id,
                     label = searchLabel ?: id,
                     menuLabel = searchLabel ?: id,
-                    usesRandomTeams = searchUsesRandomTeams ?: (id.contains("randombattle") || id.contains("battlefactory"))
+                    usesRandomTeams = searchUsesRandomTeams ?: BattleSession.MatchFormat.usesRandomTeamsFor(id)
                 )
         } ?: session.matchFormat
         if (format.id != session.matchFormat.id || format.label != session.matchFormat.label) {
@@ -1793,7 +1793,7 @@ class MainActivity : Activity() {
         val tournament = chatRoomState.tournament.snapshot
         val formatId = tournament.teambuilderFormat.ifBlank { tournament.format }
         val format = session.availableMatchFormats().firstOrNull { it.id.equals(formatId, true) }
-        if (format?.usesRandomTeams == true || formatId.contains("randombattle", true) || formatId.contains("battlefactory", true)) {
+        if (format?.usesRandomTeams == true || BattleSession.MatchFormat.usesRandomTeamsFor(formatId)) {
             sendTournamentTeamCommand(null, command)
             return
         }
@@ -4728,12 +4728,23 @@ class MainActivity : Activity() {
             frame.isFocusable = true
             frame.isFocusableInTouchMode = true
             setContentView(frame)
+            configurePresentationWindow(window)
+            window?.decorView?.isFocusable = true
+            window?.decorView?.isFocusableInTouchMode = true
+            window?.takeKeyEvents(true)
+            window?.decorView?.requestFocus()
             frame.requestFocus()
         }
 
         fun requestControllerFocus() {
             window?.decorView?.post {
-                if (isShowing && ::controllerFrame.isInitialized) controllerFrame.requestFocus()
+                if (!isShowing || !::controllerFrame.isInitialized) return@post
+                configurePresentationWindow(window)
+                window?.decorView?.isFocusable = true
+                window?.decorView?.isFocusableInTouchMode = true
+                window?.takeKeyEvents(true)
+                window?.decorView?.requestFocus()
+                controllerFrame.requestFocus()
             }
         }
 
@@ -4745,7 +4756,10 @@ class MainActivity : Activity() {
 
     private fun configurePresentationWindow(presentationWindow: Window?) {
         presentationWindow ?: return
-        presentationWindow.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        presentationWindow.clearFlags(
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        )
         presentationWindow.setDimAmount(0f)
         presentationWindow.statusBarColor = 0xFF071329.toInt()
         presentationWindow.navigationBarColor = 0xFF071329.toInt()

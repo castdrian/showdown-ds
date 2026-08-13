@@ -3,6 +3,12 @@ package dev.adrian.showdown
 import org.json.JSONObject
 import kotlin.random.Random
 
+private fun inferredRandomTeamFormat(id: String): Boolean {
+    val normalized = id.lowercase()
+    return normalized.contains("battlefactory") ||
+        (normalized.contains("random") && normalized.contains("battle"))
+}
+
 class BattleSession {
     enum class Panel {
         MOVES,
@@ -30,7 +36,7 @@ class BattleSession {
         val id: String,
         val label: String,
         val menuLabel: String = label,
-        val usesRandomTeams: Boolean = id.contains("randombattle") || id.contains("battlefactory")
+        val usesRandomTeams: Boolean = inferredRandomTeamFormat(id)
     ) {
         companion object {
             val GEN6_RANDOM = MatchFormat("gen6randombattle", "[Gen 6] Random Battle", "Gen 6 Random")
@@ -38,6 +44,8 @@ class BattleSession {
             val GEN8_RANDOM = MatchFormat("gen8randombattle", "[Gen 8] Random Battle", "Gen 8 Random")
             val GEN9_RANDOM = MatchFormat("gen9randombattle", "[Gen 9] Random Battle", "Gen 9 Random")
             val defaults = listOf(GEN6_RANDOM, GEN7_RANDOM, GEN8_RANDOM, GEN9_RANDOM)
+
+            fun usesRandomTeamsFor(id: String): Boolean = inferredRandomTeamFormat(id)
         }
     }
 
@@ -4167,7 +4175,7 @@ class BattleSession {
                     first.lowercase().filter(Char::isLetterOrDigit)
                 }
                 id.takeIf { it.isNotBlank() }?.let {
-                    MatchFormat(it, label, usesRandomTeams = second.contains('#') || it.contains("randombattle") || it.contains("battlefactory"))
+                    MatchFormat(it, label, usesRandomTeams = second.contains('#') || MatchFormat.usesRandomTeamsFor(it))
                 }
             }.distinctBy(MatchFormat::id)
         }

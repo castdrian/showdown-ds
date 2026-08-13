@@ -13,6 +13,14 @@ class BattleSessionTest {
     }
 
     @Test
+    fun randomDoublesAndTriplesFormatsDoNotRequireSavedTeams() {
+        assertTrue(BattleSession.MatchFormat("gen9randomdoublesbattle", "Random Doubles").usesRandomTeams)
+        assertTrue(BattleSession.MatchFormat("gen9randomtriplesbattle", "Random Triples").usesRandomTeams)
+        assertTrue(BattleSession.MatchFormat("gen9battlefactory", "Battle Factory").usesRandomTeams)
+        assertFalse(BattleSession.MatchFormat("gen9doublesou", "Doubles OU").usesRandomTeams)
+    }
+
+    @Test
     fun requestPopulatesMovesAndResetsFocus() {
         val session = BattleSession()
         session.focusMove(3)

@@ -72,7 +72,9 @@ class ThorDisplayProfileTest {
     fun keepsTheSecondaryPresentationInteractive() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 
-        assertTrue(source.contains("clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)"))
+        assertTrue(source.contains("clearFlags("))
+        assertTrue(source.contains("WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or"))
+        assertTrue(source.contains("WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE"))
         assertTrue(source.contains("context.createDisplayContext(display)"))
         assertTrue(source.contains("FrameLayout(presentationContext)"))
         assertTrue(source.contains("CommandDeckView(presentationContext"))

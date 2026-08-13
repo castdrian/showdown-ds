@@ -64,7 +64,9 @@ object ShowdownChangelog {
                 "Compact doubles and triples HP cards now use the same species-resolved identity and live HP projection as the cleaned single-battle layout, without party or battle metadata clutter.",
                 "Triple-battle target choices now flow onto a second readable row so every legal target remains touchable.",
                 "Damage audio now resets at every official move event, including moves marked [still], so skipped animations cannot leak timing into the next move.",
-                "Battle animations now stay at the selected playback speed instead of Showdown's automatic late-battle acceleration making later turns unexpectedly faster."
+                "Battle animations now stay at the selected playback speed instead of Showdown's automatic late-battle acceleration making later turns unexpectedly faster.",
+                "Random doubles, triples, and Battle Factory matchmaking now start without incorrectly asking for a saved team.",
+                "The Thor secondary display now reapplies touch and controller focus when its presentation is recreated or regains window focus."
             )
         ),
         ShowdownChangelogEntry(
