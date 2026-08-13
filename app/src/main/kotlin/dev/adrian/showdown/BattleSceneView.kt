@@ -27,6 +27,8 @@ class BattleSceneView(
     private val destination = RectF()
     private val logo: Bitmap? = BitmapFactory.decodeResource(resources, R.drawable.showdown_logo)
     private var backdrop: Bitmap? = null
+    private var pokeballSheet: Bitmap? = null
+    private var requestedPokeballSheet = false
     private var playerSprite: ShowdownSpriteCache.SpriteAsset? = null
     private var opponentSprite: ShowdownSpriteCache.SpriteAsset? = null
     private val playerActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
@@ -163,7 +165,8 @@ class BattleSceneView(
                         session.playerDetails(),
                         session.playerHp,
                         scale,
-                        playerStatusAlpha
+                        playerStatusAlpha,
+                        session.playerPartyDetails()
                     )
                 }
             } else {
@@ -177,7 +180,8 @@ class BattleSceneView(
                         session.opponentDetails(),
                         session.opponentHp,
                         scale,
-                        opponentStatusAlpha
+                        opponentStatusAlpha,
+                        session.opponentPartyDetails()
                     )
                 }
             } else {
@@ -334,6 +338,13 @@ class BattleSceneView(
             opponentActiveSprites,
             requestedOpponentActiveSprites
         )
+        if (!requestedPokeballSheet) {
+            requestedPokeballSheet = true
+            spriteCache.requestPokemonBallSheet { asset ->
+                pokeballSheet = asset
+                invalidate()
+            }
+        }
         SHOWDOWN_EFFECTS.forEach { name ->
             if (requestedEffects.add(name)) {
                 spriteCache.requestEffect(name) { asset ->
@@ -703,7 +714,8 @@ class BattleSceneView(
         details: BattleSession.PokemonDetails,
         hp: String,
         scale: Float,
-        alpha: Float
+        alpha: Float,
+        party: List<BattleSession.PokemonDetails>
     ) {
         drawBattleStatusCard(
             canvas,
@@ -711,7 +723,8 @@ class BattleSceneView(
             BattleCardContent.from(details, hp),
             scale,
             alpha,
-            BattleCardLayout.compactFor(1)
+            BattleCardLayout.compactFor(1),
+            party
         )
     }
 
@@ -734,7 +747,8 @@ class BattleSceneView(
                     BattleCardContent.from(combatant),
                     scale,
                     alpha,
-                    layout
+                    layout,
+                    if (player) session.playerPartyDetails() else session.opponentPartyDetails()
                 )
             }
         }
@@ -746,7 +760,8 @@ class BattleSceneView(
         content: BattleCardContent,
         scale: Float,
         alpha: Float,
-        layout: CompactBattleCardLayout
+        layout: CompactBattleCardLayout,
+        party: List<BattleSession.PokemonDetails>
     ) {
         drawBattleStatusCard(
             canvas,
@@ -754,7 +769,8 @@ class BattleSceneView(
             content,
             scale,
             alpha,
-            layout
+            layout,
+            party
         )
     }
 
@@ -764,13 +780,14 @@ class BattleSceneView(
         content: BattleCardContent,
         scale: Float,
         alpha: Float,
-        layout: CompactBattleCardLayout
+        layout: CompactBattleCardLayout,
+        party: List<BattleSession.PokemonDetails>
     ) {
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
         val left = bounds.left + 20f * scale
         val right = bounds.right - 20f * scale
         drawBattleStatusCardSurface(canvas, bounds, scale)
-        drawBattleStatusCardContent(canvas, bounds, content, left, right, scale, layout)
+        drawBattleStatusCardContent(canvas, bounds, content, left, right, scale, layout, party)
         canvas.restoreToCount(layer)
     }
 
@@ -781,10 +798,16 @@ class BattleSceneView(
         textLeft: Float,
         textRight: Float,
         scale: Float,
-        layout: CompactBattleCardLayout
+        layout: CompactBattleCardLayout,
+        party: List<BattleSession.PokemonDetails>
     ) {
         val height = bounds.height()
         val contentLayout = layout.content
+        val ballSize = height * 0.17f
+        val ballGap = ballSize * 0.12f
+        val ballStart = textRight - ballSize * 6f - ballGap * 5f
+        val ballTop = bounds.top + height * 0.75f
+        drawPartyIndicators(canvas, party, ballStart, ballTop, ballSize, ballGap)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
@@ -814,6 +837,32 @@ class BattleSceneView(
             bounds.top + height * contentLayout.barBottomFraction
         )
         drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
+    }
+
+    private fun drawPartyIndicators(
+        canvas: Canvas,
+        party: List<BattleSession.PokemonDetails>,
+        start: Float,
+        top: Float,
+        size: Float,
+        gap: Float
+    ) {
+        val sheet = pokeballSheet ?: return
+        repeat(6) { index ->
+            val pokemon = party.getOrNull(index)
+            val spriteIndex = when {
+                pokemon == null -> 0
+                pokemon.condition.contains("FNT", true) -> 2
+                pokemon.condition != "READY" -> 1
+                else -> 0
+            }
+            val left = start + index * (size + gap)
+            val cellWidth = sheet.width / 3
+            val glyphSize = 12
+            source.set(spriteIndex * cellWidth + 14, 10, spriteIndex * cellWidth + 14 + glyphSize, 10 + glyphSize)
+            destination.set(left, top, left + size, top + size)
+            canvas.drawBitmap(sheet, source, destination, paint)
+        }
     }
 
     private fun drawBattleStatusCardSurface(canvas: Canvas, bounds: RectF, scale: Float) {
@@ -886,8 +935,8 @@ class BattleSceneView(
     }
 
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
-        if (!session.battleFeedVisible) return
-        val feedMessage = session.battleFeedText() ?: return
+        val feedEntries = session.battleFeedEntries(5)
+        if (feedEntries.isEmpty()) return
         val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
         val arrival = min(1f, age / 0.18f)
         val alpha = min(1f, 0.3f + arrival)
@@ -896,7 +945,7 @@ class BattleSceneView(
         val settledLeft = maxOf(width * 0.33f, playerCardRight + sideGap)
         val left = settledLeft + (1f - arrival) * width * 0.035f
         val right = width * 0.97f
-        val top = height * 0.81f
+        val top = height * 0.75f
         val bottom = min(height * 0.965f, height * 0.98f - 24f * scale)
         val bounds = RectF(left, top, right, bottom)
         paint.shader = LinearGradient(
@@ -916,10 +965,13 @@ class BattleSceneView(
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-        paint.textSize = 42f * scale
-        val lines = BattleFeedText.wrap(feedMessage, bounds.width() - 48f * scale, 2, paint::measureText)
+        paint.textSize = readableTextSize(36f, scale, 11f)
+        val maxWidth = bounds.width() - 48f * scale
+        val lines = feedEntries
+            .flatMap { BattleFeedText.wrap(it, maxWidth, 2, paint::measureText) }
+            .takeLast(5)
             .ifEmpty { listOf("…") }
-        val lineHeight = 50f * scale
+        val lineHeight = 42f * scale
         val firstBaseline = bounds.centerY() - lines.size * lineHeight / 2f - (paint.ascent() + paint.descent()) / 2f + lineHeight / 2f
         canvas.save()
         canvas.clipRect(bounds)

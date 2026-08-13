@@ -17,7 +17,8 @@ class ShowdownMoveEffectsView(
     private val audioCueListener: (BattleAudioCue) -> Unit,
     private val audioCueResetter: () -> Unit = {},
     private val protocolHistoryProvider: () -> List<String>,
-    private val audioMoveResetter: () -> Unit = {}
+    private val audioMoveResetter: () -> Unit = {},
+    private val battleLogListener: (String) -> Unit = {}
 ) : WebView(context) {
     private val pendingPackets = ShowdownMoveEffectsQueue()
     private var pageLoaded = false
@@ -25,6 +26,7 @@ class ShowdownMoveEffectsView(
     private var playbackSpeed = 1f
     private var released = false
     private val nativeAudioBridge = NativeAudioBridge(audioCueListener, audioCueResetter, audioMoveResetter)
+    private val nativeBattleLogBridge = NativeBattleLogBridge(battleLogListener)
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
@@ -38,6 +40,7 @@ class ShowdownMoveEffectsView(
         settings.mediaPlaybackRequiresUserGesture = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         addJavascriptInterface(nativeAudioBridge, NATIVE_AUDIO_BRIDGE)
+        addJavascriptInterface(nativeBattleLogBridge, NATIVE_BATTLE_LOG_BRIDGE)
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 if (released) return
@@ -126,6 +129,7 @@ class ShowdownMoveEffectsView(
     private companion object {
         const val BASE_URL = "https://play.pokemonshowdown.com/"
         const val NATIVE_AUDIO_BRIDGE = "ShowdownNativeAudio"
+        const val NATIVE_BATTLE_LOG_BRIDGE = "ShowdownNativeBattleLog"
         val DOCUMENT = """
             <!doctype html>
             <html>
@@ -167,44 +171,80 @@ class ShowdownMoveEffectsView(
                         function nativeBattleStarted() {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.battleStarted();
                         }
+                        function nativeBattleLog(value) {
+                            if (!window.ShowdownNativeBattleLog || !value) return;
+                            var lines = String(value).split(/<br\s*\/?>(?:\s*)/i).filter(function (line) {
+                                return line.trim().indexOf('<small>[') !== 0;
+                            });
+                            if (lines.length) window.ShowdownNativeBattleLog.entry(lines.join('<br />'));
+                        }
+                        function installBattleLogHooks() {
+                            if (typeof BattleLog === 'undefined' || BattleLog.prototype.__showdownNativeBattleLogHooked) return;
+                            var originalAddDiv = BattleLog.prototype.addDiv;
+                            BattleLog.prototype.addDiv = function (className, html) {
+                                nativeBattleLog(html);
+                                return originalAddDiv.apply(this, arguments);
+                            };
+                            var originalAddBattleMessage = BattleLog.prototype.addBattleMessage;
+                            BattleLog.prototype.addBattleMessage = function (args, kwArgs) {
+                                if (args && args[0] === 'turn') {
+                                    var turnMessage = this.battleParser ? this.battleParser.parseArgs(args, kwArgs || {}).trim() : '== Turn ' + args[1] + ' ==';
+                                    if (turnMessage.indexOf('==') === 0 && turnMessage.lastIndexOf('==') === turnMessage.length - 2) {
+                                        turnMessage = turnMessage.slice(2, -2).trim();
+                                    }
+                                    nativeBattleLog(turnMessage);
+                                }
+                                return originalAddBattleMessage.apply(this, arguments);
+                            };
+                            BattleLog.prototype.__showdownNativeBattleLogHooked = true;
+                        }
                         function installAudioHooks() {
                             if (BattleScene.prototype.__showdownNativeAudioHooked) return;
-                            var originalRunMoveAnim = BattleScene.prototype.runMoveAnim;
-                            BattleScene.prototype.runMoveAnim = function (moveid, participants) {
-                                return originalRunMoveAnim.apply(this, arguments);
-                            };
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
                                 nativeMoveStarted();
-                                this.scene.__showdownNativeDamageArmed = !!move && move.category !== 'Status';
+                                this.scene.__showdownNativeDamageArmed = !move || move.category !== 'Status';
                                 this.scene.__showdownNativeDamagePlayed = false;
-                                this.scene.__showdownNativeDamagePending = false;
+                                this.scene.__showdownNativeHealthEvents = [];
                                 this.scene.__showdownNativeResultCues = [];
                                 return originalUseMove.apply(this, arguments);
                             };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
                             BattleScene.prototype.resultAnim = function () {
-                                if (this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeResultCues && this.__showdownNativeResultCues.length) {
-                                    var cue = this.__showdownNativeResultCues.shift();
-                                    nativeCue(cue);
+                                var shouldCueResult = this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeResultCues && this.__showdownNativeResultCues.length;
+                                var resultCue = shouldCueResult ? this.__showdownNativeResultCues.shift() : null;
+                                if (resultCue) {
+                                    nativeCue(resultCue);
                                 }
                                 return originalResultAnim.apply(this, arguments);
                             };
                             var originalDamageAnim = BattleScene.prototype.damageAnim;
                             BattleScene.prototype.damageAnim = function () {
-                                if (this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeDamagePending && this.__showdownNativeDamageArmed && !this.__showdownNativeDamagePlayed) {
+                                var healthEvent = this.__showdownNativeHealthEvents && this.__showdownNativeHealthEvents.length ? this.__showdownNativeHealthEvents.shift() : null;
+                                var shouldCueDamage = healthEvent === 'damage' && this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeDamageArmed && !this.__showdownNativeDamagePlayed;
+                                if (shouldCueDamage) {
                                     this.__showdownNativeDamagePlayed = true;
-                                    this.__showdownNativeDamagePending = false;
                                     nativeCue('generic_damage');
                                 }
                                 return originalDamageAnim.apply(this, arguments);
                             };
                             var originalHealAnim = BattleScene.prototype.healAnim;
                             BattleScene.prototype.healAnim = function () {
-                                this.__showdownNativeDamagePending = false;
+                                if (this.__showdownNativeHealthEvents && this.__showdownNativeHealthEvents.length) this.__showdownNativeHealthEvents.shift();
                                 return originalHealAnim.apply(this, arguments);
                             };
                             var originalRunMinor = Battle.prototype.runMinor;
+                            function setHpValue(pokemon, health) {
+                                var hp = String(health || '').split(' ')[0];
+                                if (hp === '0' || hp === '0.0') return 0;
+                                var slashIndex = hp.indexOf('/');
+                                if (slashIndex > 0) {
+                                    var absoluteHp = parseFloat(hp.slice(0, slashIndex));
+                                    return isFinite(absoluteHp) ? absoluteHp : null;
+                                }
+                                var percentage = parseFloat(hp.replace('%', ''));
+                                return pokemon && isFinite(percentage) ? (pokemon.maxhp || 100) * percentage / 100 : null;
+                            }
                             Battle.prototype.runMinor = function (args) {
                                 var resultCue = null;
                                 var kwArgs = arguments[1] || {};
@@ -220,17 +260,19 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-clearpositiveboost') resultCue = 'stat_drop';
                                     if (args[0] === '-clearnegativeboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
-                                    var directDamage = args[0] === '-damage' && !kwArgs.from;
+                                    if (!this.scene.__showdownNativeHealthEvents) this.scene.__showdownNativeHealthEvents = [];
+                                    if (args[0] === '-damage') this.scene.__showdownNativeHealthEvents.push(kwArgs.from ? 'other' : 'damage');
+                                    if (args[0] === '-heal') this.scene.__showdownNativeHealthEvents.push('heal');
                                     if (args[0] === '-sethp' && !kwArgs.from) {
                                         for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
                                             var setHpTarget = this.getPokemon(args[setHpIndex]);
-                                            var setHpChange = setHpTarget && setHpTarget.healthParse(args[setHpIndex + 1]);
-                                            if (setHpChange && setHpChange[0] < 0) directDamage = true;
+                                            var nextHp = setHpValue(setHpTarget, args[setHpIndex + 1]);
+                                            if (setHpTarget && nextHp !== null) this.scene.__showdownNativeHealthEvents.push(nextHp <= setHpTarget.hp ? 'damage' : 'heal');
                                         }
                                     }
-                                    if (directDamage && this.scene.__showdownNativeDamageArmed) this.scene.__showdownNativeDamagePending = true;
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
+                                this.scene.__showdownNativeHealthEvents = [];
                                 this.scene.__showdownNativeAudioSilent = false;
                                 return result;
                             };
@@ -263,6 +305,7 @@ class ShowdownMoveEffectsView(
                         }
                         function createBattle() {
                             nativeBattleStarted();
+                            installBattleLogHooks();
                             installAudioHooks();
                             if (chromeObserver) {
                                 chromeObserver.disconnect();
@@ -356,5 +399,14 @@ class ShowdownMoveEffectsView(
             }
         }
 
+    }
+
+    private class NativeBattleLogBridge(
+        private val callback: (String) -> Unit
+    ) {
+        @JavascriptInterface
+        fun entry(value: String) {
+            if (value.isNotBlank()) callback(value)
+        }
     }
 }

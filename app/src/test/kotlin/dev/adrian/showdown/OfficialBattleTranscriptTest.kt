@@ -176,6 +176,18 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun preservesShowdownLogLineBreaksAndInlineMarkup() {
+        val session = BattleSession()
+
+        session.appendShowdownBattleLog("<strong>Samurott</strong> used <strong>Ceaseless Edge</strong>!<br />  A critical hit!")
+
+        assertEquals(
+            listOf("Samurott used Ceaseless Edge!", "A critical hit!"),
+            session.showdownBattleLog()
+        )
+    }
+
+    @Test
     fun presentsCommonSimulatorFailureAndFieldEvents() {
         val session = BattleSession()
 

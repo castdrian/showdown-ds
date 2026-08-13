@@ -560,7 +560,10 @@ class MainActivity : Activity() {
             battleAudio::playBattleCue,
             battleAudio::resetBattleCues,
             protocolHistoryProvider = { session.protocolHistory() },
-            audioMoveResetter = battleAudio::beginBattleMove
+            audioMoveResetter = battleAudio::beginBattleMove,
+            battleLogListener = { value ->
+                runOnUiThread { session.appendShowdownBattleLog(value) }
+            }
         )
         showdownMoveEffects = effects
         frame.addView(effects, FrameLayout.LayoutParams(-1, -1))

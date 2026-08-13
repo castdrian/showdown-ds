@@ -256,6 +256,7 @@ class BattleSession {
     private val battleEventListeners = mutableListOf<BattleEventListener>()
     private var protocolEventCollector: MutableList<String>? = null
     private val protocolHistory = mutableListOf<String>()
+    private val showdownBattleLogEntries = mutableListOf<String>()
     private var moveTypeResolver: ((String) -> String?)? = null
     private var moveInfoResolver: ((String) -> MoveInfo?)? = null
     private var pokemonTypeResolver: ((String) -> List<String>?)? = null
@@ -624,6 +625,37 @@ class BattleSession {
 
     fun battleLog() = battleLog.toList()
 
+    fun battleFeedEntries(limit: Int = 4): List<String> {
+        val source = showdownBattleLogEntries.takeIf { it.isNotEmpty() } ?: battleLog
+        return source.asSequence()
+            .filter(String::isNotBlank)
+            .toList()
+            .takeLast(limit.coerceAtLeast(0))
+    }
+
+    fun showdownBattleLog() = showdownBattleLogEntries.toList()
+
+    fun resetShowdownBattleLog() {
+        showdownBattleLogEntries.clear()
+        notifyListeners()
+    }
+
+    fun appendShowdownBattleLog(value: String) {
+        val entries = value
+            .replace(Regex("(?i)<br\\s*/?>"), "\n")
+            .split('\n')
+            .map { it.replace("**", "").trim() }
+            .mapNotNull(::sanitizeShowdownMarkup)
+            .filter(String::isNotBlank)
+        if (entries.isEmpty()) return
+        showdownBattleLogEntries += entries
+        while (showdownBattleLogEntries.size > SHOWDOWN_BATTLE_LOG_LIMIT) showdownBattleLogEntries.removeAt(0)
+        latestBattleEvent = entries.last()
+        latestBattleEventAtNanos = System.nanoTime()
+        battleFeedVisible = true
+        notifyListeners()
+    }
+
     fun battleFeedText(): String? = battleLog.asReversed()
         .firstOrNull { it.isNotBlank() && !it.startsWith("Turn ") }
 
@@ -852,6 +884,7 @@ class BattleSession {
         replayMode = false
         protocolHistory.clear()
         battleLog.clear()
+        showdownBattleLogEntries.clear()
         battleLog += "No battle in progress."
         chatMessages.clear()
         chatMessages += "[System] Ready for a battle."
@@ -1413,6 +1446,7 @@ class BattleSession {
     private fun applyInit(fields: List<String>) {
         if (fields.getOrNull(2) != "battle") return
         battleLog.clear()
+        showdownBattleLogEntries.clear()
         battleLog += "Battle started."
         markupEntries.clear()
         chatMessages.clear()
@@ -3676,6 +3710,26 @@ class BattleSession {
         return message.takeIf { it.isNotBlank() }
     }
 
+    private fun sanitizeShowdownMarkup(value: String): String? {
+        val message = value
+            .replace(Regex("(?is)<script.*?</script>"), "")
+            .replace(Regex("<[^>]*>"), "")
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&rarr;", "→")
+            .replace("&larr;", "←")
+            .replace("&ndash;", "–")
+            .replace("&mdash;", "—")
+            .replace(Regex("\\s+"), " ")
+            .replace(Regex("\\s+([,.!?])"), "$1")
+            .trim()
+        return message.takeIf { it.isNotBlank() }
+    }
+
     private fun moveMoveFocus(horizontal: Int, vertical: Int) {
         if (moves.isEmpty()) return
         val direction = if (vertical != 0) vertical else horizontal
@@ -4306,6 +4360,7 @@ class BattleSession {
         const val MENU_ITEM_COUNT = 14
         const val MENU_COLUMNS = 3
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
+        private const val SHOWDOWN_BATTLE_LOG_LIMIT = 256
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun displayPokemonName(name: String, species: String = name): String {
