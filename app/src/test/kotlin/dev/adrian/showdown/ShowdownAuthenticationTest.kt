@@ -23,6 +23,7 @@ class ShowdownAuthenticationTest {
         assertEquals(true, ShowdownAuthentication.actionSucceeded("]{\"actionsuccess\":true}"))
         assertEquals(false, ShowdownAuthentication.actionSucceeded("]{\"actionsuccess\":false}"))
         assertEquals("That username is already taken.", ShowdownAuthentication.actionError("]{\"error\":\"That username is already taken.\"}"))
+        assertEquals("Your old password was incorrect.", ShowdownAuthentication.actionError("]{\"actionerror\":\"Your old password was incorrect.\"}"))
         assertNull(ShowdownAuthentication.actionError("invalid"))
     }
 

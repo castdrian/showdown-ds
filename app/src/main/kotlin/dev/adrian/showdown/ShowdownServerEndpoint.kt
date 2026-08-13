@@ -6,7 +6,8 @@ data class ShowdownServerEndpoint(
     val displayName: String,
     val webSocketUrl: String,
     val loginUrl: String = "https://play.pokemonshowdown.com/api/login",
-    val registrationUrl: String = loginUrl.substringBeforeLast('/') + "/register"
+    val registrationUrl: String = loginUrl.substringBeforeLast('/') + "/register",
+    val changePasswordUrl: String = loginUrl.substringBeforeLast('/') + "/changepassword"
 ) {
     companion object {
         val playShowdown = ShowdownServerEndpoint("Pokémon Showdown", "wss://sim3.psim.us/showdown/websocket")
@@ -42,11 +43,17 @@ data class ShowdownServerEndpoint(
             } else {
                 "$loginScheme://$host$port/api/register"
             }
+            val changePasswordUrl = if (isOfficialHost(host)) {
+                "https://play.pokemonshowdown.com/api/changepassword"
+            } else {
+                "$loginScheme://$host$port/api/changepassword"
+            }
             return ShowdownServerEndpoint(
                 host + port,
                 "$scheme://$host$port$socketPath",
                 loginUrl,
-                registrationUrl
+                registrationUrl,
+                changePasswordUrl
             )
         }
 

@@ -29,6 +29,7 @@ class ShowdownServerEndpointTest {
 
         assertEquals("https://play.pokemonshowdown.com/api/login", endpoint?.loginUrl)
         assertEquals("https://play.pokemonshowdown.com/api/register", endpoint?.registrationUrl)
+        assertEquals("https://play.pokemonshowdown.com/api/changepassword", endpoint?.changePasswordUrl)
     }
 
     @Test
@@ -36,6 +37,7 @@ class ShowdownServerEndpointTest {
         val endpoint = ShowdownServerEndpoint.fromInput("http://10.0.2.2:8000")
 
         assertEquals("http://10.0.2.2:8000/api/login", endpoint?.loginUrl)
+        assertEquals("http://10.0.2.2:8000/api/changepassword", endpoint?.changePasswordUrl)
     }
 
     @Test

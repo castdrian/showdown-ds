@@ -29,9 +29,10 @@ object ShowdownAuthentication {
         ?.takeIf { it.has("actionsuccess") }
         ?.optBoolean("actionsuccess")
 
-    fun actionError(response: String): String? = responseJson(response)
-        ?.optString("error")
-        ?.takeIf { it.isNotBlank() }
+    fun actionError(response: String): String? = responseJson(response)?.let { json ->
+        json.optString("actionerror").takeIf { it.isNotBlank() }
+            ?: json.optString("error").takeIf { it.isNotBlank() }
+    }
 
     private fun responseJson(response: String): JSONObject? = runCatching {
         JSONObject(response.removePrefix("]"))

@@ -444,6 +444,7 @@ class MainActivity : Activity() {
         displayRefreshScheduler.cancel()
         reconnectHandler.removeCallbacksAndMessages(null)
         shouldMaintainConnection = false
+        loginClient.clearSession()
         clearBattlePlayback()
         showdownConnection?.close()
         showdownConnection = null
@@ -2499,6 +2500,7 @@ class MainActivity : Activity() {
                 } else {
                     serverEndpoint = endpoint
                     getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("server_endpoint", endpoint.webSocketUrl).apply()
+                    loginClient.clearSession()
                     if (shouldMaintainConnection && activeBattleRoomId == null) {
                         session.setConnectionStatus("Server set to ${endpoint.displayName}. Reconnecting…")
                         reconnectHandler.removeCallbacksAndMessages(null)
@@ -2565,6 +2567,14 @@ class MainActivity : Activity() {
                 }
             }
         }
+        val changePassword = Button(this).apply {
+            text = "Change password"
+            isEnabled = authenticated && serverUserNamed
+            setOnClickListener {
+                accountDialog?.dismiss()
+                showChangePasswordDialog()
+            }
+        }
         val accountTools = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((56f * density).toInt(), (12f * density).toInt(), (56f * density).toInt(), 0)
@@ -2572,6 +2582,7 @@ class MainActivity : Activity() {
             addView(findUser)
             addView(resources)
             addView(friends)
+            if (authenticated && serverUserNamed) addView(changePassword)
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -2587,7 +2598,7 @@ class MainActivity : Activity() {
             .setView(scroll)
             .setNeutralButton("Sign out") { _, _ -> signOut() }
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton("Save credentials") { _, _ ->
                 val value = ShowdownCredentials(username.text.toString().trim(), password.text.toString())
                 if (value.username.isBlank() || value.password.isBlank()) {
                     session.setConnectionStatus("Enter both a username and password.")
@@ -2602,6 +2613,71 @@ class MainActivity : Activity() {
             if (accountDialog === dialog) accountDialog = null
         }
         dialog.show()
+    }
+
+    private fun showChangePasswordDialog() {
+        val density = resources.displayMetrics.density
+        val oldPassword = EditText(this).apply {
+            hint = "Current password"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val newPassword = EditText(this).apply {
+            hint = "New password"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val confirmation = EditText(this).apply {
+            hint = "Repeat new password"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((56f * density).toInt(), (8f * density).toInt(), (56f * density).toInt(), 0)
+            addView(oldPassword)
+            addView(newPassword)
+            addView(confirmation)
+        }
+        ShowdownDialogBuilder(this)
+            .setTitle("Change password")
+            .setView(form)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Change") { _, _ ->
+                changePassword(oldPassword.text.toString(), newPassword.text.toString(), confirmation.text.toString())
+            }
+            .show()
+    }
+
+    private fun changePassword(oldPassword: String, password: String, confirmation: String) {
+        if (!authenticated || !serverUserNamed) {
+            session.setConnectionStatus("Sign in to change your password.")
+            return
+        }
+        if (oldPassword.isBlank() || password.isBlank() || confirmation.isBlank()) {
+            session.setConnectionStatus("Enter your current password and both new-password fields.")
+            return
+        }
+        if (password != confirmation) {
+            session.setConnectionStatus("The new passwords do not match.")
+            return
+        }
+        if (password.replace(Regex("\\s"), "").length < 5) {
+            session.setConnectionStatus("Showdown passwords must be at least 5 characters.")
+            return
+        }
+        session.setConnectionStatus("Changing your Showdown password…")
+        loginClient.changePassword(serverEndpoint, oldPassword, password, confirmation) { result ->
+            runOnUiThread {
+                result.onSuccess {
+                    credentialsStore.save(ShowdownCredentials(credentialsStore.load()?.username ?: session.localUsername(), password))
+                    session.setConnectionStatus("Your Showdown password was changed.")
+                }
+                result.onFailure { error ->
+                    session.setConnectionStatus(error.message ?: "Showdown password change failed.")
+                }
+            }
+        }
     }
 
     private fun showRegistrationDialog() {
@@ -3129,6 +3205,7 @@ class MainActivity : Activity() {
 
     private fun signOut() {
         credentialsStore.clear()
+        loginClient.clearSession()
         lobbyState.clear()
         shouldMaintainConnection = false
         reconnectHandler.removeCallbacksAndMessages(null)
