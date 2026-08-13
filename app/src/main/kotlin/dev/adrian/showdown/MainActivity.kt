@@ -962,13 +962,20 @@ class MainActivity : Activity() {
                         roomListPending = false
                         roomListDialog?.dismiss()
                         roomListDialog = null
-                        pendingChatRoomId = room.id.takeIf { room.chatRoom }
-                        if (showdownConnection?.sendGlobal(ShowdownLobbyState.joinBattleCommand(room.id)) == true) {
-                            pendingBattleJoinRoomId = room.id.takeUnless { room.chatRoom }
-                            session.setConnectionStatus("Joining ${room.title}…")
+                        if (room.chatRoom) {
+                            pendingChatRoomId = room.id
+                            if (showdownConnection?.sendGlobal(ShowdownLobbyState.joinBattleCommand(room.id)) == true) {
+                                session.setConnectionStatus("Joining ${room.title}…")
+                            } else {
+                                pendingChatRoomId = null
+                                session.setConnectionStatus("Could not join ${room.title}.")
+                            }
                         } else {
                             pendingChatRoomId = null
-                            session.setConnectionStatus("Could not join ${room.title}.")
+                            startLobbyConnection(
+                                listOf(ShowdownLobbyState.joinBattleCommand(room.id)),
+                                "Joining ${room.title}…"
+                            )
                         }
                     }
                 }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (8f * density).toInt()) })

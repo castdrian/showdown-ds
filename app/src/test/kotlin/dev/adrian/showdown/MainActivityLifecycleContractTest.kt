@@ -80,4 +80,16 @@ class MainActivityLifecycleContractTest {
         assertTrue(preserveBattleSurfaceSource.contains("shouldMaintainConnection"))
         assertTrue(preserveBattleSurfaceSource.contains("!session.isBattleFinished()"))
     }
+
+    @Test
+    fun routesDirectBattleRoomJoinsThroughPersistedLobbyCommands() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val roomSelection = source.substringAfter("selections.forEach { room ->")
+            .substringBefore("val roomScroll = ScrollView(this)")
+
+        assertTrue(roomSelection.contains("if (room.chatRoom)"))
+        assertTrue(roomSelection.contains("startLobbyConnection("))
+        assertTrue(roomSelection.contains("ShowdownLobbyState.joinBattleCommand(room.id)"))
+        assertTrue(roomSelection.contains("pendingChatRoomId = room.id"))
+    }
 }
