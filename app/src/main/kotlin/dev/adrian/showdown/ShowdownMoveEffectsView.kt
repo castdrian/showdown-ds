@@ -176,10 +176,10 @@ class ShowdownMoveEffectsView(
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
                                 nativeMoveStarted();
-                                this.__showdownNativeDamageArmed = !!move && move.category !== 'Status';
-                                this.__showdownNativeDamagePlayed = false;
-                                this.__showdownNativeDamagePending = false;
-                                this.__showdownNativeResultCues = [];
+                                this.scene.__showdownNativeDamageArmed = !!move && move.category !== 'Status';
+                                this.scene.__showdownNativeDamagePlayed = false;
+                                this.scene.__showdownNativeDamagePending = false;
+                                this.scene.__showdownNativeResultCues = [];
                                 return originalUseMove.apply(this, arguments);
                             };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
