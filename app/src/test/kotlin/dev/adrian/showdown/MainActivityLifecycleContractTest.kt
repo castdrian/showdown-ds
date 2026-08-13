@@ -92,4 +92,16 @@ class MainActivityLifecycleContractTest {
         assertTrue(roomSelection.contains("ShowdownLobbyState.joinBattleCommand(room.id)"))
         assertTrue(roomSelection.contains("pendingChatRoomId = room.id"))
     }
+
+    @Test
+    fun keepsTeamEditorSlotsCompactAndExpandable() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("val firstExpandedIndex = sets.indexOfFirst"))
+        assertTrue(source.contains("val slotHeader: Button"))
+        assertTrue(source.contains("val details: LinearLayout"))
+        assertTrue(source.contains("details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE"))
+        assertTrue(source.contains("Pokémon \${editor.index + 1}"))
+        assertTrue(source.indexOf("addView(setFields)") < source.indexOf("addView(validateButton)"))
+    }
 }

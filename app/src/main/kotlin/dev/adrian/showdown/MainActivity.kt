@@ -3728,12 +3728,21 @@ class MainActivity : Activity() {
         }
         val sets = existing?.let { ShowdownTeamCodec.unpack(it.packed) }.orEmpty().ifEmpty { listOf(ShowdownTeamSet()) }
         val setEditors = mutableListOf<TeamSetEditor>()
+        val firstExpandedIndex = sets.indexOfFirst {
+            it.nickname.isNotBlank() || it.species.isNotBlank() || it.item.isNotBlank() || it.ability.isNotBlank() ||
+                it.moves.isNotEmpty() || it.nature.isNotBlank()
+        }.takeIf { it >= 0 } ?: 0
         val setFields = LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             val density = resources.displayMetrics.density
             setPadding((24f * density).toInt(), (8f * density).toInt(), (24f * density).toInt(), 0)
             for (index in 0 until 6) {
-                setEditors += createTeamSetEditor(this, index, sets.getOrNull(index) ?: ShowdownTeamSet())
+                setEditors += createTeamSetEditor(
+                    this,
+                    index,
+                    sets.getOrNull(index) ?: ShowdownTeamSet(),
+                    index == firstExpandedIndex
+                )
             }
         }
         fun readTeamDraft(): TeamDraft {
@@ -3917,13 +3926,26 @@ class MainActivity : Activity() {
         }
         teamUploadButtons = listOf(uploadPrivateButton, uploadPublicButton)
         teamUploadButtons.forEach { it.isEnabled = pendingTeamUpload == null }
+        val duplicateButton = existing?.let { team ->
+            Button(this).apply {
+                text = "Duplicate team"
+                setOnClickListener {
+                    teamLibrary.duplicate(team.id)?.let { copy ->
+                        session.setConnectionStatus("Duplicated ${team.name} as ${copy.name}.")
+                        teamEditorDialog?.dismiss()
+                    }
+                }
+            }
+        }
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(name)
             addView(format)
             addView(formatPicker)
             addView(folder)
+            addView(packed)
             addView(importButton)
+            addView(setFields)
             addView(validateButton)
             addView(copyButton)
             addView(copyTextButton)
@@ -3934,8 +3956,7 @@ class MainActivity : Activity() {
             copyShareButton?.let(::addView)
             privacyButton?.let(::addView)
             revertButton?.let(::addView)
-            addView(packed)
-            addView(setFields)
+            duplicateButton?.let(::addView)
         }
         val scroll = ScrollView(this).apply {
             addView(fields)
@@ -3967,18 +3988,6 @@ class MainActivity : Activity() {
                 }
             }
         }
-        val duplicateButton = existing?.let { team ->
-            Button(this).apply {
-                text = "Duplicate team"
-                setOnClickListener {
-                    teamLibrary.duplicate(team.id)?.let { copy ->
-                        session.setConnectionStatus("Duplicated ${team.name} as ${copy.name}.")
-                        teamEditorDialog?.dismiss()
-                    }
-                }
-            }
-        }
-        duplicateButton?.let(fields::addView)
         val dialog = builder.create()
         dialog.setOnShowListener {
             dialog.getButton(ShowdownDialog.BUTTON_POSITIVE)?.setOnClickListener {
@@ -4032,6 +4041,9 @@ class MainActivity : Activity() {
     }
 
     private data class TeamSetEditor(
+        val index: Int,
+        val slotHeader: Button,
+        val details: LinearLayout,
         val nickname: EditText,
         val species: EditText,
         val item: EditText,
@@ -4053,13 +4065,14 @@ class MainActivity : Activity() {
         val advancedToggle: Button
     )
 
-    private fun createTeamSetEditor(parent: LinearLayout, index: Int, set: ShowdownTeamSet): TeamSetEditor {
-        parent.addView(TextView(this).apply {
-            text = "Pokémon ${index + 1}"
-            textSize = 18f
-            val density = resources.displayMetrics.density
-            setPadding(0, (20f * density).toInt(), 0, (4f * density).toInt())
-        })
+    private fun createTeamSetEditor(parent: LinearLayout, index: Int, set: ShowdownTeamSet, expanded: Boolean): TeamSetEditor {
+        val density = resources.displayMetrics.density
+        val slotHeader = Button(this).apply {
+            isAllCaps = false
+            minLines = 2
+            gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+            setPadding((18f * density).toInt(), (8f * density).toInt(), (18f * density).toInt(), (8f * density).toInt())
+        }
         val nickname = teamField("Nickname", set.nickname)
         val species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames())
         val item = teamAutocompleteField("Item", set.item, moveDex.itemNames())
@@ -4090,7 +4103,15 @@ class MainActivity : Activity() {
                 text = if (visible) "Hide advanced details" else "Show advanced details"
             }
         }
+        val details = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (expanded) View.VISIBLE else View.GONE
+            setPadding((12f * density).toInt(), (4f * density).toInt(), (12f * density).toInt(), (4f * density).toInt())
+        }
         val editor = TeamSetEditor(
+            index = index,
+            slotHeader = slotHeader,
+            details = details,
             nickname = nickname,
             species = species,
             item = item,
@@ -4133,12 +4154,59 @@ class MainActivity : Activity() {
             editor.ivs,
             editor.advancedToggle,
             editor.advancedFields
-        ).forEach(parent::addView)
+        ).forEach(details::addView)
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(12, 37, 52))
+                setStroke((1f * density).toInt(), Color.rgb(45, 110, 123))
+                cornerRadius = 18f * density
+            }
+            addView(slotHeader, LinearLayout.LayoutParams(-1, -2))
+            addView(details, LinearLayout.LayoutParams(-1, -2))
+        }
+        slotHeader.setOnClickListener {
+            details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        listOf(nickname, species, item, ability, moves, nature, evs, ivs, gender, level, happiness, pokeBall, hiddenPowerType, dynamaxLevel, teraType)
+            .forEach { field ->
+                field.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = updateTeamSetSummary(editor)
+                    override fun afterTextChanged(editable: Editable?) = Unit
+                })
+            }
+        shiny.setOnCheckedChangeListener { _, _ -> updateTeamSetSummary(editor) }
+        gigantamax.setOnCheckedChangeListener { _, _ -> updateTeamSetSummary(editor) }
+        updateTeamSetSummary(editor)
+        parent.addView(section, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (10f * density).toInt() })
         return editor
     }
 
     private fun ShowdownTeamSet.hasAdvancedDetails() = gender.isNotBlank() || shiny || level != 100 || happiness != 255 ||
         pokeBall.isNotBlank() || hiddenPowerType.isNotBlank() || gigantamax || dynamaxLevel != 10 || teraType.isNotBlank()
+
+    private fun updateTeamSetSummary(editor: TeamSetEditor) {
+        val set = readTeamSetEditor(editor)
+        val subject = set.species.trim().ifBlank { set.nickname.trim() }
+        if (subject.isBlank()) {
+            editor.slotHeader.text = "Pokémon ${editor.index + 1}\nEmpty slot · tap to edit"
+            return
+        }
+        val details = buildList {
+            set.item.takeIf(String::isNotBlank)?.let(::add)
+            set.moves.size.takeIf { it > 0 }?.let { add("$it move${if (it == 1) "" else "s"}") }
+            set.nature.takeIf(String::isNotBlank)?.let(::add)
+            set.teraType.takeIf(String::isNotBlank)?.let { add("Tera $it") }
+        }
+        val nickname = set.nickname.trim().takeIf { it.isNotBlank() && !it.equals(subject, true) }
+        val title = nickname?.let { "$it · $subject" } ?: subject
+        editor.slotHeader.text = buildString {
+            append("Pokémon ${editor.index + 1} · $title")
+            if (details.isNotEmpty()) append("\n${details.joinToString(" · ")}")
+            else append("\nTap to edit this slot")
+        }
+    }
 
     private fun teamField(hint: String, value: String): EditText = EditText(this).apply {
         this.hint = hint
@@ -4200,6 +4268,7 @@ class MainActivity : Activity() {
         val visible = set.hasAdvancedDetails()
         editor.advancedFields.visibility = if (visible) View.VISIBLE else View.GONE
         editor.advancedToggle.text = if (visible) "Hide advanced details" else "Show advanced details"
+        updateTeamSetSummary(editor)
     }
 
     private fun readTeamSetEditor(editor: TeamSetEditor): ShowdownTeamSet = ShowdownTeamSet(

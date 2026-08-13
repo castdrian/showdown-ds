@@ -26,4 +26,9 @@ class BattleCardLayoutTest {
         assertEquals(0.55f, layout.barTopFraction, 0.001f)
         assertEquals(0.70f, layout.barBottomFraction, 0.001f)
     }
+
+    @Test
+    fun singlesAndDoublesUseTheSameCardTreatment() {
+        assertEquals(BattleCardLayout.compactFor(1), BattleCardLayout.compactFor(2))
+    }
 }
