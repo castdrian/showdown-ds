@@ -2463,7 +2463,7 @@ class BattleSession {
                 category,
                 power.value,
                 accuracy.value,
-                move.optBoolean("disabled") || pp <= 0,
+                protocolFlag(move.opt("disabled")) || (move.has("pp") && pp <= 0),
                 move.optString("target")
             )
             moveResolutionSources += MoveResolutionSources(
@@ -2472,6 +2472,22 @@ class BattleSession {
                 accuracyFromRequest = accuracy.fromRequest,
                 categoryFromRequest = move.has("category") && move.optString("category").isNotBlank()
             )
+        }
+        if (moves.isNotEmpty() && moves.none { !it.disabled } && moves.none { it.name.equals("Struggle", true) }) {
+            val struggleInfo = moveInfoResolver?.invoke("Struggle")
+            moves.clear()
+            moveResolutionSources.clear()
+            moves += MoveOption(
+                name = "Struggle",
+                type = moveTypeResolver?.invoke("Struggle") ?: "NORMAL",
+                pp = 0,
+                maxPp = 0,
+                category = struggleInfo?.category ?: "Physical",
+                power = struggleInfo?.power ?: "50",
+                accuracy = struggleInfo?.accuracy ?: "—",
+                target = "randomNormal"
+            )
+            moveResolutionSources += MoveResolutionSources()
         }
         val baseMoves = moves.toList()
         val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
@@ -2709,6 +2725,12 @@ class BattleSession {
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionListeners.toList().forEach { it.onDecision(choice) }
         return true
+    }
+
+    private fun protocolFlag(value: Any?): Boolean = when (value) {
+        is Boolean -> value
+        is String -> value.isNotBlank() && !value.equals("false", true) && !value.equals("hidden", true)
+        else -> false
     }
 
     private fun ensureActiveChoiceSlots() {

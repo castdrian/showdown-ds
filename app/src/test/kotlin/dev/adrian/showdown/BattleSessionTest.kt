@@ -80,13 +80,61 @@ class BattleSessionTest {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
         session.addDecisionListener(decisions::add)
-        session.applyProtocolLine("|request|{\"rqid\":9,\"active\":[{\"moves\":[{\"move\":\"Splash\",\"pp\":0,\"disabled\":true}]}]}")
+        session.applyProtocolLine("|request|{\"rqid\":9,\"active\":[{\"moves\":[{\"move\":\"Splash\",\"pp\":10,\"disabled\":true},{\"move\":\"Tackle\",\"pp\":35}]}]}")
 
         session.confirmSelection()
 
         assertTrue(decisions.isEmpty())
         assertTrue(session.decisionAvailable)
         assertEquals("Splash is disabled.", session.status)
+    }
+
+    @Test
+    fun allUnavailableMovesAutomaticallyChooseStruggle() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+
+        session.applyProtocolLine(
+            "|request|{\"rqid\":10,\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":0},{\"move\":\"Tackle\",\"pp\":35,\"disabled\":true}]}]}"
+        )
+
+        assertTrue(session.decisionAvailable)
+        assertEquals("Struggle", session.moves().single().name)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose move 1|10"), decisions)
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
+    fun unavailableMoveSlotsBecomeStruggleWithoutSkippingOtherActiveSlots() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+
+        session.applyProtocolLine(
+            "|request|{\"rqid\":11,\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":0}]},{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}"
+        )
+
+        assertEquals("Struggle", session.moves().single().name)
+        session.confirmSelection()
+        assertEquals("Choose a move for active Pokémon 2/2", session.status)
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose move 1, move 1|11"), decisions)
+    }
+
+    @Test
+    fun hiddenDisabledMoveFlagsRemainSelectable() {
+        val session = BattleSession()
+
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"disabled\":\"hidden\"}]}]}"
+        )
+
+        assertTrue(session.decisionAvailable)
+        assertFalse(session.moves().single().disabled)
     }
 
     @Test
