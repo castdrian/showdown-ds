@@ -258,11 +258,17 @@ class ShowdownMoveEffectsView(
                                 var normalized = String(source || '').trim().toLowerCase();
                                 return !normalized;
                             }
+                            function keepsDirectMoveDamageWindow(args) {
+                                return args[0] === '-crit' || args[0] === '-supereffective' || args[0] === '-resisted';
+                            }
                             Battle.prototype.runMinor = function (args) {
                                 var resultCue = null;
                                 var kwArgs = arguments[1] || {};
                                 var previousAudioSilent = !!this.scene.__showdownNativeAudioSilent;
                                 var directMoveDamage = this.scene.__showdownNativeDamageWindow && isDirectMoveDamage(kwArgs.from);
+                                if (this.scene.__showdownNativeDamageWindow && args[0] !== '-damage' && args[0] !== '-sethp' && !keepsDirectMoveDamageWindow(args)) {
+                                    this.scene.__showdownNativeDamageWindow = false;
+                                }
                                 this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;
                                 if (!this.scene.__showdownNativeResultCues) this.scene.__showdownNativeResultCues = [];
                                 if (this.scene.animating && !kwArgs.silent) {

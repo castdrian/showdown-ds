@@ -44,6 +44,8 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("var originalHealAnim = BattleScene.prototype.healAnim;"))
         assertTrue(source.contains("function setHpValue(pokemon, health)"))
         assertTrue(source.contains("function isDirectMoveDamage(source)"))
+        assertTrue(source.contains("function keepsDirectMoveDamageWindow(args)"))
+        assertTrue(source.contains("args[0] !== '-damage' && args[0] !== '-sethp' && !keepsDirectMoveDamageWindow(args)"))
         assertTrue(source.contains("var directMoveDamage = this.scene.__showdownNativeDamageWindow && isDirectMoveDamage(kwArgs.from);"))
         assertTrue(source.contains("this.scene.__showdownNativeHealthEvents.push(directMoveDamage ? 'damage' : 'other');"))
         assertTrue(source.contains("this.scene.__showdownNativeHealthEvents.push('heal');"))
