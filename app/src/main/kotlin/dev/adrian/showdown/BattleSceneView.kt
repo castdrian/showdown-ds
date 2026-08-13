@@ -774,8 +774,9 @@ class BattleSceneView(
     ) {
         val cardLeft = if (player) width * 0.015f else width * 0.685f
         val cardRight = if (player) width * 0.315f else width * 0.985f
-        val cardHeight = height * if (combatants.size > 2) 0.06f else 0.085f
-        val cardGap = height * if (combatants.size > 2) 0.008f else 0.012f
+        val layout = BattleCardLayout.compactFor(combatants.size)
+        val cardHeight = height * layout.heightFraction
+        val cardGap = height * layout.gapFraction
         val totalHeight = cardHeight * combatants.size + cardGap * (combatants.size - 1)
         val firstTop = if (player) height - totalHeight - height * 0.015f else height * 0.02f
         combatants.forEachIndexed { index, combatant ->
@@ -787,7 +788,8 @@ class BattleSceneView(
                     RectF(cardLeft, firstTop + index * (cardHeight + cardGap), cardRight, firstTop + index * (cardHeight + cardGap) + cardHeight),
                     combatant,
                     scale,
-                    alpha
+                    alpha,
+                    layout
                 )
             }
         }
@@ -798,7 +800,8 @@ class BattleSceneView(
         bounds: RectF,
         combatant: BattleSession.ActiveCombatant,
         scale: Float,
-        alpha: Float
+        alpha: Float,
+        layout: CompactBattleCardLayout
     ) {
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
         val height = bounds.height()
@@ -821,17 +824,22 @@ class BattleSceneView(
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
         val levelWidth = paint.measureText(content.levelLabel)
         paint.color = Color.rgb(232, 232, 232)
-        canvas.drawText(content.levelLabel, right, bounds.top + height * 0.29f, paint)
+        canvas.drawText(content.levelLabel, right, bounds.top + height * layout.titleBaselineFraction, paint)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = titleSize
         val titleWidth = (right - left - levelWidth - 16f * scale).coerceAtLeast(0f)
-        canvas.drawText(ellipsizeToWidth(content.title, titleWidth, paint), left, bounds.top + height * 0.29f, paint)
+        canvas.drawText(ellipsizeToWidth(content.title, titleWidth, paint), left, bounds.top + height * layout.titleBaselineFraction, paint)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.17f, scale, 9.5f)
         paint.color = Color.rgb(238, 238, 238)
-        canvas.drawText(content.hpLabel, right, bounds.top + height * 0.51f, paint)
+        canvas.drawText(content.hpLabel, right, bounds.top + height * layout.hpBaselineFraction, paint)
         paint.textAlign = Paint.Align.LEFT
-        val track = RectF(left, bounds.top + height * 0.55f, right, bounds.top + height * 0.70f)
+        val track = RectF(
+            left,
+            bounds.top + height * layout.barTopFraction,
+            right,
+            bounds.top + height * layout.barBottomFraction
+        )
         drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
         canvas.restoreToCount(layer)
     }
