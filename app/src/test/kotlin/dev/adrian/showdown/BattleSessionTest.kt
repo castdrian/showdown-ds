@@ -90,6 +90,49 @@ class BattleSessionTest {
     }
 
     @Test
+    fun maybeLockedRequestsOfferTheOfficialTestFightRefresh() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":19,\"active\":[{\"maybeLocked\":true,\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+        )
+
+        assertTrue(session.canTestFight())
+        session.selectTestFightWithTouch()
+
+        assertEquals(listOf("/choose testfight|19"), decisions)
+        assertFalse(session.decisionAvailable)
+        assertEquals("Checking whether the move is locked…", session.status)
+    }
+
+    @Test
+    fun ordinaryMoveRequestsDoNotOfferTheTestFightRefresh() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+        )
+
+        assertFalse(session.canTestFight())
+    }
+
+    @Test
+    fun testFightRefreshKeepsEarlierDoubleBattleChoices() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":23,\"targetable\":false,\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]},{\"maybeLocked\":true,\"moves\":[{\"move\":\"Protect\",\"pp\":10}]}]}"
+        )
+
+        session.confirmSelection()
+        assertTrue(session.canTestFight())
+        session.selectTestFightWithTouch()
+
+        assertEquals(listOf("/choose move 1, testfight|23"), decisions)
+    }
+
+    @Test
     fun allUnavailableMovesAutomaticallyChooseStruggle() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()

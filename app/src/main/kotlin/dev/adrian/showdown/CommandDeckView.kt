@@ -46,6 +46,7 @@ class CommandDeckView(
     private var activityChatBounds: RectF? = null
     private var cancelChoiceBounds: RectF? = null
     private var shiftBounds: RectF? = null
+    private var testFightBounds: RectF? = null
     private var zPowerSymbol: Bitmap? = null
     private var pressedMoveIndex: Int? = null
     private var pressStartedAt = 0L
@@ -115,6 +116,11 @@ class CommandDeckView(
         if (session.panel == BattleSession.Panel.MOVES) {
             if (session.canShift() && shiftBounds?.contains(x, y) == true) {
                 session.selectShiftWithTouch()
+                interactionListener.onConfirmation()
+                return true
+            }
+            if (session.canTestFight() && testFightBounds?.contains(x, y) == true) {
+                session.selectTestFightWithTouch()
                 interactionListener.onConfirmation()
                 return true
             }
@@ -383,6 +389,7 @@ class CommandDeckView(
         targetBounds.fill(null)
         gimmickBounds.fill(null)
         shiftBounds = null
+        testFightBounds = null
         val inset = 18f * scale
         val content = RectF(bounds.left + inset, bounds.top + inset, bounds.right - inset, bounds.bottom - inset)
         val targets = session.targetOptions()
@@ -391,6 +398,11 @@ class CommandDeckView(
         if (session.canShift()) {
             shiftBounds = RectF(content.left, contentTop, content.right, contentTop + 66f * scale)
             drawShiftButton(canvas, shiftBounds!!, scale)
+            contentTop += 80f * scale
+        }
+        if (session.canTestFight()) {
+            testFightBounds = RectF(content.left, contentTop, content.right, contentTop + 66f * scale)
+            drawTestFightButton(canvas, testFightBounds!!, scale)
             contentTop += 80f * scale
         }
         if (targets.isNotEmpty()) {
@@ -409,6 +421,31 @@ class CommandDeckView(
         } else {
             drawMoveDetails(canvas, RectF(content.left, contentTop, content.right, content.bottom), scale)
         }
+    }
+
+    private fun drawTestFightButton(canvas: Canvas, bounds: RectF, scale: Float) {
+        paint.shader = LinearGradient(
+            bounds.left,
+            bounds.top,
+            bounds.right,
+            bounds.bottom,
+            Color.rgb(107, 107, 49),
+            Color.rgb(53, 55, 30),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f * scale
+        paint.color = Color.rgb(225, 220, 121)
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(24f, scale, 20f)
+        paint.color = PAPER
+        canvas.drawText("TRY FIGHT", bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawShiftButton(canvas: Canvas, bounds: RectF, scale: Float) {

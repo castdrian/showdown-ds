@@ -685,6 +685,10 @@ class BattleSession {
 
     fun targetOptions() = targetOptions.toList()
 
+    fun canTestFight() = decisionAvailable &&
+        decisionKind == DecisionKind.MOVE &&
+        activeRequests.getOrNull(activeSlotIndex)?.optBoolean("maybeLocked") == true
+
     fun canShift() = decisionAvailable &&
         decisionKind == DecisionKind.MOVE &&
         gameType.equals("triples", true) &&
@@ -943,6 +947,12 @@ class BattleSession {
         selectedTargetIndex = index
         status = "Target: ${targetOptions[index].label}"
         confirmSelection()
+    }
+
+    fun selectTestFightWithTouch() {
+        if (!canTestFight()) return
+        submitTestFight()
+        notifyListeners()
     }
 
     fun selectShiftWithTouch() {
@@ -3960,6 +3970,19 @@ class BattleSession {
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionAvailable = false
         choiceCanBeCancelled = !requestNoCancel
+        decisionListeners.toList().forEach { it.onDecision(choice) }
+    }
+
+    private fun submitTestFight() {
+        val previousChoices = activeChoices.take(activeSlotIndex).filter(String::isNotBlank)
+        val serializedChoices = (previousChoices + "testfight").joinToString(", ")
+        val choice = "/choose $serializedChoices${requestId?.let { "|$it" } ?: ""}"
+        status = "Checking whether the move is locked…"
+        decisionAvailable = false
+        choiceCanBeCancelled = false
+        selectedGimmick = null
+        selectedTargetIndex = -1
+        targetOptions.clear()
         decisionListeners.toList().forEach { it.onDecision(choice) }
     }
 
