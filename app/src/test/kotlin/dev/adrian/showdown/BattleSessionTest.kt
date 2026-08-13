@@ -1274,9 +1274,41 @@ class BattleSessionTest {
         session.applyProtocolLine("|-item|p1a: Sparky|Light Ball")
         session.applyProtocolLine("|-ability|p1a: Sparky|Static")
 
-        assertEquals("Pikachu", session.playerDetails().name)
+        assertEquals("Sparky", session.playerDetails().name)
+        assertEquals("Pikachu", session.playerDetails().species)
         assertEquals("Light Ball", session.playerDetails().item)
         assertEquals("Static", session.playerDetails().ability)
+    }
+
+    @Test
+    fun requestSyncKeepsNicknameAndSpeciesAsSeparateBattleIdentityFields() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Sparky\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
+        )
+
+        assertEquals("Sparky", session.playerDetails().name)
+        assertEquals("Pikachu", session.playerDetails().species)
+        assertEquals("Sparky", session.playerActiveCombatants().single().name)
+        assertEquals("Pikachu", session.playerActiveCombatants().single().species)
+        assertEquals("Sparky", session.teamMemberDetails(0).name)
+        assertEquals("Pikachu", session.teamMemberDetails(0).species)
+    }
+
+    @Test
+    fun switchPacketsKeepVisibleNicknamesOnBothSides() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Sparky|Pikachu, L50|100/100",
+                "|switch|p2a: Phantom|Dragapult, L50|100/100"
+            )
+        )
+
+        assertEquals("Sparky", session.playerActiveCombatants().single().name)
+        assertEquals("Pikachu", session.playerActiveCombatants().single().species)
+        assertEquals("Phantom", session.opponentActiveCombatants().single().name)
+        assertEquals("Dragapult", session.opponentActiveCombatants().single().species)
     }
 
     @Test
@@ -1371,7 +1403,8 @@ class BattleSessionTest {
         )
         session.applyProtocolLine("|updatepoke|p1: Zoro|Zoroark-Hisui, L50")
 
-        assertEquals("Zoroark-Hisui", session.playerActiveCombatants().single().name)
+        assertEquals("Zoro", session.playerActiveCombatants().single().name)
+        assertEquals("Zoroark-Hisui", session.playerActiveCombatants().single().species)
         assertEquals(listOf("NORMAL", "GHOST"), session.playerActiveCombatants().single().types)
         assertEquals("Zoroark-Hisui", session.playerDetails().species)
     }

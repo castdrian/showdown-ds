@@ -73,7 +73,8 @@ object ShowdownChangelog {
                 "Illusion reveals now replace the temporary battle identity without carrying stale Pokémon details into the active battle state.",
                 "Ultra Burst form changes now retain nicknames and reveal the correct burst item in Pokémon details.",
                 "Transform now keeps the transformed Pokémon's nickname while copying the target's actual species and revealed battle details.",
-                "Form changes now retain the active level and gender when Showdown sends a species-only details packet."
+                "Form changes now retain the active level and gender when Showdown sends a species-only details packet.",
+                "Visible nicknames now stay separate from species across requests, switches, HP cards, and Pokémon inspection."
             )
         ),
         ShowdownChangelogEntry(

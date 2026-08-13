@@ -1565,8 +1565,8 @@ class BattleSession {
                 teraTypesBySlot.remove(slot)
                 playerBoostsBySlot.remove(slot)
                 if (!passedBoosts.isNullOrEmpty()) playerBoostsBySlot[slot] = passedBoosts.toMutableMap()
-                val activeName = if (replacingIllusion) identifier.ifBlank { activeDetails.name.ifBlank { pokemon } } else pokemon
-                val activeSpecies = if (replacingIllusion) pokemon else activeDetails.species.ifBlank { pokemon }
+                val activeName = identifier.ifBlank { activeDetails.name.ifBlank { pokemon } }
+                val activeSpecies = pokemon.ifBlank { activeDetails.species }
                 val updatedDetails = activeDetails.copy(
                     name = activeName,
                     species = activeSpecies,
@@ -1621,7 +1621,7 @@ class BattleSession {
                 teraTypesBySlot.remove(slot)
                 opponentBoostsBySlot.remove(slot)
                 if (!passedBoosts.isNullOrEmpty()) opponentBoostsBySlot[slot] = passedBoosts.toMutableMap()
-                val activeName = if (replacingIllusion) identifier.ifBlank { pokemon } else existing?.name?.takeIf { it.equals(identifier, true) } ?: pokemon
+                val activeName = identifier.ifBlank { existing?.name ?: pokemon }
                 val updatedDetails = activeDetails.copy(
                     name = activeName,
                     species = pokemon,
@@ -3945,7 +3945,7 @@ class BattleSession {
                 }
             } ?: known?.moves.orEmpty()
             synced += PokemonDetails(
-                name,
+                identifier,
                 resolvedTypes(species, known?.types.orEmpty()),
                 levelGender.first,
                 levelGender.second,
@@ -3997,8 +3997,10 @@ class BattleSession {
         playerBoostsBySlot.keys.filterNot(activeSlotNames::containsKey).toList().forEach(playerBoostsBySlot::remove)
         refreshVisibleBoosts()
         focusedTeam = focusedTeam.coerceIn(0, team.lastIndex)
-        synced.firstOrNull { it.name.equals(playerPokemon, true) }?.let { details ->
+        val primaryIndex = playerActivePartyIndices["${playerSlot}a"]
+        (primaryIndex?.let { synced.getOrNull(it) } ?: synced.firstOrNull())?.let { details ->
             playerDetails = details
+            playerPokemon = details.name
             playerHp = details.hp
             playerCondition = details.condition
             playerLevel = details.level
