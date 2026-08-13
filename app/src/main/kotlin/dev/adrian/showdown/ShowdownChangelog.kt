@@ -35,6 +35,7 @@ object ShowdownChangelog {
                 "Long multi-part form identifiers such as Alcremie-Caramel-Swirl now use the base species in readable battle labels while retaining the full form for sprites and battle state.",
                 "Battle challenges announced by Showdown now open the custom accept or reject flow.",
                 "Battle playback, audio cues, and the two-screen presentation remain tuned for human-speed reading.",
+                "Active live battles now retain their room and pending choice while Android recreates the activity.",
                 "The first live battle state is no longer fed into the animation layer twice, preventing duplicated opening effects and audio timing drift.",
                 "Live battle choices now remain queued until Showdown acknowledges them, including across reconnects and activity recreation.",
                 "Doubles and triples target selection now follows Showdown's adjacent, ally, foe, and area-target rules.",

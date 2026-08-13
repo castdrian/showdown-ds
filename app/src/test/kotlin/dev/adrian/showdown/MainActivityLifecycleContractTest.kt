@@ -69,4 +69,15 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("reconcilePendingDecisionCommand(lines)"))
         assertFalse(source.contains("if (packet.connection.send(roomId, command)) pendingDecisionCommand = null"))
     }
+
+    @Test
+    fun preservesPersistedBattleRecoveryBeforeTheRestoredSnapshotArrives() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val recovery = source.substringAfter("val preserveBattleSurface =")
+            .substringBefore("battleProtocolReady = false")
+
+        assertTrue(recovery.contains("activeBattleRoomId != null"))
+        assertTrue(recovery.contains("shouldMaintainConnection"))
+        assertTrue(recovery.contains("!session.isBattleFinished()"))
+    }
 }

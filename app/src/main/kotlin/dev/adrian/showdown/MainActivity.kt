@@ -1998,7 +1998,9 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     if (showdownConnection !== connection) return@runOnUiThread
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
-                        val preserveBattleSurface = activeBattleRoomId != null && session.isLiveBattleActive() && !session.isBattleFinished()
+                        val preserveBattleSurface = activeBattleRoomId != null &&
+                            shouldMaintainConnection &&
+                            !session.isBattleFinished()
                         battleProtocolReady = false
                         pendingDecisionSentConnection = null
                         if (!preserveBattleSurface) {
