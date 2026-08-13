@@ -1377,6 +1377,48 @@ class BattleSessionTest {
     }
 
     @Test
+    fun replacePacketsRevealTheActualSpeciesWithoutDiscardingAPlayerNickname() {
+        val session = BattleSession()
+        session.setLocalUsername("ADRIAN")
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN|",
+                "|player|p2|OPPONENT|",
+                "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Zoro\",\"details\":\"Zoroark, L50\",\"condition\":\"100/100\",\"active\":true}]}}",
+                "|switch|p1a: Zoro|Pikachu, L50|100/100",
+                "|replace|p1a: Zoro|Zoroark, L50|100/100"
+            )
+        )
+
+        assertEquals("Zoro", session.playerActiveCombatants().single().name)
+        assertEquals("Zoroark", session.playerActiveCombatants().single().species)
+        assertEquals("Zoro", session.playerDetails().name)
+        assertEquals("Zoroark", session.playerDetails().species)
+        assertTrue(session.battleLog().last().contains("was revealed as Zoroark"))
+    }
+
+    @Test
+    fun replacePacketsClearStaleOpponentIdentityDetails() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Zoro|Pikachu, L50|100/100",
+                "|-ability|p2a: Zoro|Static",
+                "|-item|p2a: Zoro|Light Ball",
+                "|replace|p2a: Zoro|Zoroark, L50|100/100"
+            )
+        )
+
+        val revealed = session.opponentActiveCombatants().single()
+        assertEquals("Zoro", revealed.name)
+        assertEquals("Zoroark", revealed.species)
+        assertEquals("Zoro", session.opponentDetails().name)
+        assertEquals("Zoroark", session.opponentDetails().species)
+        assertEquals("Unknown ability", session.opponentDetails().ability)
+        assertEquals("Unknown item", session.opponentDetails().item)
+    }
+
+    @Test
     fun customEndTerastallizeRestoresTheOriginalTypes() {
         val session = BattleSession()
         session.applyProtocolLine("|switch|p1a: Incineroar|Incineroar, L50|100/100")

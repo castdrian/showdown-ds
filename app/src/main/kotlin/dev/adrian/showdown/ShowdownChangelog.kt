@@ -69,7 +69,8 @@ object ShowdownChangelog {
                 "The Thor secondary display now reapplies touch and controller focus when its presentation is recreated or regains window focus.",
                 "Starting another battle now clears stale lobby, team, account, and room overlays so old dialogs cannot cover the new battle.",
                 "Singles, doubles, and triples now share one compact HP-card content treatment with only the card density changing.",
-                "Matchmaking now honors Showdown's advertised format capabilities and falls back from challenge-only saved formats before searching."
+                "Matchmaking now honors Showdown's advertised format capabilities and falls back from challenge-only saved formats before searching.",
+                "Illusion reveals now replace the temporary battle identity without carrying stale Pokémon details into the active battle state."
             )
         ),
         ShowdownChangelogEntry(
