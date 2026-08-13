@@ -329,6 +329,7 @@ class BattleSession {
     private val activeRequests = mutableListOf<JSONObject>()
     private val activeChoices = mutableListOf<String>()
     private val usedGimmickFamilies = mutableSetOf<String>()
+    private val forceSwitchSlots = mutableListOf<Boolean>()
     private val forceSwitchChoices = mutableListOf<String>()
     private val targetOptions = mutableListOf<TargetOption>()
     private var activeSlotIndex = 0
@@ -803,6 +804,7 @@ class BattleSession {
             revivingTeamIndices.clear()
             usedGimmickFamilies.clear()
             forceSwitchChoices.clear()
+            forceSwitchSlots.clear()
             targetOptions.clear()
             if (!battleFinished) {
                 battlePhase = BattlePhase.LOBBY
@@ -832,6 +834,7 @@ class BattleSession {
             autoPassActiveSlots.clear()
             revivingTeamIndices.clear()
             forceSwitchChoices.clear()
+            forceSwitchSlots.clear()
             targetOptions.clear()
         }
         notifyListeners()
@@ -1344,6 +1347,7 @@ class BattleSession {
                 revivingTeamIndices.clear()
                 usedGimmickFamilies.clear()
                 forceSwitchChoices.clear()
+                forceSwitchSlots.clear()
                 targetOptions.clear()
             }
         } finally {
@@ -1458,6 +1462,7 @@ class BattleSession {
         autoPassActiveSlots.clear()
         revivingTeamIndices.clear()
         usedGimmickFamilies.clear()
+        forceSwitchSlots.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
         playerActiveCombatants.clear()
@@ -2353,6 +2358,7 @@ class BattleSession {
         autoPassActiveSlots.clear()
         revivingTeamIndices.clear()
         usedGimmickFamilies.clear()
+        forceSwitchSlots.clear()
         forceSwitchChoices.clear()
         targetOptions.clear()
         choiceCanBeCancelled = false
@@ -2394,7 +2400,11 @@ class BattleSession {
             }
             val forceSwitch = request.optJSONArray("forceSwitch")
             battlePhase = BattlePhase.BATTLE
-            requiredSwitches = forceSwitch?.let { array -> (0 until array.length()).count { array.optBoolean(it) } } ?: 0
+            forceSwitchSlots.clear()
+            if (forceSwitch != null) {
+                for (index in 0 until forceSwitch.length()) forceSwitchSlots += forceSwitch.optBoolean(index)
+            }
+            requiredSwitches = forceSwitchSlots.count { it }
             if (requiredSwitches > 0) {
                 decisionKind = DecisionKind.SWITCH
                 decisionAvailable = team.indices.any { canSwitchTo(it) }
@@ -2439,6 +2449,7 @@ class BattleSession {
         targetOptions.clear()
         activeChoices.clear()
         forceSwitchChoices.clear()
+        forceSwitchSlots.clear()
         activeSlotIndex = activeRequests.size
         status = "Choice sent. Waiting for the other player…"
     }
@@ -2774,6 +2785,7 @@ class BattleSession {
             revivingTeamIndices.clear()
             usedGimmickFamilies.clear()
             forceSwitchChoices.clear()
+            forceSwitchSlots.clear()
             targetOptions.clear()
             activeSlotIndex = 0
             requiredSwitches = 0
@@ -2801,6 +2813,7 @@ class BattleSession {
         revivingTeamIndices.clear()
         usedGimmickFamilies.clear()
         forceSwitchChoices.clear()
+        forceSwitchSlots.clear()
         targetOptions.clear()
         activeSlotIndex = 0
         requiredSwitches = 0
@@ -2821,11 +2834,15 @@ class BattleSession {
             prepareNextActiveRequest()
             return
         }
-        if (decisionKind == DecisionKind.SWITCH && requiredSwitches > 1) {
+        if (decisionKind == DecisionKind.SWITCH) {
             forceSwitchChoices.clear()
             decisionAvailable = true
             panel = Panel.TEAM
-            status = "Choose a Pokémon to switch in 1/$requiredSwitches"
+            status = if (requiredSwitches > 1) {
+                "Choose a Pokémon to switch in 1/$requiredSwitches"
+            } else {
+                "Choose a Pokémon to switch in"
+            }
             return
         }
         decisionAvailable = true
@@ -3830,9 +3847,10 @@ class BattleSession {
                         status = "Choose a Pokémon to switch in ${forceSwitchChoices.size + 1}/$requiredSwitches"
                         return
                     }
-                    "/choose ${forceSwitchChoices.joinToString(", ")}${requestId?.let { "|$it" } ?: ""}"
+                    "/choose ${serializeForcedSwitchChoices()}${requestId?.let { "|$it" } ?: ""}"
                 } else {
-                    "/choose $switchChoice${requestId?.let { "|$it" } ?: ""}"
+                    forceSwitchChoices += switchChoice
+                    "/choose ${serializeForcedSwitchChoices()}${requestId?.let { "|$it" } ?: ""}"
                 }
             }
             else -> {
@@ -3857,13 +3875,25 @@ class BattleSession {
         if (requiredSwitches <= 0) return
         forceSwitchChoices.clear()
         repeat(requiredSwitches) { forceSwitchChoices += "pass" }
-        val choice = "/choose ${forceSwitchChoices.joinToString(", ")}${requestId?.let { "|$it" } ?: ""}"
+        val choice = "/choose ${serializeForcedSwitchChoices()}${requestId?.let { "|$it" } ?: ""}"
         decisionAvailable = false
         choiceCanBeCancelled = false
         status = "Choice sent. Waiting for the other player…"
         chatMessages += "[You] $choice"
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         decisionListeners.toList().forEach { it.onDecision(choice) }
+    }
+
+    private fun serializeForcedSwitchChoices(): String {
+        if (forceSwitchSlots.isEmpty()) return forceSwitchChoices.joinToString(", ")
+        var selectedChoiceIndex = 0
+        return forceSwitchSlots.joinToString(", ") { required ->
+            if (!required) {
+                "pass"
+            } else {
+                forceSwitchChoices.getOrNull(selectedChoiceIndex++) ?: "pass"
+            }
+        }
     }
 
     private fun confirmMoveRequestSwitch() {

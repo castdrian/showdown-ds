@@ -175,6 +175,38 @@ class BattleSessionTest {
     }
 
     @Test
+    fun failedForcedSwitchSubmissionRestoresPositionalChoices() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":43,\"forceSwitch\":[false,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+
+        session.selectTeamWithTouch(2)
+        session.handleDecisionSendFailure()
+        session.selectTeamWithTouch(2)
+
+        assertEquals(listOf("/choose pass, switch 3|43", "/choose pass, switch 3|43"), decisions)
+    }
+
+    @Test
+    fun rejectedSingleForcedSwitchClearsThePreviousChoice() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":44,\"forceSwitch\":[true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+
+        session.selectTeamWithTouch(1)
+        session.applyProtocolLine("|error|That switch is invalid.")
+        session.selectTeamWithTouch(1)
+
+        assertEquals(listOf("/choose switch 2|44", "/choose switch 2|44"), decisions)
+    }
+
+    @Test
     fun sentMoveCanBeCancelledUntilTheNextRequest() {
         val session = BattleSession()
         session.setLiveBattleActive(true)
@@ -1911,8 +1943,37 @@ class BattleSessionTest {
             "|request|{\"rqid\":39,\"forceSwitch\":[true,false],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
         )
 
-        assertEquals(listOf("/choose pass|39"), decisions)
+        assertEquals(listOf("/choose pass, pass|39"), decisions)
         assertFalse(session.decisionAvailable)
+    }
+
+    @Test
+    fun singleForcedSwitchPreservesLeadingPass() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":41,\"forceSwitch\":[false,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+
+        session.selectTeamWithTouch(2)
+
+        assertEquals(listOf("/choose pass, switch 3|41"), decisions)
+    }
+
+    @Test
+    fun multipleForcedSwitchesPreserveInactivePositions() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolLine(
+            "|request|{\"rqid\":42,\"forceSwitch\":[true,false,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p1: Tapu Koko\",\"details\":\"Tapu Koko, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false},{\"ident\":\"p1: Landorus\",\"details\":\"Landorus, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+
+        session.selectTeamWithTouch(3)
+        session.selectTeamWithTouch(4)
+
+        assertEquals(listOf("/choose switch 4, pass, switch 5|42"), decisions)
     }
 
     @Test
