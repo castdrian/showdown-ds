@@ -2096,7 +2096,7 @@ class BattleSession {
         val actor = fields.getOrNull(2) ?: return
         val target = fields.getOrNull(3) ?: return
         val targetDetails = actorDetails(target)
-        val species = targetDetails?.name ?: target.substringAfter(':').trim().ifBlank { return }
+        val species = targetDetails?.species ?: target.substringAfter(':').trim().ifBlank { return }
         val level = targetDetails?.level ?: "50"
         val gender = when (targetDetails?.gender) {
             "♂" -> ", M"
@@ -2112,7 +2112,7 @@ class BattleSession {
         if (targetBoosts.isEmpty()) actorBoosts.remove(targetSlot(actor)) else actorBoosts[targetSlot(actor)] = targetBoosts.toMutableMap()
         refreshVisibleBoosts()
         targetDetails?.let { details ->
-            updateActorDetails("${actor.substringBefore(':')}: $species") { current ->
+            updateActorDetails(actor) { current ->
                 current.copy(
                     ability = details.ability,
                     moves = details.moves

@@ -71,7 +71,8 @@ object ShowdownChangelog {
                 "Singles, doubles, and triples now share one compact HP-card content treatment with only the card density changing.",
                 "Matchmaking now honors Showdown's advertised format capabilities and falls back from challenge-only saved formats before searching.",
                 "Illusion reveals now replace the temporary battle identity without carrying stale Pokémon details into the active battle state.",
-                "Ultra Burst form changes now retain nicknames and reveal the correct burst item in Pokémon details."
+                "Ultra Burst form changes now retain nicknames and reveal the correct burst item in Pokémon details.",
+                "Transform now keeps the transformed Pokémon's nickname while copying the target's actual species and revealed battle details."
             )
         ),
         ShowdownChangelogEntry(

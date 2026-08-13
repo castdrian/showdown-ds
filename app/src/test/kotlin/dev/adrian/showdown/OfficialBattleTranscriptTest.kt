@@ -472,6 +472,31 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun transformsIntoTheTargetSpeciesWithoutLosingEitherNicknameOrRevealedDetails() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver(
+            mapOf(
+                "Mewtwo" to listOf("PSYCHIC"),
+                "Dragapult" to listOf("DRAGON", "GHOST")
+            )::get
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Copycat|Mewtwo, L50|100/100",
+                "|switch|p2a: Phantom|Dragapult, L50|100/100",
+                "|-ability|p2a: Phantom|Infiltrator",
+                "|-transform|p1a: Copycat|p2a: Phantom"
+            )
+        )
+
+        assertEquals("Copycat", session.playerPokemon)
+        assertEquals("Copycat", session.playerDetails().name)
+        assertEquals("Dragapult", session.playerDetails().species)
+        assertEquals(listOf("DRAGON", "GHOST"), session.playerDetails().types)
+        assertEquals("Infiltrator", session.playerDetails().ability)
+    }
+
+    @Test
     fun preservesTransformAndPerSlotBoostStateFromOfficialPackets() {
         val session = BattleSession()
         session.applyProtocolPacket(
