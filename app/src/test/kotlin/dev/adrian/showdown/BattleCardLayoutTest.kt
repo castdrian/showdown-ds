@@ -10,9 +10,9 @@ class BattleCardLayoutTest {
         val layout = BattleCardLayout.compactFor(3)
 
         assertTrue(layout.heightFraction > 0.06f)
-        assertTrue(layout.titleBaselineFraction > 0.27f)
-        assertTrue(layout.hpBaselineFraction < layout.barTopFraction)
-        assertTrue(layout.barBottomFraction < 1f)
+        assertTrue(layout.content.titleBaselineFraction > 0.27f)
+        assertTrue(layout.content.hpBaselineFraction < layout.content.barTopFraction)
+        assertTrue(layout.content.barBottomFraction < 1f)
     }
 
     @Test
@@ -21,10 +21,10 @@ class BattleCardLayoutTest {
 
         assertEquals(0.085f, layout.heightFraction, 0.001f)
         assertEquals(0.012f, layout.gapFraction, 0.001f)
-        assertEquals(0.29f, layout.titleBaselineFraction, 0.001f)
-        assertEquals(0.51f, layout.hpBaselineFraction, 0.001f)
-        assertEquals(0.55f, layout.barTopFraction, 0.001f)
-        assertEquals(0.70f, layout.barBottomFraction, 0.001f)
+        assertEquals(0.29f, layout.content.titleBaselineFraction, 0.001f)
+        assertEquals(0.51f, layout.content.hpBaselineFraction, 0.001f)
+        assertEquals(0.55f, layout.content.barTopFraction, 0.001f)
+        assertEquals(0.70f, layout.content.barBottomFraction, 0.001f)
     }
 
     @Test
@@ -33,14 +33,16 @@ class BattleCardLayoutTest {
         val doubles = BattleCardLayout.compactFor(2)
         val triples = BattleCardLayout.compactFor(3)
 
-        assertEquals(single.titleBaselineFraction, doubles.titleBaselineFraction, 0.001f)
-        assertEquals(single.titleBaselineFraction, triples.titleBaselineFraction, 0.001f)
-        assertEquals(single.hpBaselineFraction, doubles.hpBaselineFraction, 0.001f)
-        assertEquals(single.hpBaselineFraction, triples.hpBaselineFraction, 0.001f)
-        assertEquals(single.barTopFraction, doubles.barTopFraction, 0.001f)
-        assertEquals(single.barTopFraction, triples.barTopFraction, 0.001f)
-        assertEquals(single.barBottomFraction, doubles.barBottomFraction, 0.001f)
-        assertEquals(single.barBottomFraction, triples.barBottomFraction, 0.001f)
+        assertEquals(single.content, doubles.content)
+        assertEquals(single.content, triples.content)
+        assertEquals(single.content.titleBaselineFraction, doubles.content.titleBaselineFraction, 0.001f)
+        assertEquals(single.content.titleBaselineFraction, triples.content.titleBaselineFraction, 0.001f)
+        assertEquals(single.content.hpBaselineFraction, doubles.content.hpBaselineFraction, 0.001f)
+        assertEquals(single.content.hpBaselineFraction, triples.content.hpBaselineFraction, 0.001f)
+        assertEquals(single.content.barTopFraction, doubles.content.barTopFraction, 0.001f)
+        assertEquals(single.content.barTopFraction, triples.content.barTopFraction, 0.001f)
+        assertEquals(single.content.barBottomFraction, doubles.content.barBottomFraction, 0.001f)
+        assertEquals(single.content.barBottomFraction, triples.content.barBottomFraction, 0.001f)
         assertTrue(triples.heightFraction < doubles.heightFraction)
         assertTrue(triples.gapFraction < doubles.gapFraction)
     }

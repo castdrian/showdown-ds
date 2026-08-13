@@ -78,6 +78,7 @@ class MainActivity : Activity() {
     private var pendingTeamValidationFormat: String? = null
     private var teamUploadButtons: List<Button> = emptyList()
     private var teamPrivacyButton: Button? = null
+    private var teamLibraryDialog: ShowdownDialog? = null
     private var teamEditorDialog: ShowdownDialog? = null
     private var teamEditorShareView: TextView? = null
     private val pokedex = ShowdownPokedex()
@@ -1865,6 +1866,7 @@ class MainActivity : Activity() {
     }
 
     private fun startLobbyConnection(lobbyCommands: List<String>? = null, lobbyStatus: String? = null) {
+        dismissConnectionTransitionDialogs()
         replayLoadRequest = null
         activeReplayLink = null
         pendingBattleJoinRoomId = null
@@ -1901,6 +1903,51 @@ class MainActivity : Activity() {
         serverUserNamed = false
         persistLobbyState()
         connectLobbySocket()
+    }
+
+    private fun dismissConnectionTransitionDialogs() {
+        roomListDialog?.dismiss()
+        roomListDialog = null
+        roomListPending = false
+        tournamentDirectoryDialog?.dismiss()
+        tournamentDirectoryDialog = null
+        tournamentDirectoryContentView = null
+        tournamentDirectoryLinks = null
+        tournamentDialog?.dismiss()
+        tournamentDialog = null
+        ladderDialog?.dismiss()
+        ladderDialog = null
+        chatRoomDialog?.dismiss()
+        chatRoomDialog = null
+        chatRoomMessagesView = null
+        chatRoomInput = null
+        chatRoomScroll = null
+        lobbyChatDialog?.dismiss()
+        lobbyChatDialog = null
+        lobbyChatMessagesView = null
+        lobbyChatInput = null
+        lobbyChatScroll = null
+        privateMessageDialog?.dismiss()
+        privateMessageDialog = null
+        userDetailsDialog?.dismiss()
+        userDetailsDialog = null
+        friendsDialog?.dismiss()
+        friendsDialog = null
+        friendsContentView = null
+        friendsInput = null
+        teamRemoteDialog?.dismiss()
+        teamRemoteDialog = null
+        teamRemoteContentView = null
+        teamRemoteLinks = null
+        teamLibraryDialog?.dismiss()
+        teamLibraryDialog = null
+        teamEditorDialog?.dismiss()
+        teamEditorDialog = null
+        teamEditorShareView = null
+        pokedexDialog?.dismiss()
+        pokedexDialog = null
+        accountDialog?.dismiss()
+        accountDialog = null
     }
 
     private fun restoreLobbyConnection(savedInstanceState: Bundle?) {
@@ -3434,6 +3481,10 @@ class MainActivity : Activity() {
             .setPositiveButton("Import backup") { _, _ -> showTeamBackupImport() }
             .setNegativeButton("Close", null)
             .create()
+        teamLibraryDialog = teamDialog
+        teamDialog?.setOnDismissListener {
+            if (teamLibraryDialog === teamDialog) teamLibraryDialog = null
+        }
         teamDialog?.setOnShowListener {
             styleTeamButton(addButton)
             styleTeamButton(remoteButton)

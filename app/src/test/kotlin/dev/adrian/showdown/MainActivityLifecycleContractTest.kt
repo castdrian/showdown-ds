@@ -107,6 +107,19 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun closesStaleLobbyAndTeamDialogsBeforeStartingAnotherConnectionFlow() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val transition = source.substringAfter("private fun startLobbyConnection(")
+            .substringBefore("private fun dismissConnectionTransitionDialogs")
+
+        assertTrue(transition.contains("dismissConnectionTransitionDialogs()"))
+        assertTrue(source.contains("private var teamLibraryDialog: ShowdownDialog? = null"))
+        assertTrue(source.contains("teamLibraryDialog?.dismiss()"))
+        assertTrue(source.contains("teamEditorDialog?.dismiss()"))
+        assertTrue(source.contains("pokedexDialog?.dismiss()"))
+    }
+
+    @Test
     fun keepsTeamEditorSlotsCompactAndExpandable() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 

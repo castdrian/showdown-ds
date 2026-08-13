@@ -784,12 +784,13 @@ class BattleSceneView(
         layout: CompactBattleCardLayout
     ) {
         val height = bounds.height()
+        val contentLayout = layout.content
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
         val levelWidth = paint.measureText(content.levelLabel)
         paint.color = Color.rgb(232, 232, 232)
-        canvas.drawText(content.levelLabel, textRight, bounds.top + height * layout.titleBaselineFraction, paint)
+        canvas.drawText(content.levelLabel, textRight, bounds.top + height * contentLayout.titleBaselineFraction, paint)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = readableTextSize(height * 0.27f, scale, 10.5f)
         val titleWidth = (textRight - textLeft - levelWidth - 16f * scale).coerceAtLeast(0f)
@@ -797,20 +798,20 @@ class BattleSceneView(
         canvas.drawText(
             ellipsizeToWidth(content.title, titleWidth, paint),
             textLeft,
-            bounds.top + height * layout.titleBaselineFraction,
+            bounds.top + height * contentLayout.titleBaselineFraction,
             paint
         )
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.17f, scale, 9.5f)
         paint.color = Color.rgb(238, 238, 238)
-        canvas.drawText(content.hpLabel, textRight, bounds.top + height * layout.hpBaselineFraction, paint)
+        canvas.drawText(content.hpLabel, textRight, bounds.top + height * contentLayout.hpBaselineFraction, paint)
         paint.textAlign = Paint.Align.LEFT
         val track = RectF(
             textLeft,
-            bounds.top + height * layout.barTopFraction,
+            bounds.top + height * contentLayout.barTopFraction,
             textRight,
-            bounds.top + height * layout.barBottomFraction
+            bounds.top + height * contentLayout.barBottomFraction
         )
         drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
     }
