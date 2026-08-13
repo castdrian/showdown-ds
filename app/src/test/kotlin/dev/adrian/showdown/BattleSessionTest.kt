@@ -102,6 +102,7 @@ class BattleSessionTest {
         assertTrue(session.decisionAvailable)
         assertEquals("Struggle", session.moves().single().name)
         assertEquals(listOf("Protect", "Tackle"), session.playerDetails().moves)
+        assertTrue(session.availableGimmicks().isEmpty())
         session.confirmSelection()
 
         assertEquals(listOf("/choose move 1|10"), decisions)
@@ -124,6 +125,26 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertEquals(listOf("/choose move 1, move 1|11"), decisions)
+    }
+
+    @Test
+    fun officialStruggleRequestRemainsSelectableWithoutReplacingLearnedMoves() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+
+        session.applyProtocolLine(
+            "|request|{\"rqid\":14,\"active\":[{\"moves\":[{\"move\":\"Struggle\",\"id\":\"struggle\",\"target\":\"randomNormal\",\"disabled\":false}]}],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"100/100\",\"active\":true,\"moves\":[\"protect\",\"fakeout\",\"flareblitz\",\"darkestlariat\"]}]}}"
+        )
+
+        assertTrue(session.decisionAvailable)
+        assertEquals("Struggle", session.moves().single().name)
+        assertEquals("randomNormal", session.moves().single().target)
+        assertFalse(session.playerDetails().moves.any { it.equals("Struggle", true) })
+
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose move 1|14"), decisions)
     }
 
     @Test

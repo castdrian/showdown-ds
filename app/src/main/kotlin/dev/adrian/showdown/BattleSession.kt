@@ -2474,7 +2474,9 @@ class BattleSession {
             )
         }
         val requestMoveNames = moves.map { it.name }
+        var usedStruggleFallback = false
         if (moves.isNotEmpty() && moves.none { !it.disabled } && moves.none { it.name.equals("Struggle", true) }) {
+            usedStruggleFallback = true
             val struggleInfo = moveInfoResolver?.invoke("Struggle")
             moves.clear()
             moveResolutionSources.clear()
@@ -2491,21 +2493,23 @@ class BattleSession {
             moveResolutionSources += MoveResolutionSources()
         }
         val baseMoves = moves.toList()
-        val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
-        if (zMoves != null) {
-            baseMoves.forEachIndexed { index, base ->
-                val parsed = parseMoveVariant(zMoves.opt(index), base, MoveVariantKind.Z_POWER)
-                zMoveVariants += parsed?.variant
-                zMoveResolutionSources += parsed?.sources
+        if (!usedStruggleFallback) {
+            val zMoves = active.optJSONArray("zMoves") ?: active.optJSONArray("canZMove")
+            if (zMoves != null) {
+                baseMoves.forEachIndexed { index, base ->
+                    val parsed = parseMoveVariant(zMoves.opt(index), base, MoveVariantKind.Z_POWER)
+                    zMoveVariants += parsed?.variant
+                    zMoveResolutionSources += parsed?.sources
+                }
             }
-        }
-        val maxMoves = active.optJSONArray("maxMoves")
-            ?: active.optJSONObject("maxMoves")?.optJSONArray("maxMoves")
-        if (maxMoves != null) {
-            baseMoves.forEachIndexed { index, base ->
-                val parsed = parseMoveVariant(maxMoves.opt(index), base, MoveVariantKind.DYNAMAX)
-                maxMoveVariants += parsed?.variant
-                maxMoveResolutionSources += parsed?.sources
+            val maxMoves = active.optJSONArray("maxMoves")
+                ?: active.optJSONObject("maxMoves")?.optJSONArray("maxMoves")
+            if (maxMoves != null) {
+                baseMoves.forEachIndexed { index, base ->
+                    val parsed = parseMoveVariant(maxMoves.opt(index), base, MoveVariantKind.DYNAMAX)
+                    maxMoveVariants += parsed?.variant
+                    maxMoveResolutionSources += parsed?.sources
+                }
             }
         }
         focusedMove = 0
@@ -2518,8 +2522,10 @@ class BattleSession {
         } else {
             "Choose a move"
         }
-        updateMoveDetailsForActiveSlot(requestMoveNames)
-        updateAvailableGimmicks(active)
+        if (requestMoveNames.size != 1 || !requestMoveNames.single().equals("Struggle", true)) {
+            updateMoveDetailsForActiveSlot(requestMoveNames)
+        }
+        updateAvailableGimmicks(if (usedStruggleFallback) JSONObject() else active)
         updateTargetOptions()
         return moves.isNotEmpty()
     }
