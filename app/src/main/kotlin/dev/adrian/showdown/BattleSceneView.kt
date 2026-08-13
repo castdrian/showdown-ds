@@ -847,22 +847,53 @@ class BattleSceneView(
         size: Float,
         gap: Float
     ) {
-        val sheet = pokeballSheet ?: return
         repeat(6) { index ->
             val pokemon = party.getOrNull(index)
-            val spriteIndex = when {
-                pokemon == null -> 0
-                pokemon.condition.contains("FNT", true) -> 2
-                pokemon.condition != "READY" -> 1
-                else -> 0
-            }
             val left = start + index * (size + gap)
-            val cellWidth = sheet.width / 3
-            val glyphSize = 12
-            source.set(spriteIndex * cellWidth + 14, 10, spriteIndex * cellWidth + 14 + glyphSize, 10 + glyphSize)
+            val state = when {
+                pokemon?.condition?.contains("FNT", true) == true -> PartyBallState.FAINTED
+                pokemon != null && pokemon.condition != "READY" -> PartyBallState.STATUSED
+                else -> PartyBallState.READY
+            }
+            drawPartyBall(canvas, left, top, size, state)
+        }
+    }
+
+    private fun drawPartyBall(canvas: Canvas, left: Float, top: Float, size: Float, state: PartyBallState) {
+        val sheet = pokeballSheet
+        if (sheet != null && state != PartyBallState.FAINTED) {
+            val cellLeft = if (state == PartyBallState.STATUSED) POKEBALL_TILE_WIDTH_PIXELS else 0
+            source.set(cellLeft + POKEBALL_GLYPH_LEFT, POKEBALL_GLYPH_TOP, cellLeft + POKEBALL_GLYPH_LEFT + POKEBALL_GLYPH_SIZE, POKEBALL_GLYPH_TOP + POKEBALL_GLYPH_SIZE)
             destination.set(left, top, left + size, top + size)
             canvas.drawBitmap(sheet, source, destination, paint)
+            return
         }
+        drawFallbackPartyBall(canvas, left, top, size, state)
+    }
+
+    private fun drawFallbackPartyBall(canvas: Canvas, left: Float, top: Float, size: Float, state: PartyBallState) {
+        val centerX = left + size / 2f
+        val centerY = top + size / 2f
+        val radius = size * 0.40f
+        paint.style = Paint.Style.FILL
+        paint.shader = null
+        paint.color = when (state) {
+            PartyBallState.READY -> Color.rgb(234, 76, 42)
+            PartyBallState.STATUSED -> Color.rgb(236, 196, 31)
+            PartyBallState.FAINTED -> Color.rgb(95, 106, 117)
+        }
+        canvas.drawCircle(centerX, centerY, radius, paint)
+        paint.color = Color.rgb(219, 228, 235)
+        canvas.drawArc(RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius), 0f, 180f, true, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = maxOf(1f, size * 0.06f)
+        paint.color = Color.rgb(184, 197, 208)
+        canvas.drawCircle(centerX, centerY, radius, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(31, 39, 47)
+        canvas.drawRect(centerX - radius, centerY - paint.strokeWidth / 2f, centerX + radius, centerY + paint.strokeWidth / 2f, paint)
+        paint.color = Color.rgb(198, 209, 218)
+        canvas.drawCircle(centerX, centerY, size * 0.11f, paint)
     }
 
     private fun drawBattleStatusCardSurface(canvas: Canvas, bounds: RectF, scale: Float) {
@@ -1010,5 +1041,15 @@ class BattleSceneView(
         const val CYAN = 0xFF4AE7FF.toInt()
         const val MAGENTA = 0xFFFF49B0.toInt()
         const val MUTED = 0xFFBBD1EA.toInt()
+        const val POKEBALL_TILE_WIDTH_PIXELS = 40
+        const val POKEBALL_GLYPH_LEFT = 14
+        const val POKEBALL_GLYPH_TOP = 10
+        const val POKEBALL_GLYPH_SIZE = 12
+    }
+
+    private enum class PartyBallState {
+        READY,
+        STATUSED,
+        FAINTED
     }
 }
