@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -62,5 +63,14 @@ class BattleCardLayoutTest {
         assertEquals(opponentCards[0].right, opponentCards[1].right, 0.001f)
         assertEquals(playerCards[1].top - playerCards[0].top, opponentCards[1].top - opponentCards[0].top, 0.001f)
         assertEquals(playerCards[1].bottom - playerCards[0].bottom, opponentCards[1].bottom - opponentCards[0].bottom, 0.001f)
+    }
+
+    @Test
+    fun multiBattleCardsKeepOnePartyIndicatorStripPerSide() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
+
+        assertTrue(source.contains("session.playerPartyDetails().takeIf { index == combatants.lastIndex }"))
+        assertTrue(source.contains("session.opponentPartyDetails().takeIf { index == 0 }"))
+        assertTrue(source.contains("party?.let { drawPartyIndicators"))
     }
 }

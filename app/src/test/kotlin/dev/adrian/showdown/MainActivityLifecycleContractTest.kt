@@ -84,6 +84,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun restoresSavedShowdownSessionsBeforeRejoiningPersistedRooms() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("ShowdownSessionStore(this)"))
+        assertTrue(source.contains("loginClient.upkeep(serverEndpoint, challenge)"))
+        assertTrue(source.contains("sessionRestorePending = loginClient.hasSession()"))
+        assertTrue(source.contains("!sessionRestorePending && (credentialsStore.load() == null || update.named)"))
+        assertTrue(source.contains("sessionStore.clear()"))
+    }
+
+    @Test
     fun preservesPersistedBattleRecoveryBeforeTheRestoredSnapshotArrives() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val preserveBattleSurfaceSource = source.substringAfter("val preserveBattleSurface =")

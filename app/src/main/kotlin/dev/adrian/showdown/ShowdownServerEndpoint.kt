@@ -7,7 +7,8 @@ data class ShowdownServerEndpoint(
     val webSocketUrl: String,
     val loginUrl: String = "https://play.pokemonshowdown.com/api/login",
     val registrationUrl: String = loginUrl.substringBeforeLast('/') + "/register",
-    val changePasswordUrl: String = loginUrl.substringBeforeLast('/') + "/changepassword"
+    val changePasswordUrl: String = loginUrl.substringBeforeLast('/') + "/changepassword",
+    val upkeepUrl: String = loginUrl.substringBeforeLast('/') + "/upkeep"
 ) {
     companion object {
         val playShowdown = ShowdownServerEndpoint("Pokémon Showdown", "wss://sim3.psim.us/showdown/websocket")
@@ -33,27 +34,36 @@ data class ShowdownServerEndpoint(
                 else -> "$path/showdown/websocket"
             }
             val loginScheme = if (scheme == "ws") "http" else "https"
+            val apiPrefix = when {
+                path.endsWith("/showdown/websocket") -> path.removeSuffix("/showdown/websocket")
+                path.endsWith("/showdown") -> path.removeSuffix("/showdown")
+                path.endsWith("/websocket") -> path.removeSuffix("/websocket")
+                path.isBlank() || path == "/" -> ""
+                else -> path
+            }.trimEnd('/')
+            val apiBase = "$loginScheme://$host$port$apiPrefix/api"
             val loginUrl = if (isOfficialHost(host)) {
                 "https://play.pokemonshowdown.com/api/login"
             } else {
-                "$loginScheme://$host$port/api/login"
+                "$apiBase/login"
             }
             val registrationUrl = if (isOfficialHost(host)) {
                 "https://play.pokemonshowdown.com/api/register"
             } else {
-                "$loginScheme://$host$port/api/register"
+                "$apiBase/register"
             }
             val changePasswordUrl = if (isOfficialHost(host)) {
                 "https://play.pokemonshowdown.com/api/changepassword"
             } else {
-                "$loginScheme://$host$port/api/changepassword"
+                "$apiBase/changepassword"
             }
             return ShowdownServerEndpoint(
                 host + port,
                 "$scheme://$host$port$socketPath",
                 loginUrl,
                 registrationUrl,
-                changePasswordUrl
+                changePasswordUrl,
+                loginUrl.substringBeforeLast('/') + "/upkeep"
             )
         }
 

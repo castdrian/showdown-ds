@@ -4,6 +4,7 @@ import org.json.JSONObject
 
 object ShowdownAuthentication {
     data class UserUpdate(val username: String, val named: Boolean)
+    data class UpkeepResult(val username: String?, val assertion: String?)
 
     fun challenge(line: String): String? = line.takeIf { it.startsWith("|challstr|") }?.removePrefix("|challstr|")?.takeIf { it.isNotBlank() }
 
@@ -24,6 +25,12 @@ object ShowdownAuthentication {
     fun assertion(response: String): String? = responseJson(response)
         ?.optString("assertion")
         ?.takeIf { it.isNotBlank() && it != "false" && !it.startsWith(";") }
+
+    fun upkeep(response: String): UpkeepResult? = responseJson(response)?.let { json ->
+        val username = json.optString("username").takeIf { it.isNotBlank() }
+        val assertion = json.optString("assertion").takeIf { it.isNotBlank() && it != "false" }
+        UpkeepResult(username, assertion)
+    }
 
     fun actionSucceeded(response: String): Boolean? = responseJson(response)
         ?.takeIf { it.has("actionsuccess") }

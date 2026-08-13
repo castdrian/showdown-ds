@@ -24,12 +24,21 @@ class ShowdownServerEndpointTest {
     }
 
     @Test
+    fun preservesAConfiguredServerPathForAuthenticationEndpoints() {
+        val endpoint = ShowdownServerEndpoint.fromInput("http://example.test/ps/showdown/websocket")
+
+        assertEquals("http://example.test/ps/api/login", endpoint?.loginUrl)
+        assertEquals("http://example.test/ps/api/upkeep", endpoint?.upkeepUrl)
+    }
+
+    @Test
     fun usesTheOfficialLoginServerForOfficialSimulatorHosts() {
         val endpoint = ShowdownServerEndpoint.fromInput("wss://sim3.psim.us/showdown/websocket")
 
         assertEquals("https://play.pokemonshowdown.com/api/login", endpoint?.loginUrl)
         assertEquals("https://play.pokemonshowdown.com/api/register", endpoint?.registrationUrl)
         assertEquals("https://play.pokemonshowdown.com/api/changepassword", endpoint?.changePasswordUrl)
+        assertEquals("https://play.pokemonshowdown.com/api/upkeep", endpoint?.upkeepUrl)
     }
 
     @Test
@@ -38,6 +47,7 @@ class ShowdownServerEndpointTest {
 
         assertEquals("http://10.0.2.2:8000/api/login", endpoint?.loginUrl)
         assertEquals("http://10.0.2.2:8000/api/changepassword", endpoint?.changePasswordUrl)
+        assertEquals("http://10.0.2.2:8000/api/upkeep", endpoint?.upkeepUrl)
     }
 
     @Test

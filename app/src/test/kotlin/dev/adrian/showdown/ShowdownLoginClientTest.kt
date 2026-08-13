@@ -16,6 +16,63 @@ import org.junit.Test
 
 class ShowdownLoginClientTest {
     @Test
+    fun upkeepUsesThePersistedSessionCookieAndChallenge() {
+        val request = AtomicReference<Request>()
+        val completed = CountDownLatch(1)
+        val result = AtomicReference<Result<ShowdownAuthentication.UpkeepResult?>>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            request.set(chain.request())
+            Response.Builder()
+                .request(chain.request())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("]{\"username\":\"Adrian\",\"assertion\":\"token\"}".toResponseBody("application/json".toMediaType()))
+                .build()
+        }.build()
+
+        ShowdownLoginClient(client, mapOf("sid" to "session-token")).upkeep(
+            ShowdownServerEndpoint("Test", "ws://test", "https://test/api/login"),
+            "1|challenge"
+        ) {
+            result.set(it)
+            completed.countDown()
+        }
+
+        assertTrue(completed.await(2, TimeUnit.SECONDS))
+        assertEquals("https://test/api/upkeep?challstr=1%7Cchallenge", request.get().url.toString())
+        assertEquals("sid=session-token", request.get().header("Cookie"))
+        assertEquals("Adrian", result.get().getOrThrow()?.username)
+        assertEquals("token", result.get().getOrThrow()?.assertion)
+    }
+
+    @Test
+    fun upkeepRemovesExpiredSessionCookies() {
+        val completed = CountDownLatch(1)
+        val savedCookies = AtomicReference<Map<String, String>>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            Response.Builder()
+                .request(chain.request())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("Set-Cookie", "sid=; Max-Age=0; Path=/")
+                .body("]{}".toResponseBody("application/json".toMediaType()))
+                .build()
+        }.build()
+
+        ShowdownLoginClient(client, mapOf("sid" to "expired")) { savedCookies.set(it) }.upkeep(
+            ShowdownServerEndpoint("Test", "ws://test", "https://test/api/login"),
+            "1|challenge"
+        ) {
+            completed.countDown()
+        }
+
+        assertTrue(completed.await(2, TimeUnit.SECONDS))
+        assertEquals(emptyMap<String, String>(), savedCookies.get())
+    }
+
+    @Test
     fun registrationPostsTheOfficialFieldsAndReturnsTheAssertion() {
         val request = AtomicReference<Request>()
         val result = AtomicReference<Result<String>>()

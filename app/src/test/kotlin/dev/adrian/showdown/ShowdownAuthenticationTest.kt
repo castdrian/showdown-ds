@@ -14,8 +14,16 @@ class ShowdownAuthenticationTest {
     @Test
     fun parsesTheLoginAssertionAndRejectsMalformedResponses() {
         assertEquals("token", ShowdownAuthentication.assertion("]{\"assertion\":\"token\"}"))
+        assertEquals(
+            ShowdownAuthentication.UpkeepResult("Adrian", "token"),
+            ShowdownAuthentication.upkeep("]{\"username\":\"Adrian\",\"assertion\":\"token\"}")
+        )
         assertNull(ShowdownAuthentication.assertion("invalid"))
         assertNull(ShowdownAuthentication.assertion("]{\"assertion\":false}"))
+        assertEquals(
+            ShowdownAuthentication.UpkeepResult("Adrian", null),
+            ShowdownAuthentication.upkeep("]{\"username\":\"Adrian\"}")
+        )
     }
 
     @Test

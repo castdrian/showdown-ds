@@ -68,6 +68,8 @@ class MainActivity : Activity() {
     private lateinit var moveDex: ShowdownMoveDex
     private lateinit var serverEndpoint: ShowdownServerEndpoint
     private lateinit var credentialsStore: ShowdownCredentialsStore
+    private lateinit var sessionStore: ShowdownSessionStore
+    private lateinit var loginClient: ShowdownLoginClient
     private lateinit var teamLibrary: ShowdownTeamLibrary
     private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
     private lateinit var replayFetcher: ShowdownReplayFetcher
@@ -86,7 +88,6 @@ class MainActivity : Activity() {
     private val friendsState = ShowdownFriendsState()
     private val teamRemoteState = ShowdownTeamRemoteState()
     private val chatRoomState = ShowdownChatRoomState()
-    private val loginClient = ShowdownLoginClient()
     private var pendingSearch = false
     private var pendingSearchTeamPacked: String? = null
     private var pendingLobbyCommands: List<String>? = null
@@ -94,6 +95,7 @@ class MainActivity : Activity() {
     private var reconnectLobbyCommands: List<String>? = null
     private var activeSearchFormat: String? = null
     private var loginInFlight = false
+    private var sessionRestorePending = false
     private var registrationInFlight = false
     private var latestChallenge: String? = null
     private var pendingRegistration: PendingRegistration? = null
@@ -178,6 +180,17 @@ class MainActivity : Activity() {
             showdownConnection = null
             clearBattleRoomState()
             session.setConnectionStatus("That battle room is no longer available. Find another battle.")
+        }
+    }
+    private val sessionRestoreTimeout = Runnable {
+        if (!sessionRestorePending || !shouldMaintainConnection) return@Runnable
+        showdownConnection?.let { connection ->
+            sessionRestorePending = false
+            loginInFlight = false
+            loginClient.clearSession()
+            authenticated = true
+            sendPendingLobbyCommands(connection)
+            session.setConnectionStatus("Your Showdown session expired. Joining as a guest…")
         }
     }
     private val pendingBattlePackets = ArrayDeque<PendingBattlePacket>()
@@ -286,6 +299,11 @@ class MainActivity : Activity() {
         configureWindow()
         serverEndpoint = loadServerEndpoint()
         credentialsStore = ShowdownCredentialsStore(this)
+        sessionStore = ShowdownSessionStore(this)
+        loginClient = ShowdownLoginClient(
+            initialCookies = sessionStore.load(),
+            onCookiesChanged = sessionStore::save
+        )
         teamLibrary = ShowdownTeamLibrary(this)
         teamUrlFetcher = ShowdownTeamUrlFetcher()
         replayFetcher = ShowdownReplayFetcher()
@@ -445,7 +463,6 @@ class MainActivity : Activity() {
         displayRefreshScheduler.cancel()
         reconnectHandler.removeCallbacksAndMessages(null)
         shouldMaintainConnection = false
-        loginClient.clearSession()
         clearBattlePlayback()
         showdownConnection?.close()
         showdownConnection = null
@@ -1896,6 +1913,7 @@ class MainActivity : Activity() {
         pendingLobbyStatus = lobbyStatus
         reconnectLobbyCommands = lobbyCommands
         loginInFlight = false
+        sessionRestorePending = false
         registrationInFlight = false
         latestChallenge = null
         authenticated = false
@@ -2044,6 +2062,9 @@ class MainActivity : Activity() {
         val previousConnection = showdownConnection
         showdownConnection = null
         latestChallenge = null
+        reconnectHandler.removeCallbacks(sessionRestoreTimeout)
+        loginInFlight = false
+        sessionRestorePending = loginClient.hasSession() && credentialsStore.load() == null
         registrationInFlight = false
         previousConnection?.close()
         lateinit var connection: ShowdownConnection
@@ -2052,6 +2073,8 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     if (showdownConnection !== connection) return@runOnUiThread
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
+                        reconnectHandler.removeCallbacks(sessionRestoreTimeout)
+                        sessionRestorePending = false
                         val preserveBattleSurface = activeBattleRoomId != null &&
                             shouldMaintainConnection &&
                             !session.isBattleFinished()
@@ -2118,7 +2141,11 @@ class MainActivity : Activity() {
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
                         serverUserNamed = update.named
-                        if (credentialsStore.load() == null || update.named) {
+                        if (sessionRestorePending && update.named && credentialsStore.load() == null) {
+                            sessionRestorePending = false
+                            authenticated = true
+                            sendPendingLobbyCommands(connection)
+                        } else if (!sessionRestorePending && (credentialsStore.load() == null || update.named)) {
                             authenticated = true
                             sendPendingLobbyCommands(connection)
                         }
@@ -2127,6 +2154,48 @@ class MainActivity : Activity() {
                         latestChallenge = challenge
                         pendingRegistration?.takeUnless { registrationInFlight }?.let { registration ->
                             submitRegistration(connection, registration, challenge)
+                        }
+                        if (loginClient.hasSession() && credentialsStore.load() == null && !loginInFlight && !registrationInFlight && pendingRegistration == null) {
+                            sessionRestorePending = true
+                            loginInFlight = true
+                            loginClient.upkeep(serverEndpoint, challenge) { result ->
+                                runOnUiThread {
+                                    if (showdownConnection !== connection) return@runOnUiThread
+                                    loginInFlight = false
+                                    result.onSuccess { upkeep ->
+                                        val restored = upkeep?.username?.takeIf { it.isNotBlank() }
+                                            ?.let { username ->
+                                                upkeep.assertion?.takeIf { assertion ->
+                                                    assertion.isNotBlank() && !assertion.startsWith(";")
+                                                }?.let { assertion -> username to assertion }
+                                            }
+                                        if (restored == null) {
+                                            sessionRestorePending = false
+                                            loginClient.clearSession()
+                                            authenticated = true
+                                            sendPendingLobbyCommands(connection)
+                                            session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
+                                        } else if (connection.sendGlobal(ShowdownAuthentication.renameCommand(restored.first, restored.second))) {
+                                            reconnectHandler.removeCallbacks(sessionRestoreTimeout)
+                                            reconnectHandler.postDelayed(sessionRestoreTimeout, SESSION_RESTORE_TIMEOUT_MILLIS)
+                                            session.setConnectionStatus("Restoring your Showdown session…")
+                                        } else {
+                                            sessionRestorePending = false
+                                            loginClient.clearSession()
+                                            authenticated = true
+                                            sendPendingLobbyCommands(connection)
+                                            session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
+                                        }
+                                    }
+                                    result.onFailure {
+                                        sessionRestorePending = false
+                                        loginClient.clearSession()
+                                        authenticated = true
+                                        sendPendingLobbyCommands(connection)
+                                        session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
+                                    }
+                                }
+                            }
                         }
                         credentialsStore.load()?.takeUnless { loginInFlight || registrationInFlight || pendingRegistration != null }?.let { credentials ->
                             loginInFlight = true
@@ -2195,6 +2264,16 @@ class MainActivity : Activity() {
                     lines.mapNotNull(ShowdownAuthentication::serverError).firstOrNull()
                         ?.takeUnless { teamResponseHandled }
                         ?.let { error ->
+                            if (sessionRestorePending) {
+                                sessionRestorePending = false
+                                reconnectHandler.removeCallbacks(sessionRestoreTimeout)
+                                loginInFlight = false
+                                loginClient.clearSession()
+                                authenticated = true
+                                sendPendingLobbyCommands(connection)
+                                session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
+                                return@let
+                            }
                             loginInFlight = false
                             registrationInFlight = false
                             pendingRegistration = null
@@ -2584,6 +2663,7 @@ class MainActivity : Activity() {
                     serverEndpoint = endpoint
                     getSharedPreferences("showdown", MODE_PRIVATE).edit().putString("server_endpoint", endpoint.webSocketUrl).apply()
                     loginClient.clearSession()
+                    sessionStore.clear()
                     if (shouldMaintainConnection && activeBattleRoomId == null) {
                         session.setConnectionStatus("Server set to ${endpoint.displayName}. Reconnecting…")
                         reconnectHandler.removeCallbacksAndMessages(null)
@@ -3289,6 +3369,7 @@ class MainActivity : Activity() {
     private fun signOut() {
         credentialsStore.clear()
         loginClient.clearSession()
+        sessionStore.clear()
         lobbyState.clear()
         shouldMaintainConnection = false
         reconnectHandler.removeCallbacksAndMessages(null)
@@ -4872,6 +4953,7 @@ class MainActivity : Activity() {
 
     companion object {
         const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
+        const val SESSION_RESTORE_TIMEOUT_MILLIS = 5_000L
         const val DEFAULT_BATTLE_SPEED = 0.75f
     }
 }
