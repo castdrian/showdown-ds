@@ -698,13 +698,7 @@ class BattleSceneView(
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
         val height = bounds.height()
         val content = BattleCardContent.from(details, hp)
-        paint.color = Color.argb(232, 16, 20, 26)
-        canvas.drawRoundRect(bounds, height * 0.15f, height * 0.15f, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f * scale
-        paint.color = Color.rgb(104, 111, 120)
-        canvas.drawRoundRect(RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale), height * 0.15f, height * 0.15f, paint)
-        paint.style = Paint.Style.FILL
+        drawBattleStatusCardSurface(canvas, bounds, scale)
         val portraitWidth = height * 0.42f
         val portraitHeight = height * 0.62f
         val portraitTop = bounds.centerY() - portraitHeight / 2f
@@ -716,46 +710,16 @@ class BattleSceneView(
         trainerSprite?.draw(canvas, portraitBounds, SystemClock.elapsedRealtime(), alpha = 255)
         val textLeft = if (trainerAtStart) portraitBounds.right + 10f * scale else bounds.left + 20f * scale
         val textRight = if (trainerAtStart) bounds.right - 20f * scale else portraitBounds.left - 10f * scale
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        val levelLabel = content.levelLabel
-        paint.textSize = height * 0.19f
-        val levelWidth = paint.measureText(levelLabel)
-        val nameAvailableWidth = (textRight - textLeft - levelWidth - 12f * scale).coerceAtLeast(0f)
-        var nameTextSize = height * 0.27f
-        while (nameTextSize > height * 0.15f) {
-            paint.textSize = nameTextSize
-            if (paint.measureText(content.title) <= nameAvailableWidth) break
-            nameTextSize -= scale
-        }
-        paint.textSize = nameTextSize
-        val displayedPokemon = ellipsizeToWidth(content.title, nameAvailableWidth, paint)
-        paint.color = INK
-        canvas.drawText(displayedPokemon, textLeft, bounds.top + height * 0.29f, paint)
-        paint.textAlign = Paint.Align.RIGHT
-        paint.textSize = height * 0.19f
-        paint.color = Color.rgb(232, 232, 232)
-        canvas.drawText(levelLabel, textRight, bounds.top + height * 0.29f, paint)
-        paint.textAlign = Paint.Align.LEFT
-        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = height * 0.17f
-        paint.color = MUTED
-        val hpLabel = content.hpLabel
-        val hpWidth = paint.measureText(hpLabel)
-        val trainerAvailableWidth = (textRight - textLeft - hpWidth - 12f * scale).coerceAtLeast(0f)
-        canvas.drawText(
-            ellipsizeToWidth(trainer.uppercase(Locale.ROOT), trainerAvailableWidth, paint),
+        drawBattleStatusCardContent(
+            canvas,
+            bounds,
+            content,
             textLeft,
-            bounds.top + height * 0.51f,
-            paint
+            textRight,
+            scale,
+            BattleCardLayout.compactFor(2),
+            trainer
         )
-        paint.textAlign = Paint.Align.RIGHT
-        paint.color = Color.rgb(238, 238, 238)
-        canvas.drawText(hpLabel, textRight, bounds.top + height * 0.51f, paint)
-        paint.textAlign = Paint.Align.LEFT
-        val barTop = bounds.top + height * 0.55f
-        val barBottom = barTop + height * 0.15f
-        val track = RectF(textLeft, barTop, textRight, barBottom)
-        drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
         val ballSize = height * 0.17f
         val ballGap = ballSize * 0.12f
         val ballStart = textRight - ballSize * 6f - ballGap * 5f
@@ -804,44 +768,83 @@ class BattleSceneView(
         layout: CompactBattleCardLayout
     ) {
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
-        val height = bounds.height()
         val content = BattleCardContent.from(combatant)
-        paint.color = Color.argb(238, 16, 20, 26)
-        canvas.drawRoundRect(bounds, height * 0.15f, height * 0.15f, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f * scale
-        paint.color = Color.rgb(104, 111, 120)
-        canvas.drawRoundRect(RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale), height * 0.15f, height * 0.15f, paint)
-        paint.style = Paint.Style.FILL
-        paint.textAlign = Paint.Align.LEFT
         val left = bounds.left + 20f * scale
         val right = bounds.right - 20f * scale
+        drawBattleStatusCardSurface(canvas, bounds, scale)
+        drawBattleStatusCardContent(canvas, bounds, content, left, right, scale, layout)
+        canvas.restoreToCount(layer)
+    }
+
+    private fun drawBattleStatusCardContent(
+        canvas: Canvas,
+        bounds: RectF,
+        content: BattleCardContent,
+        textLeft: Float,
+        textRight: Float,
+        scale: Float,
+        layout: CompactBattleCardLayout,
+        secondaryLabel: String? = null
+    ) {
+        val height = bounds.height()
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(height * 0.27f, scale, 10.5f)
-        paint.color = INK
-        val titleSize = paint.textSize
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
         val levelWidth = paint.measureText(content.levelLabel)
         paint.color = Color.rgb(232, 232, 232)
-        canvas.drawText(content.levelLabel, right, bounds.top + height * layout.titleBaselineFraction, paint)
+        canvas.drawText(content.levelLabel, textRight, bounds.top + height * layout.titleBaselineFraction, paint)
         paint.textAlign = Paint.Align.LEFT
-        paint.textSize = titleSize
-        val titleWidth = (right - left - levelWidth - 16f * scale).coerceAtLeast(0f)
-        canvas.drawText(ellipsizeToWidth(content.title, titleWidth, paint), left, bounds.top + height * layout.titleBaselineFraction, paint)
+        paint.textSize = readableTextSize(height * 0.27f, scale, 10.5f)
+        val titleWidth = (textRight - textLeft - levelWidth - 16f * scale).coerceAtLeast(0f)
+        paint.color = INK
+        canvas.drawText(
+            ellipsizeToWidth(content.title, titleWidth, paint),
+            textLeft,
+            bounds.top + height * layout.titleBaselineFraction,
+            paint
+        )
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.17f, scale, 9.5f)
+        val hpWidth = paint.measureText(content.hpLabel)
         paint.color = Color.rgb(238, 238, 238)
-        canvas.drawText(content.hpLabel, right, bounds.top + height * layout.hpBaselineFraction, paint)
+        canvas.drawText(content.hpLabel, textRight, bounds.top + height * layout.hpBaselineFraction, paint)
+        secondaryLabel?.let {
+            paint.textAlign = Paint.Align.LEFT
+            paint.color = MUTED
+            val secondaryWidth = (textRight - textLeft - hpWidth - 12f * scale).coerceAtLeast(0f)
+            canvas.drawText(
+                ellipsizeToWidth(it.uppercase(Locale.ROOT), secondaryWidth, paint),
+                textLeft,
+                bounds.top + height * layout.hpBaselineFraction,
+                paint
+            )
+        }
         paint.textAlign = Paint.Align.LEFT
         val track = RectF(
-            left,
+            textLeft,
             bounds.top + height * layout.barTopFraction,
-            right,
+            textRight,
             bounds.top + height * layout.barBottomFraction
         )
         drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
-        canvas.restoreToCount(layer)
+    }
+
+    private fun drawBattleStatusCardSurface(canvas: Canvas, bounds: RectF, scale: Float) {
+        val radius = bounds.height() * 0.15f
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(232, 16, 20, 26)
+        canvas.drawRoundRect(bounds, radius, radius, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.rgb(104, 111, 120)
+        canvas.drawRoundRect(
+            RectF(bounds.left + scale, bounds.top + scale, bounds.right - scale, bounds.bottom - scale),
+            radius,
+            radius,
+            paint
+        )
+        paint.style = Paint.Style.FILL
     }
 
     private fun drawHealthBar(canvas: Canvas, track: RectF, fraction: Float, scale: Float, radius: Float) {
