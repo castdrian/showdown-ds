@@ -494,6 +494,14 @@ class BattleSessionTest {
     }
 
     @Test
+    fun teamPreviewUsesTheMaximumWhenBothRequestSizesArePresent() {
+        val session = BattleSession()
+        session.applyProtocolLine("|request|{\"rqid\":18,\"teamPreview\":true,\"chosenTeamSize\":6,\"maxChosenTeamSize\":2}")
+
+        assertEquals(2, session.teamPreviewRequiredSize())
+    }
+
+    @Test
     fun protocolTeamPreviewSizeLimitsTheSelectionWhenRequestOmitsIt() {
         val session = BattleSession()
         val decisions = mutableListOf<String>()

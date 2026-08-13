@@ -3548,8 +3548,8 @@ class BattleSession {
     }
 
     private fun teamPreviewSize(request: JSONObject, availableTeamSize: Int): Int {
-        request.optInt("chosenTeamSize", 0).takeIf { it > 0 }?.let { return it }
         request.optInt("maxChosenTeamSize", 0).takeIf { it > 0 }?.let { return it }
+        request.optInt("chosenTeamSize", 0).takeIf { it > 0 }?.let { return it }
         protocolTeamPreviewSize.takeIf { it > 0 }?.let { return it }
         val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon")
         val hasIllusion = pokemon != null && (0 until pokemon.length()).any { index ->
