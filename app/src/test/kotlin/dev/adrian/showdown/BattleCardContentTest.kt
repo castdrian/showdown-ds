@@ -79,10 +79,66 @@ class BattleCardContentTest {
             moveEffects = listOf("Roost")
         )
 
-        val content = BattleCardContent.from(combatant, details)
+        val content = BattleCardContent.from(combatant)
 
         assertEquals(BattleCardContent.from(details, "62/100"), content)
         assertEquals("62/100", content.hpLabel)
         assertEquals(0.62f, content.fraction, 0.001f)
+    }
+
+    @Test
+    fun compactActiveCardsProjectCurrentBattleStateOnly() {
+        val active = BattleSession.ActiveCombatant(
+            slot = "p2b",
+            name = "Aerial",
+            types = listOf("FLYING"),
+            level = "84",
+            gender = "♀",
+            hp = "62/100",
+            condition = "62/100",
+            entryAtNanos = 0L,
+            species = "Corviknight"
+        )
+
+        val content = BattleCardContent.from(active)
+
+        assertEquals("Aerial", content.title)
+        assertEquals("Lv.84♀", content.levelLabel)
+        assertEquals("62/100", content.hpLabel)
+        assertEquals(0.62f, content.fraction, 0.001f)
+    }
+
+    @Test
+    fun opponentDoubleCardsKeepEachActiveSlotReadableAndIndependent() {
+        val cards = listOf(
+            BattleSession.ActiveCombatant(
+                slot = "p2b",
+                name = "Hoopa-Unbound",
+                types = listOf("PSYCHIC", "GHOST"),
+                level = "50",
+                gender = "",
+                hp = "73/100",
+                condition = "73/100",
+                entryAtNanos = 0L,
+                species = "Hoopa-Unbound"
+            ),
+            BattleSession.ActiveCombatant(
+                slot = "p2a",
+                name = "Indeedee-F",
+                types = listOf("PSYCHIC", "NORMAL"),
+                level = "50",
+                gender = "♀",
+                hp = "100/100",
+                condition = "100/100",
+                entryAtNanos = 0L,
+                species = "Indeedee-F"
+            )
+        ).map(BattleCardContent::from)
+
+        assertEquals("Hoopa-Unbound", cards[0].title)
+        assertEquals("73/100", cards[0].hpLabel)
+        assertEquals("Indeedee-F", cards[1].title)
+        assertEquals("Lv.50♀", cards[1].levelLabel)
+        assertEquals("100/100", cards[1].hpLabel)
     }
 }

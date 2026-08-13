@@ -31,10 +31,6 @@ data class BattleCardContent(
             hp = combatant.hp
         )
 
-        fun from(combatant: BattleSession.ActiveCombatant, details: BattleSession.PokemonDetails?) = details?.let {
-            from(it, combatant.hp)
-        } ?: from(combatant)
-
         fun from(name: String, species: String, level: String, gender: String, hp: String) = BattleCardContent(
             title = BattleSession.displayPokemonName(name, species),
             levelLabel = "Lv.$level$gender",
