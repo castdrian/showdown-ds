@@ -173,10 +173,7 @@ class ShowdownMoveEffectsView(
                         }
                         function nativeBattleLog(value) {
                             if (!window.ShowdownNativeBattleLog || !value) return;
-                            var lines = String(value).split(/<br\s*\/?>(?:\s*)/i).filter(function (line) {
-                                return line.trim().indexOf('<small>[') !== 0;
-                            });
-                            if (lines.length) window.ShowdownNativeBattleLog.entry(lines.join('<br />'));
+                            window.ShowdownNativeBattleLog.entry(String(value));
                         }
                         function installBattleLogHooks() {
                             if (typeof BattleLog === 'undefined' || BattleLog.prototype.__showdownNativeBattleLogHooked) return;
@@ -188,11 +185,7 @@ class ShowdownMoveEffectsView(
                             var originalAddBattleMessage = BattleLog.prototype.addBattleMessage;
                             BattleLog.prototype.addBattleMessage = function (args, kwArgs) {
                                 if (args && args[0] === 'turn') {
-                                    var turnMessage = this.battleParser ? this.battleParser.parseArgs(args, kwArgs || {}).trim() : '== Turn ' + args[1] + ' ==';
-                                    if (turnMessage.indexOf('==') === 0 && turnMessage.lastIndexOf('==') === turnMessage.length - 2) {
-                                        turnMessage = turnMessage.slice(2, -2).trim();
-                                    }
-                                    nativeBattleLog(turnMessage);
+                                    nativeBattleLog('Turn ' + args[1]);
                                 }
                                 return originalAddBattleMessage.apply(this, arguments);
                             };
@@ -430,7 +423,8 @@ class ShowdownMoveEffectsView(
     ) {
         @JavascriptInterface
         fun entry(value: String) {
-            if (value.isNotBlank()) callback(value)
+            val entries = ShowdownBattleLogFilter.visibleEntries(value)
+            if (entries.isNotEmpty()) callback(entries.joinToString("<br />"))
         }
     }
 }
