@@ -2473,6 +2473,7 @@ class BattleSession {
                 categoryFromRequest = move.has("category") && move.optString("category").isNotBlank()
             )
         }
+        val requestMoveNames = moves.map { it.name }
         if (moves.isNotEmpty() && moves.none { !it.disabled } && moves.none { it.name.equals("Struggle", true) }) {
             val struggleInfo = moveInfoResolver?.invoke("Struggle")
             moves.clear()
@@ -2517,7 +2518,7 @@ class BattleSession {
         } else {
             "Choose a move"
         }
-        updateMoveDetailsForActiveSlot(moves.map { it.name })
+        updateMoveDetailsForActiveSlot(requestMoveNames)
         updateAvailableGimmicks(active)
         updateTargetOptions()
         return moves.isNotEmpty()

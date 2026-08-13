@@ -101,6 +101,7 @@ class BattleSessionTest {
 
         assertTrue(session.decisionAvailable)
         assertEquals("Struggle", session.moves().single().name)
+        assertEquals(listOf("Protect", "Tackle"), session.playerDetails().moves)
         session.confirmSelection()
 
         assertEquals(listOf("/choose move 1|10"), decisions)
