@@ -2135,7 +2135,8 @@ class BattleSession {
         typeChangeBySlot.remove(slot)
         typeAdditionsBySlot.remove(slot)
         if (isPlayerSide(actor)) {
-            val parsed = parseDetails(details)
+            val current = playerActiveCombatants[slot]
+            val parsed = parseDetails(details, current?.level ?: playerDetails.level, current?.gender ?: playerDetails.gender)
             val activeName = playerActiveCombatants[slot]
                 ?.let { identityName(actor, it.name, it.species, species) }
                 ?: identityName(actor, playerDetails.name, playerDetails.species, species)
@@ -2188,7 +2189,8 @@ class BattleSession {
                 }
             }
         } else {
-            val parsed = parseDetails(details)
+            val current = opponentActiveCombatants[slot]
+            val parsed = parseDetails(details, current?.level ?: opponentDetails.level, current?.gender ?: opponentDetails.gender)
             val activeName = opponentActiveCombatants[slot]
                 ?.let { identityName(actor, it.name, it.species, species) }
                 ?: identityName(actor, opponentDetails.name, opponentDetails.species, species)
@@ -4114,9 +4116,9 @@ class BattleSession {
         }
     }
 
-    private fun parseDetails(details: String): Pair<String, String> {
-        var level = "50"
-        var gender = ""
+    private fun parseDetails(details: String, fallbackLevel: String = "50", fallbackGender: String = ""): Pair<String, String> {
+        var level = fallbackLevel
+        var gender = fallbackGender
         details.split(',').map(String::trim).forEach {
             when {
                 it.startsWith("L") && it.drop(1).toIntOrNull() != null -> level = it.drop(1)

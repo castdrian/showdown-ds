@@ -110,15 +110,17 @@ class ShowdownProtocolContractTest {
                 "|player|p1|ADRIAN|",
                 "|player|p2|OPPONENT|",
                 "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Nebby\",\"details\":\"Necrozma-Dusk-Mane, L50\",\"condition\":\"153/153\",\"active\":true}]}}",
-                "|switch|p1a: Nebby|Necrozma-Dusk-Mane, L50|153/153",
+                "|switch|p1a: Nebby|Necrozma-Dusk-Mane, L82, M|153/153",
                 "|switch|p2a: Charizard|Charizard, L50|153/153",
-                "|-burst|p1a: Nebby|Necrozma-Ultra, L50|ultranecroziumz"
+                "|-burst|p1a: Nebby|Necrozma-Ultra|ultranecroziumz"
             )
         )
 
         assertEquals("Nebby", session.playerPokemon)
         assertEquals("Nebby", session.playerDetails().name)
         assertEquals("Necrozma-Ultra", session.playerDetails().species)
+        assertEquals("82", session.playerDetails().level)
+        assertEquals("♂", session.playerDetails().gender)
         assertEquals("Ultranecrozium Z", session.playerDetails().item)
         assertEquals("Necrozma-Ultra", session.playerPartyDetails().first().species)
         assertEquals("Ultranecrozium Z", session.playerPartyDetails().first().item)
