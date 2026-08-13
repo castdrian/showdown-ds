@@ -62,6 +62,7 @@ object ShowdownChangelog {
                 "Active form updates and custom end-of-Terastal packets now restore Pokémon details and original types correctly.",
                 "Battle sprite requests now carry their battle side explicitly, keeping player-side Iron Valiant artwork rear-facing in every battle layout.",
                 "Compact doubles and triples HP cards now share the cleaned single-battle layout with readable species names, HP values, and bars.",
+                "Triple-battle target choices now flow onto a second readable row so every legal target remains touchable.",
                 "Damage audio now resets at every official move event, including moves marked [still], so skipped animations cannot leak timing into the next move."
             )
         ),

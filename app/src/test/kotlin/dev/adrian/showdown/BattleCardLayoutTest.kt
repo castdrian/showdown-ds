@@ -6,7 +6,7 @@ import org.junit.Test
 
 class BattleCardLayoutTest {
     @Test
-    fun multiActiveCardsKeepReadableContentInsideTheirBounds() {
+    fun triplesKeepReadableContentInsideTheirCompactBounds() {
         val layout = BattleCardLayout.compactFor(3)
 
         assertTrue(layout.heightFraction > 0.06f)
@@ -28,7 +28,20 @@ class BattleCardLayoutTest {
     }
 
     @Test
-    fun singlesAndDoublesUseTheSameCardTreatment() {
-        assertEquals(BattleCardLayout.compactFor(1), BattleCardLayout.compactFor(2))
+    fun everyBattleFormatUsesTheSameCardContentTreatment() {
+        val single = BattleCardLayout.compactFor(1)
+        val doubles = BattleCardLayout.compactFor(2)
+        val triples = BattleCardLayout.compactFor(3)
+
+        assertEquals(single.titleBaselineFraction, doubles.titleBaselineFraction, 0.001f)
+        assertEquals(single.titleBaselineFraction, triples.titleBaselineFraction, 0.001f)
+        assertEquals(single.hpBaselineFraction, doubles.hpBaselineFraction, 0.001f)
+        assertEquals(single.hpBaselineFraction, triples.hpBaselineFraction, 0.001f)
+        assertEquals(single.barTopFraction, doubles.barTopFraction, 0.001f)
+        assertEquals(single.barTopFraction, triples.barTopFraction, 0.001f)
+        assertEquals(single.barBottomFraction, doubles.barBottomFraction, 0.001f)
+        assertEquals(single.barBottomFraction, triples.barBottomFraction, 0.001f)
+        assertTrue(triples.heightFraction < doubles.heightFraction)
+        assertTrue(triples.gapFraction < doubles.gapFraction)
     }
 }

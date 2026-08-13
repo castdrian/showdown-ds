@@ -952,6 +952,30 @@ class BattleSessionTest {
     }
 
     @Test
+    fun triplesExposeAndSubmitTheFifthAnyTarget() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener { decisions += it }
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|triples",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Naganadel|Naganadel, L50|100/100",
+                "|switch|p1c: Mimikyu|Mimikyu, L50|100/100",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p2b: Druddigon|Druddigon, L50|100/100",
+                "|switch|p2c: Landorus|Landorus, L50|100/100",
+                "|request|{\"rqid\":45,\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Trick\",\"pp\":10,\"target\":\"any\"}]},null,null]}"
+            )
+        )
+
+        assertEquals(listOf("1", "2", "3", "-2", "-3"), session.targetOptions().map { it.choice })
+        session.selectTargetWithTouch(4)
+
+        assertEquals(listOf("/choose move 1 -3, pass, pass|45"), decisions)
+    }
+
+    @Test
     fun commandingActiveSlotsArePassedAutomatically() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()

@@ -39,7 +39,7 @@ class CommandDeckView(
     private val teamBounds = arrayOfNulls<RectF>(6)
     private val menuBounds = arrayOfNulls<RectF>(BattleSession.MENU_ITEM_COUNT)
     private val gimmickBounds = arrayOfNulls<RectF>(7)
-    private val targetBounds = arrayOfNulls<RectF>(4)
+    private val targetBounds = arrayOfNulls<RectF>(BattleTargetLayout.MAX_OPTIONS)
     private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
     private val requestedTeamSprites = mutableSetOf<String>()
     private val typeIcons = mutableMapOf<String, Bitmap?>()
@@ -316,16 +316,19 @@ class CommandDeckView(
 
     private fun drawTargets(canvas: Canvas, left: Float, right: Float, top: Float, scale: Float) {
         targetBounds.fill(null)
-        val targets = session.targetOptions()
+        val targets = session.targetOptions().take(BattleTargetLayout.MAX_OPTIONS)
         if (targets.isEmpty()) return
-        val gap = 16f * scale
-        val targetWidth = (right - left - gap * (targets.size - 1)) / targets.size
+        val totalWidth = right - left
+        val targetWidth = BattleTargetLayout.optionWidth(totalWidth, targets.size, scale)
+        val targetHeight = BattleTargetLayout.optionHeight(scale)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = fittedTextSize("TARGET", right - left - 24f * scale, readableTextSize(24f, scale, 21f), 18f * scale)
         paint.color = Color.rgb(153, 224, 220)
         canvas.drawText("TARGET", left, top + 18f * scale, paint)
         targets.forEachIndexed { index, target ->
-            val bounds = RectF(left + index * (targetWidth + gap), top + 28f * scale, left + index * (targetWidth + gap) + targetWidth, top + 82f * scale)
+            val optionTop = BattleTargetLayout.optionTop(index, targets.size, top, scale)
+            val optionLeft = BattleTargetLayout.optionLeft(left, index, targets.size, totalWidth, scale)
+            val bounds = RectF(optionLeft, optionTop, optionLeft + targetWidth, optionTop + targetHeight)
             targetBounds[index] = bounds
             val selected = session.status == "Target: ${target.label}"
             paint.color = if (selected) Color.rgb(31, 122, 133) else Color.rgb(20, 53, 70)
@@ -392,7 +395,7 @@ class CommandDeckView(
         }
         if (targets.isNotEmpty()) {
             drawTargets(canvas, content.left, content.right, contentTop, scale)
-            contentTop += 112f * scale
+            contentTop += BattleTargetLayout.sectionHeight(targets.size, scale)
         }
         if (gimmicks.isNotEmpty()) {
             val gimmickHeight = minOf(214f * scale, content.bottom - contentTop - 244f * scale)
