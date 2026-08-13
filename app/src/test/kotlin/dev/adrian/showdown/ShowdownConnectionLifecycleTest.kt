@@ -49,6 +49,92 @@ class ShowdownConnectionLifecycleTest {
     }
 
     @Test
+    fun queuesCommandsUntilSockJsTransportIsReady() {
+        val server = LoopbackWebSocketServer()
+        val listener = RecordingListener()
+        val httpClient = testHttpClient()
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            httpClient
+        )
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+
+            assertTrue(connection.sendGlobal("/search gen9randombattle"))
+            assertTrue(connection.sendGlobal("/cancelsearch"))
+            server.sendText(socket, "o")
+
+            assertTrue(listener.connected.await(2, TimeUnit.SECONDS))
+            assertEquals("[\"|/search gen9randombattle\"]", server.readClientText(socket))
+            assertEquals("[\"|/cancelsearch\"]", server.readClientText(socket))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
+    @Test
+    fun queuesCommandsUntilNativeTransportIsReady() {
+        val server = LoopbackWebSocketServer()
+        val listener = RecordingListener()
+        val httpClient = testHttpClient()
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            httpClient
+        )
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+
+            assertTrue(connection.sendGlobal("/search gen9randombattle"))
+            assertTrue(connection.sendGlobal("/cancelsearch"))
+            server.sendText(socket, ">lobby\n|updateuser| Guest 1|0|1")
+
+            assertTrue(listener.connected.await(2, TimeUnit.SECONDS))
+            assertEquals("|/search gen9randombattle", server.readClientText(socket))
+            assertEquals("|/cancelsearch", server.readClientText(socket))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
+    @Test
+    fun discardingAConnectionAlsoDiscardsCommandsQueuedForItsSocket() {
+        val server = LoopbackWebSocketServer()
+        val listener = RecordingListener()
+        val httpClient = testHttpClient()
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            httpClient
+        )
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+            assertTrue(connection.sendGlobal("/search stale"))
+
+            connection.disconnect()
+            connection.connect()
+            val replacement = server.awaitClient()
+            server.sendText(replacement, "o")
+
+            assertTrue(listener.connected.await(2, TimeUnit.SECONDS))
+            runCatching { server.sendText(socket, ">lobby\\n|old|message") }
+            Thread.sleep(100)
+            assertEquals(1, listener.states.count { it.first == ShowdownConnection.State.CONNECTED })
+            assertTrue(listener.protocolPackets.isEmpty())
+            assertEquals(0, server.availableClientText(replacement))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
+    @Test
     fun dispatchesSockJsMessagesAndEncodesRoomCommands() {
         val server = LoopbackWebSocketServer()
         val listener = RecordingListener()
@@ -228,6 +314,8 @@ class ShowdownConnectionLifecycleTest {
             if (masked) payload.indices.forEach { index -> payload[index] = (payload[index].toInt() xor mask[index % 4].toInt()).toByte() }
             return payload.toString(Charsets.UTF_8)
         }
+
+        fun availableClientText(socket: Socket): Int = socket.getInputStream().available()
 
         private fun readFully(input: InputStream, buffer: ByteArray) {
             var offset = 0

@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import java.util.ArrayDeque
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -28,23 +29,49 @@ class ShowdownConnection(
     private var closedSocket: WebSocket? = null
     private var transportReady = false
     private var usesSockJs = false
+    private var acceptingCommands = false
+    private val pendingMessages = ArrayDeque<String>()
+    private val sendLock = Any()
+    private var activeGeneration = 0L
+
+    private enum class TransportReadyResult {
+        STALE,
+        READY,
+        ALREADY_READY,
+        FAILED
+    }
 
     fun connect() {
-        disconnect()
-        closedSocket = null
-        transportReady = false
-        usesSockJs = false
-        listener.onConnectionStateChanged(State.CONNECTING)
         val request = Request.Builder().url(endpoint.webSocketUrl).build()
-        socket = httpClient.newWebSocket(request, SocketListener())
+        val (previousSocket, generation) = synchronized(sendLock) {
+            val previous = socket
+            socket = null
+            closedSocket = previous
+            transportReady = false
+            usesSockJs = false
+            acceptingCommands = true
+            pendingMessages.clear()
+            activeGeneration += 1
+            val generation = activeGeneration
+            socket = httpClient.newWebSocket(request, SocketListener(generation))
+            previous to generation
+        }
+        previousSocket?.close(1000, "Client reconnecting")
+        listener.onConnectionStateChanged(State.CONNECTING)
     }
 
     fun disconnect() {
-        val previousSocket = socket
-        socket = null
-        closedSocket = previousSocket
-        transportReady = false
-        usesSockJs = false
+        val previousSocket = synchronized(sendLock) {
+            val previous = socket
+            socket = null
+            closedSocket = previous
+            transportReady = false
+            usesSockJs = false
+            acceptingCommands = false
+            pendingMessages.clear()
+            activeGeneration += 1
+            previous
+        }
         previousSocket?.close(1000, "Client closed")
     }
 
@@ -58,6 +85,8 @@ class ShowdownConnection(
         return sendFrame(message)
     }
 
+    fun isTransportReady(): Boolean = synchronized(sendLock) { transportReady }
+
     fun close() {
         disconnect()
         httpClient.dispatcher.executorService.shutdown()
@@ -65,17 +94,59 @@ class ShowdownConnection(
     }
 
     private fun sendFrame(message: String): Boolean {
-        if (!transportReady) return false
-        return socket?.send(ShowdownSocketFrames.encode(message, usesSockJs)) == true
+        synchronized(sendLock) {
+            if (!acceptingCommands) return false
+            if (!transportReady) {
+                pendingMessages.addLast(message)
+                return true
+            }
+            return socket?.send(ShowdownSocketFrames.encode(message, usesSockJs)) == true
+        }
     }
 
-    private fun markTransportReady() {
-        if (transportReady) return
-        transportReady = true
-        listener.onConnectionStateChanged(State.CONNECTED)
+    private fun markTransportReady(webSocket: WebSocket, generation: Long, sockJs: Boolean): TransportReadyResult {
+        var stateToReport: Pair<ShowdownConnection.State, String>? = null
+        val result = synchronized(sendLock) {
+            val result = when {
+                !isCurrentLocked(webSocket, generation) -> TransportReadyResult.STALE
+                transportReady -> TransportReadyResult.ALREADY_READY
+                else -> {
+                    usesSockJs = sockJs
+                    transportReady = true
+                    while (pendingMessages.isNotEmpty()) {
+                        val message = pendingMessages.first()
+                        if (webSocket.send(ShowdownSocketFrames.encode(message, usesSockJs))) {
+                            pendingMessages.removeFirst()
+                        } else {
+                            break
+                        }
+                    }
+                    if (pendingMessages.isNotEmpty()) {
+                        transportReady = false
+                        usesSockJs = false
+                        acceptingCommands = false
+                        closedSocket = webSocket
+                        pendingMessages.clear()
+                        activeGeneration += 1
+                        TransportReadyResult.FAILED
+                    } else {
+                        TransportReadyResult.READY
+                    }
+                }
+            }
+            when (result) {
+                TransportReadyResult.READY -> stateToReport = State.CONNECTED to ""
+                TransportReadyResult.FAILED -> stateToReport = State.FAILED to "The Showdown connection could not send queued commands."
+                else -> Unit
+            }
+            result
+        }
+        stateToReport?.let { (state, detail) -> listener.onConnectionStateChanged(state, detail) }
+        return result
     }
 
-    private fun dispatchProtocol(message: String) {
+    private fun dispatchProtocol(webSocket: WebSocket, generation: Long, message: String) {
+        if (!isCurrent(webSocket, generation)) return
         val packets = mutableListOf<Pair<String?, MutableList<String>>>()
         var roomId: String? = null
         var lines = mutableListOf<String>()
@@ -89,58 +160,88 @@ class ShowdownConnection(
             }
         }
         if (lines.isNotEmpty()) packets += roomId to lines
-        packets.forEach { (packetRoomId, packetLines) -> listener.onProtocol(packetRoomId, packetLines) }
+        packets.forEach { (packetRoomId, packetLines) ->
+            if (isCurrent(webSocket, generation)) listener.onProtocol(packetRoomId, packetLines)
+        }
     }
 
-    private fun isCurrent(webSocket: WebSocket): Boolean = socket === webSocket
+    private fun isCurrent(webSocket: WebSocket, generation: Long): Boolean = synchronized(sendLock) {
+        isCurrentLocked(webSocket, generation)
+    }
 
-    private fun markDisconnected(webSocket: WebSocket, detail: String): Boolean {
-        if (!isCurrent(webSocket) || closedSocket === webSocket) return false
-        closedSocket = webSocket
-        transportReady = false
+    private fun isCurrentLocked(webSocket: WebSocket, generation: Long): Boolean =
+        activeGeneration == generation && socket === webSocket && closedSocket !== webSocket
+
+    private fun markDisconnected(webSocket: WebSocket, generation: Long, detail: String): Boolean {
+        val marked = synchronized(sendLock) {
+            if (!isCurrentLocked(webSocket, generation)) {
+                false
+            } else {
+                closedSocket = webSocket
+                transportReady = false
+                acceptingCommands = false
+                pendingMessages.clear()
+                activeGeneration += 1
+                true
+            }
+        }
+        if (!marked) return false
         listener.onConnectionStateChanged(State.DISCONNECTED, detail)
         return true
     }
 
-    private inner class SocketListener : WebSocketListener() {
+    private inner class SocketListener(private val generation: Long) : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) = Unit
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            if (!isCurrent(webSocket) || closedSocket === webSocket) return
+            if (!isCurrent(webSocket, generation)) return
             when (val frame = ShowdownSocketFrames.decode(text)) {
                 ShowdownSocketFrame.Open -> {
-                    usesSockJs = true
-                    markTransportReady()
+                    markTransportReady(webSocket, generation, sockJs = true)
                 }
                 is ShowdownSocketFrame.Messages -> {
-                    usesSockJs = true
-                    markTransportReady()
-                    frame.values.forEach(::dispatchProtocol)
+                    when (markTransportReady(webSocket, generation, sockJs = true)) {
+                        TransportReadyResult.READY, TransportReadyResult.ALREADY_READY -> frame.values.forEach {
+                            dispatchProtocol(webSocket, generation, it)
+                        }
+                        else -> Unit
+                    }
                 }
                 is ShowdownSocketFrame.Closed -> {
-                    if (markDisconnected(webSocket, frame.reason)) webSocket.close(1000, frame.reason.ifBlank { "Server closed" })
+                    if (markDisconnected(webSocket, generation, frame.reason)) webSocket.close(1000, frame.reason.ifBlank { "Server closed" })
                 }
                 is ShowdownSocketFrame.Raw -> {
-                    usesSockJs = false
-                    markTransportReady()
-                    dispatchProtocol(frame.value)
+                    when (markTransportReady(webSocket, generation, sockJs = false)) {
+                        TransportReadyResult.READY, TransportReadyResult.ALREADY_READY -> dispatchProtocol(webSocket, generation, frame.value)
+                        else -> Unit
+                    }
                 }
             }
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-            markDisconnected(webSocket, reason)
+            markDisconnected(webSocket, generation, reason)
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            markDisconnected(webSocket, reason)
+            markDisconnected(webSocket, generation, reason)
         }
 
-        override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
-            if (!isCurrent(webSocket) || closedSocket === webSocket) return
-            closedSocket = webSocket
-            transportReady = false
-            listener.onConnectionStateChanged(State.FAILED, throwable.message.orEmpty())
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            val marked = synchronized(sendLock) {
+                if (!isCurrentLocked(webSocket, generation)) {
+                    false
+                } else {
+                    closedSocket = webSocket
+                    transportReady = false
+                    acceptingCommands = false
+                    pendingMessages.clear()
+                    activeGeneration += 1
+                    true
+                }
+            }
+            if (!marked) return
+            listener.onConnectionStateChanged(State.FAILED, t.message.orEmpty())
         }
     }
 }

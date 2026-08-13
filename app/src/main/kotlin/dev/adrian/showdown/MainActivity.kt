@@ -2471,8 +2471,23 @@ class MainActivity : Activity() {
 
     private fun sendLobbyCommands(commands: List<String>, status: String) {
         val connection = showdownConnection
-        if (!authenticated || connection == null || !commands.all(connection::sendGlobal)) {
+        if (!authenticated || connection == null) {
             session.setConnectionStatus("Connect to Showdown before using lobby challenges.")
+            return
+        }
+        if (!connection.isTransportReady()) {
+            pendingLobbyCommands = commands
+            when {
+                commands.any { it.startsWith("/accept ") || it.startsWith("/challenge ") } -> reconnectLobbyCommands = commands
+                commands.any { it.startsWith("/cancelchallenge ") || it.startsWith("/reject ") } -> reconnectLobbyCommands = null
+            }
+            pendingLobbyStatus = status
+            persistLobbyState()
+            session.setConnectionStatus("Waiting for the Showdown connection…")
+            return
+        }
+        if (!commands.all(connection::sendGlobal)) {
+            session.setConnectionStatus("Could not send the Showdown lobby command.")
             return
         }
         when {
