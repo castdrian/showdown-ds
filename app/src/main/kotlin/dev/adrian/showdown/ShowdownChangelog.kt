@@ -70,7 +70,8 @@ object ShowdownChangelog {
                 "Starting another battle now clears stale lobby, team, account, and room overlays so old dialogs cannot cover the new battle.",
                 "Singles, doubles, and triples now share one compact HP-card content treatment with only the card density changing.",
                 "Matchmaking now honors Showdown's advertised format capabilities and falls back from challenge-only saved formats before searching.",
-                "Illusion reveals now replace the temporary battle identity without carrying stale Pokémon details into the active battle state."
+                "Illusion reveals now replace the temporary battle identity without carrying stale Pokémon details into the active battle state.",
+                "Ultra Burst form changes now retain nicknames and reveal the correct burst item in Pokémon details."
             )
         ),
         ShowdownChangelogEntry(
