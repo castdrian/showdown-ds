@@ -73,11 +73,11 @@ class MainActivityLifecycleContractTest {
     @Test
     fun preservesPersistedBattleRecoveryBeforeTheRestoredSnapshotArrives() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val recovery = source.substringAfter("val preserveBattleSurface =")
+        val preserveBattleSurfaceSource = source.substringAfter("val preserveBattleSurface =")
             .substringBefore("battleProtocolReady = false")
 
-        assertTrue(recovery.contains("activeBattleRoomId != null"))
-        assertTrue(recovery.contains("shouldMaintainConnection"))
-        assertTrue(recovery.contains("!session.isBattleFinished()"))
+        assertTrue(preserveBattleSurfaceSource.contains("activeBattleRoomId != null"))
+        assertTrue(preserveBattleSurfaceSource.contains("shouldMaintainConnection"))
+        assertTrue(preserveBattleSurfaceSource.contains("!session.isBattleFinished()"))
     }
 }
