@@ -3539,9 +3539,9 @@ class BattleSession {
             .filter { !adjacent || if (ally) isAdjacentAlly(it) else isAdjacentFoe(it) }
             .filterNot { ally && it == selfPosition }
             .map { position ->
-                val choice = if (ally) -position else position
+                val choice = if (ally) "-$position" else "+$position"
                 val label = if (ally) "Ally $position" else "Foe $position"
-                TargetOption(label + if (ally && position == selfPosition) " (self)" else "", choice.toString())
+                TargetOption(label + if (ally && position == selfPosition) " (self)" else "", choice)
             }
         val options = when (target) {
             "adjacentally" -> targetOptions(allyPositions, ally = true, adjacent = true)
@@ -3549,7 +3549,7 @@ class BattleSession {
                 .filter { isAdjacentAlly(it) }
                 .map { position ->
                     val label = "Ally $position" + if (position == selfPosition) " (self)" else ""
-                    TargetOption(label, (-position).toString())
+                    TargetOption(label, "-$position")
                 }
             "normal", "adjacentfoe" -> targetOptions(foePositions, ally = false, adjacent = true)
             "any" -> targetOptions(foePositions, ally = false, adjacent = false) +

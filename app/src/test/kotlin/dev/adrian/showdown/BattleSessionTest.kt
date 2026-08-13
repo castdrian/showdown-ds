@@ -259,7 +259,7 @@ class BattleSessionTest {
         session.selectTargetWithTouch(1)
         session.confirmSelection()
 
-        assertEquals(listOf("/choose move 1 2, move 1|13"), decisions)
+        assertEquals(listOf("/choose move 1 +2, move 1|13"), decisions)
     }
 
     @Test
@@ -306,7 +306,7 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertEquals(listOf("Foe 2"), session.targetOptions().map { it.label })
-        assertEquals(listOf("2"), session.targetOptions().map { it.choice })
+        assertEquals(listOf("+2"), session.targetOptions().map { it.choice })
     }
 
     @Test
@@ -932,7 +932,7 @@ class BattleSessionTest {
             )
         )
 
-        assertEquals(listOf("1", "2", "-2"), session.targetOptions().map { it.choice })
+        assertEquals(listOf("+1", "+2", "-2"), session.targetOptions().map { it.choice })
     }
 
     @Test
@@ -957,19 +957,19 @@ class BattleSessionTest {
             "|request|{\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]},null,null]}"
         )
 
-        assertEquals(listOf("2", "3"), session.targetOptions().map { it.choice })
+        assertEquals(listOf("+2", "+3"), session.targetOptions().map { it.choice })
 
         session.applyProtocolLine(
             "|request|{\"targetable\":true,\"active\":[null,{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]},null]}"
         )
 
-        assertEquals(listOf("1", "2", "3"), session.targetOptions().map { it.choice })
+        assertEquals(listOf("+1", "+2", "+3"), session.targetOptions().map { it.choice })
 
         session.applyProtocolLine(
             "|request|{\"targetable\":true,\"active\":[null,null,{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"adjacentFoe\"}]}]}"
         )
 
-        assertEquals(listOf("1", "2"), session.targetOptions().map { it.choice })
+        assertEquals(listOf("+1", "+2"), session.targetOptions().map { it.choice })
 
         session.applyProtocolLine(
             "|request|{\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"allAdjacentFoes\"}]},null,null]}"
@@ -996,7 +996,7 @@ class BattleSessionTest {
             )
         )
 
-        assertEquals(listOf("1", "2", "3", "-2", "-3"), session.targetOptions().map { it.choice })
+        assertEquals(listOf("+1", "+2", "+3", "-2", "-3"), session.targetOptions().map { it.choice })
         session.selectTargetWithTouch(4)
 
         assertEquals(listOf("/choose move 1 -3, pass, pass|45"), decisions)
