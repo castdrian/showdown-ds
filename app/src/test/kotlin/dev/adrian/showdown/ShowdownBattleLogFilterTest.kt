@@ -21,4 +21,16 @@ class ShowdownBattleLogFilterTest {
 
         assertEquals(listOf("Battle started!", "Turn 1"), entries)
     }
+
+    @Test
+    fun preservesUserFacingErrorMessages() {
+        val entries = ShowdownBattleLogFilter.visibleEntries(
+            "Error: Your move is disabled.<br />The opposing Pokémon used Protect!"
+        )
+
+        assertEquals(
+            listOf("Error: Your move is disabled.", "The opposing Pokémon used Protect!"),
+            entries
+        )
+    }
 }

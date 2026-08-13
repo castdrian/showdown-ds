@@ -2,7 +2,7 @@ package dev.adrian.showdown
 
 object ShowdownBattleLogFilter {
     private val diagnosticLine = Regex(
-        "(?:^|\\s)at (?:Battle|BattleLog)\\.|Error(?: parsing)?\\s*:|sanitizeHTML requires caja|https?://play\\.pokemonshowdown\\.com/js/",
+        "(?:^|\\s)at (?:Battle|BattleLog)\\.|^Error parsing\\s*:|sanitizeHTML requires caja|https?://play\\.pokemonshowdown\\.com/js/",
         RegexOption.IGNORE_CASE
     )
 
