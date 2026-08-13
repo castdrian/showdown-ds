@@ -48,4 +48,41 @@ class BattleCardContentTest {
 
         assertEquals(0f, content.fraction, 0.001f)
     }
+
+    @Test
+    fun compactActiveCardsUseTheSingleCardProjectionWithLiveHp() {
+        val details = BattleSession.PokemonDetails(
+            name = "Aerial",
+            types = listOf("FLYING"),
+            level = "50",
+            gender = "♀",
+            hp = "100/100",
+            condition = "100/100",
+            ability = "Pressure",
+            item = "Leftovers",
+            moves = emptyList(),
+            stats = "",
+            species = "Corviknight"
+        )
+        val combatant = BattleSession.ActiveCombatant(
+            slot = "p2b",
+            name = "Aerial",
+            types = listOf("FLYING"),
+            level = "50",
+            gender = "♀",
+            hp = "62/100",
+            condition = "62/100",
+            entryAtNanos = 0L,
+            species = "Corviknight",
+            volatileEffects = listOf("Substitute"),
+            turnEffects = listOf("Protect"),
+            moveEffects = listOf("Roost")
+        )
+
+        val content = BattleCardContent.from(combatant, details)
+
+        assertEquals(BattleCardContent.from(details, "62/100"), content)
+        assertEquals("62/100", content.hpLabel)
+        assertEquals(0.62f, content.fraction, 0.001f)
+    }
 }

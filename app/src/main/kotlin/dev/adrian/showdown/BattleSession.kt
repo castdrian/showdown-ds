@@ -4052,7 +4052,7 @@ class BattleSession {
         var gender = ""
         details.split(',').map(String::trim).forEach {
             when {
-                it.startsWith("L") && it.length > 1 -> level = it.drop(1)
+                it.startsWith("L") && it.drop(1).toIntOrNull() != null -> level = it.drop(1)
                 it == "M" -> gender = "♂"
                 it == "F" -> gender = "♀"
             }

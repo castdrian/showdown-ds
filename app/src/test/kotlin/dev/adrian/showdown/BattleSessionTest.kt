@@ -1249,6 +1249,16 @@ class BattleSessionTest {
     }
 
     @Test
+    fun speciesNamesStartingWithLDoNotBecomeActiveLevels() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|switch|p2b: Lurantis|Lurantis, F|100/100")
+
+        assertEquals("50", session.opponentActiveCombatants().single().level)
+        assertEquals("♀", session.opponentActiveCombatants().single().gender)
+    }
+
+    @Test
     fun nicknameIdentifiersUpdateTheActiveSpeciesDetails() {
         val session = BattleSession()
         session.applyProtocolLine("|switch|p1a: Sparky|Pikachu, L50|100/100")

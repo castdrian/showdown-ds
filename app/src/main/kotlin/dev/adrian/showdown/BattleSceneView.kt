@@ -731,7 +731,7 @@ class BattleSceneView(
                 drawCompactStatusCard(
                     canvas,
                     BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF(),
-                    combatant,
+                    BattleCardContent.from(combatant, session.detailsForActiveCombatant(player, combatant.slot)),
                     scale,
                     alpha,
                     layout
@@ -743,7 +743,7 @@ class BattleSceneView(
     private fun drawCompactStatusCard(
         canvas: Canvas,
         bounds: RectF,
-        combatant: BattleSession.ActiveCombatant,
+        content: BattleCardContent,
         scale: Float,
         alpha: Float,
         layout: CompactBattleCardLayout
@@ -751,7 +751,7 @@ class BattleSceneView(
         drawBattleStatusCard(
             canvas,
             bounds,
-            BattleCardContent.from(combatant),
+            content,
             scale,
             alpha,
             layout
