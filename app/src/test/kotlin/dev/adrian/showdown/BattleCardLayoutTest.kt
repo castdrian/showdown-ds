@@ -44,4 +44,21 @@ class BattleCardLayoutTest {
         assertTrue(triples.heightFraction < doubles.heightFraction)
         assertTrue(triples.gapFraction < doubles.gapFraction)
     }
+
+    @Test
+    fun doublesKeepTheSingleCardTreatmentOnBothSides() {
+        val playerCards = (0..1).map { index ->
+            BattleCardLayout.compactBoundsFor(1920f, 1080f, true, index, 2)
+        }
+        val opponentCards = (0..1).map { index ->
+            BattleCardLayout.compactBoundsFor(1920f, 1080f, false, index, 2)
+        }
+
+        assertEquals(playerCards[0].left, playerCards[1].left, 0.001f)
+        assertEquals(playerCards[0].right, playerCards[1].right, 0.001f)
+        assertEquals(opponentCards[0].left, opponentCards[1].left, 0.001f)
+        assertEquals(opponentCards[0].right, opponentCards[1].right, 0.001f)
+        assertEquals(playerCards[1].top - playerCards[0].top, opponentCards[1].top - opponentCards[0].top, 0.001f)
+        assertEquals(playerCards[1].bottom - playerCards[0].bottom, opponentCards[1].bottom - opponentCards[0].bottom, 0.001f)
+    }
 }

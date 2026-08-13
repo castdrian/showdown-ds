@@ -273,16 +273,8 @@ class BattleSceneView(
         }.firstOrNull { (_, bounds) -> bounds.contains(x, y) }
         if (spriteTarget != null) return InspectTarget(player, spriteTarget.first.slot)
 
-        val cardLeft = if (player) width * 0.015f else width * 0.685f
-        val cardRight = if (player) width * 0.315f else width * 0.985f
-        val layout = BattleCardLayout.compactFor(combatants.size)
-        val cardHeight = height * layout.heightFraction
-        val cardGap = height * layout.gapFraction
-        val totalHeight = cardHeight * combatants.size + cardGap * (combatants.size - 1)
-        val firstTop = if (player) height - totalHeight - height * 0.015f else height * 0.02f
         val cardTarget = combatants.mapIndexed { index, combatant ->
-            val top = firstTop + index * (cardHeight + cardGap)
-            combatant to RectF(cardLeft, top, cardRight, top + cardHeight)
+            combatant to BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF()
         }.firstOrNull { (_, bounds) -> bounds.contains(x, y) }
         return cardTarget?.let { InspectTarget(player, it.first.slot) }
     }
@@ -731,20 +723,14 @@ class BattleSceneView(
         player: Boolean,
         combatants: List<BattleSession.ActiveCombatant>
     ) {
-        val cardLeft = if (player) width * 0.015f else width * 0.685f
-        val cardRight = if (player) width * 0.315f else width * 0.985f
         val layout = BattleCardLayout.compactFor(combatants.size)
-        val cardHeight = height * layout.heightFraction
-        val cardGap = height * layout.gapFraction
-        val totalHeight = cardHeight * combatants.size + cardGap * (combatants.size - 1)
-        val firstTop = if (player) height - totalHeight - height * 0.015f else height * 0.02f
         combatants.forEachIndexed { index, combatant ->
             val alpha = statusCardAlpha(combatant.name, combatant.condition, System.nanoTime()) *
                 BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, System.nanoTime())
             if (alpha > 0f) {
                 drawCompactStatusCard(
                     canvas,
-                    RectF(cardLeft, firstTop + index * (cardHeight + cardGap), cardRight, firstTop + index * (cardHeight + cardGap) + cardHeight),
+                    BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF(),
                     combatant,
                     scale,
                     alpha,
@@ -962,6 +948,8 @@ class BattleSceneView(
         }
         return "…"
     }
+
+    private fun BattleCardBounds.toRectF() = RectF(left, top, right, bottom)
 
     private companion object {
         val SHOWDOWN_EFFECTS = listOf("pokeball.png")
