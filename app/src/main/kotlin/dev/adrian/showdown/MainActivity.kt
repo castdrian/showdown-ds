@@ -855,28 +855,24 @@ class MainActivity : Activity() {
         searchUsesRandomTeams: Boolean? = null
     ) {
         val format = searchFormat?.let { id ->
-            BattleSession.MatchFormat.defaults.firstOrNull { it.id.equals(id, true) }
+            session.availableMatchFormats().firstOrNull { it.id.equals(id, true) }
+                ?: BattleSession.MatchFormat.defaults.firstOrNull { it.id.equals(id, true) }
                 ?: BattleSession.MatchFormat(
                     id = id,
                     label = searchLabel ?: id,
                     menuLabel = searchLabel ?: id,
-                    usesRandomTeams = searchUsesRandomTeams ?: BattleSession.MatchFormat.usesRandomTeamsFor(id)
+                    usesRandomTeams = searchUsesRandomTeams ?: BattleSession.MatchFormat.usesRandomTeamsFor(id),
+                    canSearch = false
                 )
         } ?: session.matchFormat
-        if (format.id != session.matchFormat.id || format.label != session.matchFormat.label) {
-            session.setMatchFormat(format)
-            getSharedPreferences("showdown", MODE_PRIVATE).edit()
-                .putString("match_format", format.id)
-                .putString("match_format_label", format.label)
-                .apply()
-        }
-        val teamOptions = teamLibrary.teams().filter { it.format.equals(format.id, true) }
-        if (!format.usesRandomTeams && searchTeamPacked.isNullOrBlank() && teamOptions.isEmpty()) {
-            session.setConnectionStatus("Save a ${format.label} team before searching.")
+        val searchableFormat = ensureSearchableMatchFormat(format)
+        val teamOptions = teamLibrary.teams().filter { it.format.equals(searchableFormat.id, true) }
+        if (!searchableFormat.usesRandomTeams && searchTeamPacked.isNullOrBlank() && teamOptions.isEmpty()) {
+            session.setConnectionStatus("Save a ${searchableFormat.label} team before searching.")
             showTeamLibrary()
             return
         }
-        if (!format.usesRandomTeams && searchTeamPacked.isNullOrBlank() && teamOptions.size > 1) {
+        if (!searchableFormat.usesRandomTeams && searchTeamPacked.isNullOrBlank() && teamOptions.size > 1) {
             showTeamPicker(teamOptions) {
                 pendingSearchTeamPacked = it.packed
                 startLobbyConnection()
@@ -884,7 +880,7 @@ class MainActivity : Activity() {
             return
         }
         pendingSearchTeamPacked = searchTeamPacked
-            ?: teamOptions.firstOrNull()?.packed?.takeUnless { format.usesRandomTeams }
+            ?: teamOptions.firstOrNull()?.packed?.takeUnless { searchableFormat.usesRandomTeams }
         startLobbyConnection()
     }
 
@@ -1211,7 +1207,7 @@ class MainActivity : Activity() {
     }
 
     private fun showLadderFormatPicker() {
-        val formats = session.availableMatchFormats()
+        val formats = session.availableMatchFormats().filter { it.canSearch }.ifEmpty { session.availableMatchFormats() }
         ShowdownDialogBuilder(this)
             .setTitle("Ladder format")
             .setSingleChoiceItems(formats.map { it.label }.toTypedArray(), formats.indexOfFirst { it.id.equals(ladderFormatId, true) }) { _, selected ->
@@ -2358,19 +2354,41 @@ class MainActivity : Activity() {
 
     private fun sendPendingLobbyCommands(connection: ShowdownConnection) {
         if (!authenticated || showdownConnection !== connection) return
-        val commands = pendingLobbyCommands ?: when {
+        val hasPendingSearchCommand = pendingLobbyCommands?.any { it.startsWith("/search ") } == true
+        val searchFormat = if (pendingSearch || activeSearchFormat != null || hasPendingSearchCommand) {
+            ensureSearchableMatchFormat()
+        } else {
+            session.matchFormat
+        }
+        val rawCommands = pendingLobbyCommands ?: when {
             pendingSearch -> {
-                if (!session.matchFormat.usesRandomTeams && pendingSearchTeamPacked.isNullOrBlank()) {
+                if (!searchFormat.usesRandomTeams && pendingSearchTeamPacked.isNullOrBlank()) {
                     pendingSearch = false
-                    session.setConnectionStatus("Save a team for ${session.matchFormat.label} before searching.")
+                    session.setConnectionStatus("Save a team for ${searchFormat.label} before searching.")
                     return
                 }
-                ShowdownLobbyState.searchCommands(session.matchFormat.id, pendingSearchTeamPacked)
+                ShowdownLobbyState.searchCommands(searchFormat.id, pendingSearchTeamPacked)
             }
-            activeSearchFormat != null -> ShowdownLobbyState.searchCommands(activeSearchFormat!!, pendingSearchTeamPacked)
+            activeSearchFormat != null -> {
+                val serverFormat = session.availableMatchFormats()
+                    .firstOrNull { it.id.equals(activeSearchFormat, true) && it.canSearch }
+                ShowdownLobbyState.searchCommands(serverFormat?.id ?: searchFormat.id, pendingSearchTeamPacked)
+            }
             activeBattleRoomId != null -> listOf(ShowdownLobbyState.joinBattleCommand(activeBattleRoomId!!))
             reconnectLobbyCommands != null -> reconnectLobbyCommands!!
             else -> return
+        }
+        val commands = rawCommands.map { command ->
+            if (!command.startsWith("/search ")) {
+                command
+            } else {
+                val requestedFormat = command.removePrefix("/search ").trim()
+                session.availableMatchFormats()
+                    .firstOrNull { it.id.equals(requestedFormat, true) && it.canSearch }
+                    ?.id
+                    ?.let { "/search $it" }
+                    ?: "/search ${searchFormat.id}"
+            }
         }
         val rejoiningBattle = activeBattleRoomId != null && commands == listOf(ShowdownLobbyState.joinBattleCommand(activeBattleRoomId!!))
         val searching = commands.any { it.startsWith("/search ") }
@@ -2410,7 +2428,7 @@ class MainActivity : Activity() {
             text = selectedFormat.label
             isAllCaps = false
             setOnClickListener {
-                showFormatPicker(selectedFormat) { format ->
+                showFormatPicker(selectedFormat, searchOnly = false) { format ->
                     selectedFormat = format
                     text = format.label
                 }
@@ -4555,6 +4573,7 @@ class MainActivity : Activity() {
 
     private fun showFormatPicker(
         initialFormat: BattleSession.MatchFormat = session.matchFormat,
+        searchOnly: Boolean = true,
         onSelected: (BattleSession.MatchFormat) -> Unit = { format ->
             if (activeSearchFormat != null || pendingSearch) cancelActiveSearch()
             session.setMatchFormat(format)
@@ -4565,6 +4584,8 @@ class MainActivity : Activity() {
         }
     ) {
         val formats = session.availableMatchFormats()
+            .filter { if (searchOnly) it.canSearch else it.canChallenge }
+            .ifEmpty { session.availableMatchFormats() }
         val selectedIndex = formats.indexOfFirst { it.id.equals(initialFormat.id, true) }.coerceAtLeast(0)
         ShowdownDialogBuilder(this)
             .setTitle("Battle format")
@@ -4573,6 +4594,23 @@ class MainActivity : Activity() {
                 onSelected(format)
             }
             .show()
+    }
+
+    private fun ensureSearchableMatchFormat(preferred: BattleSession.MatchFormat = session.matchFormat): BattleSession.MatchFormat {
+        val advertisedFormats = session.availableMatchFormats()
+        val format = advertisedFormats.firstOrNull { it.id.equals(preferred.id, true) && it.canSearch }
+            ?: advertisedFormats.firstOrNull { it.id.equals(BattleSession.MatchFormat.GEN9_RANDOM.id, true) && it.canSearch }
+            ?: advertisedFormats.firstOrNull { it.canSearch }
+            ?: preferred.takeIf { it.canSearch }
+            ?: BattleSession.MatchFormat.GEN9_RANDOM
+        if (format.id != session.matchFormat.id || format.label != session.matchFormat.label) {
+            session.setMatchFormat(format)
+            getSharedPreferences("showdown", MODE_PRIVATE).edit()
+                .putString("match_format", format.id)
+                .putString("match_format_label", format.label)
+                .apply()
+        }
+        return format
     }
 
     private fun confirmForfeit() {
@@ -4645,8 +4683,14 @@ class MainActivity : Activity() {
     private fun loadMatchFormat(): BattleSession.MatchFormat {
         val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
         val saved = preferences.getString("match_format", null)
-        return BattleSession.MatchFormat.defaults.firstOrNull { it.id == saved }
-            ?: saved?.let { BattleSession.MatchFormat(it, preferences.getString("match_format_label", it) ?: it) }
+        return BattleSession.MatchFormat.defaults.firstOrNull { it.id.equals(saved, true) }
+            ?: saved?.let {
+                BattleSession.MatchFormat(
+                    id = it,
+                    label = preferences.getString("match_format_label", it) ?: it,
+                    canSearch = false
+                )
+            }
             ?: BattleSession.MatchFormat.GEN9_RANDOM
     }
 

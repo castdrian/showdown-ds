@@ -2033,6 +2033,62 @@ class BattleSessionTest {
     }
 
     @Test
+    fun serverFormatCatalogPreservesSearchAndChallengeCapabilities() {
+        val formats = BattleSession.parseServerFormats(
+            "|formats|gen9randombattle,[Gen 9] Random Battle,4f|gen9multirandombattle,[Gen 9] Multi Random Battle,5|gen9ou,[Gen 9] OU,e"
+        )
+
+        assertTrue(formats[0].canSearch)
+        assertTrue(formats[0].canChallenge)
+        assertFalse(formats[1].canSearch)
+        assertTrue(formats[1].canChallenge)
+        assertTrue(formats[2].canSearch)
+        assertTrue(formats[2].canChallenge)
+    }
+
+    @Test
+    fun unavailableSavedFormatFallsBackToTheServerDefault() {
+        val session = BattleSession()
+        session.setMatchFormat(BattleSession.MatchFormat("gen9multirandombattle", "[Gen 9] Multi Random Battle"))
+
+        session.applyServerFormats(
+            listOf("|formats|gen9randombattle,[Gen 9] Random Battle,4f|gen9ou,[Gen 9] OU,e")
+        )
+
+        assertEquals("gen9randombattle", session.matchFormat.id)
+        assertEquals(listOf("gen9randombattle", "gen9ou"), session.availableMatchFormats().map { it.id })
+    }
+
+    @Test
+    fun challengeOnlySavedFormatFallsBackEvenWhenTheServerAdvertisesIt() {
+        val session = BattleSession()
+        session.setMatchFormat(BattleSession.MatchFormat("gen9multirandombattle", "[Gen 9] Multi Random Battle", canSearch = false))
+
+        session.applyServerFormats(
+            listOf("|formats|gen9multirandombattle,[Gen 9] Multi Random Battle,5|gen9randombattle,[Gen 9] Random Battle,4f")
+        )
+
+        assertEquals("gen9randombattle", session.matchFormat.id)
+        assertFalse(session.availableMatchFormats().first().canSearch)
+    }
+
+    @Test
+    fun selectedChallengeOnlyFormatSurvivesLaterFormatRefreshes() {
+        val session = BattleSession()
+        session.applyServerFormats(
+            listOf("|formats|gen9randombattle,[Gen 9] Random Battle,4f|gen9multirandombattle,[Gen 9] Multi Random Battle,5")
+        )
+        session.setMatchFormat(session.availableMatchFormats().last())
+
+        session.applyServerFormats(
+            listOf("|formats|gen9randombattle,[Gen 9] Random Battle,4f|gen9multirandombattle,[Gen 9] Multi Random Battle,5")
+        )
+
+        assertEquals("gen9multirandombattle", session.matchFormat.id)
+        assertFalse(session.matchFormat.canSearch)
+    }
+
+    @Test
     fun activityPanelRequestsChatComposer() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()

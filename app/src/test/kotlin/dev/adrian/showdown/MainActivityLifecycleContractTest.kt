@@ -130,4 +130,27 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("Pokémon \${editor.index + 1}"))
         assertTrue(source.indexOf("addView(setFields)") < source.indexOf("addView(validateButton)"))
     }
+
+    @Test
+    fun doesNotRestoreAnUnknownSavedFormatAsSearchable() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val loader = source.substringAfter("private fun loadMatchFormat()").substringBefore("private fun loadUserPreferences")
+
+        assertTrue(loader.contains("BattleSession.MatchFormat.defaults.firstOrNull"))
+        assertTrue(loader.contains("?: BattleSession.MatchFormat.GEN9_RANDOM"))
+        assertTrue(loader.contains("equals(saved, true)"))
+        assertTrue(loader.contains("saved?.let"))
+        assertTrue(loader.contains("canSearch = false"))
+    }
+
+    @Test
+    fun normalizesPersistedSearchCommandsAgainstTheAdvertisedFormatCapabilities() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val sender = source.substringAfter("private fun sendPendingLobbyCommands").substringBefore("private fun showChallengeComposer")
+
+        assertTrue(sender.contains("hasPendingSearchCommand"))
+        assertTrue(sender.contains("startsWith(\"/search \")"))
+        assertTrue(sender.contains("&& it.canSearch"))
+        assertTrue(sender.contains("?: \"/search \${searchFormat.id}\""))
+    }
 }

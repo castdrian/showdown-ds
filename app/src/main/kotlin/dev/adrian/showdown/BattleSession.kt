@@ -36,7 +36,9 @@ class BattleSession {
         val id: String,
         val label: String,
         val menuLabel: String = label,
-        val usesRandomTeams: Boolean = inferredRandomTeamFormat(id)
+        val usesRandomTeams: Boolean = inferredRandomTeamFormat(id),
+        val canSearch: Boolean = true,
+        val canChallenge: Boolean = true
     ) {
         companion object {
             val GEN6_RANDOM = MatchFormat("gen6randombattle", "[Gen 6] Random Battle", "Gen 6 Random")
@@ -897,10 +899,14 @@ class BattleSession {
     fun applyServerFormats(lines: List<String>) {
         val formats = lines.flatMap(::parseServerFormats)
         if (formats.isEmpty()) return
-        val selected = formats.firstOrNull { it.id == matchFormat.id } ?: matchFormat
+        val currentWasAdvertised = availableMatchFormats.any { it.id.equals(matchFormat.id, true) }
+        val selected = formats.firstOrNull {
+            it.id.equals(matchFormat.id, true) && (it.canSearch || currentWasAdvertised)
+        }
+            ?: formats.firstOrNull { it.canSearch }
+            ?: formats.first()
         availableMatchFormats.clear()
         availableMatchFormats += formats
-        if (availableMatchFormats.none { it.id == selected.id }) availableMatchFormats += selected
         matchFormat = selected
         notifyListeners()
     }
@@ -4164,6 +4170,10 @@ class BattleSession {
                 val parts = token.split(',', limit = 2)
                 val first = parts.firstOrNull()?.trim().orEmpty()
                 val second = parts.getOrNull(1)?.trim().orEmpty()
+                val suffix = token.substringAfterLast(',', "").trim()
+                val capabilityCode = suffix.toIntOrNull(16)?.takeIf {
+                    suffix.isNotBlank() && suffix.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }
+                }
                 val label = when {
                     first.startsWith('[') -> first
                     second.startsWith('[') -> second.substringBefore(',').trim()
@@ -4175,7 +4185,25 @@ class BattleSession {
                     first.lowercase().filter(Char::isLetterOrDigit)
                 }
                 id.takeIf { it.isNotBlank() }?.let {
-                    MatchFormat(it, label, usesRandomTeams = second.contains('#') || MatchFormat.usesRandomTeamsFor(it))
+                    val searchEnabled = when {
+                        capabilityCode != null -> capabilityCode and 2 != 0
+                        token.endsWith(",,") -> true
+                        token.endsWith(",") -> false
+                        else -> true
+                    }
+                    val challengeEnabled = when {
+                        capabilityCode != null -> capabilityCode and 4 != 0
+                        token.endsWith(",,") -> false
+                        token.endsWith(",") -> true
+                        else -> true
+                    }
+                    MatchFormat(
+                        it,
+                        label,
+                        usesRandomTeams = second.contains('#') || MatchFormat.usesRandomTeamsFor(it),
+                        canSearch = searchEnabled,
+                        canChallenge = challengeEnabled
+                    )
                 }
             }.distinctBy(MatchFormat::id)
         }
