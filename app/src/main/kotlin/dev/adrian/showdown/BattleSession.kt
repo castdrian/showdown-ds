@@ -2371,7 +2371,8 @@ class BattleSession {
             val request = JSONObject(requestText)
             requestId = request.optInt("rqid", -1).takeIf { it >= 0 }
             requestNoCancel = request.optBoolean("noCancel")
-            syncTeamFromRequest(request)
+            val activePositions = requestActivePositions(request)
+            syncTeamFromRequest(request, activePositions)
             val requestType = request.optString("requestType").lowercase()
             if (request.optBoolean("wait") || requestType == "wait") {
                 battlePhase = BattlePhase.BATTLE
@@ -2500,12 +2501,29 @@ class BattleSession {
         } else {
             "Choose a move"
         }
-        playerDetails = playerDetails.copy(moves = moves.map { it.name })
-        team.indexOf(playerPokemon).takeIf { it >= 0 }?.let { teamDetails[it] = playerDetails }
+        updateMoveDetailsForActiveSlot(moves.map { it.name })
         updateAvailableGimmicks(active)
         updateTargetOptions()
         return moves.isNotEmpty()
     }
+
+    private fun updateMoveDetailsForActiveSlot(moveNames: List<String>) {
+        val slot = playerSlotForRequestIndex(activeSlotIndex)
+        val partyIndex = playerActivePartyIndices[slot]
+            ?: playerActiveCombatants[slot]?.let { combatant ->
+                teamDetails.indexOfFirst { it.matchesIdentifier(combatant.name) }.takeIf { it >= 0 }
+            }
+        if (partyIndex != null && partyIndex in teamDetails.indices) {
+            val updated = teamDetails[partyIndex].copy(moves = moveNames)
+            teamDetails[partyIndex] = updated
+            if (slot.endsWith('a')) playerDetails = updated
+        } else if (activeSlotIndex == 0) {
+            playerDetails = playerDetails.copy(moves = moveNames)
+        }
+    }
+
+    private fun playerSlotForRequestIndex(index: Int) =
+        "$playerSlot${('a'.code + index).toChar()}"
 
     private fun movePower(move: JSONObject, info: MoveInfo?): ParsedMoveMetric {
         val value = move.opt("basePower")
@@ -3903,7 +3921,7 @@ class BattleSession {
         "Confirm your team order"
     }
 
-    private fun syncTeamFromRequest(request: JSONObject) {
+    private fun syncTeamFromRequest(request: JSONObject, activePositions: List<Int>) {
         val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon") ?: return
         val synced = mutableListOf<PokemonDetails>()
         val identifiers = mutableListOf<String>()
@@ -3916,7 +3934,7 @@ class BattleSession {
                 entry.optBoolean("active") && entry.optBoolean("reviving")
             } == true
         }
-        var activeIndex = 0
+        var activeEntryIndex = 0
         for (index in 0 until pokemon.length()) {
             val entry = pokemon.optJSONObject(index) ?: continue
             val details = entry.optString("details", entry.optString("ident").substringAfter(": "))
@@ -3925,11 +3943,12 @@ class BattleSession {
             val identifier = entry.optString("ident").substringAfter(':').trim().ifBlank { name }
             identifiers += identifier
             if (entry.optBoolean("active")) {
-                if (entry.optBoolean("commanding")) autoPassActiveSlots += activeIndex
-                val slot = "$playerSlot${('a'.code + activeIndex).toChar()}"
+                val slotPosition = activePositions.getOrNull(activeEntryIndex) ?: activeEntryIndex
+                if (entry.optBoolean("commanding")) autoPassActiveSlots += slotPosition
+                val slot = playerSlotForRequestIndex(slotPosition)
                 activeSlotNames[slot] = identifier
                 playerActivePartyIndices[slot] = index
-                activeIndex += 1
+                activeEntryIndex += 1
             }
             val known = teamDetails.firstOrNull {
                 it.name.equals(identifier, true) || it.name.equals(name, true) || it.species.equals(species, true)
@@ -3997,7 +4016,11 @@ class BattleSession {
         playerBoostsBySlot.keys.filterNot(activeSlotNames::containsKey).toList().forEach(playerBoostsBySlot::remove)
         refreshVisibleBoosts()
         focusedTeam = focusedTeam.coerceIn(0, team.lastIndex)
-        val primaryIndex = playerActivePartyIndices["${playerSlot}a"]
+        val primarySlot = activeSlotNames.keys
+            .sortedWith(compareBy<String> { !it.endsWith('a') }.thenBy { it })
+            .firstOrNull()
+        val primaryIndex = primarySlot?.let { playerActivePartyIndices[it] }
+            ?: playerActivePartyIndices["${playerSlot}a"]
         (primaryIndex?.let { synced.getOrNull(it) } ?: synced.firstOrNull())?.let { details ->
             playerDetails = details
             playerPokemon = details.name
@@ -4006,6 +4029,19 @@ class BattleSession {
             playerLevel = details.level
             playerGender = details.gender
         }
+    }
+
+    private fun requestActivePositions(request: JSONObject): List<Int> {
+        request.optJSONArray("active")?.let { active ->
+            val positions = (0 until active.length()).filter { index ->
+                active.optJSONObject(index) != null
+            }
+            if (positions.isNotEmpty()) return positions
+        }
+        request.optJSONArray("forceSwitch")?.let { forceSwitch ->
+            if (forceSwitch.length() > 0) return (0 until forceSwitch.length()).toList()
+        }
+        return emptyList()
     }
 
     private fun canSwitchTo(index: Int): Boolean {

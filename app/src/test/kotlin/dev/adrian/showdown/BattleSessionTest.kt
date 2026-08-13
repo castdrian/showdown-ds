@@ -225,6 +225,25 @@ class BattleSessionTest {
     }
 
     @Test
+    fun sparseActiveRequestsKeepTheProtocolSlotAndPartyMoveDetailsAligned() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":46,\"active\":[null,{\"moves\":[{\"move\":\"Helping Hand\",\"pp\":10,\"target\":\"adjacentAlly\"}]}],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":false},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
+        )
+
+        assertEquals(listOf("p1b"), session.playerActiveCombatants().map { it.slot })
+        assertEquals("Naganadel", session.playerDetails().name)
+        assertEquals(listOf("Helping Hand"), session.teamMemberDetails(1).moves)
+        assertEquals("Choose a move for active Pokémon 2/2", session.status)
+
+        session.confirmSelection()
+
+        assertEquals(listOf("/choose pass, move 1|46"), decisions)
+    }
+
+    @Test
     fun multiActiveRequestsAllowExplicitTargets() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
