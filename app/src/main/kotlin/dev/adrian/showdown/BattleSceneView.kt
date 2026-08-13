@@ -741,11 +741,6 @@ class BattleSceneView(
             val alpha = statusCardAlpha(combatant.name, combatant.condition, System.nanoTime()) *
                 BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, System.nanoTime())
             if (alpha > 0f) {
-                val party = if (player) {
-                    session.playerPartyDetails().takeIf { index == combatants.lastIndex }
-                } else {
-                    session.opponentPartyDetails().takeIf { index == 0 }
-                }
                 drawCompactStatusCard(
                     canvas,
                     BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF(),
@@ -753,10 +748,39 @@ class BattleSceneView(
                     scale,
                     alpha,
                     layout,
-                    party
+                    null
                 )
             }
         }
+        if (combatants.isNotEmpty()) {
+            val anchorIndex = if (player) combatants.lastIndex else 0
+            val anchorBounds = BattleCardLayout.compactBoundsFor(
+                width,
+                height,
+                player,
+                anchorIndex,
+                combatants.size
+            ).toRectF()
+            val party = if (player) session.playerPartyDetails() else session.opponentPartyDetails()
+            drawCompactPartyIndicators(canvas, anchorBounds, scale, party)
+        }
+    }
+
+    private fun drawCompactPartyIndicators(
+        canvas: Canvas,
+        bounds: RectF,
+        scale: Float,
+        party: List<BattleSession.PokemonDetails>
+    ) {
+        paint.alpha = 255
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        val size = BattleCardLayout.partyIndicatorSize(bounds.height(), scale)
+        val gap = maxOf(size * 0.12f, 2f * scale)
+        val right = bounds.right - 20f * scale
+        val start = right - size * 6f - gap * 5f
+        val top = BattleCardLayout.partyIndicatorTop(bounds.bottom, size, scale)
+        drawPartyIndicators(canvas, party, start, top, size, gap)
     }
 
     private fun drawCompactStatusCard(
@@ -808,11 +832,6 @@ class BattleSceneView(
     ) {
         val height = bounds.height()
         val contentLayout = layout.content
-        val ballSize = height * 0.17f
-        val ballGap = ballSize * 0.12f
-        val ballStart = textRight - ballSize * 6f - ballGap * 5f
-        val ballTop = bounds.top + height * 0.75f
-        party?.let { drawPartyIndicators(canvas, it, ballStart, ballTop, ballSize, ballGap) }
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
@@ -842,6 +861,11 @@ class BattleSceneView(
             bounds.top + height * contentLayout.barBottomFraction
         )
         drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
+        val ballSize = BattleCardLayout.partyIndicatorSize(height, scale)
+        val ballGap = maxOf(ballSize * 0.12f, 2f * scale)
+        val ballStart = textRight - ballSize * 6f - ballGap * 5f
+        val ballTop = BattleCardLayout.partyIndicatorTop(bounds.bottom, ballSize, scale)
+        party?.let { drawPartyIndicators(canvas, it, ballStart, ballTop, ballSize, ballGap) }
     }
 
     private fun drawPartyIndicators(
@@ -865,6 +889,9 @@ class BattleSceneView(
     }
 
     private fun drawPartyBall(canvas: Canvas, left: Float, top: Float, size: Float, state: PartyBallState) {
+        paint.alpha = 255
+        paint.shader = null
+        paint.style = Paint.Style.FILL
         val sheet = pokeballSheet
         if (sheet != null && state != PartyBallState.FAINTED) {
             val cellLeft = if (state == PartyBallState.STATUSED) POKEBALL_TILE_WIDTH_PIXELS else 0

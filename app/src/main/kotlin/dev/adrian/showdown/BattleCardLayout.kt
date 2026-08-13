@@ -21,6 +21,9 @@ data class BattleCardBounds(
 )
 
 object BattleCardLayout {
+    const val PARTY_INDICATOR_MINIMUM_PIXELS = 22f
+    const val PARTY_INDICATOR_BOTTOM_INSET_PIXELS = 3f
+
     private val singleCardContent = BattleCardContentLayout(
         titleBaselineFraction = 0.29f,
         hpBaselineFraction = 0.51f,
@@ -33,6 +36,14 @@ object BattleCardLayout {
         gapFraction = if (activeCount > 2) 0.008f else 0.012f,
         content = singleCardContent
     )
+
+    fun partyIndicatorSize(cardHeight: Float, scale: Float) = maxOf(
+        cardHeight * 0.17f,
+        PARTY_INDICATOR_MINIMUM_PIXELS * scale
+    )
+
+    fun partyIndicatorTop(cardBottom: Float, indicatorSize: Float, scale: Float) =
+        cardBottom - indicatorSize - PARTY_INDICATOR_BOTTOM_INSET_PIXELS * scale
 
     fun compactBoundsFor(width: Float, height: Float, player: Boolean, index: Int, activeCount: Int): BattleCardBounds {
         val layout = compactFor(activeCount)

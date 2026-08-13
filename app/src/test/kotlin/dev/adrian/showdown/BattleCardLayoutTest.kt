@@ -69,8 +69,15 @@ class BattleCardLayoutTest {
     fun multiBattleCardsKeepOnePartyIndicatorStripPerSide() {
         val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
 
-        assertTrue(source.contains("session.playerPartyDetails().takeIf { index == combatants.lastIndex }"))
-        assertTrue(source.contains("session.opponentPartyDetails().takeIf { index == 0 }"))
+        assertTrue(source.contains("val anchorIndex = if (player) combatants.lastIndex else 0"))
+        assertTrue(source.contains("drawCompactPartyIndicators(canvas, anchorBounds, scale, party)"))
         assertTrue(source.contains("party?.let { drawPartyIndicators"))
+    }
+
+    @Test
+    fun partyIndicatorsStayReadableOnCompactCards() {
+        assertEquals(22f, BattleCardLayout.partyIndicatorSize(81f, 1f), 0.001f)
+        assertEquals(32.98f, BattleCardLayout.partyIndicatorSize(194f, 1f), 0.001f)
+        assertTrue(BattleCardLayout.partyIndicatorTop(81f, 22f, 1f) > 55f)
     }
 }
