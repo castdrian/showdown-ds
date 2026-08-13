@@ -253,6 +253,7 @@ class ShowdownMoveEffectsView(
                                 var resultCue = null;
                                 var kwArgs = arguments[1] || {};
                                 var previousAudioSilent = !!this.scene.__showdownNativeAudioSilent;
+                                var directMoveDamage = this.scene.__showdownNativeDamageArmed && isDirectMoveDamage(kwArgs.from);
                                 this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;
                                 if (!this.scene.__showdownNativeResultCues) this.scene.__showdownNativeResultCues = [];
                                 if (this.scene.animating && !kwArgs.silent) {
@@ -266,9 +267,9 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-clearnegativeboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
                                     if (!this.scene.__showdownNativeHealthEvents) this.scene.__showdownNativeHealthEvents = [];
-                                    if (args[0] === '-damage') this.scene.__showdownNativeHealthEvents.push(this.scene.__showdownNativeDamageArmed && isDirectMoveDamage(kwArgs.from) ? 'damage' : 'other');
+                                    if (args[0] === '-damage') this.scene.__showdownNativeHealthEvents.push(directMoveDamage ? 'damage' : 'other');
                                     if (args[0] === '-heal') this.scene.__showdownNativeHealthEvents.push('heal');
-                                    if (args[0] === '-sethp' && this.scene.__showdownNativeDamageArmed && isDirectMoveDamage(kwArgs.from)) {
+                                    if (args[0] === '-sethp' && directMoveDamage) {
                                         for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
                                             var setHpTarget = this.getPokemon(args[setHpIndex]);
                                             var nextHp = setHpValue(setHpTarget, args[setHpIndex + 1]);
