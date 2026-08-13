@@ -41,8 +41,11 @@ class BattleSceneView(
     private val effectAssets = mutableMapOf<String, Bitmap>()
     private val requestedEffects = mutableSetOf<String>()
     private var inspectedPlayer: Boolean? = null
+    private var inspectedSlot: String? = null
     private val playerInspectBounds = RectF()
     private val opponentInspectBounds = RectF()
+
+    private data class InspectTarget(val player: Boolean, val slot: String?)
 
     private data class HpColors(val fill: Int, val highlight: Int, val shadow: Int)
 
@@ -142,6 +145,14 @@ class BattleSceneView(
             (inspectedPlayer == false && !session.hasActiveOpponentCombatant())
         ) {
             inspectedPlayer = null
+            inspectedSlot = null
+        }
+        if (inspectedPlayer != null && inspectedSlot != null) {
+            val combatants = if (inspectedPlayer == true) playerCombatants else opponentCombatants
+            if (combatants.none { it.slot == inspectedSlot }) {
+                inspectedPlayer = null
+                inspectedSlot = null
+            }
         }
         if (inspectedPlayer == null) {
             if (singles) {
@@ -192,17 +203,20 @@ class BattleSceneView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                return playerInspectBounds.contains(event.x, event.y) ||
-                    opponentInspectBounds.contains(event.x, event.y) ||
-                    inspectedPlayer != null
+                return inspectTargetAt(event.x, event.y) != null || inspectedPlayer != null
             }
             MotionEvent.ACTION_UP -> {
-                val requestedPlayer = when {
-                    playerInspectBounds.contains(event.x, event.y) -> true
-                    opponentInspectBounds.contains(event.x, event.y) -> false
-                    else -> null
+                val target = inspectTargetAt(event.x, event.y)
+                if (target == null) {
+                    inspectedPlayer = null
+                    inspectedSlot = null
+                } else if (target.player == inspectedPlayer && target.slot == inspectedSlot) {
+                    inspectedPlayer = null
+                    inspectedSlot = null
+                } else {
+                    inspectedPlayer = target.player
+                    inspectedSlot = target.slot
                 }
-                inspectedPlayer = if (requestedPlayer == null || requestedPlayer == inspectedPlayer) null else requestedPlayer
                 invalidate()
                 performClick()
                 return true
@@ -212,6 +226,65 @@ class BattleSceneView(
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    private fun inspectTargetAt(x: Float, y: Float): InspectTarget? {
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+        val scale = min(viewWidth / 1920f, viewHeight / 1080f)
+        if (session.isSinglesBattle()) {
+            return when {
+                playerInspectBounds.contains(x, y) -> InspectTarget(true, null)
+                opponentInspectBounds.contains(x, y) -> InspectTarget(false, null)
+                else -> null
+            }
+        }
+        val playerCombatants = fieldCombatants(session.playerActiveCombatants(), true)
+        val opponentCombatants = fieldCombatants(session.opponentActiveCombatants(), false)
+        val playerTarget = findMultiInspectTarget(x, y, viewWidth, viewHeight, scale, true, playerCombatants)
+        val opponentTarget = findMultiInspectTarget(x, y, viewWidth, viewHeight, scale, false, opponentCombatants)
+        return playerTarget ?: opponentTarget ?: when {
+            playerInspectBounds.contains(x, y) -> playerCombatants.firstOrNull()?.let { InspectTarget(true, it.slot) }
+            opponentInspectBounds.contains(x, y) -> opponentCombatants.firstOrNull()?.let { InspectTarget(false, it.slot) }
+            else -> null
+        }
+    }
+
+    private fun findMultiInspectTarget(
+        x: Float,
+        y: Float,
+        width: Float,
+        height: Float,
+        scale: Float,
+        player: Boolean,
+        combatants: List<BattleSession.ActiveCombatant>
+    ): InspectTarget? {
+        if (combatants.isEmpty()) return null
+        val centerY = height * if (player) 0.67f else 0.42f
+        val spriteTarget = combatants.mapIndexed { index, combatant ->
+            val centerX = multiCombatantX(width, player, index, combatants.size)
+            val bounds = RectF(
+                centerX - 220f * scale,
+                centerY - 360f * scale,
+                centerX + 220f * scale,
+                centerY + 160f * scale
+            )
+            combatant to bounds
+        }.firstOrNull { (_, bounds) -> bounds.contains(x, y) }
+        if (spriteTarget != null) return InspectTarget(player, spriteTarget.first.slot)
+
+        val cardLeft = if (player) width * 0.015f else width * 0.685f
+        val cardRight = if (player) width * 0.315f else width * 0.985f
+        val layout = BattleCardLayout.compactFor(combatants.size)
+        val cardHeight = height * layout.heightFraction
+        val cardGap = height * layout.gapFraction
+        val totalHeight = cardHeight * combatants.size + cardGap * (combatants.size - 1)
+        val firstTop = if (player) height - totalHeight - height * 0.015f else height * 0.02f
+        val cardTarget = combatants.mapIndexed { index, combatant ->
+            val top = firstTop + index * (cardHeight + cardGap)
+            combatant to RectF(cardLeft, top, cardRight, top + cardHeight)
+        }.firstOrNull { (_, bounds) -> bounds.contains(x, y) }
+        return cardTarget?.let { InspectTarget(player, it.first.slot) }
     }
 
     override fun performClick(): Boolean {
@@ -507,12 +580,16 @@ class BattleSceneView(
 
     private fun drawInspectSheet(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val playerSide = inspectedPlayer ?: return
-        val details = if (playerSide) session.playerDetails() else session.opponentDetails()
-        val activeEffects = (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
-            .flatMap { combatant ->
-                val effects = combatant.volatileEffects + combatant.turnEffects + combatant.moveEffects
-                effects.map { effect -> "${BattleSession.displayPokemonName(combatant.name, combatant.species)}: $effect" }
-            }
+        val details = inspectedSlot?.let { session.detailsForActiveCombatant(playerSide, it) }
+            ?: if (playerSide) session.playerDetails() else session.opponentDetails()
+        val visibleCombatants = inspectedSlot?.let { slot ->
+            (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+                .filter { it.slot == slot }
+        } ?: (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+        val activeEffects = visibleCombatants.flatMap { combatant ->
+            val effects = combatant.volatileEffects + combatant.turnEffects + combatant.moveEffects
+            effects.map { effect -> "${BattleSession.displayPokemonName(combatant.name, combatant.species)}: $effect" }
+        }
             .distinct()
         val bounds = if (playerSide) {
             RectF(width * 0.025f, height * 0.14f, width * 0.49f, height * 0.85f)

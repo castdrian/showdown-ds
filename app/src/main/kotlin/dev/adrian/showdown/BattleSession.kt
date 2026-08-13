@@ -632,6 +632,36 @@ class BattleSession {
 
     fun opponentActiveCombatants() = opponentActiveCombatants.values.sortedBy { it.slot }
 
+    fun detailsForActiveCombatant(playerSide: Boolean, slot: String): PokemonDetails? {
+        val combatant = (if (playerSide) playerActiveCombatants else opponentActiveCombatants)[slot] ?: return null
+        val party = if (playerSide) teamDetails else opponentTeamDetails
+        val partyIndex = if (playerSide) playerActivePartyIndices[slot] else opponentActivePartyIndices[slot]
+        val base = partyIndex?.let { party.getOrNull(it) }
+            ?: party.firstOrNull { it.matchesIdentifier(combatant.name) }
+            ?: PokemonDetails(
+                name = combatant.name,
+                types = combatant.types,
+                level = combatant.level,
+                gender = combatant.gender,
+                hp = combatant.hp,
+                condition = combatant.condition,
+                ability = "Unknown ability",
+                item = "Unknown item",
+                moves = emptyList(),
+                stats = "",
+                species = combatant.species.ifBlank { combatant.name }
+            )
+        return base.copy(
+            name = combatant.name,
+            types = combatant.types,
+            level = combatant.level,
+            gender = combatant.gender,
+            hp = combatant.hp,
+            condition = combatant.condition,
+            species = combatant.species.ifBlank { base.species }
+        )
+    }
+
     fun focusedTeamDetails() = teamDetails.getOrElse(focusedTeam) { playerDetails }
 
     fun teamMemberDetails(index: Int) = teamDetails.getOrElse(index) { playerDetails }

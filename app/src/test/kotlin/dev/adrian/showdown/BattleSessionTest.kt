@@ -1159,6 +1159,50 @@ class BattleSessionTest {
     }
 
     @Test
+    fun activeDetailsFollowTheSelectedDoubleBattleSlot() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Naganadel|Naganadel, L50|72/100 brn",
+                "|-ability|p1b: Naganadel|Beast Boost",
+                "|-item|p1b: Naganadel|Dragonium Z"
+            )
+        )
+
+        val details = session.detailsForActiveCombatant(true, "p1b")
+
+        assertEquals("Naganadel", details?.name)
+        assertEquals("Naganadel", details?.species)
+        assertEquals("72/100 brn", details?.hp)
+        assertEquals("Dragonium Z", details?.item)
+        assertEquals("Beast Boost", details?.ability)
+    }
+
+    @Test
+    fun activeDetailsDoNotCopyLeadMetadataToAnUnknownPartner() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Tyranitar|Tyranitar, L50|100/100",
+                "|switch|p1b: Primarina|Primarina, L50|84/100"
+            )
+        )
+
+        val details = session.detailsForActiveCombatant(true, "p1b")
+
+        assertEquals("Unknown ability", details?.ability)
+        assertEquals("Unknown item", details?.item)
+        assertTrue(details?.moves.orEmpty().isEmpty())
+        assertTrue(details?.stats.orEmpty().isEmpty())
+    }
+
+    @Test
     fun doublesKeepOpponentSideDetailsOutOfThePrimaryCombatantCard() {
         val session = BattleSession()
         session.applyProtocolPacket(
