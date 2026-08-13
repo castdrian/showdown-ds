@@ -2449,7 +2449,6 @@ class BattleSession {
         targetOptions.clear()
         activeChoices.clear()
         forceSwitchChoices.clear()
-        forceSwitchSlots.clear()
         activeSlotIndex = activeRequests.size
         status = "Choice sent. Waiting for the other player…"
     }

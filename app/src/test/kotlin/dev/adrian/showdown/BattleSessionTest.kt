@@ -207,6 +207,24 @@ class BattleSessionTest {
     }
 
     @Test
+    fun sentForcedSwitchPreservesPositionalMaskAfterReconnect() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener { decisions += it }
+        session.setLiveBattleActive(true)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":45,\"forceSwitch\":[false,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
+        )
+
+        session.selectTeamWithTouch(2)
+        session.applyProtocolLine("|sentchoice|pass, switch 3")
+
+        assertEquals(listOf("/choose pass, switch 3|45"), decisions)
+        assertFalse(session.decisionAvailable)
+        assertTrue(session.canCancelChoice())
+    }
+
+    @Test
     fun sentMoveCanBeCancelledUntilTheNextRequest() {
         val session = BattleSession()
         session.setLiveBattleActive(true)
