@@ -204,10 +204,19 @@ class ShowdownMoveEffectsView(
                             Battle.prototype.useMove = function (pokemon, move) {
                                 nativeMoveStarted();
                                 this.scene.__showdownNativeDamageArmed = !!move && (move.category === 'Physical' || move.category === 'Special');
+                                this.scene.__showdownNativeDamageWindow = this.scene.__showdownNativeDamageArmed;
                                 this.scene.__showdownNativeDamagePlayed = false;
                                 this.scene.__showdownNativeHealthEvents = [];
                                 this.scene.__showdownNativeResultCues = [];
                                 return originalUseMove.apply(this, arguments);
+                            };
+                            var originalRunMajor = Battle.prototype.runMajor;
+                            Battle.prototype.runMajor = function (args) {
+                                if (!args || args[0] !== 'move') {
+                                    this.scene.__showdownNativeDamageArmed = false;
+                                    this.scene.__showdownNativeDamageWindow = false;
+                                }
+                                return originalRunMajor.apply(this, arguments);
                             };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
                             BattleScene.prototype.resultAnim = function () {
@@ -247,13 +256,13 @@ class ShowdownMoveEffectsView(
                             }
                             function isDirectMoveDamage(source) {
                                 var normalized = String(source || '').trim().toLowerCase();
-                                return !normalized || normalized.indexOf('move:') === 0;
+                                return !normalized;
                             }
                             Battle.prototype.runMinor = function (args) {
                                 var resultCue = null;
                                 var kwArgs = arguments[1] || {};
                                 var previousAudioSilent = !!this.scene.__showdownNativeAudioSilent;
-                                var directMoveDamage = this.scene.__showdownNativeDamageArmed && isDirectMoveDamage(kwArgs.from);
+                                var directMoveDamage = this.scene.__showdownNativeDamageWindow && isDirectMoveDamage(kwArgs.from);
                                 this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;
                                 if (!this.scene.__showdownNativeResultCues) this.scene.__showdownNativeResultCues = [];
                                 if (this.scene.animating && !kwArgs.silent) {
@@ -267,7 +276,10 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-clearnegativeboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
                                     if (!this.scene.__showdownNativeHealthEvents) this.scene.__showdownNativeHealthEvents = [];
-                                    if (args[0] === '-damage') this.scene.__showdownNativeHealthEvents.push(directMoveDamage ? 'damage' : 'other');
+                                    if (args[0] === '-damage') {
+                                        this.scene.__showdownNativeHealthEvents.push(directMoveDamage ? 'damage' : 'other');
+                                        this.scene.__showdownNativeDamageWindow = false;
+                                    }
                                     if (args[0] === '-heal') this.scene.__showdownNativeHealthEvents.push('heal');
                                     if (args[0] === '-sethp' && directMoveDamage) {
                                         for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
@@ -275,6 +287,7 @@ class ShowdownMoveEffectsView(
                                             var nextHp = setHpValue(setHpTarget, args[setHpIndex + 1]);
                                             if (setHpTarget && nextHp !== null) this.scene.__showdownNativeHealthEvents.push(nextHp < setHpTarget.hp ? 'damage' : nextHp > setHpTarget.hp ? 'heal' : 'other');
                                         }
+                                        this.scene.__showdownNativeDamageWindow = false;
                                     }
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
