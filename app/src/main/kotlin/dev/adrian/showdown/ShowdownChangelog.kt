@@ -50,6 +50,7 @@ object ShowdownChangelog {
                 "Team JSON import and export now preserve Showdown's advanced set fields.",
                 "Team imports now also accept the beta client's bracketed ability and inline nature format.",
                 "Remote team imports now keep every Pokémon from the selected Showdown export.",
+                "Imported team backups now return to a refreshed team library so new teams appear immediately.",
                 "Custom dialogs no longer open the keyboard automatically, keeping their actions visible until an input is tapped.",
                 "Iron Valiant now uses verified rear-facing artwork on the player side and never falls back to its front sprite.",
                 "Active battle sprites now resolve from species identifiers while keeping nicknames readable in the battle UI.",

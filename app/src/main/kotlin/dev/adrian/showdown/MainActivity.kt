@@ -3640,7 +3640,7 @@ class MainActivity : Activity() {
             .setTitle("Team library · 0/${teams.size}")
             .setView(scroll)
             .setNeutralButton("Export backup") { _, _ -> copyTeamBackup() }
-            .setPositiveButton("Import backup") { _, _ -> showTeamBackupImport() }
+            .setPositiveButton("Import backup") { _, _ -> showTeamBackupImport(returnToTeamLibrary = true) }
             .setNegativeButton("Close", null)
             .create()
         teamLibraryDialog = teamDialog
@@ -3832,7 +3832,7 @@ class MainActivity : Activity() {
         session.setConnectionStatus("Team backup copied to the clipboard.")
     }
 
-    private fun showTeamBackupImport() {
+    private fun showTeamBackupImport(returnToTeamLibrary: Boolean = false) {
         val input = EditText(this).apply {
             hint = "Paste exported teams, a PokePaste URL, or a Gist URL"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -3852,23 +3852,36 @@ class MainActivity : Activity() {
                 if (ShowdownTeamUrlImporter.normalize(source) != null) {
                     session.setConnectionStatus("Fetching team from URL…")
                     teamUrlFetcher.fetch(source) { result ->
-                        result.onSuccess { payload -> importTeamBackup(payload.text, payload.name, payload.format) }
+                        result.onSuccess { payload ->
+                            val imported = importTeamBackup(payload.text, payload.name, payload.format)
+                            refreshTeamLibraryAfterImport(imported, returnToTeamLibrary)
+                        }
                             .onFailure { session.setConnectionStatus("Could not fetch that team URL. Paste the team export instead.") }
                     }
                 } else {
-                    importTeamBackup(source)
+                    val imported = importTeamBackup(source)
+                    refreshTeamLibraryAfterImport(imported, returnToTeamLibrary)
                 }
             }
             .show()
     }
 
-    private fun importTeamBackup(value: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9") {
+    private fun importTeamBackup(value: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9"): List<ShowdownTeam> {
         val payload = ShowdownTeamUrlImporter.payload(value, fallbackName, fallbackFormat)
         val imported = teamLibrary.importBackup(payload.text, payload.name.ifBlank { fallbackName }, payload.format.ifBlank { fallbackFormat })
         session.setConnectionStatus(
             if (imported.isEmpty()) "No valid Showdown teams were found in that backup."
             else "Imported ${imported.size} team${if (imported.size == 1) "" else "s"}."
         )
+        return imported
+    }
+
+    private fun refreshTeamLibraryAfterImport(imported: List<ShowdownTeam>, returnToTeamLibrary: Boolean) {
+        if (!ShowdownTeamImportRefresh.shouldRefresh(teamLibraryDialog?.isShowing == true, returnToTeamLibrary, imported)) return
+        teamLibraryDialog?.dismiss()
+        window.decorView.post {
+            if (!isFinishing) showTeamLibrary()
+        }
     }
 
     private fun String.isLikelyTeamBackup() = ShowdownTeamUrlImporter.normalize(this) != null || contains("===") || contains("]") && contains("|") ||
