@@ -3623,6 +3623,13 @@ class BattleSession {
         else -> 1
     }
 
+    private fun activeSlotCountForBattleType(): Int? = when (gameType.lowercase()) {
+        "singles", "rotation" -> 1
+        "doubles", "multi" -> 2
+        "triples" -> 3
+        else -> null
+    }
+
     private fun updateTargetOptions() {
         targetOptions.clear()
         selectedTargetIndex = -1
@@ -4071,9 +4078,28 @@ class BattleSession {
 
     private fun syncTeamFromRequest(request: JSONObject, activePositions: List<Int>) {
         val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon") ?: return
+        val requestPlayerSlot = pokemon.optJSONObject(0)
+            ?.optString("ident")
+            ?.substringBefore(':')
+            ?.trim()
+            ?.takeIf { it.matches(Regex("p\\d+")) }
+        if (requestPlayerSlot != null && localUsername != null && sideNames.values.none { it.equals(localUsername, true) }) {
+            if (playerSlot != requestPlayerSlot) {
+                playerSlot = requestPlayerSlot
+                updatePerspective()
+            }
+        }
         val synced = mutableListOf<PokemonDetails>()
         val identifiers = mutableListOf<String>()
         val previousActiveCombatants = playerActiveCombatants.toMap()
+        val activeArray = request.optJSONArray("active")
+        val forceSwitchArray = request.optJSONArray("forceSwitch")
+        val hasAuthoritativeActiveSlots = activeArray != null || forceSwitchArray != null
+        val activeSlotLimit = when {
+            activeArray != null -> activePositions.size
+            forceSwitchArray != null -> forceSwitchArray.length()
+            else -> activeSlotCountForBattleType()
+        }
         activeTeamNames.clear()
         activeSlotNames.clear()
         playerActivePartyIndices.clear()
@@ -4090,7 +4116,7 @@ class BattleSession {
             val species = details.substringBefore(',').ifBlank { name }
             val identifier = entry.optString("ident").substringAfter(':').trim().ifBlank { name }
             identifiers += identifier
-            if (entry.optBoolean("active")) {
+            if (entry.optBoolean("active") && (activeSlotLimit == null || activeEntryIndex < activeSlotLimit)) {
                 val slotPosition = activePositions.getOrNull(activeEntryIndex) ?: activeEntryIndex
                 if (entry.optBoolean("commanding")) autoPassActiveSlots += slotPosition
                 val slot = playerSlotForRequestIndex(slotPosition)
@@ -4134,8 +4160,8 @@ class BattleSession {
         teamDetails.clear()
         teamDetails += synced
         activeTeamNames += activeSlotNames.values
+        if (hasAuthoritativeActiveSlots) playerActiveCombatants.clear()
         if (activeSlotNames.isNotEmpty()) {
-            playerActiveCombatants.clear()
             activeSlotNames.forEach { (slot, identifier) ->
                 playerPartyIdentifiers.indexOfFirst { it.equals(identifier, true) }
                     .takeIf { it >= 0 }

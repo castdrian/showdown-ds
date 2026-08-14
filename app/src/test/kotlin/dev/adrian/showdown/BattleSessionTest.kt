@@ -431,6 +431,47 @@ class BattleSessionTest {
     }
 
     @Test
+    fun requestSyncUsesTheExplicitActiveSlotsInsteadOfExtraSideFlags() {
+        val session = BattleSession()
+        session.applyProtocolLine("|gametype|doubles")
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]},{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}],\"side\":{\"pokemon\":[{\"ident\":\"p1: First\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p1: Second\",\"details\":\"Eevee, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p1: Extra\",\"details\":\"Mew, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
+        )
+
+        assertEquals(listOf("p1a", "p1b"), session.playerActiveCombatants().map { it.slot })
+        assertEquals(listOf("First", "Second"), session.playerActiveCombatants().map { it.name })
+    }
+
+    @Test
+    fun requestWithNoAuthoritativeActiveSlotsClearsPreviousCards() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|doubles",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p1b: Eevee|Eevee, L50|100/100"
+            )
+        )
+        session.applyProtocolLine(
+            "|request|{\"active\":[],\"side\":{\"pokemon\":[{\"ident\":\"p1: Pikachu\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\"},{\"ident\":\"p1: Eevee\",\"details\":\"Eevee, L50\",\"condition\":\"100/100\"}]}}"
+        )
+
+        assertTrue(session.playerActiveCombatants().isEmpty())
+    }
+
+    @Test
+    fun requestSideIdentReorientsTheLocalBattleSlot() {
+        val session = BattleSession()
+        session.setLocalUsername("LOCAL")
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"moves\":[{\"move\":\"Protect\",\"pp\":10}]},{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}],\"side\":{\"pokemon\":[{\"ident\":\"p2: First\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\",\"active\":true},{\"ident\":\"p2: Second\",\"details\":\"Eevee, L50\",\"condition\":\"100/100\",\"active\":true}]}}"
+        )
+
+        assertEquals("p2", session.battlePlayerSlot())
+        assertEquals(listOf("p2a", "p2b"), session.playerActiveCombatants().map { it.slot })
+    }
+
+    @Test
     fun multiActiveRequestsAllowExplicitTargets() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
