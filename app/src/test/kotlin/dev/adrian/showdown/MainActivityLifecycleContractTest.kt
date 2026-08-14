@@ -106,6 +106,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun doesNotRestoreAnAnonymousParticipantAsALiveBattleAfterProcessDeath() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("ShowdownBattleRecovery.Mode.UNRESTORABLE_GUEST"))
+        assertTrue(source.contains("abandonUnrestorableGuestBattle()"))
+        assertTrue(source.contains("battleWasParticipant = true"))
+        assertTrue(source.contains("battleProtocolIdentifiesLocalPlayer(lines)"))
+        assertTrue(source.contains("battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)"))
+    }
+
+    @Test
     fun routesDirectBattleRoomJoinsThroughPersistedLobbyCommands() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val roomSelection = source.substringAfter("selections.forEach { room ->")

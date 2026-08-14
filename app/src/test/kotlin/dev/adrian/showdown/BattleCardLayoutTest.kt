@@ -75,6 +75,15 @@ class BattleCardLayoutTest {
     }
 
     @Test
+    fun singleBattleCardsKeepTheirPartyIndicatorStrip() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
+
+        assertTrue(source.contains("session.playerPartyDetails()"))
+        assertTrue(source.contains("session.opponentPartyDetails()"))
+        assertTrue(source.contains("party?.let { drawPartyIndicators(canvas, it, ballStart, ballTop, ballSize, ballGap) }"))
+    }
+
+    @Test
     fun partyIndicatorsStayReadableOnCompactCards() {
         assertEquals(22f, BattleCardLayout.partyIndicatorSize(81f, 1f), 0.001f)
         assertEquals(32.98f, BattleCardLayout.partyIndicatorSize(194f, 1f), 0.001f)

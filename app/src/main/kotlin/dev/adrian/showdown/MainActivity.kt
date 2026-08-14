@@ -102,6 +102,8 @@ class MainActivity : Activity() {
     private var authenticated = false
     private var serverUserNamed = false
     private var activeBattleRoomId: String? = null
+    private var battleWasRegistered = false
+    private var battleWasParticipant = false
     private var completedBattleRoomId: String? = null
     private var leftBattleRoomId: String? = null
     private var pendingBattleJoinRoomId: String? = null
@@ -359,6 +361,7 @@ class MainActivity : Activity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        rememberBattleIdentity()
         outState.putBoolean("maintain_connection", shouldMaintainConnection)
         outState.putBoolean("pending_search", pendingSearch)
         outState.putString("pending_search_team", pendingSearchTeamPacked)
@@ -367,6 +370,8 @@ class MainActivity : Activity() {
         outState.putStringArrayList("reconnect_lobby_commands", ArrayList(reconnectLobbyCommands.orEmpty()))
         outState.putString("active_search_format", activeSearchFormat)
         outState.putString("active_battle_room", activeBattleRoomId)
+        outState.putBoolean("battle_registered", battleWasRegistered)
+        outState.putBoolean("battle_participant", battleWasParticipant)
         outState.putString("pending_battle_search_format", pendingBattleSearchFormat)
         outState.putString("pending_battle_search_label", pendingBattleSearchLabel)
         outState.putBoolean("pending_battle_search_random", pendingBattleSearchUsesRandomTeams == true)
@@ -1876,6 +1881,8 @@ class MainActivity : Activity() {
         showdownConnection = null
         authenticated = false
         serverUserNamed = false
+        battleWasRegistered = false
+        battleWasParticipant = false
         pendingRegistration = null
         clearPersistedLobbyState()
         session.setConnectionStatus("Battle search cancelled.")
@@ -1898,6 +1905,8 @@ class MainActivity : Activity() {
         session.setReplayMode(false)
         session.prepareForLobby()
         activeBattleRoomId = null
+        battleWasRegistered = false
+        battleWasParticipant = false
         completedBattleRoomId = null
         battleProtocolReady = false
         pendingDecisionCommand = null
@@ -1987,6 +1996,18 @@ class MainActivity : Activity() {
             ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
         activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
         activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
+        val hasSavedBattleIdentity = savedInstanceState?.containsKey("battle_participant") == true || preferences.contains("battle_participant")
+        battleWasRegistered = if (savedInstanceState?.containsKey("battle_registered") == true) {
+            savedInstanceState.getBoolean("battle_registered")
+        } else {
+            preferences.getBoolean("battle_registered", credentialsStore.load() != null || loginClient.hasSession())
+        }
+        battleWasParticipant = if (savedInstanceState?.containsKey("battle_participant") == true) {
+            savedInstanceState.getBoolean("battle_participant")
+        } else {
+            preferences.getBoolean("battle_participant", false)
+        }
+        if (activeBattleRoomId != null && !hasSavedBattleIdentity && !battleWasRegistered) battleWasParticipant = true
         pendingBattleSearchFormat = savedInstanceState?.getString("pending_battle_search_format")
             ?: preferences.getString("pending_battle_search_format", null)
         pendingBattleSearchLabel = savedInstanceState?.getString("pending_battle_search_label")
@@ -1999,6 +2020,10 @@ class MainActivity : Activity() {
         pendingBattleSearchTeamPacked = savedInstanceState?.getString("pending_battle_search_team")
             ?: preferences.getString("pending_battle_search_team", null)
         val battlePlayerSlot = savedInstanceState?.getString("battle_player_slot") ?: preferences.getString("battle_player_slot", null)
+        if (ShowdownBattleRecovery.mode(activeBattleRoomId, battleWasRegistered, battleWasParticipant) == ShowdownBattleRecovery.Mode.UNRESTORABLE_GUEST) {
+            abandonUnrestorableGuestBattle()
+            return
+        }
         if (activeBattleRoomId != null) session.restoreBattlePlayerSlot(battlePlayerSlot)
         completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
         pendingDecisionCommand = savedInstanceState?.getString("pending_decision_command")
@@ -2010,6 +2035,7 @@ class MainActivity : Activity() {
     }
 
     private fun persistLobbyState() {
+        rememberBattleIdentity()
         getSharedPreferences("showdown_live", MODE_PRIVATE).edit()
             .putBoolean("maintain_connection", shouldMaintainConnection)
             .putBoolean("pending_search", pendingSearch)
@@ -2019,6 +2045,8 @@ class MainActivity : Activity() {
             .putString("reconnect_lobby_commands", encodeLobbyCommands(reconnectLobbyCommands))
             .putString("active_search_format", activeSearchFormat)
             .putString("active_battle_room", activeBattleRoomId)
+            .putBoolean("battle_registered", battleWasRegistered)
+            .putBoolean("battle_participant", battleWasParticipant)
             .putString("pending_battle_search_format", pendingBattleSearchFormat)
             .putString("pending_battle_search_label", pendingBattleSearchLabel)
             .putBoolean("pending_battle_search_random", pendingBattleSearchUsesRandomTeams == true)
@@ -2034,6 +2062,8 @@ class MainActivity : Activity() {
 
     private fun clearBattleRoomState() {
         activeBattleRoomId = null
+        battleWasRegistered = false
+        battleWasParticipant = false
         completedBattleRoomId = null
         pendingBattleJoinRoomId = null
         pendingBattleSearchFormat = null
@@ -2052,6 +2082,30 @@ class MainActivity : Activity() {
         clearPersistedLobbyState()
         clearBattlePlayback()
         session.prepareForLobby()
+    }
+
+    private fun rememberBattleIdentity() {
+        if (activeBattleRoomId == null) return
+        battleWasRegistered = battleWasRegistered || serverUserNamed
+        battleWasParticipant = battleWasParticipant || session.isBattleParticipant()
+    }
+
+    private fun battleProtocolIdentifiesLocalPlayer(lines: List<String>): Boolean {
+        val localUsername = session.localUsername().trim()
+        if (localUsername.isBlank()) return false
+        return lines.any { line ->
+            val fields = line.split('|')
+            fields.getOrNull(1) == "player" && fields.getOrNull(3)?.trim()?.equals(localUsername, true) == true
+        }
+    }
+
+    private fun abandonUnrestorableGuestBattle() {
+        shouldMaintainConnection = false
+        reconnectHandler.removeCallbacksAndMessages(null)
+        showdownConnection?.close()
+        showdownConnection = null
+        clearBattleRoomState()
+        session.setConnectionStatus("The previous guest battle cannot be restored after the app was closed. Find another battle.")
     }
 
     private fun encodeLobbyCommands(commands: List<String>?) = commands?.joinToString("\u0000")
@@ -2375,6 +2429,10 @@ class MainActivity : Activity() {
                         }
                         if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
                         activeBattleRoomId = roomId
+                        battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)
+                        if (startsBattle) {
+                            rememberBattleIdentity()
+                        }
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
                         if (startsBattle) battleProtocolReady = true
@@ -2415,6 +2473,8 @@ class MainActivity : Activity() {
         pendingLobbyStatus = null
         reconnectLobbyCommands = null
         activeBattleRoomId = roomId
+        battleWasRegistered = serverUserNamed || credentialsStore.load() != null || loginClient.hasSession()
+        battleWasParticipant = true
         battleProtocolReady = false
         pendingDecisionCommand = null
         pendingDecisionSentConnection = null
