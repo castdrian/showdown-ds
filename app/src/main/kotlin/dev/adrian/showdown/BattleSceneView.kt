@@ -915,14 +915,33 @@ class BattleSceneView(
         paint.shader = null
         paint.style = Paint.Style.FILL
         val sheet = pokeballSheet
-        if (sheet != null && state != PartyBallState.FAINTED) {
-            val cellLeft = if (state == PartyBallState.STATUSED) POKEBALL_TILE_WIDTH_PIXELS else 0
-            source.set(cellLeft + POKEBALL_GLYPH_LEFT, POKEBALL_GLYPH_TOP, cellLeft + POKEBALL_GLYPH_LEFT + POKEBALL_GLYPH_SIZE, POKEBALL_GLYPH_TOP + POKEBALL_GLYPH_SIZE)
-            destination.set(left, top, left + size, top + size)
-            canvas.drawBitmap(sheet, source, destination, paint)
+        if (sheet != null && state != PartyBallState.FAINTED && drawPartyBallFromSheet(canvas, sheet, left, top, size, state)) {
             return
         }
         drawFallbackPartyBall(canvas, left, top, size, state)
+    }
+
+    private fun drawPartyBallFromSheet(
+        canvas: Canvas,
+        sheet: Bitmap,
+        left: Float,
+        top: Float,
+        size: Float,
+        state: PartyBallState
+    ): Boolean {
+        val cellLeft = if (state == PartyBallState.STATUSED) POKEBALL_TILE_WIDTH_PIXELS else 0
+        val cellRight = cellLeft + POKEBALL_GLYPH_LEFT + POKEBALL_GLYPH_SIZE
+        val glyphBottom = POKEBALL_GLYPH_TOP + POKEBALL_GLYPH_SIZE
+        if (cellRight > sheet.width || glyphBottom > sheet.height) return false
+        source.set(
+            cellLeft + POKEBALL_GLYPH_LEFT,
+            POKEBALL_GLYPH_TOP,
+            cellRight,
+            glyphBottom
+        )
+        destination.set(left, top, left + size, top + size)
+        canvas.drawBitmap(sheet, source, destination, paint)
+        return true
     }
 
     private fun drawFallbackPartyBall(canvas: Canvas, left: Float, top: Float, size: Float, state: PartyBallState) {

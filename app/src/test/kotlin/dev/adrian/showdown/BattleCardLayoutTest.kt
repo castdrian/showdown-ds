@@ -88,6 +88,15 @@ class BattleCardLayoutTest {
     }
 
     @Test
+    fun invalidPartyBallSheetsFallBackToNativeBalls() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
+
+        assertTrue(source.contains("drawPartyBallFromSheet(canvas, sheet, left, top, size, state)"))
+        assertTrue(source.contains("if (cellRight > sheet.width || glyphBottom > sheet.height) return false"))
+        assertTrue(source.contains("drawFallbackPartyBall(canvas, left, top, size, state)"))
+    }
+
+    @Test
     fun partyIndicatorsStayReadableOnCompactCards() {
         assertEquals(22f, BattleCardLayout.partyIndicatorSize(81f, 1f), 0.001f)
         assertEquals(32.98f, BattleCardLayout.partyIndicatorSize(194f, 1f), 0.001f)
