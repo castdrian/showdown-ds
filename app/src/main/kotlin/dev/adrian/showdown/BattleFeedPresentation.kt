@@ -9,10 +9,10 @@ data class BattleFeedFrame(
 )
 
 class BattleFeedPresentation(
-    private val charactersPerSecond: Float = 42f,
-    private val minimumMessageDurationMillis: Long = 1_200L,
-    private val holdDurationMillis: Long = 600L,
-    private val fadeDurationMillis: Long = 220L
+    private val charactersPerSecond: Float = 32f,
+    private val minimumMessageDurationMillis: Long = 1_500L,
+    private val holdDurationMillis: Long = 650L,
+    private val fadeDurationMillis: Long = 240L
 ) {
     private val pendingMessages = ArrayDeque<String>()
     private var observedEntries: List<String>? = null
@@ -20,9 +20,24 @@ class BattleFeedPresentation(
     private var currentStartedAtMillis = 0L
     private var playbackSpeed = 1f
     private var feedVisible = true
+    private var playbackPaused = false
+    private var playbackPausedAtMillis = 0L
+    private var accumulatedPausedMillis = 0L
 
     fun setPlaybackSpeed(value: Float) {
         playbackSpeed = value.coerceIn(0.25f, 4f)
+    }
+
+    fun setPlaybackPaused(value: Boolean, nowMillis: Long) {
+        if (playbackPaused == value) return
+        if (value) {
+            playbackPaused = true
+            playbackPausedAtMillis = nowMillis
+        } else {
+            accumulatedPausedMillis += (nowMillis - playbackPausedAtMillis).coerceAtLeast(0L)
+            playbackPausedAtMillis = 0L
+            playbackPaused = false
+        }
     }
 
     fun reset() {
@@ -34,6 +49,7 @@ class BattleFeedPresentation(
     }
 
     fun update(entries: List<String>, visible: Boolean, nowMillis: Long) {
+        val presentationNowMillis = presentationNowMillis(nowMillis)
         feedVisible = visible
         if (entries.isEmpty()) {
             pendingMessages.clear()
@@ -45,28 +61,29 @@ class BattleFeedPresentation(
         if (previousEntries == null) {
             pendingMessages.clear()
             currentText = entries.last()
-            currentStartedAtMillis = nowMillis
+            currentStartedAtMillis = presentationNowMillis
         } else if (previousEntries.isEmpty()) {
             pendingMessages.clear()
             currentText = entries.last()
-            currentStartedAtMillis = nowMillis
+            currentStartedAtMillis = presentationNowMillis
         } else if (isNewBattle(previousEntries, entries)) {
             pendingMessages.clear()
             currentText = entries.last()
-            currentStartedAtMillis = nowMillis
+            currentStartedAtMillis = presentationNowMillis
         } else {
             newEntries(previousEntries, entries).forEach { message ->
                 if (message.isNotBlank()) pendingMessages.addLast(message)
             }
-            advance(nowMillis)
+            if (!playbackPaused) advance(presentationNowMillis)
         }
         observedEntries = entries
     }
 
     fun frame(nowMillis: Long): BattleFeedFrame? {
-        advance(nowMillis)
+        val presentationNowMillis = presentationNowMillis(nowMillis)
+        if (!playbackPaused) advance(presentationNowMillis)
         val text = currentText ?: return null
-        val ageMillis = (nowMillis - currentStartedAtMillis).coerceAtLeast(0L)
+        val ageMillis = (presentationNowMillis - currentStartedAtMillis).coerceAtLeast(0L)
         val fadeStartMillis = messageVisibleDurationMillis(text)
         val fadeDuration = scaledFadeDurationMillis()
         val endMillis = fadeStartMillis + fadeDuration
@@ -92,8 +109,9 @@ class BattleFeedPresentation(
     }
 
     fun needsAnimation(nowMillis: Long): Boolean {
+        if (playbackPaused) return false
         val text = currentText ?: return pendingMessages.isNotEmpty()
-        val ageMillis = (nowMillis - currentStartedAtMillis).coerceAtLeast(0L)
+        val ageMillis = (presentationNowMillis(nowMillis) - currentStartedAtMillis).coerceAtLeast(0L)
         return pendingMessages.isNotEmpty() || (text.isNotBlank() && ageMillis < messageVisibleDurationMillis(text) + scaledFadeDurationMillis())
     }
 
@@ -128,6 +146,15 @@ class BattleFeedPresentation(
     private fun scaledHoldDurationMillis() = (holdDurationMillis / playbackSpeed).toLong().coerceAtLeast(1L)
 
     private fun scaledFadeDurationMillis() = (fadeDurationMillis / playbackSpeed).toLong().coerceAtLeast(1L)
+
+    private fun presentationNowMillis(nowMillis: Long): Long {
+        val pausedMillis = if (playbackPaused) {
+            (nowMillis - playbackPausedAtMillis).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        return (nowMillis - accumulatedPausedMillis - pausedMillis).coerceAtLeast(0L)
+    }
 
     private fun prefixByCodePoints(value: String, count: Int): String {
         if (count <= 0) return ""

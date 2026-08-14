@@ -505,6 +505,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        battleScene?.setPlaybackPaused(true)
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
         if (::battleAudio.isInitialized) {
@@ -529,6 +530,7 @@ class MainActivity : Activity() {
         super.onResume()
         configureWindow()
         showSecondaryDisplay()
+        battleScene?.setPlaybackPaused(false)
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()

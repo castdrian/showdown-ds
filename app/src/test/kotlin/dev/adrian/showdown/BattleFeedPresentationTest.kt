@@ -12,7 +12,7 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("Older", "Newest"), true, 1_000L)
 
         assertEquals("Newest", presentation.frame(1_100L)?.text)
-        assertNull(presentation.frame(2_500L))
+        assertNull(presentation.frame(2_800L))
     }
 
     @Test
@@ -21,8 +21,8 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("Move text"), true, 1_000L)
 
         assertEquals(1f, presentation.frame(1_500L)?.alpha)
-        assertEquals(0.23f, presentation.frame(2_369L)?.alpha ?: 0f, 0.01f)
-        assertNull(presentation.frame(2_470L))
+        assertEquals(0.23f, presentation.frame(2_685L)?.alpha ?: 0f, 0.01f)
+        assertNull(presentation.frame(2_750L))
     }
 
     @Test
@@ -78,14 +78,14 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("First", "Second"), true, 1_100L)
 
         assertEquals("First", presentation.frame(1_100L)?.text)
-        assertEquals("Second", presentation.frame(2_500L)?.text)
+        assertEquals("Second", presentation.frame(2_800L)?.text)
     }
 
     @Test
     fun fullyFadedMessageDoesNotResurfaceAfterHiddenBoundary() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("Old"), true, 1_000L)
-        assertNull(presentation.frame(2_500L))
+        assertNull(presentation.frame(2_800L))
         presentation.update(listOf("Old"), false, 2_000L)
         presentation.update(listOf("Old"), true, 3_000L)
 
@@ -101,7 +101,7 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("First", "Second", "Third"), true, 1_300L)
 
         assertEquals("First", presentation.frame(1_300L)?.text)
-        assertEquals("Second", presentation.frame(2_500L)?.text)
+        assertEquals("Second", presentation.frame(2_800L)?.text)
     }
 
     @Test
@@ -120,10 +120,10 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("First", "Second"), false, 1_100L)
 
         assertEquals("First", presentation.frame(1_300L)?.text)
-        assertNull(presentation.frame(2_500L))
-        presentation.update(listOf("First", "Second"), true, 2_600L)
+        assertNull(presentation.frame(2_800L))
+        presentation.update(listOf("First", "Second"), true, 2_900L)
 
-        assertEquals("Second", presentation.frame(2_600L)?.text)
+        assertEquals("Second", presentation.frame(2_900L)?.text)
     }
 
     @Test
@@ -152,8 +152,8 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("Old 1", "Old 2", "Old 3", "New 1", "New 2"), true, 1_100L)
 
         assertEquals("Old 3", presentation.frame(1_100L)?.text)
-        assertEquals("New 1", presentation.frame(2_500L)?.text)
-        assertEquals("New 2", presentation.frame(4_000L)?.text)
+        assertEquals("New 1", presentation.frame(2_800L)?.text)
+        assertEquals("New 2", presentation.frame(4_600L)?.text)
     }
 
     @Test
@@ -163,6 +163,43 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("Two", "Three", "Four"), true, 1_100L)
 
         assertEquals("Three", presentation.frame(1_100L)?.text)
-        assertEquals("Four", presentation.frame(2_500L)?.text)
+        assertEquals("Four", presentation.frame(2_800L)?.text)
+    }
+
+    @Test
+    fun pausesTheMessageClockWhileTheActivityIsPaused() {
+        val presentation = BattleFeedPresentation(
+            charactersPerSecond = 10f,
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 500L,
+            fadeDurationMillis = 100L
+        )
+        presentation.update(listOf("First"), true, 1_000L)
+        presentation.update(listOf("First", "Second"), true, 1_100L)
+        val beforePause = presentation.frame(1_200L)
+
+        presentation.setPlaybackPaused(true, 1_200L)
+        assertEquals(beforePause, presentation.frame(4_000L))
+
+        presentation.setPlaybackPaused(false, 4_000L)
+        assertEquals("First", presentation.frame(4_100L)?.text)
+        assertEquals("Fir", presentation.frame(4_100L)?.visibleText)
+    }
+
+    @Test
+    fun keepsEventsArrivingWhilePausedInOrderAfterResume() {
+        val presentation = BattleFeedPresentation(
+            charactersPerSecond = 10f,
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 500L,
+            fadeDurationMillis = 100L
+        )
+        presentation.update(listOf("First"), true, 1_000L)
+        presentation.setPlaybackPaused(true, 1_100L)
+        presentation.update(listOf("First", "Second", "Third"), true, 2_000L)
+        presentation.setPlaybackPaused(false, 4_000L)
+
+        assertEquals("Second", presentation.frame(5_000L)?.text)
+        assertEquals("Third", presentation.frame(6_200L)?.text)
     }
 }

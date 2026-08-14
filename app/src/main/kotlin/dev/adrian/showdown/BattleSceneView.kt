@@ -76,6 +76,11 @@ class BattleSceneView(
         invalidate()
     }
 
+    fun setPlaybackPaused(paused: Boolean) {
+        battleFeedPresentation.setPlaybackPaused(paused, SystemClock.elapsedRealtime())
+        invalidate()
+    }
+
     fun resetBattleFeed() {
         battleFeedPresentation.reset()
         battleFeedBounds.setEmpty()

@@ -19,6 +19,8 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("livePlaybackPausedForLifecycle = false"))
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(true)"))
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(false)"))
+        assertTrue(source.contains("battleScene?.setPlaybackPaused(true)"))
+        assertTrue(source.contains("battleScene?.setPlaybackPaused(false)"))
         assertTrue(source.contains("displayRefreshScheduler.cancel()"))
         assertTrue(source.contains("battleAudio.pauseBattleCues()"))
         assertTrue(source.contains("battleAudio.resumeBattleCues()"))
