@@ -19,13 +19,16 @@ object BattlePlaybackTiming {
         return chunks
     }
 
-    fun pauseAfter(lines: List<String>): Long = when {
-        lines.any { it.startsWith("|win|") || it.startsWith("|tie|") } -> END_OF_BATTLE_PAUSE_MILLIS
-        lines.any { it.startsWith("|faint|") } -> FAINT_PAUSE_MILLIS
-        lines.any { it.startsWith("|move|") } -> MOVE_PAUSE_MILLIS
-        lines.any { it.startsWith("|switch|") || it.startsWith("|drag|") || it.startsWith("|replace|") } -> SWITCH_PAUSE_MILLIS
-        lines.any { it.startsWith("|turn|") } -> TURN_PAUSE_MILLIS
-        else -> 0L
+    fun pauseAfter(lines: List<String>): Long {
+        val actionPause = when {
+            lines.any { it.startsWith("|win|") || it.startsWith("|tie|") } -> END_OF_BATTLE_PAUSE_MILLIS
+            lines.any { it.startsWith("|faint|") } -> FAINT_PAUSE_MILLIS
+            lines.any { it.startsWith("|move|") } -> MOVE_PAUSE_MILLIS
+            lines.any { it.startsWith("|switch|") || it.startsWith("|drag|") || it.startsWith("|replace|") } -> SWITCH_PAUSE_MILLIS
+            lines.any { it.startsWith("|turn|") } -> TURN_PAUSE_MILLIS
+            else -> 0L
+        }
+        return maxOf(actionPause, readableMessageCount(lines) * MESSAGE_PAUSE_MILLIS)
     }
 
     fun isDecisionChunk(lines: List<String>): Boolean = lines.any { it.startsWith("|request|") }
@@ -34,6 +37,12 @@ object BattlePlaybackTiming {
         if (pauseMillis <= 0L) return 0L
         return (pauseMillis / speed.coerceIn(0.25f, 4f)).roundToLong().coerceAtLeast(1L)
     }
+
+    private fun readableMessageCount(lines: List<String>): Long = lines.count { line ->
+        val action = line.split('|').getOrNull(1).orEmpty()
+        !line.contains("|[silent]") &&
+            (action.startsWith("-") || action in READABLE_ACTIONS)
+    }.toLong()
 
     private fun isActionBoundary(line: String) =
         line.startsWith("|move|") ||
@@ -50,4 +59,20 @@ object BattlePlaybackTiming {
     private const val SWITCH_PAUSE_MILLIS = 2_800L
     private const val TURN_PAUSE_MILLIS = 2_000L
     private const val END_OF_BATTLE_PAUSE_MILLIS = 4_000L
+    private const val MESSAGE_PAUSE_MILLIS = 1_800L
+    private val READABLE_ACTIONS = setOf(
+        "cant",
+        "custom",
+        "draw",
+        "drag",
+        "faint",
+        "hint",
+        "message",
+        "move",
+        "prematureend",
+        "replace",
+        "switch",
+        "tie",
+        "win"
+    )
 }

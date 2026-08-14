@@ -41,7 +41,21 @@ class BattlePlaybackTimingTest {
     @Test
     fun givesFaintsLongerReadingTimeThanOrdinaryMoves() {
         assertEquals(2_600L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee")))
-        assertEquals(3_200L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee", "|faint|p2a: Eevee")))
+        assertEquals(3_600L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee", "|faint|p2a: Eevee")))
+    }
+
+    @Test
+    fun givesMultiLineMoveResultsEnoughTimeToReadEachLine() {
+        assertEquals(
+            5_400L,
+            BattlePlaybackTiming.pauseAfter(
+                listOf(
+                    "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados",
+                    "|-damage|p2a: Gyarados|120/200",
+                    "|-supereffective|p2a: Gyarados"
+                )
+            )
+        )
     }
 
     @Test
@@ -52,7 +66,7 @@ class BattlePlaybackTimingTest {
 
     @Test
     fun doesNotDelayUnrelatedProtocolMetadata() {
-        assertEquals(0L, BattlePlaybackTiming.pauseAfter(listOf("|-weather|SunnyDay", "|-fieldstart|move: Electric Terrain")))
+        assertEquals(0L, BattlePlaybackTiming.pauseAfter(listOf("|gen|9", "|tier|[Gen 9] OU")))
     }
 
     @Test
