@@ -334,16 +334,19 @@ class ShowdownMoveEffectsView(
                                     if (!this.scene.__showdownNativeHealthEvents) this.scene.__showdownNativeHealthEvents = [];
                                     if (args[0] === '-damage') {
                                         this.scene.__showdownNativeHealthEvents.push(directMoveDamage ? 'damage' : 'other');
-                                        this.scene.__showdownNativeDamageWindow = false;
+                                        if (!directMoveDamage) this.scene.__showdownNativeDamageWindow = false;
                                     }
                                     if (args[0] === '-heal') this.scene.__showdownNativeHealthEvents.push('heal');
-                                    if (args[0] === '-sethp' && directMoveDamage) {
-                                        for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
-                                            var setHpTarget = this.getPokemon(args[setHpIndex]);
-                                            var nextHp = setHpValue(setHpTarget, args[setHpIndex + 1]);
-                                            if (setHpTarget && nextHp !== null) this.scene.__showdownNativeHealthEvents.push(nextHp < setHpTarget.hp ? 'damage' : nextHp > setHpTarget.hp ? 'heal' : 'other');
+                                    if (args[0] === '-sethp') {
+                                        if (directMoveDamage) {
+                                            for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
+                                                var setHpTarget = this.getPokemon(args[setHpIndex]);
+                                                var nextHp = setHpValue(setHpTarget, args[setHpIndex + 1]);
+                                                if (setHpTarget && nextHp !== null) this.scene.__showdownNativeHealthEvents.push(nextHp < setHpTarget.hp ? 'damage' : nextHp > setHpTarget.hp ? 'heal' : 'other');
+                                            }
+                                        } else {
+                                            this.scene.__showdownNativeDamageWindow = false;
                                         }
-                                        this.scene.__showdownNativeDamageWindow = false;
                                     }
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
