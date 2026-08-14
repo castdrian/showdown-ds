@@ -10,6 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "New teams now start with a competitive format instead of Random Battle when no format has been chosen.",
+                "Team sets now edit EVs and IVs in readable HP, Atk, Def, SpA, SpD, and Spe controls while preserving Showdown's packed and text formats.",
                 "The upper battle messages now behave like a Pokémon battle message box: one current event at a time, at most two readable lines, with a gentle fade and enough dwell time to read it.",
                 "Damage, effectiveness, and stat audio now starts on Showdown's matching visual event and is cancelled when animation playback pauses or resets.",
                 "Compact multi-battle HP cards now keep a readable Poké Ball strip on smaller Thor display surfaces, even before party details arrive from the server.",

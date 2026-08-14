@@ -3989,7 +3989,7 @@ class MainActivity : Activity() {
         val format = EditText(this).apply {
             hint = "Format ID, for example gen9ou"
             setSingleLine(true)
-            setText(existing?.format ?: initialFormat ?: session.matchFormat.id)
+            setText(existing?.format ?: ShowdownTeamEditorDefaults.format(initialFormat, session.matchFormat, session.availableMatchFormats()))
         }
         val formatPicker = Button(this).apply {
             text = "Choose format from Showdown"
@@ -4374,6 +4374,11 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private data class TeamStatEditor(
+        val container: LinearLayout,
+        val fields: List<EditText>
+    )
+
     private data class TeamSetEditor(
         val index: Int,
         val slotHeader: Button,
@@ -4384,9 +4389,9 @@ class MainActivity : Activity() {
         val ability: EditText,
         val moves: EditText,
         val nature: EditText,
-        val evs: EditText,
+        val evs: TeamStatEditor,
         val gender: EditText,
-        val ivs: EditText,
+        val ivs: TeamStatEditor,
         val shiny: CheckBox,
         val level: EditText,
         val happiness: EditText,
@@ -4413,9 +4418,9 @@ class MainActivity : Activity() {
         val ability = teamAutocompleteField("Ability", set.ability, moveDex.abilityNames())
         val moves = teamMovesField(set.moves.joinToString(","), moveDex.moveNames())
         val nature = teamAutocompleteField("Nature", set.nature, moveDex.natureNames())
-        val evs = teamField("EVs HP,Atk,Def,SpA,SpD,Spe", set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty())
+        val evs = teamStatEditor("EVs · max 252 each / 510 total", set.evs, 0)
         val gender = teamField("Gender M or F", set.gender)
-        val ivs = teamField("IVs HP,Atk,Def,SpA,SpD,Spe", set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty())
+        val ivs = teamStatEditor("IVs · max 31", set.ivs, 31)
         val shiny = CheckBox(this).apply { text = "Shiny"; isChecked = set.shiny }
         val level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty())
         val happiness = teamField("Happiness", set.happiness.takeUnless { it == 255 }?.toString().orEmpty())
@@ -4484,8 +4489,8 @@ class MainActivity : Activity() {
             editor.ability,
             editor.moves,
             editor.nature,
-            editor.evs,
-            editor.ivs,
+            editor.evs.container,
+            editor.ivs.container,
             editor.advancedToggle,
             editor.advancedFields
         ).forEach(details::addView)
@@ -4502,7 +4507,22 @@ class MainActivity : Activity() {
         slotHeader.setOnClickListener {
             details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
-        listOf(nickname, species, item, ability, moves, nature, evs, ivs, gender, level, happiness, pokeBall, hiddenPowerType, dynamaxLevel, teraType)
+        val summaryFields = listOf<EditText>(
+            nickname,
+            species,
+            item,
+            ability,
+            moves,
+            nature,
+            gender,
+            level,
+            happiness,
+            pokeBall,
+            hiddenPowerType,
+            dynamaxLevel,
+            teraType
+        ) + evs.fields + ivs.fields
+        summaryFields
             .forEach { field ->
                 field.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -4548,6 +4568,69 @@ class MainActivity : Activity() {
         setText(value)
     }
 
+    private fun teamStatEditor(title: String, values: List<Int>, default: Int): TeamStatEditor {
+        val density = resources.displayMetrics.density
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, (8f * density).toInt(), 0, (4f * density).toInt())
+        }
+        container.addView(TextView(this).apply {
+            text = title
+            setTextSize(15f)
+            setTextColor(0xffa9e8e2.toInt())
+            setPadding((2f * density).toInt(), 0, 0, (6f * density).toInt())
+        }, LinearLayout.LayoutParams(-1, -2))
+        val fields = mutableListOf<EditText>()
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        listOf(0 until 3, 3 until 6).forEach { rowRange ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            rowRange.forEach { index ->
+                val cell = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    setPadding((8f * density).toInt(), (6f * density).toInt(), (8f * density).toInt(), (8f * density).toInt())
+                    background = GradientDrawable().apply {
+                        setColor(Color.rgb(9, 31, 44))
+                        setStroke((1f * density).toInt(), Color.rgb(54, 130, 143))
+                        cornerRadius = 12f * density
+                    }
+                }
+                cell.addView(TextView(this).apply {
+                    text = TEAM_STAT_NAMES[index]
+                    setTextSize(14f)
+                    setTextColor(0xffd6f3f0.toInt())
+                    gravity = android.view.Gravity.CENTER
+                }, LinearLayout.LayoutParams(-1, -2))
+                val field = EditText(this).apply {
+                    inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                    setSingleLine(true)
+                    gravity = android.view.Gravity.CENTER
+                    setTextSize(17f)
+                    hint = default.toString()
+                    setText(values.getOrNull(index)?.takeUnless { it == default }?.toString().orEmpty())
+                    setPadding((4f * density).toInt(), 0, (4f * density).toInt(), 0)
+                    minHeight = (44f * density).toInt()
+                    background = GradientDrawable().apply {
+                        setColor(Color.rgb(15, 50, 67))
+                        setStroke((1f * density).toInt(), Color.rgb(45, 110, 123))
+                        cornerRadius = 10f * density
+                    }
+                }
+                fields += field
+                cell.addView(field, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (4f * density).toInt() })
+                row.addView(cell, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    if (index % 3 != 0) leftMargin = (6f * density).toInt()
+                    if (index % 3 != 2) rightMargin = (6f * density).toInt()
+                })
+            }
+            grid.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                if (rowRange.first != 0) topMargin = (8f * density).toInt()
+            })
+        }
+        container.addView(grid, LinearLayout.LayoutParams(-1, -2))
+        return TeamStatEditor(container, fields)
+    }
+
     private fun teamAutocompleteField(hint: String, value: String, suggestions: List<String>): AutoCompleteTextView = AutoCompleteTextView(this).apply {
         this.hint = hint
         setSingleLine(true)
@@ -4588,9 +4671,9 @@ class MainActivity : Activity() {
         editor.ability.setText(set.ability)
         editor.moves.setText(set.moves.joinToString(","))
         editor.nature.setText(set.nature)
-        editor.evs.setText(set.evs.joinToString(",").takeUnless { set.evs == List(6) { 0 } }.orEmpty())
+        populateTeamStatEditor(editor.evs.fields, set.evs, 0)
         editor.gender.setText(set.gender)
-        editor.ivs.setText(set.ivs.joinToString(",").takeUnless { set.ivs == List(6) { 31 } }.orEmpty())
+        populateTeamStatEditor(editor.ivs.fields, set.ivs, 31)
         editor.shiny.isChecked = set.shiny
         editor.level.setText(set.level.takeUnless { it == 100 }?.toString().orEmpty())
         editor.happiness.setText(set.happiness.takeUnless { it == 255 }?.toString().orEmpty())
@@ -4612,9 +4695,9 @@ class MainActivity : Activity() {
         ability = editor.ability.text.toString(),
         moves = editor.moves.text.toString().split(',').map(String::trim).filter(String::isNotBlank),
         nature = editor.nature.text.toString(),
-        evs = editorValues(editor.evs.text.toString(), 0),
+        evs = editorValues(editor.evs.fields, 0),
         gender = editor.gender.text.toString(),
-        ivs = editorValues(editor.ivs.text.toString(), 31),
+        ivs = editorValues(editor.ivs.fields, 31),
         shiny = editor.shiny.isChecked,
         level = editor.level.text.toString().toIntOrNull() ?: 100,
         happiness = editor.happiness.text.toString().toIntOrNull() ?: 255,
@@ -4625,11 +4708,14 @@ class MainActivity : Activity() {
         teraType = editor.teraType.text.toString()
     )
 
-    private fun editorValues(value: String, default: Int): List<Int> {
-        if (value.isBlank()) return List(6) { default }
-        return value.split(',').map { it.trim().toIntOrNull() ?: default }.take(6).let { values ->
-            values + List(6 - values.size) { default }
+    private fun populateTeamStatEditor(fields: List<EditText>, values: List<Int>, default: Int) {
+        fields.forEachIndexed { index, field ->
+            field.setText(values.getOrNull(index)?.takeUnless { it == default }?.toString().orEmpty())
         }
+    }
+
+    private fun editorValues(fields: List<EditText>, default: Int): List<Int> = (0 until 6).map { index ->
+        fields.getOrNull(index)?.text?.toString()?.trim()?.toIntOrNull() ?: default
     }
 
     private fun showChatComposer() {
@@ -5132,5 +5218,6 @@ class MainActivity : Activity() {
         const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
         const val SESSION_RESTORE_TIMEOUT_MILLIS = 5_000L
         const val DEFAULT_BATTLE_SPEED = 0.75f
+        private val TEAM_STAT_NAMES = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
     }
 }
