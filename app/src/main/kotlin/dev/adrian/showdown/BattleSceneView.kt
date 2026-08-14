@@ -774,11 +774,22 @@ class BattleSceneView(
         combatants: List<BattleSession.ActiveCombatant>
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
-        val anchorIndex = if (player) combatants.lastIndex else 0
+        val nowNanos = System.nanoTime()
+        val visibleIndices = combatants.mapIndexedNotNull { index, combatant ->
+            val alpha = statusCardAlpha(combatant.name, combatant.condition, nowNanos) *
+                BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, nowNanos)
+            index.takeIf { alpha > 0f }
+        }
+        val preferredIndices = visibleIndices.filterNot { combatants[it].condition.contains("FNT", true) }
+        val anchorIndex = BattleCardLayout.partyIndicatorAnchorIndex(
+            combatants.size,
+            preferredIndices.ifEmpty { visibleIndices },
+            player
+        )
         val party = if (player) session.playerPartyDetails() else session.opponentPartyDetails()
         combatants.forEachIndexed { index, combatant ->
-            val alpha = statusCardAlpha(combatant.name, combatant.condition, System.nanoTime()) *
-                BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, System.nanoTime())
+            val alpha = statusCardAlpha(combatant.name, combatant.condition, nowNanos) *
+                BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, nowNanos)
             if (alpha > 0f) {
                 val cardParty = party.takeIf { index == anchorIndex }
                 drawCompactStatusCard(

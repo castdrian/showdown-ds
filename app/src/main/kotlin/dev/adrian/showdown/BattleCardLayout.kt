@@ -45,6 +45,11 @@ object BattleCardLayout {
     fun partyIndicatorTop(cardBottom: Float, indicatorSize: Float, scale: Float) =
         cardBottom - indicatorSize - PARTY_INDICATOR_BOTTOM_INSET_PIXELS * scale
 
+    fun partyIndicatorAnchorIndex(activeCount: Int, visibleIndices: List<Int>, player: Boolean): Int? {
+        val validIndices = visibleIndices.filter { it in 0 until activeCount }
+        return if (player) validIndices.lastOrNull() else validIndices.firstOrNull()
+    }
+
     fun compactBoundsFor(width: Float, height: Float, player: Boolean, index: Int, activeCount: Int): BattleCardBounds {
         val layout = compactFor(activeCount)
         val cardLeft = if (player) width * 0.015f else width * 0.685f

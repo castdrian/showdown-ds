@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Multi-Pokémon battles now keep the party Poké Ball strip on the remaining visible HP card while a partner faints.",
                 "Account settings can now create a registered Showdown account and finish sign-in without leaving the client.",
                 "Registered Showdown sessions now survive app process restarts and restore the active battle identity before rejoining.",
                 "Battle sound effects now pause and resume with their active move timing when the app leaves and re-enters the foreground.",
