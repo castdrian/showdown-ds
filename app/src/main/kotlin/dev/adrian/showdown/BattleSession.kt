@@ -1473,6 +1473,7 @@ class BattleSession {
         selectedGimmick = null
         availableGimmicks.clear()
         availableTeraType = ""
+        panel = Panel.MOVES
         battleFinished = false
         battlePhase = BattlePhase.BATTLE
         openingEntrances = 0

@@ -704,6 +704,17 @@ class BattleSessionTest {
     }
 
     @Test
+    fun newBattleStartsOnTheFightPanelAfterLeavingTheLobbyMenu() {
+        val session = BattleSession()
+        session.prepareForLobby()
+        session.selectPanel(BattleSession.Panel.MENU)
+
+        session.applyProtocolLine("|init|battle")
+
+        assertEquals(BattleSession.Panel.MOVES, session.panel)
+    }
+
+    @Test
     fun doublesKeepIndependentActiveCombatantState() {
         val session = BattleSession()
 
