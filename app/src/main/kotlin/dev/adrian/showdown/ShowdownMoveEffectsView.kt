@@ -193,10 +193,15 @@ class ShowdownMoveEffectsView(
                         }
                         function installAudioHooks() {
                             if (BattleScene.prototype.__showdownNativeAudioHooked) return;
+                            function moveCanDamage(move) {
+                                if (!move || move.category === 'Status') return false;
+                                var basePower = Number(move.basePower);
+                                return (isFinite(basePower) && basePower > 0) || typeof move.damage === 'function' || typeof move.damage === 'number';
+                            }
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
                                 nativeMoveStarted();
-                                this.scene.__showdownNativeDamageArmed = !!move && (move.category === 'Physical' || move.category === 'Special');
+                                this.scene.__showdownNativeDamageArmed = moveCanDamage(move);
                                 this.scene.__showdownNativeDamageWindow = this.scene.__showdownNativeDamageArmed;
                                 this.scene.__showdownNativeDamagePlayed = false;
                                 this.scene.__showdownNativeHealthEvents = [];

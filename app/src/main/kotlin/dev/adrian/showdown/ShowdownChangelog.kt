@@ -75,6 +75,7 @@ object ShowdownChangelog {
                 "Triple-battle target choices now flow onto a second readable row so every legal target remains touchable.",
                 "Damage audio now resets at every official move event, including moves marked [still], so skipped animations cannot leak timing into the next move.",
                 "Direct-hit audio now follows the current damaging move only, leaving misses, residual effects, recoil, hazards, and healing silent.",
+                "Damage audio now ignores non-damaging Physical and Special moves unless Showdown reports real damage power or a custom damage handler.",
                 "Battle animations now stay at the selected playback speed instead of Showdown's automatic late-battle acceleration making later turns unexpectedly faster.",
                 "Random doubles, triples, and Battle Factory matchmaking now start without incorrectly asking for a saved team.",
                 "The Thor secondary display now reapplies touch and controller focus when its presentation is recreated or regains window focus.",
