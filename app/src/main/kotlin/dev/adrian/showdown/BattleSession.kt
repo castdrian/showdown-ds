@@ -629,6 +629,7 @@ class BattleSession {
         val source = showdownBattleLogEntries.takeIf { it.isNotEmpty() } ?: battleLog
         return source.asSequence()
             .filter(String::isNotBlank)
+            .filterNot(::isBattleFeedTurnMarker)
             .toList()
             .takeLast(limit.coerceAtLeast(0))
     }
@@ -4303,6 +4304,8 @@ class BattleSession {
     }
 
     private fun condition(hp: String) = hp.substringAfter(' ', "READY").uppercase()
+
+    private fun isBattleFeedTurnMarker(value: String) = value.trim().matches(Regex("^Turn\\s+\\d+\\.?$", RegexOption.IGNORE_CASE))
 
     private fun isPlayerSide(side: String): Boolean {
         val playerGroup = battleSideGroup(playerSlot)

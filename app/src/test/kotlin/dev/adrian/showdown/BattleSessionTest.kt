@@ -13,6 +13,15 @@ class BattleSessionTest {
     }
 
     @Test
+    fun upperBattleFeedOmitsTurnMarkersWithoutChangingTheFullTranscript() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog("Battle started!<br />Turn 1<br />Go! Pikachu!")
+
+        assertEquals(listOf("Battle started!", "Go! Pikachu!"), session.battleFeedEntries())
+        assertEquals(listOf("Battle started!", "Turn 1", "Go! Pikachu!"), session.showdownBattleLog())
+    }
+
+    @Test
     fun randomDoublesAndTriplesFormatsDoNotRequireSavedTeams() {
         assertTrue(BattleSession.MatchFormat("gen9randomdoublesbattle", "Random Doubles").usesRandomTeams)
         assertTrue(BattleSession.MatchFormat("gen9randomtriplesbattle", "Random Triples").usesRandomTeams)
