@@ -44,6 +44,27 @@ object ShowdownTeamLibraryQuery {
         return "[Gen ${match.groupValues[1]}] $suffixLabel"
     }
 
+    fun resolveFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): BattleSession.MatchFormat? {
+        val normalized = format.trim()
+        return knownFormats.firstOrNull { it.id.trim().equals(normalized, true) }
+    }
+
+    fun matchFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): BattleSession.MatchFormat {
+        val normalized = format.trim()
+        val advertised = resolveFormat(normalized, knownFormats)
+        return advertised?.copy(
+            id = advertised.id.trim(),
+            label = displayFormat(normalized, knownFormats)
+        ) ?: BattleSession.MatchFormat(normalized, displayFormat(normalized, knownFormats))
+    }
+
+    fun displayFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): String {
+        val advertised = resolveFormat(format, knownFormats)
+        return advertised?.label
+            ?.takeUnless { it.isBlank() || it.equals(advertised.id.trim(), true) }
+            ?: displayFormat(format)
+    }
+
     fun filter(teams: List<ShowdownTeam>, filter: ShowdownTeamLibraryFilter): List<ShowdownTeam> {
         val terms = filter.query
             .split(',')

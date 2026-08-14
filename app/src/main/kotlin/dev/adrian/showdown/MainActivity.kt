@@ -2607,7 +2607,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Enter a username to challenge.")
             return
         }
-        val teams = teamLibrary.teams().filter { it.format.equals(format.id, true) }
+        val teams = teamLibrary.teams().filter { it.format.trim().equals(format.id.trim(), true) }
         if (format.usesRandomTeams) {
             startChallenge(target, format, null)
         } else if (teams.isEmpty()) {
@@ -2627,10 +2627,19 @@ class MainActivity : Activity() {
         )
     }
 
+    private fun readableFormatLabel(format: String): String = ShowdownTeamLibraryQuery.displayFormat(
+        format,
+        session.availableMatchFormats()
+    )
+
+    private fun challengeMatchFormat(format: String): BattleSession.MatchFormat {
+        return ShowdownTeamLibraryQuery.matchFormat(format, session.availableMatchFormats())
+    }
+
     private fun showIncomingChallenge(username: String, format: String) {
         ShowdownDialogBuilder(this)
             .setTitle("Battle challenge")
-            .setMessage("$username challenged you to $format.")
+            .setMessage("$username challenged you to ${readableFormatLabel(format)}.")
             .setNegativeButton("Reject") { _, _ -> sendLobbyCommand(ShowdownLobbyState.rejectChallengeCommand(username), "Challenge rejected.") }
             .setNeutralButton("Ignore", null)
             .setPositiveButton("Accept") { _, _ -> beginAcceptChallenge(username, format) }
@@ -2638,7 +2647,7 @@ class MainActivity : Activity() {
     }
 
     private fun showIncomingChallengeIfNeeded(username: String, format: String) {
-        val challengeKey = "${normalizeShowdownId(username)}|${format.lowercase()}"
+        val challengeKey = "${normalizeShowdownId(username)}|${format.trim().lowercase()}"
         if (displayedIncomingChallenge == challengeKey) return
         displayedIncomingChallenge = challengeKey
         showIncomingChallenge(username, format)
@@ -2647,7 +2656,7 @@ class MainActivity : Activity() {
     private fun showOutgoingChallenge(challenge: ShowdownLobbyState.OutgoingChallenge) {
         ShowdownDialogBuilder(this)
             .setTitle("Challenge pending")
-            .setMessage("Waiting for ${challenge.username} to accept your ${challenge.format} challenge.")
+            .setMessage("Waiting for ${challenge.username} to accept your ${readableFormatLabel(challenge.format)} challenge.")
             .setNegativeButton("Close", null)
             .setPositiveButton("Cancel challenge") { _, _ ->
                 sendLobbyCommand(ShowdownLobbyState.cancelChallengeCommand(challenge.username), "Challenge cancelled.")
@@ -2656,12 +2665,12 @@ class MainActivity : Activity() {
     }
 
     private fun beginAcceptChallenge(username: String, format: String) {
-        val matchFormat = BattleSession.MatchFormat(format, format)
-        val teams = teamLibrary.teams().filter { it.format.equals(format, true) }
+        val matchFormat = challengeMatchFormat(format)
+        val teams = teamLibrary.teams().filter { it.format.trim().equals(matchFormat.id.trim(), true) }
         if (matchFormat.usesRandomTeams) {
             sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, null), "Challenge accepted.")
         } else if (teams.isEmpty()) {
-            session.setConnectionStatus("Save a $format team before accepting.")
+            session.setConnectionStatus("Save a ${matchFormat.label} team before accepting.")
             showTeamLibrary()
         } else if (teams.size == 1) {
             sendLobbyCommands(ShowdownLobbyState.acceptChallengeCommands(username, teams.single().packed), "Challenge accepted.")
@@ -3517,13 +3526,7 @@ class MainActivity : Activity() {
         }
         var activeFolder: String? = null
         var activeFormat: String? = null
-        val knownFormatLabels = session.availableMatchFormats().associate { format ->
-            format.id.trim().lowercase() to format.label
-        }
-        fun formatLabel(format: String): String {
-            val normalized = format.trim()
-            return knownFormatLabels[normalized.lowercase()] ?: ShowdownTeamLibraryQuery.displayFormat(normalized)
-        }
+        fun formatLabel(format: String): String = readableFormatLabel(format)
         var teamDialog: ShowdownDialog? = null
         fun styleTeamButton(button: Button, compact: Boolean = false, selected: Boolean = false) = button.apply {
             isAllCaps = false
