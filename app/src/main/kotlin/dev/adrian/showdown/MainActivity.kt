@@ -679,6 +679,7 @@ class MainActivity : Activity() {
 
     private fun applyBattleProtocolToEffects(lines: List<String>) {
         val effectsAlreadyCreated = showdownMoveEffects != null
+        if (lines.any { it.startsWith("|init|battle") }) battleScene?.resetBattleFeed()
         if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
         if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return
         showdownMoveEffects?.applyProtocol(lines)

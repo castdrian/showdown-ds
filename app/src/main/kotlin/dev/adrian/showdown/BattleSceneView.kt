@@ -76,6 +76,12 @@ class BattleSceneView(
         invalidate()
     }
 
+    fun resetBattleFeed() {
+        battleFeedPresentation.reset()
+        battleFeedBounds.setEmpty()
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val width = width.toFloat()

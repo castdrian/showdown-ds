@@ -81,9 +81,10 @@ class BattleFeedPresentationTest {
     }
 
     @Test
-    fun hiddenFeedDoesNotResurfaceOldHistory() {
+    fun fullyFadedMessageDoesNotResurfaceAfterHiddenBoundary() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("Old"), true, 1_000L)
+        assertNull(presentation.frame(2_500L))
         presentation.update(listOf("Old"), false, 2_000L)
         presentation.update(listOf("Old"), true, 3_000L)
 
@@ -91,14 +92,56 @@ class BattleFeedPresentationTest {
     }
 
     @Test
-    fun hiddenBoundaryDiscardsPendingMessagesAndStartsWithTheNextEvent() {
+    fun hiddenBoundaryKeepsPendingMessagesInReadableOrder() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), true, 1_100L)
         presentation.update(listOf("First", "Second"), false, 1_200L)
         presentation.update(listOf("First", "Second", "Third"), true, 1_300L)
 
-        assertEquals("Third", presentation.frame(1_300L)?.text)
+        assertEquals("First", presentation.frame(1_300L)?.text)
+        assertEquals("Second", presentation.frame(2_500L)?.text)
+    }
+
+    @Test
+    fun separatorLetsTheCurrentMessageFinishItsReadableCycle() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("First"), true, 1_000L)
+        presentation.update(listOf("First"), false, 1_100L)
+
+        assertEquals("First", presentation.frame(1_100L)?.text)
+    }
+
+    @Test
+    fun separatorWaitsBeforeStartingTheQueuedMessage() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("First"), true, 1_000L)
+        presentation.update(listOf("First", "Second"), false, 1_100L)
+
+        assertEquals("First", presentation.frame(1_300L)?.text)
+        assertNull(presentation.frame(2_500L))
+        presentation.update(listOf("First", "Second"), true, 2_600L)
+
+        assertEquals("Second", presentation.frame(2_600L)?.text)
+    }
+
+    @Test
+    fun aNewBattleReplacesThePreviousMessageImmediately() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("Old battle"), true, 1_000L)
+        presentation.update(listOf("New battle"), true, 1_100L)
+
+        assertEquals("New battle", presentation.frame(1_100L)?.text)
+    }
+
+    @Test
+    fun explicitResetAllowsAnIdenticalOpeningMessageToAppearAgain() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("Battle started."), true, 1_000L)
+        presentation.reset()
+        presentation.update(listOf("Battle started."), true, 2_000L)
+
+        assertEquals("Battle started.", presentation.frame(2_000L)?.text)
     }
 
     @Test

@@ -19,13 +19,23 @@ class BattleFeedPresentation(
     private var currentText: String? = null
     private var currentStartedAtMillis = 0L
     private var playbackSpeed = 1f
+    private var feedVisible = true
 
     fun setPlaybackSpeed(value: Float) {
         playbackSpeed = value.coerceIn(0.25f, 4f)
     }
 
+    fun reset() {
+        pendingMessages.clear()
+        observedEntries = null
+        currentText = null
+        currentStartedAtMillis = 0L
+        feedVisible = true
+    }
+
     fun update(entries: List<String>, visible: Boolean, nowMillis: Long) {
-        if (!visible || entries.isEmpty()) {
+        feedVisible = visible
+        if (entries.isEmpty()) {
             pendingMessages.clear()
             currentText = null
             observedEntries = entries
@@ -36,6 +46,10 @@ class BattleFeedPresentation(
             currentText = entries.last()
             currentStartedAtMillis = nowMillis
         } else if (previousEntries.isEmpty()) {
+            pendingMessages.clear()
+            currentText = entries.last()
+            currentStartedAtMillis = nowMillis
+        } else if (isNewBattle(previousEntries, entries)) {
             pendingMessages.clear()
             currentText = entries.last()
             currentStartedAtMillis = nowMillis
@@ -56,9 +70,11 @@ class BattleFeedPresentation(
         val fadeStartMillis = messageVisibleDurationMillis(text)
         val fadeDuration = scaledFadeDurationMillis()
         val endMillis = fadeStartMillis + fadeDuration
-        if (ageMillis >= endMillis && pendingMessages.isEmpty()) {
-            currentText = null
-            return null
+        if (ageMillis >= endMillis) {
+            if (!feedVisible || pendingMessages.isEmpty()) {
+                currentText = null
+                return null
+            }
         }
         val revealedCharacters = ((ageMillis * charactersPerSecond * playbackSpeed) / 1_000f)
             .toInt()
@@ -82,6 +98,7 @@ class BattleFeedPresentation(
     }
 
     private fun advance(nowMillis: Long) {
+        if (!feedVisible) return
         val current = currentText
         if (current == null) {
             if (pendingMessages.isNotEmpty()) {
@@ -127,6 +144,11 @@ class BattleFeedPresentation(
         }
         if (current == previous) return emptyList()
         return current.lastOrNull()?.let(::listOf).orEmpty()
+    }
+
+    private fun isNewBattle(previous: List<String>, current: List<String>): Boolean {
+        if (current.size < previous.size) return true
+        return current.size == 1 && current.firstOrNull() != previous.firstOrNull()
     }
 
     private companion object {
