@@ -1364,27 +1364,47 @@ class CommandDeckView(
             }
             canvas.save()
             canvas.clipRect(bounds)
-            val spriteBounds = RectF(bounds.left + 16f * scale, bounds.top + 18f * scale, bounds.left + 150f * scale, bounds.top + 152f * scale)
+            val content = SwitchTeamLayout.contentBounds(
+                bounds.toSwitchTeamBounds(),
+                scale,
+                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW
+            )
+            val spriteBounds = RectF(
+                content.sprite.left,
+                content.sprite.top,
+                content.sprite.right,
+                content.sprite.bottom
+            )
             teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val displayPokemon = BattleSession.displayPokemonName(pokemon, details.species)
-            val nameLeft = bounds.left + 164f * scale
-            val markerInset = if (session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW) 106f * scale else 20f * scale
-            val nameWidth = bounds.right - markerInset - nameLeft
-            paint.textSize = fittedTextSize(
-                displayPokemon,
-                nameWidth,
-                readableTextSize(if (displayPokemon.length > 11) 34f else 40f, scale, 30f, 16f),
-                readableTextSize(24f, scale, 22f, 14f)
-            )
+            val headerHeight = content.header.bottom - content.header.top
+            val headerWidth = content.header.right - content.header.left
+            val nameSlotHeight = headerHeight * 0.58f
+            val namePreferredSize = readableTextSize(if (displayPokemon.length > 11) 34f else 40f, scale, 24f, 14f)
+                .coerceAtMost(nameSlotHeight * 0.9f)
+            val nameMinimumSize = readableTextSize(16f, scale, 12f, 10f).coerceAtMost(namePreferredSize)
+            paint.textSize = namePreferredSize
+            val name = fitTextToWidth(displayPokemon, headerWidth)
+            paint.textSize = fittedTextSize(name, headerWidth, namePreferredSize, nameMinimumSize)
             paint.color = PAPER
-            canvas.drawText(displayPokemon, nameLeft, bounds.top + 58f * scale, paint)
-            paint.textSize = readableTextSize(24f, scale, 22f, 14f)
+            canvas.drawText(name, content.header.left, centeredTextBaseline(content.header.top + nameSlotHeight / 2f), paint)
+            val level = "Lv. ${details.level}${details.gender.ifBlank { "" }}"
+            val levelArea = RectF(
+                content.header.left,
+                content.header.top + nameSlotHeight,
+                content.header.right,
+                content.header.bottom
+            )
+            val levelPreferredSize = readableTextSize(24f, scale, 18f, 12f)
+                .coerceAtMost(levelArea.height() * 0.82f)
+            val levelMinimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(levelPreferredSize)
+            paint.textSize = fittedTextSize(level, levelArea.width(), levelPreferredSize, levelMinimumSize)
             paint.color = MUTED
-            canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", nameLeft, bounds.top + 104f * scale, paint)
-            drawTeamHp(canvas, RectF(nameLeft, bounds.top + 120f * scale, bounds.right - 20f * scale, bounds.top + 168f * scale), details.hp, scale)
+            canvas.drawText(level, levelArea.left, centeredTextBaseline(levelArea.centerY()), paint)
+            drawTeamHp(canvas, RectF(content.hp.left, content.hp.top, content.hp.right, content.hp.bottom), details.hp, scale)
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            val bottomRow = RectF(bounds.left + 18f * scale, bounds.top + 178f * scale, bounds.right - 18f * scale, bounds.top + 230f * scale)
+            val bottomRow = RectF(content.bottomRow.left, content.bottomRow.top, content.bottomRow.right, content.bottomRow.bottom)
             val visibleTypes = details.types.take(2)
             val rowBounds = SwitchTeamLayout.rowBounds(bounds.toSwitchTeamBounds(), scale, visibleTypes.size)
             visibleTypes.forEachIndexed { index, type ->
@@ -1393,11 +1413,13 @@ class CommandDeckView(
                 paint.color = movePalette(type).base
                 canvas.drawRoundRect(typeBounds, 13f * scale, 13f * scale, paint)
                 paint.textAlign = Paint.Align.CENTER
+                val typePreferredSize = readableTextSize(20f, scale, 15f, 11f).coerceAtMost(typeBounds.height() * 0.72f)
+                val typeMinimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(typePreferredSize)
                 paint.textSize = fittedTextSize(
                     type,
                     typeBounds.width() - 18f * scale,
-                    readableTextSize(20f, scale, 18f, 12f),
-                    readableTextSize(14f, scale, 12f, 12f)
+                    typePreferredSize,
+                    typeMinimumSize
                 )
                 drawOutlinedText(canvas, type, typeBounds.centerX(), centeredTextBaseline(typeBounds.centerY()), Color.rgb(7, 18, 26), PAPER, 1.5f * scale)
                 paint.textAlign = Paint.Align.LEFT
@@ -1413,11 +1435,13 @@ class CommandDeckView(
             paint.color = if (details.condition.contains("FNT", true)) Color.rgb(95, 31, 66) else Color.rgb(12, 69, 82)
             canvas.drawRoundRect(stateBounds, 14f * scale, 14f * scale, paint)
             paint.textAlign = Paint.Align.CENTER
+            val statePreferredSize = readableTextSize(17f, scale, 13f, 11f).coerceAtMost(stateBounds.height() * 0.72f)
+            val stateMinimumSize = readableTextSize(11f, scale, 10f, 10f).coerceAtMost(statePreferredSize)
             paint.textSize = fittedTextSize(
                 state,
                 stateBounds.width() - 18f * scale,
-                readableTextSize(17f, scale, 15f, 14f),
-                readableTextSize(13f, scale, 12f, 12f)
+                statePreferredSize,
+                stateMinimumSize
             )
             paint.color = if (details.condition.contains("FNT", true)) MAGENTA else Color.rgb(174, 244, 217)
             canvas.drawText(state, stateBounds.centerX(), centeredTextBaseline(stateBounds.centerY()), paint)
@@ -1451,11 +1475,13 @@ class CommandDeckView(
         canvas.drawRoundRect(RectF(bounds.left + 3f * scale, bounds.top + 3f * scale, bounds.left + maxOf(7f * scale, (bounds.width() - 6f * scale) * ratio), bounds.bottom - 3f * scale), 9f * scale, 9f * scale, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        val preferredSize = readableTextSize(24f, scale, 18f, 12f).coerceAtMost(bounds.height() * 0.72f)
+        val minimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(preferredSize)
         paint.textSize = fittedTextSize(
             "HP ${hp.substringBefore(' ')}",
             bounds.width() - 18f * scale,
-            readableTextSize(24f, scale, 22f, 14f),
-            readableTextSize(14f, scale, 12f, 12f)
+            preferredSize,
+            minimumSize
         )
         drawOutlinedText(canvas, "HP ${hp.substringBefore(' ')}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.8f * scale)
         paint.textAlign = Paint.Align.LEFT

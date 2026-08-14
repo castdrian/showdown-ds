@@ -118,6 +118,7 @@ object ShowdownChangelog {
                 "Anonymous guest battles now return to a truthful lobby after an app process restart instead of showing a stale battle transcript.",
                 "Fainted Pokémon now keep their zero-HP card and party Poké Balls visible while their field sprite leaves play.",
                 "Switch cards now reserve separate type and status regions at the Thor lower display density, keeping long type names inside their own card.",
+                "Switch cards now derive their sprite, header, HP, type, and status regions from each card's available height, preventing six-Pokémon switch screens from overlapping.",
                 "Native battle messages now follow the local player side, so move wording matches the upper HP cards in every matchup."
             )
         ),

@@ -31,4 +31,54 @@ class SwitchTeamLayoutTest {
         assertTrue(row.typeRight < row.statusLeft)
         assertTrue(row.statusLeft < row.right)
     }
+
+    @Test
+    fun switchTeamContentStaysInsideEachCardAtThorLowerDensity() {
+        val card = SwitchTeamLayout.bounds(1240f, 1080f, 1f, 5, 6)
+        val content = SwitchTeamLayout.contentBounds(card, 1f, false)
+
+        assertTrue(content.sprite.left >= card.left)
+        assertTrue(content.sprite.right <= card.right)
+        assertTrue(content.sprite.top >= card.top)
+        assertTrue(content.sprite.bottom <= content.bottomRow.top)
+        assertTrue(content.header.left >= card.left)
+        assertTrue(content.header.right <= card.right)
+        assertTrue(content.header.bottom <= content.hp.top)
+        assertTrue(content.hp.left >= card.left)
+        assertTrue(content.hp.right <= card.right)
+        assertTrue(content.hp.bottom <= content.bottomRow.top)
+        assertTrue(content.bottomRow.bottom <= card.bottom)
+    }
+
+    @Test
+    fun switchTeamContentRemainsSeparatedWhenThePresentationHasLessHeight() {
+        val card = SwitchTeamLayout.bounds(1240f, 900f, 1f, 5, 6)
+        val content = SwitchTeamLayout.contentBounds(card, 1f, false)
+
+        assertTrue(content.sprite.bottom <= content.bottomRow.top)
+        assertTrue(content.header.bottom <= content.hp.top)
+        assertTrue(content.hp.bottom <= content.bottomRow.top)
+        assertTrue(content.bottomRow.bottom <= card.bottom)
+    }
+
+    @Test
+    fun teamPreviewHeaderLeavesRoomForItsOrderMarker() {
+        val card = SwitchTeamLayout.bounds(1240f, 1080f, 1f, 0, 6)
+        val content = SwitchTeamLayout.contentBounds(card, 1f, true)
+        val markerLeft = card.right - 90f
+
+        assertTrue(content.header.right < markerLeft)
+        assertTrue(content.header.bottom <= content.hp.top)
+    }
+
+    @Test
+    fun switchTeamContentNeverReclaimsSpaceBelowTheCardOnAShortSurface() {
+        val card = SwitchTeamLayout.bounds(1240f, 600f, 1f, 5, 6)
+        val content = SwitchTeamLayout.contentBounds(card, 1f, false)
+
+        assertTrue(content.header.bottom <= content.hp.top)
+        assertTrue(content.hp.bottom <= content.bottomRow.top)
+        assertTrue(content.sprite.bottom <= content.bottomRow.top)
+        assertTrue(content.bottomRow.bottom <= card.bottom)
+    }
 }
