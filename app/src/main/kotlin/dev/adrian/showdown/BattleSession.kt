@@ -3795,10 +3795,11 @@ class BattleSession {
 
     private fun moveTeamFocus(horizontal: Int, vertical: Int) {
         if (team.isEmpty()) return
-        val rowCount = (team.size + 2) / 3
-        val row = (focusedTeam / 3 + vertical).coerceIn(0, rowCount - 1)
-        val column = (focusedTeam % 3 + horizontal).coerceIn(0, 2)
-        focusedTeam = (row * 3 + column).coerceIn(0, team.lastIndex)
+        val columns = SwitchTeamLayout.COLUMNS
+        val rowCount = (team.size + columns - 1) / columns
+        val row = (focusedTeam / columns + vertical).coerceIn(0, rowCount - 1)
+        val column = (focusedTeam % columns + horizontal).coerceIn(0, columns - 1)
+        focusedTeam = (row * columns + column).coerceIn(0, team.lastIndex)
         status = "Ready: ${teamDisplayName(focusedTeam)}"
         notifyListeners()
     }

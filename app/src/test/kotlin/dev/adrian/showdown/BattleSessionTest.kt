@@ -711,7 +711,10 @@ class BattleSessionTest {
 
         val desiredOrder = listOf(2, 0, 1, 3, 4, 5)
         desiredOrder.forEach { index ->
-            session.moveFocus(index % 3 - session.focusedTeam % 3, index / 3 - session.focusedTeam / 3)
+            session.moveFocus(
+                index % SwitchTeamLayout.COLUMNS - session.focusedTeam % SwitchTeamLayout.COLUMNS,
+                index / SwitchTeamLayout.COLUMNS - session.focusedTeam / SwitchTeamLayout.COLUMNS
+            )
             session.confirmSelection()
         }
 
@@ -968,7 +971,7 @@ class BattleSessionTest {
 
         session.selectPanel(BattleSession.Panel.TEAM)
         session.moveFocus(1, 1)
-        assertEquals(4, session.focusedTeam)
+        assertEquals(3, session.focusedTeam)
         session.selectPanel(BattleSession.Panel.ACTIVITY)
         session.moveFocus(0, 1)
         assertEquals(1, session.focusedMessage)
@@ -976,6 +979,21 @@ class BattleSessionTest {
         session.moveFocus(0, 1)
 
         assertEquals(3, session.focusedMenuItem)
+    }
+
+    @Test
+    fun controllerNavigationMatchesTheTwoColumnSwitchGrid() {
+        val session = BattleSession()
+
+        session.selectPanel(BattleSession.Panel.TEAM)
+        session.moveFocus(0, 1)
+        assertEquals(2, session.focusedTeam)
+        session.moveFocus(1, 0)
+        assertEquals(3, session.focusedTeam)
+        session.moveFocus(0, 1)
+        assertEquals(5, session.focusedTeam)
+        session.moveFocus(-1, 0)
+        assertEquals(4, session.focusedTeam)
     }
 
     @Test
@@ -2221,7 +2239,7 @@ class BattleSessionTest {
 
         session.moveFocus(1, 0)
         session.confirmSelection()
-        session.moveFocus(1, 0)
+        session.moveFocus(0, 1)
         session.confirmSelection()
 
         assertEquals(listOf("/choose switch 2, switch 3|33"), decisions)
@@ -2278,7 +2296,7 @@ class BattleSessionTest {
             "|request|{\"rqid\":40,\"forceSwitch\":[true,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false}]}}"
         )
 
-        session.moveFocus(2, 0)
+        session.moveFocus(0, 1)
         session.confirmSelection()
 
         assertEquals(listOf("/choose switch 3, pass|40"), decisions)
