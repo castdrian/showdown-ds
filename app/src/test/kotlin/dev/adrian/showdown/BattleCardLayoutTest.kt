@@ -2,7 +2,6 @@ package dev.adrian.showdown
 
 import java.io.File
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,14 +66,12 @@ class BattleCardLayoutTest {
     }
 
     @Test
-    fun multiBattleCardsKeepOnePartyIndicatorStripPerSide() {
+    fun multiBattleCardsKeepTheirPartyIndicatorStrip() {
         val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
 
-        assertTrue(source.contains("val visibleIndices = combatants.mapIndexedNotNull"))
-        assertTrue(source.contains("val preferredIndices = visibleIndices.filterNot"))
-        assertTrue(source.contains("preferredIndices.ifEmpty { visibleIndices }"))
-        assertTrue(source.contains("BattleCardLayout.partyIndicatorAnchorIndex("))
-        assertTrue(source.contains("val cardParty = party.takeIf { index == anchorIndex }"))
+        assertTrue(source.contains("val party = (if (player) session.playerPartyDetails() else session.opponentPartyDetails())"))
+        assertTrue(source.contains("layout,\n                    party\n                )"))
+        assertTrue(!source.contains("partyIndicatorAnchorIndex"))
         assertTrue(source.contains("party?.let { drawPartyIndicators"))
     }
 
@@ -103,14 +100,4 @@ class BattleCardLayoutTest {
         assertTrue(BattleCardLayout.partyIndicatorTop(81f, 22f, 1f) > 55f)
     }
 
-    @Test
-    fun partyIndicatorsMoveToTheRemainingVisibleCardDuringFaints() {
-        assertEquals(1, BattleCardLayout.partyIndicatorAnchorIndex(2, listOf(0, 1), true))
-        assertEquals(0, BattleCardLayout.partyIndicatorAnchorIndex(2, listOf(0, 1), false))
-        assertEquals(1, BattleCardLayout.partyIndicatorAnchorIndex(2, listOf(1), true))
-        assertEquals(1, BattleCardLayout.partyIndicatorAnchorIndex(2, listOf(1), false))
-        assertEquals(2, BattleCardLayout.partyIndicatorAnchorIndex(3, listOf(2), true))
-        assertEquals(0, BattleCardLayout.partyIndicatorAnchorIndex(3, listOf(0), false))
-        assertNull(BattleCardLayout.partyIndicatorAnchorIndex(2, emptyList(), false))
-    }
 }
