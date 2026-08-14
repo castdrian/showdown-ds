@@ -586,8 +586,11 @@ class MainActivity : Activity() {
             battleAudio::resetBattleCues,
             protocolHistoryProvider = { session.protocolHistory() },
             audioMoveResetter = battleAudio::beginBattleMove,
-            battleLogListener = { value ->
-                runOnUiThread { session.appendShowdownBattleLog(value) }
+            battleLogListener = { value, generation ->
+                runOnUiThread { session.appendShowdownBattleLog(value, generation) }
+            },
+            battleLogSyncListener = { generation ->
+                runOnUiThread { session.markNativeBattleLogSynchronized(generation) }
             }
         )
         showdownMoveEffects = effects
@@ -684,7 +687,7 @@ class MainActivity : Activity() {
         if (lines.any { it.startsWith("|init|battle") }) battleScene?.resetBattleFeed()
         if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
         if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return
-        showdownMoveEffects?.applyProtocol(lines)
+        showdownMoveEffects?.applyProtocol(lines, session.battleLogGeneration())
     }
 
     private fun flushBattlePlayback() {

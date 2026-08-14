@@ -105,6 +105,16 @@ class BattleFeedPresentationTest {
     }
 
     @Test
+    fun transcriptReconciliationDoesNotDiscardQueuedMessages() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("First", "Second"), true, 1_000L)
+        presentation.update(listOf("First", "Native detail", "Second"), true, 1_100L)
+
+        assertEquals("Second", presentation.frame(1_100L)?.text)
+        assertEquals("Native detail", presentation.frame(2_800L)?.text)
+    }
+
+    @Test
     fun separatorLetsTheCurrentMessageFinishItsReadableCycle() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("First"), true, 1_000L)

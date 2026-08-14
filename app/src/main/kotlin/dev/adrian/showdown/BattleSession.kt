@@ -265,6 +265,10 @@ class BattleSession {
     private var protocolEventCollector: MutableList<String>? = null
     private val protocolHistory = mutableListOf<String>()
     private val showdownBattleLogEntries = mutableListOf<String>()
+    private var battleLogGeneration = 0L
+    private var nativeBattleLogGeneration = -1L
+    private var nativeBattleLogPending = false
+    private var hasBattleProtocolTranscript = false
     private var moveTypeResolver: ((String) -> String?)? = null
     private var moveInfoResolver: ((String) -> MoveInfo?)? = null
     private var pokemonTypeResolver: ((String) -> List<String>?)? = null
@@ -633,23 +637,41 @@ class BattleSession {
 
     fun battleLog() = battleLog.toList()
 
+    fun battleLogGeneration() = battleLogGeneration
+
+    fun markNativeBattleLogSynchronized(generation: Long) {
+        if (generation != battleLogGeneration) return
+        nativeBattleLogGeneration = generation
+        nativeBattleLogPending = false
+        notifyListeners()
+    }
+
     fun battleFeedEntries(limit: Int = SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT): List<String> {
-        val source = showdownBattleLogEntries.takeIf { it.isNotEmpty() } ?: battleLog
-        return source.asSequence()
-            .filter(String::isNotBlank)
-            .filterNot(::isBattleFeedTurnMarker)
-            .toList()
-            .takeLast(limit.coerceAtLeast(0))
+        val protocolEntries = battleLog.filter(::isBattleFeedEntry)
+        val nativeEntries = if (nativeBattleLogGeneration == battleLogGeneration) {
+            showdownBattleLogEntries.filter(::isBattleFeedEntry)
+        } else {
+            emptyList()
+        }
+        val source = when {
+            !hasBattleProtocolTranscript && nativeEntries.isNotEmpty() -> nativeEntries
+            nativeEntries.isEmpty() -> protocolEntries
+            else -> mergeBattleFeedEntries(protocolEntries, nativeEntries)
+        }
+        return source.takeLast(limit.coerceAtLeast(0))
     }
 
     fun showdownBattleLog() = showdownBattleLogEntries.toList()
 
     fun resetShowdownBattleLog() {
         showdownBattleLogEntries.clear()
+        nativeBattleLogGeneration = -1L
+        nativeBattleLogPending = false
         notifyListeners()
     }
 
-    fun appendShowdownBattleLog(value: String) {
+    fun appendShowdownBattleLog(value: String, generation: Long = battleLogGeneration) {
+        if (generation != battleLogGeneration) return
         val entries = value
             .replace(SHOWDOWN_LOG_BREAK_TAG, "\n")
             .split('\n')
@@ -659,6 +681,7 @@ class BattleSession {
         if (entries.isEmpty()) return
         showdownBattleLogEntries += entries
         while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
+        if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
         entries.forEach(::appendActivity)
         latestBattleEvent = entries.last()
         latestBattleEventAtNanos = System.nanoTime()
@@ -901,6 +924,7 @@ class BattleSession {
         activityMessages.clear()
         activityMessages += battleLog
         activityMessages += chatMessages
+        hasBattleProtocolTranscript = false
         liveBattleActive = false
         battleFinished = false
         battlePhase = BattlePhase.LOBBY
@@ -1235,7 +1259,6 @@ class BattleSession {
         val events = mutableListOf<String>()
         protocolEventCollector = events
         try {
-            protocolListeners.toList().forEach { it.onProtocol(packet) }
             packet.forEach { line ->
                 val fields = line.split('|')
                 if (fields.size < 2) return@forEach
@@ -1409,6 +1432,7 @@ class BattleSession {
         } finally {
             protocolEventCollector = null
         }
+        protocolListeners.toList().forEach { it.onProtocol(packet) }
         if (events.isNotEmpty()) {
             if (battleEventListeners.isEmpty()) {
                 latestBattleEvent = events.last()
@@ -1458,8 +1482,12 @@ class BattleSession {
 
     private fun applyInit(fields: List<String>) {
         if (fields.getOrNull(2) != "battle") return
+        hasBattleProtocolTranscript = true
         battleLog.clear()
         showdownBattleLogEntries.clear()
+        battleLogGeneration += 1L
+        nativeBattleLogGeneration = -1L
+        nativeBattleLogPending = true
         battleLog += "Battle started."
         markupEntries.clear()
         chatMessages.clear()
@@ -3683,6 +3711,8 @@ class BattleSession {
         battleFeedVisible = true
         battleLog += entry
         if (battleLog.size > 32) battleLog.removeAt(0)
+        battleLogGeneration += 1L
+        nativeBattleLogPending = true
         appendActivity(entry)
         protocolEventCollector?.add(entry) ?: run {
             latestBattleEvent = entry
@@ -4344,6 +4374,26 @@ class BattleSession {
     private fun condition(hp: String) = hp.substringAfter(' ', "READY").uppercase()
 
     private fun isBattleFeedTurnMarker(value: String) = value.trim().matches(Regex("^Turn\\s+\\d+\\.?$", RegexOption.IGNORE_CASE))
+
+    private fun isBattleFeedEntry(value: String) = value.isNotBlank() && !isBattleFeedTurnMarker(value)
+
+    private fun mergeBattleFeedEntries(protocolEntries: List<String>, nativeEntries: List<String>): List<String> {
+        val merged = mutableListOf<String>()
+        var nativeIndex = 0
+        protocolEntries.forEach { protocolEntry ->
+            val relativeNativeMatch = nativeEntries.subList(nativeIndex, nativeEntries.size).indexOf(protocolEntry)
+            val nativeMatch = if (relativeNativeMatch >= 0) nativeIndex + relativeNativeMatch else -1
+            if (nativeMatch >= 0) {
+                while (nativeIndex < nativeMatch) merged += nativeEntries[nativeIndex++]
+                merged += if (protocolEntry == "Battle started.") nativeEntries[nativeMatch] else protocolEntry
+                nativeIndex = nativeMatch + 1
+            } else if (protocolEntry != "Battle started." || nativeEntries.isEmpty()) {
+                merged += protocolEntry
+            }
+        }
+        while (nativeIndex < nativeEntries.size) merged += nativeEntries[nativeIndex++]
+        return merged
+    }
 
     private fun isPlayerSide(side: String): Boolean {
         val playerGroup = battleSideGroup(playerSlot)

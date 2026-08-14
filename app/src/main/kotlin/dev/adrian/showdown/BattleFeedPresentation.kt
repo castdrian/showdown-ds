@@ -92,6 +92,11 @@ class BattleFeedPresentation(
             pendingMessages.clear()
             currentText = entries.last()
             currentStartedAtMillis = presentationNowMillis
+        } else if (isContinuation(previousEntries, entries)) {
+            newEntries(previousEntries, entries).forEach { message ->
+                enqueue(message)
+            }
+            if (!playbackPaused) advance(presentationNowMillis)
         } else if (isSnapshotReplacement(previousEntries, entries)) {
             pendingMessages.clear()
             currentText = entries.last()
@@ -197,6 +202,18 @@ class BattleFeedPresentation(
     }
 
     private fun newEntries(previous: List<String>, current: List<String>): List<String> {
+        if (isContinuation(previous, current)) {
+            val additions = mutableListOf<String>()
+            var previousIndex = 0
+            current.forEach { entry ->
+                if (previousIndex < previous.size && previous[previousIndex] == entry) {
+                    previousIndex += 1
+                } else {
+                    additions += entry
+                }
+            }
+            return additions
+        }
         if (current.size >= previous.size && current.take(previous.size) == previous) {
             return current.drop(previous.size)
         }
@@ -209,12 +226,22 @@ class BattleFeedPresentation(
 
     private fun isSnapshotReplacement(previous: List<String>, current: List<String>): Boolean {
         if (previous == current) return false
+        if (isContinuation(previous, current)) return false
         if (current.size < previous.size) return true
         if (current.size == 1 && current.firstOrNull() != previous.firstOrNull()) return true
         if (previous.isEmpty() || current.isEmpty()) return false
         return (minOf(previous.size, current.size) downTo 1).none { size ->
             previous.takeLast(size) == current.take(size)
         }
+    }
+
+    private fun isContinuation(previous: List<String>, current: List<String>): Boolean {
+        if (previous.isEmpty() || current.size < previous.size) return false
+        var previousIndex = 0
+        current.forEach { entry ->
+            if (previousIndex < previous.size && previous[previousIndex] == entry) previousIndex += 1
+        }
+        return previousIndex == previous.size
     }
 
     private companion object {

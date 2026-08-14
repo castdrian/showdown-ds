@@ -74,6 +74,87 @@ class BattleSessionTest {
     }
 
     @Test
+    fun fallsBackToProtocolBattleEventsWhileNativeTranscriptIsBehind() {
+        val session = BattleSession()
+        session.applyProtocolLine("|init|battle")
+        session.appendShowdownBattleLog("Go! Pikachu!")
+        session.applyProtocolLine("|move|p1a: Pikachu|Thunderbolt|p2a: Eevee")
+
+        assertEquals("Pikachu used Thunderbolt!", session.battleFeedEntries().last())
+
+        session.appendShowdownBattleLog("Pikachu used Thunderbolt!")
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        assertEquals(
+            listOf("Go! Pikachu!", "Pikachu used Thunderbolt!"),
+            session.battleFeedEntries()
+        )
+    }
+
+    @Test
+    fun ignoresNativeEntriesAndSynchronizationFromAnOlderBattleGeneration() {
+        val session = BattleSession()
+        session.applyProtocolLine("|init|battle")
+        val oldGeneration = session.battleLogGeneration()
+        session.applyProtocolLine("|move|p1a: Pikachu|Thunderbolt|p2a: Eevee")
+        session.applyProtocolLine("|init|battle")
+
+        session.appendShowdownBattleLog("Old battle move", oldGeneration)
+        session.markNativeBattleLogSynchronized(oldGeneration)
+
+        assertFalse(session.battleFeedEntries().contains("Old battle move"))
+        assertEquals(listOf("Battle started."), session.battleFeedEntries())
+    }
+
+    @Test
+    fun protocolListenersObserveTheGenerationAfterThePacketIsApplied() {
+        val session = BattleSession()
+        var observedGeneration = -1L
+        session.addProtocolListener { observedGeneration = session.battleLogGeneration() }
+
+        session.applyProtocolLine("|init|battle")
+        session.applyProtocolLine("|move|p1a: Pikachu|Thunderbolt|p2a: Eevee")
+
+        assertEquals(session.battleLogGeneration(), observedGeneration)
+    }
+
+    @Test
+    fun nativeBattleStartMessageRemainsVisibleWhenItMatchesTheProtocolPlaceholder() {
+        val session = BattleSession()
+        session.applyProtocolLine("|init|battle")
+        session.appendShowdownBattleLog("Battle started.<br />Go! Pikachu!")
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        assertEquals(listOf("Battle started.", "Go! Pikachu!"), session.battleFeedEntries())
+    }
+
+    @Test
+    fun keepsProtocolEventsVisibleUntilTheMatchingNativeGenerationIsSynchronized() {
+        val session = BattleSession()
+        session.applyProtocolLine("|init|battle")
+        session.appendShowdownBattleLog("Go! Pikachu!")
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee",
+                "|-supereffective|p2a: Eevee"
+            )
+        )
+        session.appendShowdownBattleLog("Pikachu used Thunderbolt!")
+
+        assertTrue(session.battleFeedEntries().contains("Pikachu used Thunderbolt!"))
+        assertTrue(session.battleFeedEntries().contains("It's super effective!"))
+        assertTrue(session.battleFeedEntries().contains("Go! Pikachu!"))
+
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        assertEquals(
+            listOf("Go! Pikachu!", "Pikachu used Thunderbolt!", "It's super effective!"),
+            session.battleFeedEntries()
+        )
+    }
+
+    @Test
     fun randomDoublesAndTriplesFormatsDoNotRequireSavedTeams() {
         assertTrue(BattleSession.MatchFormat("gen9randomdoublesbattle", "Random Doubles").usesRandomTeams)
         assertTrue(BattleSession.MatchFormat("gen9randomtriplesbattle", "Random Triples").usesRandomTeams)
