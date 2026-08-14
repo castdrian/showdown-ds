@@ -196,7 +196,9 @@ class ShowdownMoveEffectsView(
                             function moveCanDamage(move) {
                                 if (!move || move.category === 'Status') return false;
                                 var basePower = Number(move.basePower);
-                                return (isFinite(basePower) && basePower > 0) || typeof move.damage === 'function' || typeof move.damage === 'number';
+                                var hasFixedDamage = move.damage !== undefined && move.damage !== null && move.damage !== 0 && move.damage !== false;
+                                var hasDamageCallback = typeof move.damageCallback === 'function';
+                                return (isFinite(basePower) && basePower > 0) || hasFixedDamage || hasDamageCallback;
                             }
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
