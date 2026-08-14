@@ -30,6 +30,16 @@ class BattleSessionTest {
     }
 
     @Test
+    fun liveBattleFeedWindowStaysSmallWhileActivityKeepsTheFullTranscript() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog((1..40).joinToString("<br />") { "Event $it" })
+
+        assertEquals(40, session.showdownBattleLog().size)
+        assertEquals((9..40).map { "Event $it" }, session.battleFeedEntries())
+        assertEquals((9..40).map { "Event $it" }, session.activityMessages().takeLast(32))
+    }
+
+    @Test
     fun upperBattleFeedSeparatesShowdownBlockMessagesIntoIndividualEvents() {
         val session = BattleSession()
         session.appendShowdownBattleLog("<section><strong>Iron Hands used Thunder Punch!</strong></section><article>It was super effective.</article>")

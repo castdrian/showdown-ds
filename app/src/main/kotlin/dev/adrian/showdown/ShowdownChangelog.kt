@@ -16,6 +16,7 @@ object ShowdownChangelog {
                 "The upper battle messages now behave like a Pokémon battle message box: one compact event at a time, with a steady speed-aware text reveal, readable dwell time, and a gentle fade between events.",
                 "Tap the upper battle message to finish revealing it, then tap again to advance to the next queued event.",
                 "Battle history snapshots no longer replay as a burst when the live Showdown feed takes over; only new events enter the readable message queue.",
+                "Replayed protocol history now stays out of the live message queue, preventing reconnects and resumed battles from rebuilding an old text backlog.",
                 "Battle messages now appear one readable event at a time instead of building a wall of text, and the feed freezes cleanly when the app leaves the foreground.",
                 "Effectiveness battle audio now waits for the generic damage sample to finish, keeping the hit and result cues audibly sequential.",
                 "Battle message separators now let the current event finish before the next queued event appears.",

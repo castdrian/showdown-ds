@@ -161,6 +161,7 @@ class ShowdownMoveEffectsView(
                     (function () {
                         var battle = null;
                         var animationSpeed = 1;
+                        var captureNativeBattleLog = true;
                         var chromeObserver = null;
                         function nativeCue(value) {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.cue(value);
@@ -191,7 +192,7 @@ class ShowdownMoveEffectsView(
                             scene.__showdownNativeCueTimers.push(timer);
                         }
                         function nativeBattleLog(value) {
-                            if (!window.ShowdownNativeBattleLog || !value) return;
+                            if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
                             window.ShowdownNativeBattleLog.entry(String(value));
                         }
                         function installBattleLogHooks() {
@@ -384,6 +385,7 @@ class ShowdownMoveEffectsView(
                         window.ShowdownNativeEffects = {
                             seed: function (lines) {
                                 createBattle();
+                                captureNativeBattleLog = false;
                                 battle.scene.animationOff();
                                 add(lines);
                                 battle.play();
@@ -391,6 +393,7 @@ class ShowdownMoveEffectsView(
                             },
                             receive: function (lines) {
                                 if (!battle || lines.some(function (line) { return line.indexOf('|init|battle') === 0; })) createBattle();
+                                captureNativeBattleLog = true;
                                 add(lines);
                                 if (battle.paused) battle.play();
                             },
