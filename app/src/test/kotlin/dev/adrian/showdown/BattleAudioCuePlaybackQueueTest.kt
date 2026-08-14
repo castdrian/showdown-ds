@@ -5,12 +5,12 @@ import org.junit.Test
 
 class BattleAudioCuePlaybackQueueTest {
     @Test
-    fun effectivenessFollowsTheImpactWithoutWaitingForTheFullSample() {
+    fun effectivenessStartsAfterTheImpactSampleFinishes() {
         val queue = BattleAudioCuePlaybackQueue()
 
         assertEquals(0L, queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L).delayMillis)
         assertEquals(
-            180L,
+            724L,
             queue.enqueue(BattleAudioCue.SUPER_EFFECTIVE, 1_000L).delayMillis
         )
     }
@@ -22,7 +22,7 @@ class BattleAudioCuePlaybackQueueTest {
         queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L)
 
         assertEquals(
-            80L,
+            624L,
             queue.enqueue(BattleAudioCue.SUPER_EFFECTIVE, 1_100L).delayMillis
         )
     }

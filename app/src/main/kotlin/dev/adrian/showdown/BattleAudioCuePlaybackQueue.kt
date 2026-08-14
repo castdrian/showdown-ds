@@ -22,7 +22,7 @@ class BattleAudioCuePlaybackQueue {
             BattleAudioCue.SUPER_EFFECTIVE,
             BattleAudioCue.NOT_VERY_EFFECTIVE -> maxOf(
                 requestedAtMillis,
-                lastImpactAtMillis + IMPACT_RESULT_DELAY_MILLIS
+                lastImpactAtMillis + impactResultDelayMillis
             )
             BattleAudioCue.STAT_BOOST,
             BattleAudioCue.STAT_DROP -> requestedAtMillis
@@ -40,6 +40,6 @@ class BattleAudioCuePlaybackQueue {
 
     private companion object {
         const val CUE_GAP_MILLIS = 24L
-        const val IMPACT_RESULT_DELAY_MILLIS = 180L
+        val impactResultDelayMillis = BattleAudioCue.GENERIC_DAMAGE.playbackDurationMillis + CUE_GAP_MILLIS
     }
 }
