@@ -38,6 +38,23 @@ class BattleAudioCueSequencerTest {
     }
 
     @Test
+    fun effectivenessCuesPlayOnlyOncePerMove() {
+        val emitted = mutableListOf<BattleAudioCue>()
+        val sequencer = BattleAudioCueSequencer(emitted::add)
+
+        sequencer.beginMove()
+        sequencer.receive(BattleAudioCue.SUPER_EFFECTIVE)
+        sequencer.receive(BattleAudioCue.SUPER_EFFECTIVE)
+        sequencer.receive(BattleAudioCue.GENERIC_DAMAGE)
+        sequencer.receive(BattleAudioCue.SUPER_EFFECTIVE)
+
+        assertEquals(
+            listOf(BattleAudioCue.GENERIC_DAMAGE, BattleAudioCue.SUPER_EFFECTIVE),
+            emitted
+        )
+    }
+
+    @Test
     fun pendingEffectivenessDoesNotLeakIntoTheNextMove() {
         val emitted = mutableListOf<BattleAudioCue>()
         val sequencer = BattleAudioCueSequencer(emitted::add)

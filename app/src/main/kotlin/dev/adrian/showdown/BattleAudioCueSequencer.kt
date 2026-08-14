@@ -1,16 +1,16 @@
 package dev.adrian.showdown
 
-import java.util.ArrayDeque
-
 class BattleAudioCueSequencer(
     private val listener: (BattleAudioCue) -> Unit
 ) {
-    private val pendingEffectiveness = ArrayDeque<BattleAudioCue>()
+    private var pendingEffectiveness: BattleAudioCue? = null
+    private var effectivenessPlayed = false
     private var damagePlayed = false
 
     @Synchronized
     fun reset() {
-        pendingEffectiveness.clear()
+        pendingEffectiveness = null
+        effectivenessPlayed = false
         damagePlayed = false
     }
 
@@ -26,11 +26,21 @@ class BattleAudioCueSequencer(
                 if (damagePlayed) return
                 damagePlayed = true
                 listener(cue)
-                while (pendingEffectiveness.isNotEmpty()) listener(pendingEffectiveness.removeFirst())
+                pendingEffectiveness?.let {
+                    listener(it)
+                    pendingEffectiveness = null
+                    effectivenessPlayed = true
+                }
             }
             BattleAudioCue.SUPER_EFFECTIVE,
             BattleAudioCue.NOT_VERY_EFFECTIVE -> {
-                if (damagePlayed) listener(cue) else pendingEffectiveness.addLast(cue)
+                if (effectivenessPlayed) return
+                if (damagePlayed) {
+                    listener(cue)
+                    effectivenessPlayed = true
+                } else if (pendingEffectiveness == null) {
+                    pendingEffectiveness = cue
+                }
             }
             else -> listener(cue)
         }
