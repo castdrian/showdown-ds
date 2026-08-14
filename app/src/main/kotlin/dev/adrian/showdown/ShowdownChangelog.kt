@@ -116,7 +116,8 @@ object ShowdownChangelog {
                 "The upper battle feed now combines the live protocol transcript with Showdown's native log as animations catch up, so move and effect messages cannot disappear or interrupt the readable queue.",
                 "Native Showdown battle wording now replaces protocol fallbacks in place, preventing duplicate readable lines while the battle feed catches up.",
                 "Anonymous guest battles now return to a truthful lobby after an app process restart instead of showing a stale battle transcript.",
-                "Fainted Pokémon now keep their zero-HP card and party Poké Balls visible while their field sprite leaves play."
+                "Fainted Pokémon now keep their zero-HP card and party Poké Balls visible while their field sprite leaves play.",
+                "Switch cards now keep their readable text, HP bars, type badges, and selection status separated on the Thor lower display."
             )
         ),
         ShowdownChangelogEntry(

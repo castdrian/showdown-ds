@@ -1362,30 +1362,32 @@ class CommandDeckView(
                 canvas.drawText(if (previewPosition >= 0) "${previewPosition + 1}" else "—", marker.centerX(), marker.centerY() + 8f * scale, paint)
                 paint.textAlign = Paint.Align.LEFT
             }
-            val spriteBounds = RectF(bounds.left + 16f * scale, bounds.top + 22f * scale, bounds.left + 150f * scale, bounds.top + 156f * scale)
+            val spriteBounds = RectF(bounds.left + 16f * scale, bounds.top + 18f * scale, bounds.left + 150f * scale, bounds.top + 152f * scale)
             teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val displayPokemon = BattleSession.displayPokemonName(pokemon, details.species)
             val nameLeft = bounds.left + 164f * scale
-            val nameWidth = bounds.right - 20f * scale - nameLeft
+            val markerInset = if (session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW) 106f * scale else 20f * scale
+            val nameWidth = bounds.right - markerInset - nameLeft
             paint.textSize = fittedTextSize(
                 displayPokemon,
                 nameWidth,
-                readableTextSize(if (displayPokemon.length > 11) 32f else 38f, scale, 28f),
-                readableTextSize(24f, scale, 22f)
+                readableTextSize(if (displayPokemon.length > 11) 34f else 40f, scale, 30f, 16f),
+                readableTextSize(24f, scale, 22f, 14f)
             )
             paint.color = PAPER
-            canvas.drawText(displayPokemon, nameLeft, bounds.top + 55f * scale, paint)
-            paint.textSize = readableTextSize(30f, scale, 26f)
+            canvas.drawText(displayPokemon, nameLeft, bounds.top + 58f * scale, paint)
+            paint.textSize = readableTextSize(24f, scale, 22f, 14f)
             paint.color = MUTED
-            canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", nameLeft, bounds.top + 92f * scale, paint)
-            drawTeamHp(canvas, RectF(nameLeft, bounds.top + 112f * scale, bounds.right - 20f * scale, bounds.top + 140f * scale), details.hp, scale)
+            canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", nameLeft, bounds.top + 104f * scale, paint)
+            drawTeamHp(canvas, RectF(nameLeft, bounds.top + 120f * scale, bounds.right - 20f * scale, bounds.top + 168f * scale), details.hp, scale)
             var typeX = bounds.left + 18f * scale
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = readableTextSize(24f, scale, 21f)
+            paint.textSize = readableTextSize(20f, scale, 18f, 14f)
+            val bottomRow = RectF(bounds.left + 18f * scale, bounds.top + 178f * scale, bounds.right - 18f * scale, bounds.top + 230f * scale)
             details.types.forEach { type ->
                 val typeWidth = maxOf(92f * scale, paint.measureText(type) + 28f * scale)
-                val typeBounds = RectF(typeX, bounds.top + 177f * scale, typeX + typeWidth, bounds.top + 217f * scale)
+                val typeBounds = RectF(typeX, bottomRow.top, typeX + typeWidth, bottomRow.bottom)
                 paint.color = movePalette(type).base
                 canvas.drawRoundRect(typeBounds, 13f * scale, 13f * scale, paint)
                 paint.textAlign = Paint.Align.CENTER
@@ -1393,16 +1395,27 @@ class CommandDeckView(
                 paint.textAlign = Paint.Align.LEFT
                 typeX = typeBounds.right + 8f * scale
             }
-            paint.textSize = readableTextSize(30f, scale, 26f)
             val state = when {
                 details.condition.contains("FNT", true) -> "Fainted"
-                session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Choose to switch in"
+                session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Switch in"
                 session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> if (previewPosition >= 0) "Order ${previewPosition + 1}/$previewLimit" else "Tap to order"
                 pokemon.equals(session.playerPokemon, true) -> "In battle"
                 else -> "Available"
             }
-            paint.color = if (details.condition.contains("FNT", true)) MAGENTA else Color.rgb(150, 231, 205)
-            canvas.drawText(state, bounds.left + 18f * scale, bounds.bottom - 32f * scale, paint)
+            val stateLeft = maxOf(typeX + 4f * scale, bounds.right - 220f * scale)
+            val stateBounds = RectF(stateLeft, bottomRow.top, bounds.right - 18f * scale, bottomRow.bottom)
+            paint.color = if (details.condition.contains("FNT", true)) Color.rgb(95, 31, 66) else Color.rgb(12, 69, 82)
+            canvas.drawRoundRect(stateBounds, 14f * scale, 14f * scale, paint)
+            paint.textAlign = Paint.Align.CENTER
+            paint.textSize = fittedTextSize(
+                state,
+                stateBounds.width() - 18f * scale,
+                readableTextSize(17f, scale, 15f, 14f),
+                readableTextSize(13f, scale, 12f, 12f)
+            )
+            paint.color = if (details.condition.contains("FNT", true)) MAGENTA else Color.rgb(174, 244, 217)
+            canvas.drawText(state, stateBounds.centerX(), centeredTextBaseline(stateBounds.centerY()), paint)
+            paint.textAlign = Paint.Align.LEFT
         }
     }
 
@@ -1429,8 +1442,13 @@ class CommandDeckView(
         canvas.drawRoundRect(RectF(bounds.left + 3f * scale, bounds.top + 3f * scale, bounds.left + maxOf(7f * scale, (bounds.width() - 6f * scale) * ratio), bounds.bottom - 3f * scale), 9f * scale, 9f * scale, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(30f, scale, 26f)
-        drawOutlinedText(canvas, "HP ${hp.substringBefore(' ')}", bounds.centerX(), bounds.centerY() + 8f * scale, Color.rgb(5, 14, 22), PAPER, 1.8f * scale)
+        paint.textSize = fittedTextSize(
+            "HP ${hp.substringBefore(' ')}",
+            bounds.width() - 18f * scale,
+            readableTextSize(24f, scale, 22f, 14f),
+            readableTextSize(14f, scale, 12f, 12f)
+        )
+        drawOutlinedText(canvas, "HP ${hp.substringBefore(' ')}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.8f * scale)
         paint.textAlign = Paint.Align.LEFT
     }
 
