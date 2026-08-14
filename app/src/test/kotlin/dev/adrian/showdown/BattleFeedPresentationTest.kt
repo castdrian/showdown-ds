@@ -6,12 +6,13 @@ import org.junit.Test
 
 class BattleFeedPresentationTest {
     @Test
-    fun startsWithOnlyTheNewestMessage() {
+    fun startsWithTheOldestMessageAndQueuesTheRest() {
         val presentation = BattleFeedPresentation()
 
         presentation.update(listOf("Older", "Newest"), true, 1_000L)
 
-        assertEquals("Newest", presentation.frame(1_100L)?.text)
+        assertEquals("Older", presentation.frame(1_100L)?.text)
+        assertEquals("Newest", presentation.frame(2_500L)?.text)
     }
 
     @Test
@@ -145,12 +146,26 @@ class BattleFeedPresentationTest {
     }
 
     @Test
-    fun restoresWithOnlyTheNewestMessageButQueuesNewMessages() {
+    fun queuesExistingAndNewMessagesInOrder() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("Old 1", "Old 2", "Old 3"), true, 1_000L)
         presentation.update(listOf("Old 1", "Old 2", "Old 3", "New 1", "New 2"), true, 1_100L)
 
-        assertEquals("Old 3", presentation.frame(1_100L)?.text)
-        assertEquals("New 1", presentation.frame(2_500L)?.text)
+        assertEquals("Old 1", presentation.frame(1_100L)?.text)
+        assertEquals("Old 2", presentation.frame(2_500L)?.text)
+        assertEquals("Old 3", presentation.frame(4_000L)?.text)
+        assertEquals("New 1", presentation.frame(5_500L)?.text)
+    }
+
+    @Test
+    fun keepsEveryLineWhenAHistoryWindowAdvances() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("One", "Two", "Three"), true, 1_000L)
+        presentation.update(listOf("Two", "Three", "Four"), true, 1_100L)
+
+        assertEquals("One", presentation.frame(1_100L)?.text)
+        assertEquals("Two", presentation.frame(2_500L)?.text)
+        assertEquals("Three", presentation.frame(4_000L)?.text)
+        assertEquals("Four", presentation.frame(5_500L)?.text)
     }
 }

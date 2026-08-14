@@ -43,21 +43,30 @@ class BattleFeedPresentation(
         }
         val previousEntries = observedEntries
         if (previousEntries == null) {
-            currentText = entries.last()
+            pendingMessages.clear()
+            currentText = entries.first()
             currentStartedAtMillis = nowMillis
+            entries.drop(1).forEach { message ->
+                if (message.isNotBlank()) pendingMessages.addLast(message)
+            }
         } else if (previousEntries.isEmpty()) {
             pendingMessages.clear()
-            currentText = entries.last()
+            currentText = entries.first()
             currentStartedAtMillis = nowMillis
+            entries.drop(1).forEach { message ->
+                if (message.isNotBlank()) pendingMessages.addLast(message)
+            }
         } else if (isNewBattle(previousEntries, entries)) {
             pendingMessages.clear()
-            currentText = entries.last()
+            currentText = entries.first()
             currentStartedAtMillis = nowMillis
+            entries.drop(1).forEach { message ->
+                if (message.isNotBlank()) pendingMessages.addLast(message)
+            }
         } else {
             newEntries(previousEntries, entries).forEach { message ->
                 if (message.isNotBlank()) pendingMessages.addLast(message)
             }
-            while (pendingMessages.size > MAX_PENDING_MESSAGES) pendingMessages.removeFirst()
             advance(nowMillis)
         }
         observedEntries = entries
@@ -143,7 +152,10 @@ class BattleFeedPresentation(
             return current.drop(previous.size)
         }
         if (current == previous) return emptyList()
-        return current.lastOrNull()?.let(::listOf).orEmpty()
+        val overlap = (minOf(previous.size, current.size) downTo 1)
+            .firstOrNull { size -> previous.takeLast(size) == current.take(size) }
+            ?: 0
+        return current.drop(overlap)
     }
 
     private fun isNewBattle(previous: List<String>, current: List<String>): Boolean {
@@ -154,6 +166,5 @@ class BattleFeedPresentation(
     private companion object {
         const val MINIMUM_REVEAL_DURATION_MILLIS = 320L
         const val MAXIMUM_REVEAL_DURATION_MILLIS = 1_400L
-        const val MAX_PENDING_MESSAGES = 8
     }
 }
