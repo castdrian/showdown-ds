@@ -46,6 +46,32 @@ class BattleFeedPresentation(
         currentText = null
         currentStartedAtMillis = 0L
         feedVisible = true
+        playbackPaused = false
+        playbackPausedAtMillis = 0L
+        accumulatedPausedMillis = 0L
+    }
+
+    fun advanceOnTap(nowMillis: Long) {
+        if (playbackPaused || !feedVisible) return
+        val presentationNowMillis = presentationNowMillis(nowMillis)
+        val text = currentText
+        if (text == null) {
+            if (pendingMessages.isNotEmpty()) {
+                currentText = pendingMessages.removeFirst()
+                currentStartedAtMillis = presentationNowMillis
+            }
+            return
+        }
+        val ageMillis = (presentationNowMillis - currentStartedAtMillis).coerceAtLeast(0L)
+        val revealDuration = revealDurationMillis(text)
+        if (ageMillis < revealDuration) {
+            currentStartedAtMillis = presentationNowMillis - revealDuration
+        } else if (pendingMessages.isNotEmpty()) {
+            currentText = pendingMessages.removeFirst()
+            currentStartedAtMillis = presentationNowMillis
+        } else {
+            currentText = null
+        }
     }
 
     fun update(entries: List<String>, visible: Boolean, nowMillis: Long) {

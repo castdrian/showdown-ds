@@ -212,4 +212,48 @@ class BattleFeedPresentationTest {
         assertEquals("Event 1", presentation.frame(2_900L)?.text)
         assertEquals("Event 2", presentation.frame(4_800L)?.text)
     }
+
+    @Test
+    fun tapCompletesTheCurrentRevealBeforeMovingOn() {
+        val presentation = BattleFeedPresentation(
+            charactersPerSecond = 10f,
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 500L,
+            fadeDurationMillis = 100L
+        )
+        presentation.update(listOf("First"), true, 1_000L)
+
+        presentation.advanceOnTap(1_100L)
+
+        assertEquals("First", presentation.frame(1_100L)?.visibleText)
+        assertEquals("First", presentation.frame(1_500L)?.visibleText)
+    }
+
+    @Test
+    fun secondTapAdvancesToTheNextQueuedMessage() {
+        val presentation = BattleFeedPresentation(
+            charactersPerSecond = 10f,
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 500L,
+            fadeDurationMillis = 100L
+        )
+        presentation.update(listOf("First"), true, 1_000L)
+        presentation.update(listOf("First", "Second"), true, 1_100L)
+
+        presentation.advanceOnTap(1_200L)
+        presentation.advanceOnTap(1_300L)
+
+        assertEquals("Second", presentation.frame(1_300L)?.text)
+        assertEquals("", presentation.frame(1_300L)?.visibleText)
+    }
+
+    @Test
+    fun resetStartsReadableFeedClockAfterPause() {
+        val presentation = BattleFeedPresentation()
+        presentation.setPlaybackPaused(true, 1_000L)
+        presentation.reset()
+        presentation.update(listOf("New battle"), true, 5_000L)
+
+        assertEquals(0f, presentation.frame(5_000L)?.alpha)
+    }
 }

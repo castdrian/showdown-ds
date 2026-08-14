@@ -260,6 +260,13 @@ class BattleSceneView(
                     performClick()
                     return true
                 }
+                if (wasBattleFeedTouch) {
+                    battleFeedPresentation.advanceOnTap(SystemClock.elapsedRealtime())
+                    battleFeedTouchMoved = false
+                    invalidate()
+                    performClick()
+                    return true
+                }
                 val target = inspectTargetAt(event.x, event.y)
                 if (target == null) {
                     inspectedPlayer = null
