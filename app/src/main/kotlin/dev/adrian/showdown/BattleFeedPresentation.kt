@@ -208,6 +208,7 @@ class BattleFeedPresentation(
     }
 
     private fun isSnapshotReplacement(previous: List<String>, current: List<String>): Boolean {
+        if (previous == current) return false
         if (current.size < previous.size) return true
         if (current.size == 1 && current.firstOrNull() != previous.firstOrNull()) return true
         if (previous.isEmpty() || current.isEmpty()) return false

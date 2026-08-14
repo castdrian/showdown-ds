@@ -3890,18 +3890,20 @@ class MainActivity : Activity() {
         val links = teamRemoteLinks ?: return
         links.removeAllViews()
         snapshot.teams.forEach { team ->
-            links.addView(Button(this).apply {
+            val teamButton = Button(this).apply {
                 text = "${team.name}\n${readableFormatLabel(team.formatLabel)} · ${team.owner}"
                 setOnClickListener {
                     requestTeamRemotePage(ShowdownTeamRemoteState.viewCommand(team))
                     session.setConnectionStatus("Loading ${team.name}…")
                 }
-            }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (6f * resources.displayMetrics.density).toInt()) })
+            }
+            styleDynamicDialogButton(teamButton)
+            links.addView(teamButton, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (6f * resources.displayMetrics.density).toInt()) })
         }
         val selectedTeam = snapshot.selectedTeam
         val packed = snapshot.packed
         if (selectedTeam != null && !packed.isNullOrBlank()) {
-            links.addView(Button(this).apply {
+            val importButton = Button(this).apply {
                 text = "Import ${selectedTeam.name}"
                 setOnClickListener {
                     val format = ShowdownTeamRemoteState.resolveFormatId(selectedTeam.formatLabel, session.availableMatchFormats())
@@ -3914,7 +3916,9 @@ class MainActivity : Activity() {
                     teamRemoteDialog?.dismiss()
                     showTeamLibrary()
                 }
-            })
+            }
+            styleDynamicDialogButton(importButton)
+            links.addView(importButton)
         }
     }
 
