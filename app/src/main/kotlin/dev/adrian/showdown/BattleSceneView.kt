@@ -1069,7 +1069,7 @@ class BattleSceneView(
         val padding = 24f * scale
         val viewportHeight = (bounds.height() - padding * 2f).coerceAtLeast(lineHeight)
         val maxVisibleLines = (viewportHeight / lineHeight).toInt().coerceAtLeast(1)
-        val wrappedEntries = feedEntries.map { BattleFeedText.wrap(it, maxWidth, 2, paint::measureText) }
+        val wrappedEntries = feedEntries.map { BattleFeedText.wrapForBattleFeed(it, maxWidth, paint::measureText) }
         val totalLineCount = wrappedEntries.sumOf(List<String>::size)
         val maxScroll = (totalLineCount - maxVisibleLines).coerceAtLeast(0) * lineHeight
         battleFeedScrollOffsetPixels = battleFeedScrollOffsetPixels.coerceIn(0f, maxScroll)
