@@ -4381,11 +4381,12 @@ class BattleSession {
         val merged = mutableListOf<String>()
         var nativeIndex = 0
         protocolEntries.forEach { protocolEntry ->
-            val relativeNativeMatch = nativeEntries.subList(nativeIndex, nativeEntries.size).indexOf(protocolEntry)
+            val relativeNativeMatch = nativeEntries.subList(nativeIndex, nativeEntries.size)
+                .indexOfFirst { nativeEntry -> BattleFeedMessageIdentity.matches(protocolEntry, nativeEntry) }
             val nativeMatch = if (relativeNativeMatch >= 0) nativeIndex + relativeNativeMatch else -1
             if (nativeMatch >= 0) {
                 while (nativeIndex < nativeMatch) merged += nativeEntries[nativeIndex++]
-                merged += if (protocolEntry == "Battle started.") nativeEntries[nativeMatch] else protocolEntry
+                merged += nativeEntries[nativeMatch]
                 nativeIndex = nativeMatch + 1
             } else if (protocolEntry != "Battle started." || nativeEntries.isEmpty()) {
                 merged += protocolEntry

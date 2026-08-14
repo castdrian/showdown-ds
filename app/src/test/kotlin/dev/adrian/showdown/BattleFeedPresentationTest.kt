@@ -115,6 +115,16 @@ class BattleFeedPresentationTest {
     }
 
     @Test
+    fun nativeWordingReplacementDoesNotCreateAnotherReadableEvent() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("First", "Pikachu recovered health."), true, 1_000L)
+        presentation.update(listOf("First", "Pikachu restored health!"), true, 1_100L)
+
+        assertEquals("Pikachu restored health!", presentation.frame(1_100L)?.text)
+        assertNull(presentation.frame(2_800L))
+    }
+
+    @Test
     fun separatorLetsTheCurrentMessageFinishItsReadableCycle() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("First"), true, 1_000L)

@@ -84,6 +84,7 @@ class BattleFeedPresentation(
             return
         }
         val previousEntries = observedEntries
+        reconcileMessageWording(entries)
         if (previousEntries == null) {
             pendingMessages.clear()
             currentText = entries.last()
@@ -108,6 +109,20 @@ class BattleFeedPresentation(
             if (!playbackPaused) advance(presentationNowMillis)
         }
         observedEntries = entries
+    }
+
+    private fun reconcileMessageWording(entries: List<String>) {
+        currentText = currentText?.let { current ->
+            entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(current, entry) } ?: current
+        }
+        if (pendingMessages.isEmpty()) return
+        val queued = pendingMessages.toList()
+        pendingMessages.clear()
+        queued.forEach { message ->
+            pendingMessages.addLast(
+                entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(message, entry) } ?: message
+            )
+        }
     }
 
     fun frame(nowMillis: Long): BattleFeedFrame? {
@@ -206,7 +221,7 @@ class BattleFeedPresentation(
             val additions = mutableListOf<String>()
             var previousIndex = 0
             current.forEach { entry ->
-                if (previousIndex < previous.size && previous[previousIndex] == entry) {
+                if (previousIndex < previous.size && BattleFeedMessageIdentity.matches(previous[previousIndex], entry)) {
                     previousIndex += 1
                 } else {
                     additions += entry
@@ -217,21 +232,21 @@ class BattleFeedPresentation(
         if (current.size >= previous.size && current.take(previous.size) == previous) {
             return current.drop(previous.size)
         }
-        if (current == previous) return emptyList()
+        if (sameSequence(previous, current)) return emptyList()
         val overlap = (minOf(previous.size, current.size) downTo 1)
-            .firstOrNull { size -> previous.takeLast(size) == current.take(size) }
+            .firstOrNull { size -> sameSequence(previous.takeLast(size), current.take(size)) }
             ?: 0
         return current.drop(overlap)
     }
 
     private fun isSnapshotReplacement(previous: List<String>, current: List<String>): Boolean {
-        if (previous == current) return false
+        if (sameSequence(previous, current)) return false
         if (isContinuation(previous, current)) return false
         if (current.size < previous.size) return true
-        if (current.size == 1 && current.firstOrNull() != previous.firstOrNull()) return true
+        if (current.size == 1 && !BattleFeedMessageIdentity.matches(current.firstOrNull().orEmpty(), previous.firstOrNull().orEmpty())) return true
         if (previous.isEmpty() || current.isEmpty()) return false
         return (minOf(previous.size, current.size) downTo 1).none { size ->
-            previous.takeLast(size) == current.take(size)
+            sameSequence(previous.takeLast(size), current.take(size))
         }
     }
 
@@ -239,10 +254,15 @@ class BattleFeedPresentation(
         if (previous.isEmpty() || current.size < previous.size) return false
         var previousIndex = 0
         current.forEach { entry ->
-            if (previousIndex < previous.size && previous[previousIndex] == entry) previousIndex += 1
+            if (previousIndex < previous.size && BattleFeedMessageIdentity.matches(previous[previousIndex], entry)) previousIndex += 1
         }
         return previousIndex == previous.size
     }
+
+    private fun sameSequence(first: List<String>, second: List<String>): Boolean =
+        first.size == second.size && first.indices.all { index ->
+            BattleFeedMessageIdentity.matches(first[index], second[index])
+        }
 
     private companion object {
         const val MINIMUM_REVEAL_DURATION_MILLIS = 320L

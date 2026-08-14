@@ -155,6 +155,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun nativeHealthWordingReplacesTheProtocolFallbackWithoutDuplicatingIt() {
+        val session = BattleSession()
+        session.applyProtocolLine("|init|battle")
+        session.applyProtocolLine("|-heal|p1a: Pikachu|100/100")
+        session.appendShowdownBattleLog("Pikachu restored health!")
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        assertEquals(
+            listOf("Pikachu restored health!"),
+            session.battleFeedEntries()
+        )
+    }
+
+    @Test
     fun randomDoublesAndTriplesFormatsDoNotRequireSavedTeams() {
         assertTrue(BattleSession.MatchFormat("gen9randomdoublesbattle", "Random Doubles").usesRandomTeams)
         assertTrue(BattleSession.MatchFormat("gen9randomtriplesbattle", "Random Triples").usesRandomTeams)
