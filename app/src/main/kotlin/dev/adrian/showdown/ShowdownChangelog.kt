@@ -52,6 +52,7 @@ object ShowdownChangelog {
                 "Remote team imports now keep every Pokémon from the selected Showdown export.",
                 "Imported team backups now return to a refreshed team library so new teams appear immediately.",
                 "Team library navigation now filters saved teams by Showdown format as well as folder and search.",
+                "Team format pickers now show readable Showdown names without exposing raw IDs in the selection list.",
                 "Custom dialogs no longer open the keyboard automatically, keeping their actions visible until an input is tapped.",
                 "Iron Valiant now uses verified rear-facing artwork on the player side and never falls back to its front sprite.",
                 "Active battle sprites now resolve from species identifiers while keeping nicknames readable in the battle UI.",

@@ -4328,9 +4328,13 @@ class MainActivity : Activity() {
         val formats = (session.availableMatchFormats() + typedFormat.takeIf { it.isNotBlank() }?.let { BattleSession.MatchFormat(it, it) })
             .filterNotNull()
             .distinctBy { it.id }
+        val labels = formats.map { format ->
+            format.label.takeUnless { it.isBlank() || it.equals(format.id, true) }
+                ?: ShowdownTeamLibraryQuery.displayFormat(format.id)
+        }
         ShowdownDialogBuilder(this)
             .setTitle("Choose team format")
-            .setSingleChoiceItems(formats.map { "${it.label}\n${it.id}" }.toTypedArray(), formats.indexOfFirst { it.id.equals(typedFormat, true) }) { dialog, selected ->
+            .setSingleChoiceItems(labels.toTypedArray(), formats.indexOfFirst { it.id.equals(typedFormat, true) }) { dialog, selected ->
                 target.setText(formats[selected].id)
                 dialog.dismiss()
             }
