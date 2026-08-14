@@ -1048,7 +1048,7 @@ class BattleSceneView(
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val nowMillis = SystemClock.elapsedRealtime()
         val feedEntries = session.battleFeedEntries()
-        battleFeedPresentation.update(feedEntries, true, nowMillis)
+        battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis)
         val frame = battleFeedPresentation.frame(nowMillis) ?: return
         val alpha = frame.alpha
         val playerCardRight = width * 0.315f

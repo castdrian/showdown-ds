@@ -22,6 +22,11 @@ object ShowdownAssetPaths {
         val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
         verifiedBackPaths.forEach { candidates += it }
         val hasVerifiedBackSprite = verifiedBackPaths.isNotEmpty()
+        val staticCollections = if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
+            listOf("xy", "gen5")
+        } else {
+            listOf("gen5")
+        }
         if (!hasVerifiedBackSprite) {
             collections.forEach { collection ->
                 speciesNames.forEach { name -> candidates += battleSprite(name, request.side, collection) }
@@ -29,17 +34,15 @@ object ShowdownAssetPaths {
         }
         if (request.backFacing) {
             if (!hasVerifiedBackSprite) {
-                val staticCollections = if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
-                    listOf("xy", "gen5")
-                } else {
-                    listOf("gen5")
-                }
                 staticCollections.forEach { collection ->
                     speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection) }
                 }
             }
             candidates += placeholder(BattleSpriteSide.PLAYER)
         } else {
+            staticCollections.forEach { collection ->
+                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.OPPONENT, collection) }
+            }
             candidates += dexSprite(request.species)
             candidates += "sprites/dex/${animationId(request.species)}.png"
         }

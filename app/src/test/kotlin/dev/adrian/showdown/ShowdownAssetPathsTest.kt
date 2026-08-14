@@ -28,6 +28,10 @@ class ShowdownAssetPathsTest {
                 "sprites/xyani/furfrou.gif",
                 "sprites/gen5ani/furfroulareine.gif",
                 "sprites/gen5ani/furfrou.gif",
+                "sprites/xy/furfroulareine.png",
+                "sprites/xy/furfrou.png",
+                "sprites/gen5/furfroulareine.png",
+                "sprites/gen5/furfrou.png",
                 "sprites/dex/furfrou-la-reine.png",
                 "sprites/dex/furfroulareine.png"
             ),
@@ -41,10 +45,21 @@ class ShowdownAssetPathsTest {
             listOf(
                 "sprites/xyani/ironhands.gif",
                 "sprites/gen5ani/ironhands.gif",
+                "sprites/xy/ironhands.png",
+                "sprites/gen5/ironhands.png",
                 "sprites/dex/iron-hands.png",
                 "sprites/dex/ironhands.png"
             ),
             ShowdownAssetPaths.battleSpriteCandidates(BattleSpriteRequest.forOpponent("Iron Hands", BattleSession.SpriteStyle.MODERN_3D))
+        )
+    }
+
+    @Test
+    fun fallsBackToStaticGen5FrontSpritesForSpeciesWithoutAnimatedAssets() {
+        assertTrue(
+            ShowdownAssetPaths.battleSpriteCandidates(
+                BattleSpriteRequest.forOpponent("Pecharunt", BattleSession.SpriteStyle.MODERN_3D)
+            ).contains("sprites/gen5/pecharunt.png")
         )
     }
 

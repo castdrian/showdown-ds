@@ -91,6 +91,17 @@ class BattleFeedPresentationTest {
     }
 
     @Test
+    fun hiddenBoundaryDiscardsPendingMessagesAndStartsWithTheNextEvent() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("First"), true, 1_000L)
+        presentation.update(listOf("First", "Second"), true, 1_100L)
+        presentation.update(listOf("First", "Second"), false, 1_200L)
+        presentation.update(listOf("First", "Second", "Third"), true, 1_300L)
+
+        assertEquals("Third", presentation.frame(1_300L)?.text)
+    }
+
+    @Test
     fun restoresWithOnlyTheNewestMessageButQueuesNewMessages() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("Old 1", "Old 2", "Old 3"), true, 1_000L)
