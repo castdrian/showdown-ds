@@ -21,29 +21,27 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("Move text"), true, 1_000L)
 
         assertEquals(1f, presentation.frame(1_500L)?.alpha)
-        assertEquals(0.23f, presentation.frame(2_685L)?.alpha ?: 0f, 0.01f)
+        assertEquals(0.13f, presentation.frame(2_685L)?.alpha ?: 0f, 0.01f)
         assertNull(presentation.frame(2_750L))
     }
 
     @Test
-    fun revealsTheMessageBeforeHoldingIt() {
+    fun showsTheCompleteMessageDuringItsFadeAndHold() {
         val presentation = BattleFeedPresentation(
-            charactersPerSecond = 10f,
             minimumMessageDurationMillis = 0L,
             holdDurationMillis = 500L,
             fadeDurationMillis = 100L
         )
         presentation.update(listOf("Hello"), true, 1_000L)
 
-        assertEquals("H", presentation.frame(1_100L)?.visibleText)
+        assertEquals("Hello", presentation.frame(1_100L)?.visibleText)
         assertEquals("Hello", presentation.frame(1_500L)?.visibleText)
-        assertEquals(1f, presentation.frame(1_900L)?.alpha)
+        assertEquals(0.5f, presentation.frame(1_550L)?.alpha ?: 0f, 0.01f)
     }
 
     @Test
-    fun selectedPlaybackSpeedChangesTheRevealRate() {
+    fun selectedPlaybackSpeedChangesTheFadeRate() {
         val presentation = BattleFeedPresentation(
-            charactersPerSecond = 10f,
             minimumMessageDurationMillis = 0L,
             holdDurationMillis = 0L,
             fadeDurationMillis = 100L
@@ -51,14 +49,13 @@ class BattleFeedPresentationTest {
         presentation.setPlaybackSpeed(0.5f)
         presentation.update(listOf("Hello"), true, 1_000L)
 
-        assertEquals("", presentation.frame(1_100L)?.visibleText)
-        assertEquals("H", presentation.frame(1_200L)?.visibleText)
+        assertEquals("Hello", presentation.frame(1_100L)?.visibleText)
+        assertEquals(1f, presentation.frame(1_200L)?.alpha)
     }
 
     @Test
     fun fadesIntoTheNextMessageAfterTheReadableCycle() {
         val presentation = BattleFeedPresentation(
-            charactersPerSecond = 10f,
             minimumMessageDurationMillis = 0L,
             holdDurationMillis = 500L,
             fadeDurationMillis = 100L
@@ -66,9 +63,9 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), true, 1_100L)
 
-        assertEquals("First", presentation.frame(1_999L)?.visibleText)
-        assertEquals("", presentation.frame(2_100L)?.visibleText)
-        assertEquals("S", presentation.frame(2_200L)?.visibleText)
+        assertEquals("First", presentation.frame(1_499L)?.visibleText)
+        assertEquals("Second", presentation.frame(1_600L)?.text)
+        assertEquals("Second", presentation.frame(1_700L)?.visibleText)
     }
 
     @Test
@@ -202,12 +199,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun pausesTheMessageClockWhileTheActivityIsPaused() {
-        val presentation = BattleFeedPresentation(
-            charactersPerSecond = 10f,
-            minimumMessageDurationMillis = 0L,
-            holdDurationMillis = 500L,
-            fadeDurationMillis = 100L
-        )
+        val presentation = BattleFeedPresentation()
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), true, 1_100L)
         val beforePause = presentation.frame(1_200L)
@@ -217,13 +209,12 @@ class BattleFeedPresentationTest {
 
         presentation.setPlaybackPaused(false, 4_000L)
         assertEquals("First", presentation.frame(4_100L)?.text)
-        assertEquals("Fir", presentation.frame(4_100L)?.visibleText)
+        assertEquals("First", presentation.frame(4_100L)?.visibleText)
     }
 
     @Test
     fun keepsEventsArrivingWhilePausedInOrderAfterResume() {
         val presentation = BattleFeedPresentation(
-            charactersPerSecond = 10f,
             minimumMessageDurationMillis = 0L,
             holdDurationMillis = 500L,
             fadeDurationMillis = 100L
@@ -248,25 +239,23 @@ class BattleFeedPresentationTest {
     }
 
     @Test
-    fun tapCompletesTheCurrentRevealBeforeMovingOn() {
+    fun tapCompletesTheCurrentFadeBeforeMovingOn() {
         val presentation = BattleFeedPresentation(
-            charactersPerSecond = 10f,
             minimumMessageDurationMillis = 0L,
             holdDurationMillis = 500L,
             fadeDurationMillis = 100L
         )
         presentation.update(listOf("First"), true, 1_000L)
 
-        presentation.advanceOnTap(1_100L)
+        presentation.advanceOnTap(1_050L)
 
-        assertEquals("First", presentation.frame(1_100L)?.visibleText)
+        assertEquals("First", presentation.frame(1_050L)?.visibleText)
         assertEquals("First", presentation.frame(1_500L)?.visibleText)
     }
 
     @Test
     fun secondTapAdvancesToTheNextQueuedMessage() {
         val presentation = BattleFeedPresentation(
-            charactersPerSecond = 10f,
             minimumMessageDurationMillis = 0L,
             holdDurationMillis = 500L,
             fadeDurationMillis = 100L
@@ -274,11 +263,11 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), true, 1_100L)
 
-        presentation.advanceOnTap(1_200L)
-        presentation.advanceOnTap(1_300L)
+        presentation.advanceOnTap(1_050L)
+        presentation.advanceOnTap(1_100L)
 
-        assertEquals("Second", presentation.frame(1_300L)?.text)
-        assertEquals("", presentation.frame(1_300L)?.visibleText)
+        assertEquals("Second", presentation.frame(1_100L)?.text)
+        assertEquals("Second", presentation.frame(1_100L)?.visibleText)
     }
 
     @Test

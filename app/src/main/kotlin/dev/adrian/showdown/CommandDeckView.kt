@@ -780,11 +780,11 @@ class CommandDeckView(
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(24f, scale, 21f)
-        val title = if (session.decisionAvailable) "LAST ACTION" else "WAITING"
+        val title = if (session.decisionAvailable) "YOUR TURN" else "WAITING"
         val titleHeight = paint.descent() - paint.ascent()
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         var messageSize = readableTextSize(30f, scale, 26f)
-        val message = if (session.decisionAvailable) session.latestBattleEvent else session.status
+        val message = session.status
         var messageLines: List<String>
         var messageLineHeight: Float
         var messageHeight: Float
@@ -1320,20 +1320,13 @@ class CommandDeckView(
             )
             return
         }
-        val left = 44f * scale
-        val top = 220f * scale
-        val gap = 14f * scale
-        val cardWidth = (width - left * 2f - gap * 2f) / 3f
-        val cardHeight = 378f * scale
+        val visibleTeam = session.team().take(teamBounds.size)
         teamBounds.fill(null)
         val previewOrder = session.teamPreviewOrder()
         val previewLimit = session.teamPreviewRequiredSize()
-        session.team().forEachIndexed { index, pokemon ->
-            val row = index / 3
-            val column = index % 3
-            val x = left + column * (cardWidth + gap)
-            val y = top + row * (cardHeight + gap)
-            val bounds = RectF(x, y, x + cardWidth, y + cardHeight)
+        visibleTeam.forEachIndexed { index, pokemon ->
+            val layoutBounds = SwitchTeamLayout.bounds(width, height, scale, index, visibleTeam.size)
+            val bounds = RectF(layoutBounds.left, layoutBounds.top, layoutBounds.right, layoutBounds.bottom)
             teamBounds[index] = bounds
             val focused = index == session.focusedTeam
             val previewPosition = previewOrder.indexOf(index)
@@ -1373,14 +1366,20 @@ class CommandDeckView(
             teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val displayPokemon = BattleSession.displayPokemonName(pokemon, details.species)
-            paint.textSize = readableTextSize(if (displayPokemon.length > 11) 32f else 38f, scale, 28f)
+            val nameLeft = bounds.left + 164f * scale
+            val nameWidth = bounds.right - 20f * scale - nameLeft
+            paint.textSize = fittedTextSize(
+                displayPokemon,
+                nameWidth,
+                readableTextSize(if (displayPokemon.length > 11) 32f else 38f, scale, 28f),
+                readableTextSize(24f, scale, 22f)
+            )
             paint.color = PAPER
-            val teamName = fitTextToWidth(displayPokemon, bounds.right - 20f * scale - (bounds.left + 164f * scale))
-            canvas.drawText(teamName, bounds.left + 164f * scale, bounds.top + 55f * scale, paint)
+            canvas.drawText(displayPokemon, nameLeft, bounds.top + 55f * scale, paint)
             paint.textSize = readableTextSize(30f, scale, 26f)
             paint.color = MUTED
-            canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", bounds.left + 164f * scale, bounds.top + 92f * scale, paint)
-            drawTeamHp(canvas, RectF(bounds.left + 164f * scale, bounds.top + 112f * scale, bounds.right - 20f * scale, bounds.top + 140f * scale), details.hp, scale)
+            canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", nameLeft, bounds.top + 92f * scale, paint)
+            drawTeamHp(canvas, RectF(nameLeft, bounds.top + 112f * scale, bounds.right - 20f * scale, bounds.top + 140f * scale), details.hp, scale)
             var typeX = bounds.left + 18f * scale
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(24f, scale, 21f)

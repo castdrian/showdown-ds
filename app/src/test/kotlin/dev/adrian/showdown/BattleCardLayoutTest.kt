@@ -86,13 +86,22 @@ class BattleCardLayoutTest {
     }
 
     @Test
-    fun invalidPartyBallSheetsFallBackToNativeBalls() {
+    fun partyIndicatorsUseAntialiasedNativeBalls() {
         val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
 
-        assertTrue(source.contains("drawPartyBallFromSheet(canvas, sheet, left, top, size, state)"))
-        assertTrue(source.contains("if (cellRight > sheet.width || glyphBottom > sheet.height) return false"))
-        assertTrue(source.contains("if (!glyphVisible) return false"))
+        assertTrue(!source.contains("drawPartyBallFromSheet"))
+        assertTrue(source.contains("LinearGradient(bounds.left, bounds.top"))
+        assertTrue(source.contains("canvas.drawArc(bounds, 180f, 180f, true, paint)"))
         assertTrue(source.contains("drawFallbackPartyBall(canvas, left, top, size, state)"))
+    }
+
+    @Test
+    fun pokemonNamesUseACompleteFitInsideHpCards() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
+
+        assertTrue(!source.contains("ellipsizeToWidth(content.title, titleWidth, paint)"))
+        assertTrue(source.contains("val titleHorizontalScale"))
+        assertTrue(source.contains("canvas.scale(titleHorizontalScale, 1f, textLeft, titleBaseline)"))
     }
 
     @Test

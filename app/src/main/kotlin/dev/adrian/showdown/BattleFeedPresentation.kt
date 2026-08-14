@@ -9,7 +9,6 @@ data class BattleFeedFrame(
 )
 
 class BattleFeedPresentation(
-    private val charactersPerSecond: Float = 32f,
     private val minimumMessageDurationMillis: Long = 1_500L,
     private val holdDurationMillis: Long = 650L,
     private val fadeDurationMillis: Long = 240L
@@ -63,9 +62,9 @@ class BattleFeedPresentation(
             return
         }
         val ageMillis = (presentationNowMillis - currentStartedAtMillis).coerceAtLeast(0L)
-        val revealDuration = revealDurationMillis(text)
-        if (ageMillis < revealDuration) {
-            currentStartedAtMillis = presentationNowMillis - revealDuration
+        val fadeDuration = scaledFadeDurationMillis()
+        if (ageMillis < fadeDuration) {
+            currentStartedAtMillis = presentationNowMillis - fadeDuration
         } else if (pendingMessages.isNotEmpty()) {
             currentText = pendingMessages.removeFirst()
             currentStartedAtMillis = presentationNowMillis
@@ -130,7 +129,7 @@ class BattleFeedPresentation(
         if (!playbackPaused) advance(presentationNowMillis)
         val text = currentText ?: return null
         val ageMillis = (presentationNowMillis - currentStartedAtMillis).coerceAtLeast(0L)
-        val fadeStartMillis = messageVisibleDurationMillis(text)
+        val fadeStartMillis = messageVisibleDurationMillis()
         val fadeDuration = scaledFadeDurationMillis()
         val endMillis = fadeStartMillis + fadeDuration
         if (ageMillis >= endMillis) {
@@ -139,18 +138,15 @@ class BattleFeedPresentation(
                 return null
             }
         }
-        val revealedCharacters = ((ageMillis * charactersPerSecond * playbackSpeed) / 1_000f)
-            .toInt()
-            .coerceIn(0, text.codePointCount(0, text.length))
         val alpha = when {
-            ageMillis < fadeDuration -> ageMillis.toFloat() / fadeDuration
+            ageMillis < fadeDuration -> easedProgress(ageMillis.toFloat() / fadeDuration)
             ageMillis < fadeStartMillis -> 1f
-            else -> 1f - (ageMillis - fadeStartMillis).toFloat() / fadeDuration
+            else -> 1f - easedProgress((ageMillis - fadeStartMillis).toFloat() / fadeDuration)
         }
         return BattleFeedFrame(
             text = text,
             alpha = alpha.coerceIn(0f, 1f),
-            visibleText = prefixByCodePoints(text, revealedCharacters)
+            visibleText = text
         )
     }
 
@@ -158,7 +154,7 @@ class BattleFeedPresentation(
         if (playbackPaused) return false
         val text = currentText ?: return pendingMessages.isNotEmpty()
         val ageMillis = (presentationNowMillis(nowMillis) - currentStartedAtMillis).coerceAtLeast(0L)
-        return pendingMessages.isNotEmpty() || (text.isNotBlank() && ageMillis < messageVisibleDurationMillis(text) + scaledFadeDurationMillis())
+        return pendingMessages.isNotEmpty() || (text.isNotBlank() && ageMillis < messageVisibleDurationMillis() + scaledFadeDurationMillis())
     }
 
     private fun advance(nowMillis: Long) {
@@ -172,7 +168,7 @@ class BattleFeedPresentation(
             return
         }
         val ageMillis = (nowMillis - currentStartedAtMillis).coerceAtLeast(0L)
-        if (pendingMessages.isNotEmpty() && ageMillis >= messageVisibleDurationMillis(current) + scaledFadeDurationMillis()) {
+        if (pendingMessages.isNotEmpty() && ageMillis >= messageVisibleDurationMillis() + scaledFadeDurationMillis()) {
             currentText = pendingMessages.removeFirst()
             currentStartedAtMillis = nowMillis
         }
@@ -183,14 +179,11 @@ class BattleFeedPresentation(
         pendingMessages.addLast(message)
     }
 
-    private fun messageVisibleDurationMillis(text: String): Long = maxOf(
+    private fun messageVisibleDurationMillis(): Long = maxOf(
         scaledMinimumMessageDurationMillis(),
-        revealDurationMillis(text) + scaledHoldDurationMillis()
+        scaledHoldDurationMillis(),
+        scaledFadeDurationMillis()
     )
-
-    private fun revealDurationMillis(text: String): Long = (
-        text.codePointCount(0, text.length) * 1_000f / (charactersPerSecond * playbackSpeed).coerceAtLeast(1f)
-        ).toLong().coerceIn(MINIMUM_REVEAL_DURATION_MILLIS, MAXIMUM_REVEAL_DURATION_MILLIS)
 
     private fun scaledMinimumMessageDurationMillis() = (minimumMessageDurationMillis / playbackSpeed).toLong().coerceAtLeast(1L)
 
@@ -207,13 +200,9 @@ class BattleFeedPresentation(
         return (nowMillis - accumulatedPausedMillis - pausedMillis).coerceAtLeast(0L)
     }
 
-    private fun prefixByCodePoints(value: String, count: Int): String {
-        if (count <= 0) return ""
-        var end = 0
-        repeat(count.coerceAtMost(value.codePointCount(0, value.length))) {
-            end += Character.charCount(value.codePointAt(end))
-        }
-        return value.substring(0, end)
+    private fun easedProgress(value: Float): Float {
+        val progress = value.coerceIn(0f, 1f)
+        return progress * progress * (3f - 2f * progress)
     }
 
     private fun newEntries(previous: List<String>, current: List<String>): List<String> {
@@ -263,9 +252,4 @@ class BattleFeedPresentation(
         first.size == second.size && first.indices.all { index ->
             BattleFeedMessageIdentity.matches(first[index], second[index])
         }
-
-    private companion object {
-        const val MINIMUM_REVEAL_DURATION_MILLIS = 320L
-        const val MAXIMUM_REVEAL_DURATION_MILLIS = 1_400L
-    }
 }

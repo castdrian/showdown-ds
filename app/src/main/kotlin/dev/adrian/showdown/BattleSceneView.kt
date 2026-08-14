@@ -28,9 +28,6 @@ class BattleSceneView(
     private val destination = RectF()
     private val logo: Bitmap? = BitmapFactory.decodeResource(resources, R.drawable.showdown_logo)
     private var backdrop: Bitmap? = null
-    private var pokeballSheet: Bitmap? = null
-    private var requestedPokeballSheet = false
-    private val partyBallGlyphValidity = mutableMapOf<PartyBallState, Boolean>()
     private var playerSprite: ShowdownSpriteCache.SpriteAsset? = null
     private var opponentSprite: ShowdownSpriteCache.SpriteAsset? = null
     private val playerActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
@@ -93,10 +90,10 @@ class BattleSceneView(
         val height = height.toFloat()
         val scale = min(width / 1920f, height / 1080f)
         val singles = session.isSinglesBattle()
-        val playerX = width * 0.30f
-        val playerY = height * if (singles) 0.68f else 0.67f
-        val opponentX = width * 0.73f
-        val opponentY = height * if (singles) 0.45f else 0.42f
+        val playerX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.PLAYER_X) else width * 0.30f
+        val playerY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.PLAYER_Y) else height * 0.67f
+        val opponentX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.OPPONENT_X) else width * 0.73f
+        val opponentY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.OPPONENT_Y) else height * 0.42f
         val playerCombatants = session.playerActiveCombatants()
         val opponentCombatants = session.opponentActiveCombatants()
         val nowNanos = System.nanoTime()
@@ -132,12 +129,13 @@ class BattleSceneView(
                 canvas,
                 opponentX,
                 opponentY,
-                scale * if (singles) 1.30f else 1.05f,
+                scale * if (singles) ShowdownBattleLayout.OPPONENT_SCALE else 1.05f,
                 session.opponentPokemon,
                 session.opponentCondition,
                 session.opponentEntryAtNanos,
                 nowNanos,
-                opponentSprite ?: opponentPlaceholder
+                opponentSprite ?: opponentPlaceholder,
+                showdownPlacement = singles
             )
         }
         if (!singles && playerCombatants.isNotEmpty()) {
@@ -159,12 +157,13 @@ class BattleSceneView(
                 canvas,
                 playerX,
                 playerY,
-                scale * if (singles) 1.50f else 1.16f,
+                scale * if (singles) ShowdownBattleLayout.PLAYER_SCALE else 1.16f,
                 session.playerPokemon,
                 session.playerCondition,
                 session.playerEntryAtNanos,
                 nowNanos,
-                playerSprite ?: playerPlaceholder
+                playerSprite ?: playerPlaceholder,
+                showdownPlacement = singles
             )
         }
         drawHeader(canvas, width, scale)
@@ -186,7 +185,12 @@ class BattleSceneView(
                 if (playerStatusAlpha > 0f) {
                     drawStatusCard(
                         canvas,
-                        RectF(width * 0.015f, height * 0.80f, width * 0.315f, height * 0.98f),
+                        RectF(
+                            width * ShowdownBattleLayout.SINGLE_CARD_LEFT_FRACTION,
+                            height * 0.80f,
+                            ShowdownBattleLayout.singlePlayerCardRight(width, scale),
+                            height * 0.98f
+                        ),
                         session.playerDetails(),
                         session.playerHp,
                         scale,
@@ -201,7 +205,12 @@ class BattleSceneView(
                 if (opponentStatusAlpha > 0f) {
                     drawStatusCard(
                         canvas,
-                        RectF(width * 0.685f, height * 0.02f, width * 0.985f, height * 0.20f),
+                        RectF(
+                            ShowdownBattleLayout.singleOpponentCardLeft(width, scale),
+                            height * 0.02f,
+                            width * ShowdownBattleLayout.SINGLE_CARD_RIGHT_FRACTION,
+                            height * 0.20f
+                        ),
                         session.opponentDetails(),
                         session.opponentHp,
                         scale,
@@ -397,14 +406,6 @@ class BattleSceneView(
             opponentActiveSprites,
             requestedOpponentActiveSprites
         )
-        if (!requestedPokeballSheet) {
-            requestedPokeballSheet = true
-            spriteCache.requestPokemonBallSheet { asset ->
-                pokeballSheet = asset
-                partyBallGlyphValidity.clear()
-                invalidate()
-            }
-        }
         SHOWDOWN_EFFECTS.forEach { name ->
             if (requestedEffects.add(name)) {
                 spriteCache.requestEffect(name) { asset ->
@@ -548,7 +549,8 @@ class BattleSceneView(
         condition: String,
         summonAtNanos: Long,
         nowNanos: Long,
-        sprite: ShowdownSpriteCache.SpriteAsset?
+        sprite: ShowdownSpriteCache.SpriteAsset?,
+        showdownPlacement: Boolean = false
     ) {
         val faintProgress = faintProgress(pokemon, condition, nowNanos)
         if (faintProgress >= 1f) return
@@ -561,13 +563,14 @@ class BattleSceneView(
         val spriteHeight = 300f * scale * summonScale
         val summonOffset = BattleSceneTiming.summonVerticalOffset(summonAtNanos, nowNanos) * scale
         val easedFaint = faintProgress * faintProgress
+        val imageCenterY = if (showdownPlacement) centerY + summonOffset else centerY + summonOffset - spriteHeight * 0.18f
         sprite.draw(
             canvas,
             RectF(
                 centerX - spriteWidth / 2f,
-                centerY + summonOffset - spriteHeight * 0.68f - 240f * scale * easedFaint,
+                imageCenterY - spriteHeight / 2f - 240f * scale * easedFaint,
                 centerX + spriteWidth / 2f,
-                centerY + summonOffset + spriteHeight * 0.32f - 240f * scale * easedFaint
+                imageCenterY + spriteHeight / 2f - 240f * scale * easedFaint
             ),
             SystemClock.elapsedRealtime(),
             alpha = ((1f - easedFaint) * summonAlpha * 255f).toInt()
@@ -875,12 +878,17 @@ class BattleSceneView(
         paint.textSize = readableTextSize(height * 0.27f, scale, 10.5f)
         val titleWidth = (textRight - textLeft - levelWidth - 16f * scale).coerceAtLeast(0f)
         paint.color = INK
-        canvas.drawText(
-            ellipsizeToWidth(content.title, titleWidth, paint),
-            textLeft,
-            bounds.top + height * contentLayout.titleBaselineFraction,
-            paint
-        )
+        val titleBaseline = bounds.top + height * contentLayout.titleBaselineFraction
+        val titleMeasuredWidth = paint.measureText(content.title)
+        val titleHorizontalScale = if (titleMeasuredWidth > titleWidth && titleMeasuredWidth > 0f) {
+            titleWidth / titleMeasuredWidth
+        } else {
+            1f
+        }
+        canvas.save()
+        canvas.scale(titleHorizontalScale, 1f, textLeft, titleBaseline)
+        canvas.drawText(content.title, textLeft, titleBaseline, paint)
+        canvas.restore()
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.17f, scale, 9.5f)
@@ -925,73 +933,54 @@ class BattleSceneView(
         paint.alpha = 255
         paint.shader = null
         paint.style = Paint.Style.FILL
-        val sheet = pokeballSheet
-        if (sheet != null && state != PartyBallState.FAINTED && drawPartyBallFromSheet(canvas, sheet, left, top, size, state)) {
-            return
-        }
         drawFallbackPartyBall(canvas, left, top, size, state)
-    }
-
-    private fun drawPartyBallFromSheet(
-        canvas: Canvas,
-        sheet: Bitmap,
-        left: Float,
-        top: Float,
-        size: Float,
-        state: PartyBallState
-    ): Boolean {
-        val cellLeft = if (state == PartyBallState.STATUSED) POKEBALL_TILE_WIDTH_PIXELS else 0
-        val cellRight = cellLeft + POKEBALL_GLYPH_LEFT + POKEBALL_GLYPH_SIZE
-        val glyphBottom = POKEBALL_GLYPH_TOP + POKEBALL_GLYPH_SIZE
-        if (cellRight > sheet.width || glyphBottom > sheet.height) return false
-        val glyphVisible = partyBallGlyphValidity.getOrPut(state) {
-            var visible = false
-            for (y in POKEBALL_GLYPH_TOP until glyphBottom) {
-                for (x in (cellLeft + POKEBALL_GLYPH_LEFT) until cellRight) {
-                    if ((sheet.getPixel(x, y) ushr 24) != 0) {
-                        visible = true
-                        break
-                    }
-                }
-                if (visible) break
-            }
-            visible
-        }
-        if (!glyphVisible) return false
-        source.set(
-            cellLeft + POKEBALL_GLYPH_LEFT,
-            POKEBALL_GLYPH_TOP,
-            cellRight,
-            glyphBottom
-        )
-        destination.set(left, top, left + size, top + size)
-        canvas.drawBitmap(sheet, source, destination, paint)
-        return true
     }
 
     private fun drawFallbackPartyBall(canvas: Canvas, left: Float, top: Float, size: Float, state: PartyBallState) {
         val centerX = left + size / 2f
         val centerY = top + size / 2f
-        val radius = size * 0.40f
-        paint.style = Paint.Style.FILL
-        paint.shader = null
-        paint.color = when (state) {
-            PartyBallState.READY -> Color.rgb(234, 76, 42)
-            PartyBallState.STATUSED -> Color.rgb(236, 196, 31)
-            PartyBallState.FAINTED -> Color.rgb(95, 106, 117)
+        val radius = size * 0.43f
+        val bounds = RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
+        val colors = when (state) {
+            PartyBallState.READY -> intArrayOf(Color.rgb(255, 113, 76), Color.rgb(205, 43, 31))
+            PartyBallState.STATUSED -> intArrayOf(Color.rgb(255, 230, 92), Color.rgb(190, 135, 22))
+            PartyBallState.FAINTED -> intArrayOf(Color.rgb(156, 170, 184), Color.rgb(78, 91, 105))
         }
+        paint.style = Paint.Style.FILL
+        paint.shader = LinearGradient(
+            bounds.left,
+            bounds.top,
+            bounds.left,
+            bounds.bottom,
+            Color.rgb(249, 252, 255),
+            Color.rgb(188, 204, 216),
+            Shader.TileMode.CLAMP
+        )
         canvas.drawCircle(centerX, centerY, radius, paint)
-        paint.color = Color.rgb(219, 228, 235)
-        canvas.drawArc(RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius), 0f, 180f, true, paint)
+        paint.shader = LinearGradient(bounds.left, bounds.top, bounds.left, centerY, colors[0], colors[1], Shader.TileMode.CLAMP)
+        canvas.drawArc(bounds, 180f, 180f, true, paint)
+        paint.shader = null
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = maxOf(1f, size * 0.06f)
-        paint.color = Color.rgb(184, 197, 208)
+        paint.strokeWidth = maxOf(1.5f, size * 0.06f)
+        paint.color = Color.rgb(176, 192, 205)
         canvas.drawCircle(centerX, centerY, radius, paint)
         paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(31, 39, 47)
-        canvas.drawRect(centerX - radius, centerY - paint.strokeWidth / 2f, centerX + radius, centerY + paint.strokeWidth / 2f, paint)
-        paint.color = Color.rgb(198, 209, 218)
-        canvas.drawCircle(centerX, centerY, size * 0.11f, paint)
+        paint.color = Color.rgb(27, 38, 48)
+        canvas.drawRoundRect(
+            RectF(centerX - radius, centerY - size * 0.045f, centerX + radius, centerY + size * 0.045f),
+            size * 0.045f,
+            size * 0.045f,
+            paint
+        )
+        paint.color = Color.rgb(218, 229, 237)
+        canvas.drawCircle(centerX, centerY, size * 0.13f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = maxOf(1f, size * 0.035f)
+        paint.color = Color.rgb(105, 123, 138)
+        canvas.drawCircle(centerX, centerY, size * 0.13f, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(145, 255, 255, 255)
+        canvas.drawCircle(centerX - size * 0.15f, centerY - size * 0.18f, size * 0.07f, paint)
     }
 
     private fun drawBattleStatusCardSurface(canvas: Canvas, bounds: RectF, scale: Float) {
@@ -1065,13 +1054,29 @@ class BattleSceneView(
 
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val nowMillis = SystemClock.elapsedRealtime()
+        battleFeedBounds.setEmpty()
         val feedEntries = session.battleFeedEntries()
         battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis)
         val frame = battleFeedPresentation.frame(nowMillis) ?: return
         val alpha = frame.alpha
-        val playerCardRight = width * 0.315f
         val sideGap = maxOf(48f * scale, width * 0.025f)
-        val settledLeft = maxOf(width * 0.33f, playerCardRight + sideGap)
+        val playerCardRight = if (session.isSinglesBattle()) {
+            ShowdownBattleLayout.singlePlayerCardRight(width, scale)
+        } else {
+            width * 0.315f
+        }
+        val playerCombatants = session.playerActiveCombatants()
+        val playerSpriteRight = if (session.isSinglesBattle()) {
+            ShowdownBattleLayout.x(width, ShowdownBattleLayout.PLAYER_X) +
+                145f * scale * ShowdownBattleLayout.PLAYER_SCALE
+        } else if (playerCombatants.isEmpty()) {
+            playerCardRight
+        } else {
+            playerCombatants.indices.maxOf { index ->
+                multiCombatantX(width, true, index, playerCombatants.size) + 145f * scale * 1.02f
+            }
+        }
+        val settledLeft = maxOf(width * 0.33f, playerCardRight + sideGap, playerSpriteRight + sideGap)
         val left = settledLeft
         val right = width * 0.97f
         val bottom = min(height * 0.945f, height * 0.98f - 32f * scale)
@@ -1147,10 +1152,6 @@ class BattleSceneView(
         const val CYAN = 0xFF4AE7FF.toInt()
         const val MAGENTA = 0xFFFF49B0.toInt()
         const val MUTED = 0xFFBBD1EA.toInt()
-        const val POKEBALL_TILE_WIDTH_PIXELS = 40
-        const val POKEBALL_GLYPH_LEFT = 14
-        const val POKEBALL_GLYPH_TOP = 10
-        const val POKEBALL_GLYPH_SIZE = 12
     }
 
     private enum class PartyBallState {

@@ -658,7 +658,14 @@ class BattleSession {
             nativeEntries.isEmpty() -> protocolEntries
             else -> mergeBattleFeedEntries(protocolEntries, nativeEntries)
         }
-        return source.takeLast(limit.coerceAtLeast(0))
+        return source
+            .fold(mutableListOf<String>()) { uniqueEntries, entry ->
+                if (uniqueEntries.lastOrNull()?.let { BattleFeedMessageIdentity.matches(it, entry) } != true) {
+                    uniqueEntries += entry
+                }
+                uniqueEntries
+            }
+            .takeLast(limit.coerceAtLeast(0))
     }
 
     fun showdownBattleLog() = showdownBattleLogEntries.toList()

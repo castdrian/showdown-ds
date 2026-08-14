@@ -55,6 +55,15 @@ class BattleSessionTest {
     }
 
     @Test
+    fun upperBattleFeedRemovesAdjacentDuplicateMessages() {
+        val session = BattleSession()
+
+        session.appendShowdownBattleLog("<div>Pikachu used Tackle!</div><div>Pikachu used Tackle!</div>")
+
+        assertEquals(listOf("Pikachu used Tackle!"), session.battleFeedEntries())
+    }
+
+    @Test
     fun activityKeepsConsecutiveIdenticalBattleMessages() {
         val session = BattleSession()
         session.appendShowdownBattleLog("<div>It had no effect.</div><div>It had no effect.</div>")

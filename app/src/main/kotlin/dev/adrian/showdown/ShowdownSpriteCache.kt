@@ -140,12 +140,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
     }
 
-    fun requestPokemonBallSheet(receiver: (Bitmap?) -> Unit) {
-        requestBytes("sprites/pokemonicons-pokeball-sheet.png") { file ->
-            receiver(file?.let { BitmapFactory.decodeFile(it.path) })
-        }
-    }
-
     fun requestAudio(path: String, receiver: (File?) -> Unit) {
         requestBytes(path, receiver)
     }
