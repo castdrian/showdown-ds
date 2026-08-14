@@ -10,6 +10,9 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Saved Random Doubles Battle selections now survive a server format refresh instead of silently falling back to singles.",
+                "Live battle decisions now become actionable immediately while the readable send-out and move playback continues, keeping the server timer in sync.",
+                "Battle-feed scrolling now moves cleanly past long entries without splitting the newest short event across the viewport.",
                 "The upper battle log now keeps complete Showdown events together while you scroll, so it never opens on a clipped continuation line.",
                 "Thor touch and controller focus now restores cleanly after the app returns from the background.",
                 "Team Library now keeps repeated confirmations from stacking duplicate custom dialogs.",

@@ -80,6 +80,18 @@ object BattleFeedText {
     }
 
     private fun oversizedEntryWindow(entries: List<List<String>>, maxLines: Int, scrollLines: Int): List<String> {
+        val lastOversizedIndex = entries.indexOfLast { it.size > maxLines }
+        val trailingLines = if (lastOversizedIndex >= 0) {
+            entries.drop(lastOversizedIndex + 1).sumOf(List<String>::size)
+        } else {
+            0
+        }
+        if (lastOversizedIndex >= 0 && trailingLines > 0 && scrollLines > 0) {
+            val oversized = entries[lastOversizedIndex]
+            val offset = (scrollLines - 1).coerceIn(0, (oversized.size - maxLines).coerceAtLeast(0))
+            val start = (oversized.size - maxLines - offset).coerceAtLeast(0)
+            return oversized.subList(start, (start + maxLines).coerceAtMost(oversized.size))
+        }
         val segments = entries.flatMap { entry ->
             if (entry.size > maxLines) entry.map(::listOf) else listOf(entry)
         }

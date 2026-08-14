@@ -76,7 +76,7 @@ class BattleFeedTextTest {
         )
         assertEquals(
             listOf("line two", "line three", "line four"),
-            BattleFeedText.window(entries, 3, 2)
+            BattleFeedText.window(entries, 3, 1)
         )
     }
 
@@ -87,7 +87,7 @@ class BattleFeedTextTest {
             listOf("Short event line one", "line two")
         )
 
-        val windows = (0..3).map { scroll -> BattleFeedText.window(entries, 3, scroll) }
+        val windows = (0..2).map { scroll -> BattleFeedText.window(entries, 3, scroll) }
 
         assertEquals(
             listOf(

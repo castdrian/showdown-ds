@@ -28,6 +28,8 @@ object BattlePlaybackTiming {
         else -> 0L
     }
 
+    fun isDecisionChunk(lines: List<String>): Boolean = lines.any { it.startsWith("|request|") }
+
     fun scaledPause(pauseMillis: Long, speed: Float): Long {
         if (pauseMillis <= 0L) return 0L
         return (pauseMillis / speed.coerceIn(0.25f, 4f)).roundToLong().coerceAtLeast(1L)

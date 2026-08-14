@@ -45,7 +45,13 @@ class BattleSession {
             val GEN7_RANDOM = MatchFormat("gen7randombattle", "[Gen 7] Random Battle", "Gen 7 Random")
             val GEN8_RANDOM = MatchFormat("gen8randombattle", "[Gen 8] Random Battle", "Gen 8 Random")
             val GEN9_RANDOM = MatchFormat("gen9randombattle", "[Gen 9] Random Battle", "Gen 9 Random")
-            val defaults = listOf(GEN6_RANDOM, GEN7_RANDOM, GEN8_RANDOM, GEN9_RANDOM)
+            val GEN9_CHAMPIONS_RANDOM_DOUBLES = MatchFormat(
+                "gen9championsrandomdoublesbattle",
+                "[Gen 9 Champions] Random Doubles Battle",
+                "Gen 9 Champions Doubles",
+                usesRandomTeams = true
+            )
+            val defaults = listOf(GEN6_RANDOM, GEN7_RANDOM, GEN8_RANDOM, GEN9_RANDOM, GEN9_CHAMPIONS_RANDOM_DOUBLES)
 
             fun usesRandomTeams(format: MatchFormat): Boolean = format.usesRandomTeams || usesRandomTeamsFor(format.id)
 
@@ -946,10 +952,13 @@ class BattleSession {
         val selected = formats.firstOrNull {
             it.id.trim().equals(matchFormat.id.trim(), true) && (it.canSearch || currentWasAdvertised)
         }
+            ?: matchFormat.takeIf { currentWasAdvertised && it.canSearch }
             ?: formats.firstOrNull { it.canSearch }
             ?: formats.first()
+        val refreshedFormats = formats.toMutableList()
+        if (refreshedFormats.none { it.id.trim().equals(selected.id.trim(), true) }) refreshedFormats.add(0, selected)
         availableMatchFormats.clear()
-        availableMatchFormats += formats
+        availableMatchFormats += refreshedFormats
         matchFormat = selected
         notifyListeners()
     }

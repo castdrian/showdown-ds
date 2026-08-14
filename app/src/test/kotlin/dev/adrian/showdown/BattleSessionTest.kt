@@ -2389,6 +2389,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun knownSavedChampionsDoublesFormatSurvivesServerFormatRefresh() {
+        val session = BattleSession()
+        session.setMatchFormat(BattleSession.MatchFormat.GEN9_CHAMPIONS_RANDOM_DOUBLES)
+
+        session.applyServerFormats(
+            listOf("|formats|gen9randombattle,[Gen 9] Random Battle,4f|gen9ou,[Gen 9] OU,e")
+        )
+
+        assertEquals("gen9championsrandomdoublesbattle", session.matchFormat.id)
+        assertTrue(session.matchFormat.usesRandomTeams)
+        assertTrue(session.availableMatchFormats().any { it.id == session.matchFormat.id })
+    }
+
+    @Test
     fun challengeOnlySavedFormatFallsBackEvenWhenTheServerAdvertisesIt() {
         val session = BattleSession()
         session.setMatchFormat(BattleSession.MatchFormat("gen9multirandombattle", "[Gen 9] Multi Random Battle", canSearch = false))

@@ -766,7 +766,14 @@ class MainActivity : Activity() {
         if (lines.isEmpty()) return
         if (resetOnBattleInit && lines.any { it.startsWith("|init|battle") }) clearBattlePlayback()
         BattlePlaybackTiming.chunks(lines).forEach { chunk ->
-            if (chunk.isNotEmpty()) pendingBattlePackets.addLast(PendingBattlePacket(connection, roomId, chunk))
+            if (chunk.isEmpty()) return@forEach
+            val packet = PendingBattlePacket(connection, roomId, chunk)
+            if (connection != null && !session.isReplayMode() && BattlePlaybackTiming.isDecisionChunk(chunk)) {
+                session.applyProtocolPacket(chunk)
+                handleAppliedBattlePacket(packet)
+            } else {
+                pendingBattlePackets.addLast(packet)
+            }
         }
         flushBattlePlayback()
     }

@@ -1,6 +1,8 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BattlePlaybackTimingTest {
@@ -40,6 +42,12 @@ class BattlePlaybackTimingTest {
     fun givesFaintsLongerReadingTimeThanOrdinaryMoves() {
         assertEquals(2_600L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee")))
         assertEquals(3_200L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee", "|faint|p2a: Eevee")))
+    }
+
+    @Test
+    fun identifiesDecisionChunksForImmediateLiveControls() {
+        assertTrue(BattlePlaybackTiming.isDecisionChunk(listOf("|request|{}")))
+        assertFalse(BattlePlaybackTiming.isDecisionChunk(listOf("|turn|1")))
     }
 
     @Test
