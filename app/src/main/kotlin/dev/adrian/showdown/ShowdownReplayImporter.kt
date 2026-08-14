@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import org.json.JSONArray
@@ -21,12 +22,22 @@ data class ShowdownReplayPayload(
 }
 
 object ShowdownReplayImporter {
-    fun uploadUrl(message: String): String? = Regex(
-        "https?://replay\\.pokemonshowdown\\.com/[A-Za-z0-9-]+(?:\\.json)?"
-    ).find(message)?.value?.removeSuffix(".json")
+    private val replayUrl = Regex(
+        "https?://(?:replay\\.pokemonshowdown\\.com/[A-Za-z0-9-]+(?:\\.json)?|pokemonshowdown\\.com/replay/[A-Za-z0-9-]+(?:\\.json)?)",
+        RegexOption.IGNORE_CASE
+    )
+
+    fun uploadUrl(message: String): String? = replayUrl.find(message)?.value?.removeSuffix(".json")
+
+    fun intentSource(action: String?, data: String?, sharedText: String?): String? = when (action) {
+        Intent.ACTION_VIEW -> data
+        Intent.ACTION_SEND -> sharedText
+        else -> null
+    }?.takeIf { normalize(it) != null }
 
     fun normalize(input: String): String? {
-        val uri = runCatching { URI(input.trim()) }.getOrNull() ?: return null
+        val source = replayUrl.find(input)?.value ?: input.trim()
+        val uri = runCatching { URI(source) }.getOrNull() ?: return null
         val scheme = uri.scheme?.lowercase(Locale.ROOT)
         if (scheme != "http" && scheme != "https") return null
         val host = uri.host?.lowercase(Locale.ROOT) ?: return null

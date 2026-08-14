@@ -4838,8 +4838,11 @@ class MainActivity : Activity() {
     }
 
     private fun handleIncomingIntent(intent: Intent): Boolean {
-        if (intent.action != Intent.ACTION_VIEW) return false
-        val source = intent.dataString ?: return false
+        val source = ShowdownReplayImporter.intentSource(
+            intent.action,
+            intent.dataString,
+            intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        ) ?: return false
         val normalized = ShowdownReplayImporter.normalize(source) ?: return false
         loadReplay(normalized)
         return true

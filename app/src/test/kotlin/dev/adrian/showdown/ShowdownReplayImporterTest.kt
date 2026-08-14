@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import android.content.Intent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -27,6 +28,23 @@ class ShowdownReplayImporterTest {
             ShowdownReplayImporter.normalize("https://pokemonshowdown.com/replay/gen9ou-123.json")
         )
         assertNull(ShowdownReplayImporter.normalize("https://example.com/gen9ou-123"))
+    }
+
+    @Test
+    fun acceptsReplayLinksEmbeddedInSharedText() {
+        assertEquals(
+            "https://replay.pokemonshowdown.com/gen9ou-123.json",
+            ShowdownReplayImporter.normalize("Check this replay: https://replay.pokemonshowdown.com/gen9ou-123")
+        )
+        assertEquals(
+            "https://replay.pokemonshowdown.com/gen9ou-123.json",
+            ShowdownReplayImporter.intentSource(
+                Intent.ACTION_SEND,
+                null,
+                "https://pokemonshowdown.com/replay/gen9ou-123.json"
+            )?.let(ShowdownReplayImporter::normalize)
+        )
+        assertNull(ShowdownReplayImporter.intentSource(Intent.ACTION_SEND, null, "not a replay"))
     }
 
     @Test
