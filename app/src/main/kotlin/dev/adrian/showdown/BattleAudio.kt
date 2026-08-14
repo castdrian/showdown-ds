@@ -289,7 +289,7 @@ class BattleAudio(
             pendingBattleCues.removeFirst()
             val cue = pending.cue
             val queuedAtMillis = pending.queuedAtMillis
-            val playback = cuePlaybackQueue.enqueue(cue, nowMillis)
+            val playback = cuePlaybackQueue.enqueue(cue, queuedAtMillis)
             scheduleBattleCue(cue, soundId, queuedAtMillis, playback.delayMillis, playback.delayMillis)
         }
     }

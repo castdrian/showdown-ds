@@ -625,7 +625,7 @@ class BattleSession {
 
     fun battleLog() = battleLog.toList()
 
-    fun battleFeedEntries(limit: Int = 4): List<String> {
+    fun battleFeedEntries(limit: Int = SHOWDOWN_BATTLE_LOG_LIMIT): List<String> {
         val source = showdownBattleLogEntries.takeIf { it.isNotEmpty() } ?: battleLog
         return source.asSequence()
             .filter(String::isNotBlank)
@@ -4363,7 +4363,7 @@ class BattleSession {
         const val MENU_ITEM_COUNT = 14
         const val MENU_COLUMNS = 3
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
-        private const val SHOWDOWN_BATTLE_LOG_LIMIT = 256
+        private const val SHOWDOWN_BATTLE_LOG_LIMIT = 1024
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun displayPokemonName(name: String, species: String = name): String {

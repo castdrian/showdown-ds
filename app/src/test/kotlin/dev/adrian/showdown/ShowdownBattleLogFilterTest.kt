@@ -33,4 +33,13 @@ class ShowdownBattleLogFilterTest {
             entries
         )
     }
+
+    @Test
+    fun removesAccountRegistrationControlsFromTheBattleTranscript() {
+        val entries = ShowdownBattleLogFilter.visibleEntries(
+            "<div>Register an account to protect your ladder rating!</div><button>Register</button>"
+        )
+
+        assertEquals(emptyList<String>(), entries)
+    }
 }

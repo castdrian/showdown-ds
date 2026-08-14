@@ -22,6 +22,14 @@ class BattleSessionTest {
     }
 
     @Test
+    fun upperBattleFeedKeepsMoreThanThePreviousFiveVisibleEntries() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog((1..7).joinToString("<br />") { "Event $it" })
+
+        assertEquals((1..7).map { "Event $it" }, session.battleFeedEntries())
+    }
+
+    @Test
     fun randomDoublesAndTriplesFormatsDoNotRequireSavedTeams() {
         assertTrue(BattleSession.MatchFormat("gen9randomdoublesbattle", "Random Doubles").usesRandomTeams)
         assertTrue(BattleSession.MatchFormat("gen9randomtriplesbattle", "Random Triples").usesRandomTeams)

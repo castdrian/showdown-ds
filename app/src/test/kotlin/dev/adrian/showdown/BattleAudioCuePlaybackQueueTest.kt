@@ -16,6 +16,18 @@ class BattleAudioCuePlaybackQueueTest {
     }
 
     @Test
+    fun effectivenessKeepsItsOffsetFromAnEarlierDamageEvent() {
+        val queue = BattleAudioCuePlaybackQueue()
+
+        queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L)
+
+        assertEquals(
+            80L,
+            queue.enqueue(BattleAudioCue.SUPER_EFFECTIVE, 1_100L).delayMillis
+        )
+    }
+
+    @Test
     fun impactAudioIsNotBlockedByAnEarlierStatusCue() {
         val queue = BattleAudioCuePlaybackQueue()
 

@@ -15,7 +15,9 @@ import android.view.MotionEvent
 import android.view.View
 import dev.adrian.showdown.R
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 class BattleSceneView(
     context: Context,
@@ -46,6 +48,13 @@ class BattleSceneView(
     private var inspectedSlot: String? = null
     private val playerInspectBounds = RectF()
     private val opponentInspectBounds = RectF()
+    private val battleFeedBounds = RectF()
+    private var battleFeedScrollOffsetPixels = 0f
+    private var battleFeedTouchDownY = 0f
+    private var battleFeedTouchLastY = 0f
+    private var battleFeedTouchActive = false
+    private var battleFeedTouchMoved = false
+    private var battleFeedLastEventAtNanos = 0L
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -207,9 +216,35 @@ class BattleSceneView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                return inspectTargetAt(event.x, event.y) != null || inspectedPlayer != null
+                if (inspectTargetAt(event.x, event.y) != null || inspectedPlayer != null) return true
+                if (battleFeedBounds.contains(event.x, event.y)) {
+                    battleFeedTouchDownY = event.y
+                    battleFeedTouchLastY = event.y
+                    battleFeedTouchActive = true
+                    battleFeedTouchMoved = false
+                    return true
+                }
+                return false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!battleFeedTouchActive) return false
+                val delta = event.y - battleFeedTouchLastY
+                if (abs(delta) > 0.5f) {
+                    battleFeedScrollOffsetPixels -= delta
+                    battleFeedTouchMoved = battleFeedTouchMoved || abs(event.y - battleFeedTouchDownY) > 12f
+                    battleFeedTouchLastY = event.y
+                    invalidate()
+                }
+                return true
             }
             MotionEvent.ACTION_UP -> {
+                val wasBattleFeedTouch = battleFeedTouchActive
+                battleFeedTouchActive = false
+                if (wasBattleFeedTouch && battleFeedTouchMoved) {
+                    battleFeedTouchMoved = false
+                    performClick()
+                    return true
+                }
                 val target = inspectTargetAt(event.x, event.y)
                 if (target == null) {
                     inspectedPlayer = null
@@ -226,6 +261,8 @@ class BattleSceneView(
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
+                battleFeedTouchActive = false
+                battleFeedTouchMoved = false
                 return inspectedPlayer != null
             }
         }
@@ -972,8 +1009,12 @@ class BattleSceneView(
     }
 
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
-        val feedEntries = session.battleFeedEntries(5)
+        val feedEntries = session.battleFeedEntries()
         if (feedEntries.isEmpty()) return
+        if (session.latestBattleEventAtNanos != battleFeedLastEventAtNanos) {
+            battleFeedLastEventAtNanos = session.latestBattleEventAtNanos
+            battleFeedScrollOffsetPixels = 0f
+        }
         val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
         val arrival = min(1f, age / 0.18f)
         val alpha = min(1f, 0.3f + arrival)
@@ -985,6 +1026,7 @@ class BattleSceneView(
         val top = height * 0.75f
         val bottom = min(height * 0.965f, height * 0.98f - 24f * scale)
         val bounds = RectF(left, top, right, bottom)
+        battleFeedBounds.set(bounds)
         paint.shader = LinearGradient(
             bounds.left,
             bounds.top,
@@ -1006,14 +1048,24 @@ class BattleSceneView(
         val maxWidth = bounds.width() - 48f * scale
         val lines = feedEntries
             .flatMap { BattleFeedText.wrap(it, maxWidth, 2, paint::measureText) }
-            .takeLast(5)
             .ifEmpty { listOf("…") }
         val lineHeight = 42f * scale
-        val firstBaseline = bounds.centerY() - lines.size * lineHeight / 2f - (paint.ascent() + paint.descent()) / 2f + lineHeight / 2f
+        val padding = 24f * scale
+        val viewportHeight = (bounds.height() - padding * 2f).coerceAtLeast(lineHeight)
+        val contentHeight = lines.size * lineHeight
+        val maxScroll = (contentHeight - viewportHeight).coerceAtLeast(0f)
+        battleFeedScrollOffsetPixels = battleFeedScrollOffsetPixels.coerceIn(0f, maxScroll)
+        battleFeedScrollOffsetPixels =
+            (battleFeedScrollOffsetPixels / lineHeight).roundToInt() * lineHeight
+        val contentTop = if (contentHeight <= viewportHeight) {
+            bounds.top + padding + (viewportHeight - contentHeight) / 2f
+        } else {
+            bounds.bottom - padding - contentHeight + battleFeedScrollOffsetPixels
+        }
         canvas.save()
         canvas.clipRect(bounds)
         lines.forEachIndexed { index, line ->
-            val baseline = firstBaseline + index * lineHeight
+            val baseline = contentTop + index * lineHeight + (lineHeight - paint.ascent() - paint.descent()) / 2f
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 2.25f * scale
             paint.strokeJoin = Paint.Join.ROUND

@@ -18,6 +18,8 @@ object ShowdownChangelog {
                 "Move previews now fill power, accuracy, category, and gimmick power from the official dex while keeping status and always-hit values as dashes.",
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
                 "Impact audio now starts with the damage animation instead of waiting behind longer status clips, with effectiveness cues following the hit.",
+                "Battle cues now preserve their original animation timestamp while audio samples finish loading, keeping late-loaded damage and effectiveness sounds in sync.",
+                "The upper battle transcript now keeps every user-facing Showdown entry available with swipe scrolling and removes non-battle registration controls.",
                 "Spread moves now play one effectiveness cue per move instead of stacking the same sound once per target.",
                 "Stat boost and drop audio now starts at the corresponding battle event instead of waiting for an earlier cue to finish.",
                 "Battle audio timing resets at each move boundary so faster playback cannot delay the next move's cue.",
