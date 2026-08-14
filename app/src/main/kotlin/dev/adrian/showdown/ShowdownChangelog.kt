@@ -10,6 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Thor touch and controller focus now restores cleanly after the app returns from the background.",
+                "Team Library now keeps repeated confirmations from stacking duplicate custom dialogs.",
                 "Multi-Pokémon battles now keep the party Poké Ball strip on the remaining visible HP card while a partner faints.",
                 "Account settings can now create a registered Showdown account and finish sign-in without leaving the client.",
                 "Registered Showdown sessions now survive app process restarts and restore the active battle identity before rejoining.",

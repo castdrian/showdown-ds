@@ -597,7 +597,11 @@ class MainActivity : Activity() {
 
     private fun showSecondaryDisplay() {
         if (secondaryPresentation?.isShowing == false) secondaryPresentation = null
-        if (isFinishing || displayManager == null || secondaryPresentation != null) return
+        if (isFinishing || displayManager == null) return
+        secondaryPresentation?.let {
+            it.requestControllerFocus()
+            return
+        }
         findThorDisplay()?.let { display ->
             secondaryPresentation = ThorPresentation(this, display).also { presentation ->
                 presentation.setOnDismissListener {
@@ -3523,6 +3527,7 @@ class MainActivity : Activity() {
     }
 
     private fun showTeamLibrary() {
+        if (teamLibraryDialog?.isShowing == true) return
         val teams = teamLibrary.teams()
         val density = resources.displayMetrics.density
         val search = EditText(this).apply {
@@ -5077,6 +5082,7 @@ class MainActivity : Activity() {
             window?.takeKeyEvents(true)
             window?.decorView?.requestFocus()
             frame.requestFocus()
+            frame.requestFocusFromTouch()
         }
 
         fun requestControllerFocus() {
@@ -5086,8 +5092,8 @@ class MainActivity : Activity() {
                 window?.decorView?.isFocusable = true
                 window?.decorView?.isFocusableInTouchMode = true
                 window?.takeKeyEvents(true)
-                window?.decorView?.requestFocus()
-                controllerFrame.requestFocus()
+                window?.decorView?.requestFocusFromTouch()
+                controllerFrame.requestFocusFromTouch()
             }
         }
 

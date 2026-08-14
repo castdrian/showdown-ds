@@ -33,6 +33,8 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(resume.contains("showSecondaryDisplay()"))
         assertTrue(source.contains("secondaryPresentation?.isShowing == false"))
+        assertTrue(source.contains("secondaryPresentation?.let {"))
+        assertTrue(source.contains("it.requestControllerFocus()"))
     }
 
     @Test
@@ -44,6 +46,8 @@ class MainActivityLifecycleContractTest {
         assertTrue(presentation.contains("setContentView(frame)"))
         assertTrue(presentation.contains("configurePresentationWindow(window)"))
         assertTrue(presentation.contains("window?.takeKeyEvents(true)"))
+        assertTrue(presentation.contains("frame.requestFocusFromTouch()"))
+        assertTrue(presentation.contains("controllerFrame.requestFocusFromTouch()"))
         assertTrue(source.contains("FLAG_NOT_FOCUSABLE or"))
         assertTrue(source.contains("FLAG_NOT_TOUCHABLE"))
     }
@@ -139,6 +143,14 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("teamLibraryDialog?.dismiss()"))
         assertTrue(source.contains("teamEditorDialog?.dismiss()"))
         assertTrue(source.contains("pokedexDialog?.dismiss()"))
+    }
+
+    @Test
+    fun doesNotStackTeamLibraryDialogs() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val teamLibrary = source.substringAfter("private fun showTeamLibrary()").substringBefore("private fun showTeamRemoteLibrary")
+
+        assertTrue(teamLibrary.contains("if (teamLibraryDialog?.isShowing == true) return"))
     }
 
     @Test
