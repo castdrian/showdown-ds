@@ -26,12 +26,29 @@ class ShowdownTeamEditorDefaultsTest {
     fun advertisedCompetitiveFormatBeatsRandomCurrentFormat() {
         val formats = listOf(
             BattleSession.MatchFormat.GEN9_RANDOM,
-            BattleSession.MatchFormat("gen9doublesou", "[Gen 9] Doubles OU")
+            BattleSession.MatchFormat("gen9doublesou", "[Gen 9] Doubles OU", canSearch = true, canChallenge = true)
         )
         assertEquals(
             "gen9doublesou",
             ShowdownTeamEditorDefaults.format(null, BattleSession.MatchFormat.GEN9_RANDOM, formats)
         )
+    }
+
+    @Test
+    fun usableFormatPrefersSearchAndChallengeOverChallengeOnly() {
+        val formats = listOf(
+            BattleSession.MatchFormat("gen9challengeonly", "Challenge only", canSearch = false, canChallenge = true),
+            BattleSession.MatchFormat("gen9ou", "[Gen 9] OU", canSearch = true, canChallenge = true)
+        )
+        assertEquals("gen9ou", ShowdownTeamEditorDefaults.format(null, BattleSession.MatchFormat.GEN9_RANDOM, formats))
+    }
+
+    @Test
+    fun searchableOnlyFormatIsStillUsable() {
+        val formats = listOf(
+            BattleSession.MatchFormat("gen9searchonly", "Search only", canSearch = true, canChallenge = false)
+        )
+        assertEquals("gen9searchonly", ShowdownTeamEditorDefaults.format(null, BattleSession.MatchFormat.GEN9_RANDOM, formats))
     }
 
     @Test

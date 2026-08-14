@@ -11,7 +11,11 @@ object ShowdownTeamEditorDefaults {
             return current.id.trim().takeIf(String::isNotBlank) ?: "gen9ou"
         }
         return available.firstOrNull {
-            it.canChallenge && !BattleSession.MatchFormat.usesRandomTeams(it) && it.id.isNotBlank()
-        }?.id?.trim() ?: "gen9ou"
+            it.canSearch && it.canChallenge && !BattleSession.MatchFormat.usesRandomTeams(it) && it.id.isNotBlank()
+        }?.id?.trim()
+            ?: available.firstOrNull {
+                (it.canSearch || it.canChallenge) && !BattleSession.MatchFormat.usesRandomTeams(it) && it.id.isNotBlank()
+            }?.id?.trim()
+            ?: "gen9ou"
     }
 }
