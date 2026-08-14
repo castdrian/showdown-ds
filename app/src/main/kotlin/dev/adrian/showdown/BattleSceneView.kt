@@ -1076,22 +1076,20 @@ class BattleSceneView(
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         paint.textSize = readableTextSize(36f, scale, 11f)
         val maxWidth = bounds.width() - 48f * scale
-        val lines = feedEntries
-            .flatMap { BattleFeedText.wrap(it, maxWidth, 2, paint::measureText) }
-            .ifEmpty { listOf("…") }
         val lineHeight = 42f * scale
         val padding = 24f * scale
         val viewportHeight = (bounds.height() - padding * 2f).coerceAtLeast(lineHeight)
-        val contentHeight = lines.size * lineHeight
-        val maxScroll = (contentHeight - viewportHeight).coerceAtLeast(0f)
+        val maxVisibleLines = (viewportHeight / lineHeight).toInt().coerceAtLeast(1)
+        val wrappedEntries = feedEntries.map { BattleFeedText.wrap(it, maxWidth, 2, paint::measureText) }
+        val totalLineCount = wrappedEntries.sumOf(List<String>::size)
+        val maxScroll = (totalLineCount - maxVisibleLines).coerceAtLeast(0) * lineHeight
         battleFeedScrollOffsetPixels = battleFeedScrollOffsetPixels.coerceIn(0f, maxScroll)
         battleFeedScrollOffsetPixels =
             (battleFeedScrollOffsetPixels / lineHeight).roundToInt() * lineHeight
-        val contentTop = if (contentHeight <= viewportHeight) {
-            bounds.top + padding + (viewportHeight - contentHeight) / 2f
-        } else {
-            bounds.bottom - padding - contentHeight + battleFeedScrollOffsetPixels
-        }
+        val scrollLines = (battleFeedScrollOffsetPixels / lineHeight).roundToInt()
+        val lines = BattleFeedText.window(wrappedEntries, maxVisibleLines, scrollLines).ifEmpty { listOf("…") }
+        val contentHeight = lines.size * lineHeight
+        val contentTop = bounds.top + padding + (viewportHeight - contentHeight).coerceAtLeast(0f) / 2f
         canvas.save()
         canvas.clipRect(bounds)
         lines.forEachIndexed { index, line ->

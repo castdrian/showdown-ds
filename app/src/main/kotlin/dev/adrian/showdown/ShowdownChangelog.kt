@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "The upper battle log now keeps complete Showdown events together while you scroll, so it never opens on a clipped continuation line.",
                 "Thor touch and controller focus now restores cleanly after the app returns from the background.",
                 "Team Library now keeps repeated confirmations from stacking duplicate custom dialogs.",
                 "Multi-Pokémon battles now keep the party Poké Ball strip on the remaining visible HP card while a partner faints.",
