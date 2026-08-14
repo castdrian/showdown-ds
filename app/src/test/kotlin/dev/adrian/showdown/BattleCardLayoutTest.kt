@@ -70,7 +70,7 @@ class BattleCardLayoutTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
 
         assertTrue(source.contains("val anchorIndex = if (player) combatants.lastIndex else 0"))
-        assertTrue(source.contains("drawCompactPartyIndicators(canvas, anchorBounds, scale, party)"))
+        assertTrue(source.contains("val cardParty = party.takeIf { index == anchorIndex }"))
         assertTrue(source.contains("party?.let { drawPartyIndicators"))
     }
 

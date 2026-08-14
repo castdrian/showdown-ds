@@ -737,10 +737,13 @@ class BattleSceneView(
         combatants: List<BattleSession.ActiveCombatant>
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
+        val anchorIndex = if (player) combatants.lastIndex else 0
+        val party = if (player) session.playerPartyDetails() else session.opponentPartyDetails()
         combatants.forEachIndexed { index, combatant ->
             val alpha = statusCardAlpha(combatant.name, combatant.condition, System.nanoTime()) *
                 BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, System.nanoTime())
             if (alpha > 0f) {
+                val cardParty = party.takeIf { index == anchorIndex }
                 drawCompactStatusCard(
                     canvas,
                     BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF(),
@@ -748,39 +751,10 @@ class BattleSceneView(
                     scale,
                     alpha,
                     layout,
-                    null
+                    cardParty
                 )
             }
         }
-        if (combatants.isNotEmpty()) {
-            val anchorIndex = if (player) combatants.lastIndex else 0
-            val anchorBounds = BattleCardLayout.compactBoundsFor(
-                width,
-                height,
-                player,
-                anchorIndex,
-                combatants.size
-            ).toRectF()
-            val party = if (player) session.playerPartyDetails() else session.opponentPartyDetails()
-            drawCompactPartyIndicators(canvas, anchorBounds, scale, party)
-        }
-    }
-
-    private fun drawCompactPartyIndicators(
-        canvas: Canvas,
-        bounds: RectF,
-        scale: Float,
-        party: List<BattleSession.PokemonDetails>
-    ) {
-        paint.alpha = 255
-        paint.shader = null
-        paint.style = Paint.Style.FILL
-        val size = BattleCardLayout.partyIndicatorSize(bounds.height(), scale)
-        val gap = maxOf(size * 0.12f, 2f * scale)
-        val right = bounds.right - 20f * scale
-        val start = right - size * 6f - gap * 5f
-        val top = BattleCardLayout.partyIndicatorTop(bounds.bottom, size, scale)
-        drawPartyIndicators(canvas, party, start, top, size, gap)
     }
 
     private fun drawCompactStatusCard(
