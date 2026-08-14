@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "The upper battle log now preserves Showdown's block-separated events, including move and field messages, while hiding only diagnostics and controls.",
                 "Damage, effectiveness, and stat audio now starts on Showdown's matching visual event and is cancelled when animation playback pauses or resets.",
                 "Compact multi-battle HP cards now keep their Poké Ball strip visible before party details arrive from the server.",
                 "Saved Random Doubles Battle selections now survive a server format refresh instead of silently falling back to singles.",

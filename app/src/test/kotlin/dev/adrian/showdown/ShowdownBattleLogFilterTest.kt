@@ -42,4 +42,34 @@ class ShowdownBattleLogFilterTest {
 
         assertEquals(emptyList<String>(), entries)
     }
+
+    @Test
+    fun preservesEntriesSeparatedByShowdownBlockMarkup() {
+        val entries = ShowdownBattleLogFilter.visibleEntries(
+            "<div><strong>Gholdengo</strong> used Make It Rain!</div><div>The opposing team lost 30% of its health.</div>"
+        )
+
+        assertEquals(
+            listOf("Gholdengo used Make It Rain!", "The opposing team lost 30% of its health."),
+            entries
+        )
+    }
+
+    @Test
+    fun removesDebugAndTimestampRowsWithoutDroppingTheBattleEventsAroundThem() {
+        val entries = ShowdownBattleLogFilter.visibleEntries(
+            "<div>Turn 2</div><div><small style=\"color:#999\">[DEBUG] internal parser state</small></div><div><small>[12:35] internal timestamp</small></div><div>Gholdengo used Make It Rain!</div>"
+        )
+
+        assertEquals(listOf("Turn 2", "Gholdengo used Make It Rain!"), entries)
+    }
+
+    @Test
+    fun removesOnlyTheRegistrationControlWhenItSharesAnAddDivWithOtherRows() {
+        val entries = ShowdownBattleLogFilter.visibleEntries(
+            "<div>Battle started!</div><div>Register an account to protect your ladder rating!<button>Register</button></div><div>Go! Pikachu!</div>"
+        )
+
+        assertEquals(listOf("Battle started!", "Go! Pikachu!"), entries)
+    }
 }
