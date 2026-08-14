@@ -41,13 +41,13 @@ class BattlePlaybackTimingTest {
     @Test
     fun givesFaintsLongerReadingTimeThanOrdinaryMoves() {
         assertEquals(2_600L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee")))
-        assertEquals(4_600L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee", "|faint|p2a: Eevee")))
+        assertEquals(4_800L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee", "|faint|p2a: Eevee")))
     }
 
     @Test
     fun givesMultiLineMoveResultsEnoughTimeToReadEachLine() {
         assertEquals(
-            6_900L,
+            7_200L,
             BattlePlaybackTiming.pauseAfter(
                 listOf(
                     "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados",

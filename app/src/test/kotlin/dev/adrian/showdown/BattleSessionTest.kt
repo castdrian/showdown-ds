@@ -30,6 +30,40 @@ class BattleSessionTest {
     }
 
     @Test
+    fun upperBattleFeedSeparatesShowdownBlockMessagesIntoIndividualEvents() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog("<section><strong>Iron Hands used Thunder Punch!</strong></section><article>It was super effective.</article>")
+
+        assertEquals(
+            listOf("Iron Hands used Thunder Punch!", "It was super effective."),
+            session.battleFeedEntries()
+        )
+        assertEquals(
+            listOf("Iron Hands used Thunder Punch!", "It was super effective."),
+            session.activityMessages().takeLast(2)
+        )
+    }
+
+    @Test
+    fun activityKeepsConsecutiveIdenticalBattleMessages() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog("<div>It had no effect.</div><div>It had no effect.</div>")
+
+        assertEquals(
+            listOf("It had no effect.", "It had no effect."),
+            session.activityMessages().takeLast(2)
+        )
+    }
+
+    @Test
+    fun upperBattleFeedSplitsBreakTagsWithAttributes() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog("First<br class=\"battle-line\">Second")
+
+        assertEquals(listOf("First", "Second"), session.battleFeedEntries())
+    }
+
+    @Test
     fun randomDoublesAndTriplesFormatsDoNotRequireSavedTeams() {
         assertTrue(BattleSession.MatchFormat("gen9randomdoublesbattle", "Random Doubles").usesRandomTeams)
         assertTrue(BattleSession.MatchFormat("gen9randomtriplesbattle", "Random Triples").usesRandomTeams)

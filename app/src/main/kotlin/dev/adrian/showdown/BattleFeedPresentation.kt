@@ -72,7 +72,7 @@ class BattleFeedPresentation(
             currentStartedAtMillis = presentationNowMillis
         } else {
             newEntries(previousEntries, entries).forEach { message ->
-                if (message.isNotBlank()) pendingMessages.addLast(message)
+                enqueue(message)
             }
             if (!playbackPaused) advance(presentationNowMillis)
         }
@@ -130,6 +130,11 @@ class BattleFeedPresentation(
             currentText = pendingMessages.removeFirst()
             currentStartedAtMillis = nowMillis
         }
+    }
+
+    private fun enqueue(message: String) {
+        if (message.isBlank()) return
+        pendingMessages.addLast(message)
     }
 
     private fun messageVisibleDurationMillis(text: String): Long = maxOf(

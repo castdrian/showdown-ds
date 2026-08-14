@@ -14,7 +14,7 @@ object ShowdownChangelog {
                 "New teams now start with a competitive format instead of Random Battle when no format has been chosen.",
                 "Team sets now edit EVs and IVs in readable HP, Atk, Def, SpA, SpD, and Spe controls while preserving Showdown's packed and text formats.",
                 "The upper battle messages now behave like a Pokémon battle message box: one compact event at a time, with a steady speed-aware text reveal, readable dwell time, and a gentle fade between events.",
-                "Battle message pacing is now calmer by default and freezes cleanly when the app leaves the foreground, so returning to a battle never skips ahead through its text.",
+                "Battle messages now appear one readable event at a time instead of building a wall of text, and the feed freezes cleanly when the app leaves the foreground.",
                 "Effectiveness battle audio now waits for the generic damage sample to finish, keeping the hit and result cues audibly sequential.",
                 "Battle message separators now let the current event finish before the next queued event appears.",
                 "Modern battles now fall back to static Showdown front artwork for newer Pokémon without animated sprite files.",

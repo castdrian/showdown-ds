@@ -202,4 +202,14 @@ class BattleFeedPresentationTest {
         assertEquals("Second", presentation.frame(5_000L)?.text)
         assertEquals("Third", presentation.frame(6_200L)?.text)
     }
+
+    @Test
+    fun serializesEveryMessageInARecentBurst() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("Current"), true, 1_000L)
+        presentation.update(listOf("Current") + (1..8).map { "Event $it" }, true, 1_100L)
+
+        assertEquals("Event 1", presentation.frame(2_900L)?.text)
+        assertEquals("Event 2", presentation.frame(4_800L)?.text)
+    }
 }

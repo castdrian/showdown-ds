@@ -633,7 +633,7 @@ class BattleSession {
 
     fun battleLog() = battleLog.toList()
 
-    fun battleFeedEntries(limit: Int = SHOWDOWN_BATTLE_LOG_LIMIT): List<String> {
+    fun battleFeedEntries(limit: Int = SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT): List<String> {
         val source = showdownBattleLogEntries.takeIf { it.isNotEmpty() } ?: battleLog
         return source.asSequence()
             .filter(String::isNotBlank)
@@ -651,14 +651,15 @@ class BattleSession {
 
     fun appendShowdownBattleLog(value: String) {
         val entries = value
-            .replace(Regex("(?i)<br\\s*/?>"), "\n")
+            .replace(SHOWDOWN_LOG_BREAK_TAG, "\n")
             .split('\n')
             .map { it.replace("**", "").trim() }
             .mapNotNull(::sanitizeShowdownMarkup)
             .filter(String::isNotBlank)
         if (entries.isEmpty()) return
         showdownBattleLogEntries += entries
-        while (showdownBattleLogEntries.size > SHOWDOWN_BATTLE_LOG_LIMIT) showdownBattleLogEntries.removeAt(0)
+        while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
+        entries.forEach(::appendActivity)
         latestBattleEvent = entries.last()
         latestBattleEventAtNanos = System.nanoTime()
         battleFeedVisible = true
@@ -3690,9 +3691,8 @@ class BattleSession {
     }
 
     private fun appendActivity(entry: String) {
-        if (activityMessages.lastOrNull() == entry) return
         activityMessages += entry
-        if (activityMessages.size > 64) activityMessages.removeAt(0)
+        while (activityMessages.size > BATTLE_HISTORY_LIMIT) activityMessages.removeAt(0)
     }
 
     private fun appendMarkup(value: String) {
@@ -4401,7 +4401,11 @@ class BattleSession {
         const val MENU_ITEM_COUNT = 14
         const val MENU_COLUMNS = 3
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
-        private const val SHOWDOWN_BATTLE_LOG_LIMIT = 1024
+        private const val BATTLE_HISTORY_LIMIT = 1024
+        private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = BATTLE_HISTORY_LIMIT
+        private val SHOWDOWN_LOG_BREAK_TAG = Regex(
+            "(?i)<br(?:\\s+[^>]*)?\\s*/?>|</?(?:address|article|aside|blockquote|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)(?:\\s+[^>]*)?\\s*/?>"
+        )
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
         fun displayPokemonName(name: String, species: String = name): String {

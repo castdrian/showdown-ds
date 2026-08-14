@@ -59,7 +59,7 @@ object BattlePlaybackTiming {
     private const val SWITCH_PAUSE_MILLIS = 2_800L
     private const val TURN_PAUSE_MILLIS = 2_000L
     private const val END_OF_BATTLE_PAUSE_MILLIS = 4_000L
-    private const val MESSAGE_PAUSE_MILLIS = 2_300L
+    private const val MESSAGE_PAUSE_MILLIS = 2_400L
     private val READABLE_ACTIONS = setOf(
         "cant",
         "custom",
