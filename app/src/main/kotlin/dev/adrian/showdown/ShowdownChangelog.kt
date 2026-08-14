@@ -117,7 +117,8 @@ object ShowdownChangelog {
                 "Native Showdown battle wording now replaces protocol fallbacks in place, preventing duplicate readable lines while the battle feed catches up.",
                 "Anonymous guest battles now return to a truthful lobby after an app process restart instead of showing a stale battle transcript.",
                 "Fainted Pokémon now keep their zero-HP card and party Poké Balls visible while their field sprite leaves play.",
-                "Switch cards now keep their readable text, HP bars, type badges, and selection status separated on the Thor lower display."
+                "Switch cards now reserve separate type and status regions at the Thor lower display density, keeping long type names inside their own card.",
+                "Native battle messages now follow the local player side, so move wording matches the upper HP cards in every matchup."
             )
         ),
         ShowdownChangelogEntry(

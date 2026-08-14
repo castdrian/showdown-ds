@@ -12,6 +12,10 @@ class ShowdownMoveEffectsContractTest {
 
         assertTrue(source.contains("new Battle({ id: 'showdownds', paused: true,"))
         assertTrue(source.contains("if (battle.paused) battle.play();"))
+        assertTrue(source.contains("var nativeBattlePerspective = 'p1';"))
+        assertTrue(source.contains("function applyNativeBattlePerspective()"))
+        assertTrue(source.contains("battle.scene.log.battleParser.perspective = battle.mySide.sideid;"))
+        assertTrue(source.contains("setPerspective: function (side)"))
         assertTrue(source.contains("this.scene.__showdownNativeResultCues = [];"))
         assertTrue(source.contains("nativeMoveStarted();"))
         assertTrue(source.contains("function clearNativeCueTimers(scene)"))

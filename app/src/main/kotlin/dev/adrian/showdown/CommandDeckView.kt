@@ -1362,6 +1362,8 @@ class CommandDeckView(
                 canvas.drawText(if (previewPosition >= 0) "${previewPosition + 1}" else "—", marker.centerX(), marker.centerY() + 8f * scale, paint)
                 paint.textAlign = Paint.Align.LEFT
             }
+            canvas.save()
+            canvas.clipRect(bounds)
             val spriteBounds = RectF(bounds.left + 16f * scale, bounds.top + 18f * scale, bounds.left + 150f * scale, bounds.top + 152f * scale)
             teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
@@ -1381,19 +1383,24 @@ class CommandDeckView(
             paint.color = MUTED
             canvas.drawText("Lv. ${details.level}${details.gender.ifBlank { "" }}", nameLeft, bounds.top + 104f * scale, paint)
             drawTeamHp(canvas, RectF(nameLeft, bounds.top + 120f * scale, bounds.right - 20f * scale, bounds.top + 168f * scale), details.hp, scale)
-            var typeX = bounds.left + 18f * scale
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-            paint.textSize = readableTextSize(20f, scale, 18f, 14f)
             val bottomRow = RectF(bounds.left + 18f * scale, bounds.top + 178f * scale, bounds.right - 18f * scale, bounds.top + 230f * scale)
-            details.types.forEach { type ->
-                val typeWidth = maxOf(92f * scale, paint.measureText(type) + 28f * scale)
-                val typeBounds = RectF(typeX, bottomRow.top, typeX + typeWidth, bottomRow.bottom)
+            val visibleTypes = details.types.take(2)
+            val rowBounds = SwitchTeamLayout.rowBounds(bounds.toSwitchTeamBounds(), scale, visibleTypes.size)
+            visibleTypes.forEachIndexed { index, type ->
+                val typeRegion = SwitchTeamLayout.typeBounds(rowBounds, index)
+                val typeBounds = RectF(typeRegion.left, bottomRow.top, typeRegion.right, bottomRow.bottom)
                 paint.color = movePalette(type).base
                 canvas.drawRoundRect(typeBounds, 13f * scale, 13f * scale, paint)
                 paint.textAlign = Paint.Align.CENTER
+                paint.textSize = fittedTextSize(
+                    type,
+                    typeBounds.width() - 18f * scale,
+                    readableTextSize(20f, scale, 18f, 12f),
+                    readableTextSize(14f, scale, 12f, 12f)
+                )
                 drawOutlinedText(canvas, type, typeBounds.centerX(), centeredTextBaseline(typeBounds.centerY()), Color.rgb(7, 18, 26), PAPER, 1.5f * scale)
                 paint.textAlign = Paint.Align.LEFT
-                typeX = typeBounds.right + 8f * scale
             }
             val state = when {
                 details.condition.contains("FNT", true) -> "Fainted"
@@ -1402,8 +1409,7 @@ class CommandDeckView(
                 pokemon.equals(session.playerPokemon, true) -> "In battle"
                 else -> "Available"
             }
-            val stateLeft = maxOf(typeX + 4f * scale, bounds.right - 220f * scale)
-            val stateBounds = RectF(stateLeft, bottomRow.top, bounds.right - 18f * scale, bottomRow.bottom)
+            val stateBounds = RectF(rowBounds.statusLeft, bottomRow.top, rowBounds.right, bottomRow.bottom)
             paint.color = if (details.condition.contains("FNT", true)) Color.rgb(95, 31, 66) else Color.rgb(12, 69, 82)
             canvas.drawRoundRect(stateBounds, 14f * scale, 14f * scale, paint)
             paint.textAlign = Paint.Align.CENTER
@@ -1416,8 +1422,11 @@ class CommandDeckView(
             paint.color = if (details.condition.contains("FNT", true)) MAGENTA else Color.rgb(174, 244, 217)
             canvas.drawText(state, stateBounds.centerX(), centeredTextBaseline(stateBounds.centerY()), paint)
             paint.textAlign = Paint.Align.LEFT
+            canvas.restore()
         }
     }
+
+    private fun RectF.toSwitchTeamBounds() = SwitchTeamCardBounds(left, top, right, bottom)
 
     private fun requestTeamSprite(species: String) {
         if (teamSprites.containsKey(species) || !requestedTeamSprites.add(species)) return

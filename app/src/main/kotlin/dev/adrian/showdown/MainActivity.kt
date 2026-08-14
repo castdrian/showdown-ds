@@ -595,6 +595,7 @@ class MainActivity : Activity() {
         )
         showdownMoveEffects = effects
         frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
+        effects.setPerspective(session.battlePlayerSlot())
         effects.setPlaybackSpeed(replaySpeed)
         effects.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
         effects.seed(session.protocolHistory())
@@ -687,6 +688,7 @@ class MainActivity : Activity() {
         if (lines.any { it.startsWith("|init|battle") }) battleScene?.resetBattleFeed()
         if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
         if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return
+        showdownMoveEffects?.setPerspective(session.battlePlayerSlot())
         showdownMoveEffects?.applyProtocol(lines, session.battleLogGeneration())
     }
 

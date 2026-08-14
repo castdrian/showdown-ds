@@ -25,6 +25,7 @@ class ShowdownMoveEffectsView(
     private var pageLoaded = false
     private var playbackPaused = false
     private var playbackSpeed = 1f
+    private var battlePerspective = "p1"
     private var released = false
     private val nativeAudioBridge = NativeAudioBridge(audioCueListener, audioCueResetter, audioMoveResetter)
     private val nativeBattleLogBridge = NativeBattleLogBridge(battleLogListener, battleLogSyncListener)
@@ -47,6 +48,7 @@ class ShowdownMoveEffectsView(
                 if (released) return
                 pageLoaded = true
                 runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
+                runJavascript("window.ShowdownNativeEffects.setPerspective('$battlePerspective');")
                 seed(protocolHistoryProvider())
                 if (playbackPaused) runJavascript("window.ShowdownNativeEffects.pause();")
                 flushPendingPackets()
@@ -90,6 +92,12 @@ class ShowdownMoveEffectsView(
         if (nextSpeed == playbackSpeed) return
         playbackSpeed = nextSpeed
         runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
+    }
+
+    fun setPerspective(side: String) {
+        val next = side.takeIf { it == "p1" || it == "p2" } ?: return
+        battlePerspective = next
+        runJavascript("window.ShowdownNativeEffects.setPerspective('$next');")
     }
 
     fun release() {
@@ -164,6 +172,7 @@ class ShowdownMoveEffectsView(
                     <script>
                     (function () {
                         var battle = null;
+                        var nativeBattlePerspective = 'p1';
                         var animationSpeed = 1;
                         var captureNativeBattleLog = true;
                         var chromeObserver = null;
@@ -202,6 +211,13 @@ class ShowdownMoveEffectsView(
                         }
                         function nativeBattleLogSynchronized(generation) {
                             if (window.ShowdownNativeBattleLog) window.ShowdownNativeBattleLog.synced(Number(generation) || 0);
+                        }
+                        function applyNativeBattlePerspective() {
+                            if (!battle) return;
+                            battle.setViewpoint(nativeBattlePerspective);
+                            if (battle.scene && battle.scene.log && battle.scene.log.battleParser) {
+                                battle.scene.log.battleParser.perspective = battle.mySide.sideid;
+                            }
                         }
                         function installBattleLogHooks() {
                             if (typeof BattleLog === 'undefined' || BattleLog.prototype.__showdownNativeBattleLogHooked) return;
@@ -373,6 +389,7 @@ class ShowdownMoveEffectsView(
                             document.getElementById('battle').innerHTML = '';
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', paused: true, ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
+                            applyNativeBattlePerspective();
                             battle.setMute(true);
                             var scene = battle.scene;
                             var updateAcceleration = scene.updateAcceleration;
@@ -411,6 +428,11 @@ class ShowdownMoveEffectsView(
                             setSpeed: function (speed) {
                                 animationSpeed = Math.max(0.25, Math.min(4, Number(speed) || 1));
                                 if (battle) battle.scene.acceleration = animationSpeed;
+                            },
+                            setPerspective: function (side) {
+                                if (side !== 'p1' && side !== 'p2') return;
+                                nativeBattlePerspective = side;
+                                applyNativeBattlePerspective();
                             },
                             pause: function () {
                                 if (battle) battle.pause();

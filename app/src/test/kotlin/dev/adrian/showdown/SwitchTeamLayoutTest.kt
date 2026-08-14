@@ -18,4 +18,17 @@ class SwitchTeamLayoutTest {
         assertTrue(second.left > first.right)
         assertTrue(last.bottom <= 1080f - SwitchTeamLayout.BOTTOM_MARGIN)
     }
+
+    @Test
+    fun switchTeamBottomRowReservesStatusBeforeSizingTypeBadges() {
+        val card = SwitchTeamLayout.bounds(1240f, 1080f, 1f, 0, 6)
+        val row = SwitchTeamLayout.rowBounds(card, 1f, 2)
+        val firstType = SwitchTeamLayout.typeBounds(row, 0)
+        val secondType = SwitchTeamLayout.typeBounds(row, 1)
+
+        assertTrue(firstType.right <= secondType.left)
+        assertTrue(secondType.right <= row.typeRight)
+        assertTrue(row.typeRight < row.statusLeft)
+        assertTrue(row.statusLeft < row.right)
+    }
 }
