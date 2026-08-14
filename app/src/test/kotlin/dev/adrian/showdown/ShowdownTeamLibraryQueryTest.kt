@@ -16,6 +16,11 @@ class ShowdownTeamLibraryQueryTest {
     }
 
     @Test
+    fun listsDistinctFormatsForTeamLibraryNavigation() {
+        assertEquals(listOf("gen8ou", "gen9ou"), ShowdownTeamLibraryQuery.formats(teams))
+    }
+
+    @Test
     fun filtersByFolderAndCommaSeparatedPackedTerms() {
         assertEquals(
             listOf("Rain"),
@@ -24,6 +29,21 @@ class ShowdownTeamLibraryQueryTest {
         assertEquals(
             listOf("Balance"),
             ShowdownTeamLibraryQuery.filter(teams, ShowdownTeamLibraryFilter(query = "gen9ou, makeitrain")).map { it.name }
+        )
+    }
+
+    @Test
+    fun filtersByFormatWithoutChangingFolderSearch() {
+        assertEquals(
+            listOf("Rain", "Balance"),
+            ShowdownTeamLibraryQuery.filter(teams, ShowdownTeamLibraryFilter(format = "gen9ou")).map { it.name }
+        )
+        assertEquals(
+            listOf("Rain"),
+            ShowdownTeamLibraryQuery.filter(
+                teams,
+                ShowdownTeamLibraryFilter(query = "hurricane", format = "gen9ou", folder = "Weather")
+            ).map { it.name }
         )
     }
 }
