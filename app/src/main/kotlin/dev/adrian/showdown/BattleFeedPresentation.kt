@@ -92,7 +92,7 @@ class BattleFeedPresentation(
             pendingMessages.clear()
             currentText = entries.last()
             currentStartedAtMillis = presentationNowMillis
-        } else if (isNewBattle(previousEntries, entries)) {
+        } else if (isSnapshotReplacement(previousEntries, entries)) {
             pendingMessages.clear()
             currentText = entries.last()
             currentStartedAtMillis = presentationNowMillis
@@ -207,9 +207,13 @@ class BattleFeedPresentation(
         return current.drop(overlap)
     }
 
-    private fun isNewBattle(previous: List<String>, current: List<String>): Boolean {
+    private fun isSnapshotReplacement(previous: List<String>, current: List<String>): Boolean {
         if (current.size < previous.size) return true
-        return current.size == 1 && current.firstOrNull() != previous.firstOrNull()
+        if (current.size == 1 && current.firstOrNull() != previous.firstOrNull()) return true
+        if (previous.isEmpty() || current.isEmpty()) return false
+        return (minOf(previous.size, current.size) downTo 1).none { size ->
+            previous.takeLast(size) == current.take(size)
+        }
     }
 
     private companion object {

@@ -167,6 +167,20 @@ class BattleFeedPresentationTest {
     }
 
     @Test
+    fun skipsAReplacedHistorySnapshotWithoutASharedBoundary() {
+        val presentation = BattleFeedPresentation()
+        presentation.update(listOf("Protocol status", "Format"), true, 1_000L)
+        presentation.update(
+            listOf("Go! Pikachu!", "Pikachu used Tackle!", "It was super effective."),
+            true,
+            1_100L
+        )
+
+        assertEquals("It was super effective.", presentation.frame(1_100L)?.text)
+        assertNull(presentation.frame(2_900L))
+    }
+
+    @Test
     fun pausesTheMessageClockWhileTheActivityIsPaused() {
         val presentation = BattleFeedPresentation(
             charactersPerSecond = 10f,
