@@ -31,6 +31,7 @@ class BattleSceneView(
     private var backdrop: Bitmap? = null
     private var pokeballSheet: Bitmap? = null
     private var requestedPokeballSheet = false
+    private val partyBallGlyphValidity = mutableMapOf<PartyBallState, Boolean>()
     private var playerSprite: ShowdownSpriteCache.SpriteAsset? = null
     private var opponentSprite: ShowdownSpriteCache.SpriteAsset? = null
     private val playerActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
@@ -379,6 +380,7 @@ class BattleSceneView(
             requestedPokeballSheet = true
             spriteCache.requestPokemonBallSheet { asset ->
                 pokeballSheet = asset
+                partyBallGlyphValidity.clear()
                 invalidate()
             }
         }
@@ -871,7 +873,7 @@ class BattleSceneView(
             bounds.top + height * contentLayout.barBottomFraction
         )
         drawHealthBar(canvas, track, content.fraction, scale, height * 0.07f)
-        val ballSize = BattleCardLayout.partyIndicatorSize(height, scale)
+        val ballSize = BattleCardLayout.partyIndicatorSize(height)
         val ballGap = maxOf(ballSize * 0.12f, 2f * scale)
         val ballStart = textRight - ballSize * 6f - ballGap * 5f
         val ballTop = BattleCardLayout.partyIndicatorTop(bounds.bottom, ballSize, scale)
@@ -921,6 +923,20 @@ class BattleSceneView(
         val cellRight = cellLeft + POKEBALL_GLYPH_LEFT + POKEBALL_GLYPH_SIZE
         val glyphBottom = POKEBALL_GLYPH_TOP + POKEBALL_GLYPH_SIZE
         if (cellRight > sheet.width || glyphBottom > sheet.height) return false
+        val glyphVisible = partyBallGlyphValidity.getOrPut(state) {
+            var visible = false
+            for (y in POKEBALL_GLYPH_TOP until glyphBottom) {
+                for (x in (cellLeft + POKEBALL_GLYPH_LEFT) until cellRight) {
+                    if ((sheet.getPixel(x, y) ushr 24) != 0) {
+                        visible = true
+                        break
+                    }
+                }
+                if (visible) break
+            }
+            visible
+        }
+        if (!glyphVisible) return false
         source.set(
             cellLeft + POKEBALL_GLYPH_LEFT,
             POKEBALL_GLYPH_TOP,

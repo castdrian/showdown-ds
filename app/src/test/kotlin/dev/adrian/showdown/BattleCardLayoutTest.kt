@@ -91,14 +91,15 @@ class BattleCardLayoutTest {
 
         assertTrue(source.contains("drawPartyBallFromSheet(canvas, sheet, left, top, size, state)"))
         assertTrue(source.contains("if (cellRight > sheet.width || glyphBottom > sheet.height) return false"))
+        assertTrue(source.contains("if (!glyphVisible) return false"))
         assertTrue(source.contains("drawFallbackPartyBall(canvas, left, top, size, state)"))
     }
 
     @Test
     fun partyIndicatorsStayReadableOnCompactCards() {
-        assertEquals(22f, BattleCardLayout.partyIndicatorSize(81f, 1f), 0.001f)
-        assertEquals(32.98f, BattleCardLayout.partyIndicatorSize(194f, 1f), 0.001f)
-        assertTrue(BattleCardLayout.partyIndicatorTop(81f, 22f, 1f) > 55f)
+        assertEquals(24f, BattleCardLayout.partyIndicatorSize(81f), 0.001f)
+        assertEquals(32.98f, BattleCardLayout.partyIndicatorSize(194f), 0.001f)
+        assertTrue(BattleCardLayout.partyIndicatorTop(81f, 24f, 1f) > 53f)
     }
 
 }
