@@ -44,25 +44,16 @@ class BattleFeedPresentation(
         val previousEntries = observedEntries
         if (previousEntries == null) {
             pendingMessages.clear()
-            currentText = entries.first()
+            currentText = entries.last()
             currentStartedAtMillis = nowMillis
-            entries.drop(1).forEach { message ->
-                if (message.isNotBlank()) pendingMessages.addLast(message)
-            }
         } else if (previousEntries.isEmpty()) {
             pendingMessages.clear()
-            currentText = entries.first()
+            currentText = entries.last()
             currentStartedAtMillis = nowMillis
-            entries.drop(1).forEach { message ->
-                if (message.isNotBlank()) pendingMessages.addLast(message)
-            }
         } else if (isNewBattle(previousEntries, entries)) {
             pendingMessages.clear()
-            currentText = entries.first()
+            currentText = entries.last()
             currentStartedAtMillis = nowMillis
-            entries.drop(1).forEach { message ->
-                if (message.isNotBlank()) pendingMessages.addLast(message)
-            }
         } else {
             newEntries(previousEntries, entries).forEach { message ->
                 if (message.isNotBlank()) pendingMessages.addLast(message)

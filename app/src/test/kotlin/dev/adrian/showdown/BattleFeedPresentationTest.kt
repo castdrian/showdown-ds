@@ -6,13 +6,13 @@ import org.junit.Test
 
 class BattleFeedPresentationTest {
     @Test
-    fun startsWithTheOldestMessageAndQueuesTheRest() {
+    fun startsWithTheLatestMessageWithoutReplayingHistory() {
         val presentation = BattleFeedPresentation()
 
         presentation.update(listOf("Older", "Newest"), true, 1_000L)
 
-        assertEquals("Older", presentation.frame(1_100L)?.text)
-        assertEquals("Newest", presentation.frame(2_500L)?.text)
+        assertEquals("Newest", presentation.frame(1_100L)?.text)
+        assertNull(presentation.frame(2_500L))
     }
 
     @Test
@@ -146,26 +146,23 @@ class BattleFeedPresentationTest {
     }
 
     @Test
-    fun queuesExistingAndNewMessagesInOrder() {
+    fun skipsSnapshotHistoryButQueuesLiveMessagesInOrder() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("Old 1", "Old 2", "Old 3"), true, 1_000L)
         presentation.update(listOf("Old 1", "Old 2", "Old 3", "New 1", "New 2"), true, 1_100L)
 
-        assertEquals("Old 1", presentation.frame(1_100L)?.text)
-        assertEquals("Old 2", presentation.frame(2_500L)?.text)
-        assertEquals("Old 3", presentation.frame(4_000L)?.text)
-        assertEquals("New 1", presentation.frame(5_500L)?.text)
+        assertEquals("Old 3", presentation.frame(1_100L)?.text)
+        assertEquals("New 1", presentation.frame(2_500L)?.text)
+        assertEquals("New 2", presentation.frame(4_000L)?.text)
     }
 
     @Test
-    fun keepsEveryLineWhenAHistoryWindowAdvances() {
+    fun keepsTheLatestLineWhenAHistoryWindowAdvances() {
         val presentation = BattleFeedPresentation()
         presentation.update(listOf("One", "Two", "Three"), true, 1_000L)
         presentation.update(listOf("Two", "Three", "Four"), true, 1_100L)
 
-        assertEquals("One", presentation.frame(1_100L)?.text)
-        assertEquals("Two", presentation.frame(2_500L)?.text)
-        assertEquals("Three", presentation.frame(4_000L)?.text)
-        assertEquals("Four", presentation.frame(5_500L)?.text)
+        assertEquals("Three", presentation.frame(1_100L)?.text)
+        assertEquals("Four", presentation.frame(2_500L)?.text)
     }
 }
