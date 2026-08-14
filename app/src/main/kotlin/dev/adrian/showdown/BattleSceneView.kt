@@ -71,6 +71,11 @@ class BattleSceneView(
         }
     }
 
+    fun setPlaybackSpeed(speed: Float) {
+        battleFeedPresentation.setPlaybackSpeed(speed)
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val width = width.toFloat()
@@ -1043,7 +1048,7 @@ class BattleSceneView(
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val nowMillis = SystemClock.elapsedRealtime()
         val feedEntries = session.battleFeedEntries()
-        battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis)
+        battleFeedPresentation.update(feedEntries, true, nowMillis)
         val frame = battleFeedPresentation.frame(nowMillis) ?: return
         val alpha = frame.alpha
         val playerCardRight = width * 0.315f
@@ -1051,8 +1056,20 @@ class BattleSceneView(
         val settledLeft = maxOf(width * 0.33f, playerCardRight + sideGap)
         val left = settledLeft
         val right = width * 0.97f
-        val top = height * 0.78f
         val bottom = min(height * 0.945f, height * 0.98f - 32f * scale)
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+        paint.textSize = readableTextSize(36f, scale, 11f)
+        val maxWidth = right - left - 48f * scale
+        val lineHeight = maxOf(42f * scale, paint.descent() - paint.ascent() + 8f * scale)
+        val padding = 22f * scale
+        val fullLines = BattleFeedText.wrap(frame.text, maxWidth, 2, paint::measureText)
+            .ifEmpty { listOf("") }
+        val lines = BattleFeedText.wrap(frame.visibleText, maxWidth, fullLines.size, paint::measureText)
+            .ifEmpty { listOf("") }
+        val boundsHeight = fullLines.size * lineHeight + padding * 2f
+        val top = (bottom - boundsHeight).coerceAtLeast(height * 0.70f)
         val bounds = RectF(left, top, right, bottom)
         battleFeedBounds.set(bounds)
         paint.shader = LinearGradient(
@@ -1071,16 +1088,8 @@ class BattleSceneView(
         paint.color = Color.argb((132f * alpha).toInt(), 183, 229, 235)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.FILL
-        paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(36f, scale, 11f)
-        val maxWidth = bounds.width() - 48f * scale
-        val lineHeight = 42f * scale
-        val padding = 24f * scale
         val viewportHeight = (bounds.height() - padding * 2f).coerceAtLeast(lineHeight)
-        val maxVisibleLines = (viewportHeight / lineHeight).toInt().coerceAtLeast(1)
-        val lines = BattleFeedText.wrap(frame.text, maxWidth, maxVisibleLines.coerceAtMost(2), paint::measureText)
-            .ifEmpty { listOf("…") }
-        val contentHeight = lines.size * lineHeight
+        val contentHeight = fullLines.size * lineHeight
         val contentTop = bounds.top + padding + (viewportHeight - contentHeight).coerceAtLeast(0f) / 2f
         canvas.save()
         canvas.clipRect(bounds)

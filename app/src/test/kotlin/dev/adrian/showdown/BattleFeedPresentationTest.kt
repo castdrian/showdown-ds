@@ -20,8 +20,54 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("Move text"), true, 1_000L)
 
         assertEquals(1f, presentation.frame(1_500L)?.alpha)
-        assertEquals(0.23f, presentation.frame(4_800L)?.alpha ?: 0f, 0.01f)
-        assertNull(presentation.frame(4_900L))
+        assertEquals(0.23f, presentation.frame(2_369L)?.alpha ?: 0f, 0.01f)
+        assertNull(presentation.frame(2_470L))
+    }
+
+    @Test
+    fun revealsTheMessageBeforeHoldingIt() {
+        val presentation = BattleFeedPresentation(
+            charactersPerSecond = 10f,
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 500L,
+            fadeDurationMillis = 100L
+        )
+        presentation.update(listOf("Hello"), true, 1_000L)
+
+        assertEquals("H", presentation.frame(1_100L)?.visibleText)
+        assertEquals("Hello", presentation.frame(1_500L)?.visibleText)
+        assertEquals(1f, presentation.frame(1_900L)?.alpha)
+    }
+
+    @Test
+    fun selectedPlaybackSpeedChangesTheRevealRate() {
+        val presentation = BattleFeedPresentation(
+            charactersPerSecond = 10f,
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 0L,
+            fadeDurationMillis = 100L
+        )
+        presentation.setPlaybackSpeed(0.5f)
+        presentation.update(listOf("Hello"), true, 1_000L)
+
+        assertEquals("", presentation.frame(1_100L)?.visibleText)
+        assertEquals("H", presentation.frame(1_200L)?.visibleText)
+    }
+
+    @Test
+    fun fadesIntoTheNextMessageAfterTheReadableCycle() {
+        val presentation = BattleFeedPresentation(
+            charactersPerSecond = 10f,
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 500L,
+            fadeDurationMillis = 100L
+        )
+        presentation.update(listOf("First"), true, 1_000L)
+        presentation.update(listOf("First", "Second"), true, 1_100L)
+
+        assertEquals("First", presentation.frame(1_999L)?.visibleText)
+        assertEquals("", presentation.frame(2_100L)?.visibleText)
+        assertEquals("S", presentation.frame(2_200L)?.visibleText)
     }
 
     @Test
@@ -31,7 +77,7 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("First", "Second"), true, 1_100L)
 
         assertEquals("First", presentation.frame(1_100L)?.text)
-        assertEquals("Second", presentation.frame(2_300L)?.text)
+        assertEquals("Second", presentation.frame(2_500L)?.text)
     }
 
     @Test
@@ -51,6 +97,6 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("Old 1", "Old 2", "Old 3", "New 1", "New 2"), true, 1_100L)
 
         assertEquals("Old 3", presentation.frame(1_100L)?.text)
-        assertEquals("New 1", presentation.frame(2_300L)?.text)
+        assertEquals("New 1", presentation.frame(2_500L)?.text)
     }
 }

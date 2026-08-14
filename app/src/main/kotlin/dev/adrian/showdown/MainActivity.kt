@@ -570,6 +570,7 @@ class MainActivity : Activity() {
     private fun createPrimaryScreen(): View {
         val frame = FrameLayout(this).also { primaryFrame = it }
         battleScene = BattleSceneView(this, session, spriteCache)
+        battleScene?.setPlaybackSpeed(replaySpeed)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
         return frame
     }
@@ -750,6 +751,7 @@ class MainActivity : Activity() {
             replaySpeed = nextSpeed
         }
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
+        battleScene?.setPlaybackSpeed(replaySpeed)
         getSharedPreferences("showdown", MODE_PRIVATE).edit().putFloat("battle_speed", replaySpeed).apply()
         if (session.isReplayMode()) updateReplayStatus() else session.setConnectionStatus("Battle playback speed: ${replaySpeed.trimTrailingZero()}×")
     }
@@ -4898,6 +4900,7 @@ class MainActivity : Activity() {
         replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
         ensureShowdownMoveEffects()
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
+        battleScene?.setPlaybackSpeed(replaySpeed)
         showdownMoveEffects?.setPlaybackPaused(false)
         enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)
         if (replayStartsPaused) setReplayPaused(true)
