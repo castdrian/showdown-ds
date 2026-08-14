@@ -62,7 +62,7 @@ class ShowdownTournamentState {
         return if (json.optString("type") == "table") tableBracketLines(json) else treeBracketLines(json)
     }
 
-    fun title(): String = snapshot.format.takeIf { it.isNotBlank() }?.let { "$it Tournament" } ?: "Tournament"
+    fun title(formatLabel: (String) -> String = { it }): String = snapshot.format.takeIf { it.isNotBlank() }?.let { "${formatLabel(it)} Tournament" } ?: "Tournament"
 
     fun status(): String = when {
         !snapshot.isActive && snapshot.format.isNotBlank() -> "Finished"
@@ -82,7 +82,7 @@ class ShowdownTournamentState {
             teambuilderFormat = baseFormat,
             generator = generator,
             playerCap = playerCap,
-            events = listOf("${customName.ifBlank { baseFormat }} tournament created.")
+            events = listOf("Tournament created.")
         )
     }
 

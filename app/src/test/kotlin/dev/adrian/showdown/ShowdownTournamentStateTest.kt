@@ -64,4 +64,12 @@ class ShowdownTournamentStateTest {
         assertEquals("/tournament cancelchallenge", ShowdownTournamentState.cancelChallengeCommand())
         assertEquals("/tournament vtm", ShowdownTournamentState.validateTeamCommand())
     }
+
+    @Test
+    fun formatsTournamentTitleThroughTheKnownFormatLabeler() {
+        val state = ShowdownTournamentState()
+        state.applyProtocol("|tournament|create|gen9ou|Single Elimination|4")
+
+        assertEquals("[Gen 9] OU Tournament", state.title { format -> ShowdownTeamLibraryQuery.displayFormat(format) })
+    }
 }

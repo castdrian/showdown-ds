@@ -52,15 +52,18 @@ object ShowdownTeamLibraryQuery {
     fun matchFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): BattleSession.MatchFormat {
         val normalized = format.trim()
         val advertised = resolveFormat(normalized, knownFormats)
+        val readableLabel = displayFormat(normalized, knownFormats)
         return advertised?.copy(
             id = advertised.id.trim(),
-            label = displayFormat(normalized, knownFormats)
-        ) ?: BattleSession.MatchFormat(normalized, displayFormat(normalized, knownFormats))
+            label = readableLabel,
+            menuLabel = advertised.menuLabel.trim().takeUnless { it.isBlank() || it.equals(advertised.id.trim(), true) }
+                ?: readableLabel
+        ) ?: BattleSession.MatchFormat(normalized, readableLabel)
     }
 
     fun displayFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): String {
         val advertised = resolveFormat(format, knownFormats)
-        return advertised?.label
+        return advertised?.label?.trim()
             ?.takeUnless { it.isBlank() || it.equals(advertised.id.trim(), true) }
             ?: displayFormat(format)
     }
@@ -88,4 +91,9 @@ object ShowdownTeamLibraryQuery {
             folderMatches && formatMatches && terms.all(searchText::contains)
         }
     }
+
+    fun matchingFormat(teams: List<ShowdownTeam>, format: String): List<ShowdownTeam> = filter(
+        teams,
+        ShowdownTeamLibraryFilter(format = format)
+    )
 }

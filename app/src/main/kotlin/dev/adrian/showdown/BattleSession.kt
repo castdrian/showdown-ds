@@ -4,7 +4,7 @@ import org.json.JSONObject
 import kotlin.random.Random
 
 private fun inferredRandomTeamFormat(id: String): Boolean {
-    val normalized = id.lowercase()
+    val normalized = id.trim().lowercase()
     return normalized.contains("battlefactory") ||
         (normalized.contains("random") && normalized.contains("battle"))
 }
@@ -46,6 +46,8 @@ class BattleSession {
             val GEN8_RANDOM = MatchFormat("gen8randombattle", "[Gen 8] Random Battle", "Gen 8 Random")
             val GEN9_RANDOM = MatchFormat("gen9randombattle", "[Gen 9] Random Battle", "Gen 9 Random")
             val defaults = listOf(GEN6_RANDOM, GEN7_RANDOM, GEN8_RANDOM, GEN9_RANDOM)
+
+            fun usesRandomTeams(format: MatchFormat): Boolean = format.usesRandomTeams || usesRandomTeamsFor(format.id)
 
             fun usesRandomTeamsFor(id: String): Boolean = inferredRandomTeamFormat(id)
         }
@@ -940,9 +942,9 @@ class BattleSession {
     fun applyServerFormats(lines: List<String>) {
         val formats = lines.flatMap(::parseServerFormats)
         if (formats.isEmpty()) return
-        val currentWasAdvertised = availableMatchFormats.any { it.id.equals(matchFormat.id, true) }
+        val currentWasAdvertised = availableMatchFormats.any { it.id.trim().equals(matchFormat.id.trim(), true) }
         val selected = formats.firstOrNull {
-            it.id.equals(matchFormat.id, true) && (it.canSearch || currentWasAdvertised)
+            it.id.trim().equals(matchFormat.id.trim(), true) && (it.canSearch || currentWasAdvertised)
         }
             ?: formats.firstOrNull { it.canSearch }
             ?: formats.first()

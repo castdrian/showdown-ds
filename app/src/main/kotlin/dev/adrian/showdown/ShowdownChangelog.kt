@@ -55,6 +55,7 @@ object ShowdownChangelog {
                 "Team library navigation now filters saved teams by Showdown format as well as folder and search.",
                 "Team format pickers now show readable Showdown names without exposing raw IDs in the selection list.",
                 "Challenge dialogs now use the readable advertised Showdown format name instead of a raw format ID.",
+                "Team selection and tournament surfaces now use readable Showdown format names throughout.",
                 "Custom dialogs no longer open the keyboard automatically, keeping their actions visible until an input is tapped.",
                 "Iron Valiant now uses verified rear-facing artwork on the player side and never falls back to its front sprite.",
                 "Active battle sprites now resolve from species identifiers while keeping nicknames readable in the battle UI.",

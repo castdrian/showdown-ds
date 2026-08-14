@@ -29,7 +29,7 @@ class ShowdownTeamLibraryQueryTest {
     @Test
     fun prefersAdvertisedFormatLabelsForChallengeAndTeamSurfaces() {
         val advertised = listOf(
-            BattleSession.MatchFormat(" gen9ou ", "[Gen 9] OverUsed"),
+            BattleSession.MatchFormat(" gen9ou ", " [Gen 9] OverUsed ", menuLabel = " gen9ou "),
             BattleSession.MatchFormat("gen9randombattle", "gen9randombattle", usesRandomTeams = true)
         )
 
@@ -46,6 +46,7 @@ class ShowdownTeamLibraryQueryTest {
         )
         assertEquals("gen9ou", normalized.id)
         assertEquals("[Gen 9] OU", normalized.label)
+        assertEquals("[Gen 9] OU", normalized.menuLabel)
         assertEquals(false, normalized.usesRandomTeams)
     }
 
@@ -79,6 +80,17 @@ class ShowdownTeamLibraryQueryTest {
             ShowdownTeamLibraryQuery.filter(
                 teams,
                 ShowdownTeamLibraryFilter(format = " gen9ou ", folder = " weather ")
+            ).map { it.name }
+        )
+    }
+
+    @Test
+    fun matchingFormatAcceptsWhitespacePaddedStoredAndRequestedIds() {
+        assertEquals(
+            listOf("Rain", "Balance", "Legacy"),
+            ShowdownTeamLibraryQuery.matchingFormat(
+                teams + ShowdownTeam("legacy", "Legacy", " gen9ou ", "|Politoed|||scald"),
+                " GEN9OU "
             ).map { it.name }
         )
     }

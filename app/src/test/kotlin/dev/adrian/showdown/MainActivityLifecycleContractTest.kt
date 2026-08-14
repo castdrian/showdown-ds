@@ -160,7 +160,7 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(loader.contains("BattleSession.MatchFormat.defaults.firstOrNull"))
         assertTrue(loader.contains("?: BattleSession.MatchFormat.GEN9_RANDOM"))
-        assertTrue(loader.contains("equals(saved, true)"))
+        assertTrue(loader.contains("equals(normalizedSaved, true)"))
         assertTrue(loader.contains("saved?.let"))
         assertTrue(loader.contains("canSearch = false"))
     }

@@ -38,6 +38,13 @@ class BattleSessionTest {
     }
 
     @Test
+    fun randomFormatDetectionAcceptsWhitespacePaddedIds() {
+        assertTrue(BattleSession.MatchFormat(" gen9randombattle ", "Random Battle").usesRandomTeams)
+        assertTrue(BattleSession.MatchFormat.usesRandomTeamsFor(" gen9battlefactory "))
+        assertTrue(BattleSession.MatchFormat.usesRandomTeams(BattleSession.MatchFormat(" gen9randombattle ", "Random Battle", usesRandomTeams = false)))
+    }
+
+    @Test
     fun requestPopulatesMovesAndResetsFocus() {
         val session = BattleSession()
         session.focusMove(3)

@@ -129,8 +129,8 @@ class ShowdownTeamRemoteState {
         fun resolveFormatId(label: String, formats: List<BattleSession.MatchFormat>): String? {
             val candidate = formatIdFromLabel(label)
             return formats.firstOrNull { format ->
-                format.label.equals(label, true) || format.id.equals(candidate, true)
-            }?.id
+                format.label.trim().equals(label.trim(), true) || format.id.trim().equals(candidate.trim(), true)
+            }?.id?.trim()
         }
 
         fun ownTeamsCommand() = "/join view-teams-all"
