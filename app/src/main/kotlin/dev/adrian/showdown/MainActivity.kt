@@ -3515,8 +3515,15 @@ class MainActivity : Activity() {
         val resultList = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
-        val activeFolder = arrayOfNulls<String>(1)
-        val activeFormat = arrayOfNulls<String>(1)
+        var activeFolder: String? = null
+        var activeFormat: String? = null
+        val knownFormatLabels = session.availableMatchFormats().associate { format ->
+            format.id.trim().lowercase() to format.label
+        }
+        fun formatLabel(format: String): String {
+            val normalized = format.trim()
+            return knownFormatLabels[normalized.lowercase()] ?: ShowdownTeamLibraryQuery.displayFormat(normalized)
+        }
         var teamDialog: ShowdownDialog? = null
         fun styleTeamButton(button: Button, compact: Boolean = false, selected: Boolean = false) = button.apply {
             isAllCaps = false
@@ -3537,21 +3544,21 @@ class MainActivity : Activity() {
                 teams,
                 ShowdownTeamLibraryFilter(
                     query = search.text.toString(),
-                    folder = activeFolder[0],
-                    format = activeFormat[0]
+                    folder = activeFolder,
+                    format = activeFormat
                 )
             )
             val countLabel = "${visibleTeams.size} team${if (visibleTeams.size == 1) "" else "s"}"
             resultSummary.text = when {
-                activeFolder[0] != null && activeFormat[0] != null -> {
-                    val folderName = activeFolder[0].takeUnless { it.isNullOrBlank() } ?: "Unfiled"
-                    "${activeFormat[0]} · $folderName · $countLabel"
+                activeFolder != null && activeFormat != null -> {
+                    val folderName = activeFolder.takeUnless { it.isNullOrBlank() } ?: "Unfiled"
+                    "${formatLabel(activeFormat.orEmpty())} · $folderName · $countLabel"
                 }
-                activeFolder[0] != null -> {
-                    val folderName = activeFolder[0].takeUnless { it.isNullOrBlank() } ?: "Unfiled"
+                activeFolder != null -> {
+                    val folderName = activeFolder.takeUnless { it.isNullOrBlank() } ?: "Unfiled"
                     "$folderName · $countLabel"
                 }
-                activeFormat[0] != null -> "${activeFormat[0]} · $countLabel"
+                activeFormat != null -> "${formatLabel(activeFormat.orEmpty())} · $countLabel"
                 else -> "${visibleTeams.size} of ${teams.size} teams"
             }
             resultList.removeAllViews()
@@ -3572,8 +3579,8 @@ class MainActivity : Activity() {
                     resultList.addView(styleTeamButton(Button(this)).apply {
                         text = buildString {
                             append(team.name)
-                            append("\n${team.format}")
-                            team.folder.takeIf(String::isNotBlank)?.let { append(" · $it") }
+                            append("\n${formatLabel(team.format)}")
+                            team.folder.trim().takeIf(String::isNotBlank)?.let { append(" · $it") }
                             append(remoteState)
                         }
                         gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
@@ -3593,16 +3600,15 @@ class MainActivity : Activity() {
             formatBar.removeAllViews()
             val options = buildList<Pair<String?, String>> {
                 add(null to "All formats")
-                ShowdownTeamLibraryQuery.formats(teams).forEach { add(it to it) }
+                ShowdownTeamLibraryQuery.formats(teams).forEach { add(it to formatLabel(it)) }
             }
             options.forEach { (format, label) ->
-                val selected = activeFormat[0].equals(format, true)
+                val selected = activeFormat.equals(format, true)
                 formatBar.addView(styleTeamButton(Button(this), compact = true, selected = selected).apply {
                     text = if (selected) "✓ $label" else label
                     isSelected = selected
                     setOnClickListener {
-                        activeFormat[0] = format
-                        activeFolder[0] = null
+                        activeFormat = format
                         renderFormats()
                         renderFolders()
                         renderResults()
@@ -3620,13 +3626,12 @@ class MainActivity : Activity() {
                 ShowdownTeamLibraryQuery.folders(teams).forEach { add(it to it) }
             }
             options.forEach { (folder, label) ->
-                val selected = activeFolder[0].equals(folder, true)
+                val selected = activeFolder.equals(folder, true)
                 folderBar.addView(styleTeamButton(Button(this), compact = true, selected = selected).apply {
                     text = if (selected) "✓ $label" else label
                     isSelected = selected
                     setOnClickListener {
-                        activeFolder[0] = folder
-                        activeFormat[0] = null
+                        activeFolder = folder
                         renderFormats()
                         renderFolders()
                         renderResults()
@@ -3646,8 +3651,8 @@ class MainActivity : Activity() {
             setOnClickListener {
                 teamDialog?.dismiss()
                 showTeamEditor(
-                    initialFolder = activeFolder[0].orEmpty(),
-                    initialFormat = activeFormat[0]
+                    initialFolder = activeFolder.orEmpty(),
+                    initialFormat = activeFormat
                 )
             }
         }

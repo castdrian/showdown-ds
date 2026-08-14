@@ -21,6 +21,12 @@ class ShowdownTeamLibraryQueryTest {
     }
 
     @Test
+    fun formatsUseReadableShowdownLabelsWhenTheServerLabelIsUnavailable() {
+        assertEquals("[Gen 9] Random Battle", ShowdownTeamLibraryQuery.displayFormat(" gen9randombattle "))
+        assertEquals("[Gen 9] OU", ShowdownTeamLibraryQuery.displayFormat("gen9ou"))
+    }
+
+    @Test
     fun filtersByFolderAndCommaSeparatedPackedTerms() {
         assertEquals(
             listOf("Rain"),
@@ -43,6 +49,13 @@ class ShowdownTeamLibraryQueryTest {
             ShowdownTeamLibraryQuery.filter(
                 teams,
                 ShowdownTeamLibraryFilter(query = "hurricane", format = "gen9ou", folder = "Weather")
+            ).map { it.name }
+        )
+        assertEquals(
+            listOf("Rain"),
+            ShowdownTeamLibraryQuery.filter(
+                teams,
+                ShowdownTeamLibraryFilter(format = " gen9ou ", folder = " weather ")
             ).map { it.name }
         )
     }

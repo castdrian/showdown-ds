@@ -7,6 +7,20 @@ data class ShowdownTeamLibraryFilter(
 )
 
 object ShowdownTeamLibraryQuery {
+    private val namedFormatLabels = mapOf(
+        "ag" to "Anything Goes",
+        "aaa" to "Almost Any Ability",
+        "balancedhackmons" to "Balanced Hackmons",
+        "battlefactory" to "Battle Factory",
+        "doublesou" to "Doubles OU",
+        "doublesuu" to "Doubles UU",
+        "monotype" to "Monotype",
+        "nationaldex" to "National Dex",
+        "randombattle" to "Random Battle",
+        "ubers" to "Ubers"
+    )
+    private val uppercaseFormatLabels = setOf("bh", "lc", "nu", "ou", "pu", "ru", "uu")
+
     fun folders(teams: List<ShowdownTeam>): List<String> = teams
         .map { it.folder.trim() }
         .filter(String::isNotBlank)
@@ -19,15 +33,28 @@ object ShowdownTeamLibraryQuery {
         .distinctBy(String::lowercase)
         .sortedWith(String.CASE_INSENSITIVE_ORDER)
 
+    fun displayFormat(format: String): String {
+        val normalized = format.trim()
+        if (normalized.isBlank()) return "Unknown format"
+        val match = Regex("^gen(\\d+)([a-z0-9]+)$", RegexOption.IGNORE_CASE).matchEntire(normalized)
+            ?: return normalized
+        val suffix = match.groupValues[2].lowercase()
+        val suffixLabel = namedFormatLabels[suffix]
+            ?: if (suffix in uppercaseFormatLabels) suffix.uppercase() else suffix
+        return "[Gen ${match.groupValues[1]}] $suffixLabel"
+    }
+
     fun filter(teams: List<ShowdownTeam>, filter: ShowdownTeamLibraryFilter): List<ShowdownTeam> {
         val terms = filter.query
             .split(',')
             .map(String::trim)
             .filter(String::isNotBlank)
             .map(String::lowercase)
+        val folder = filter.folder?.trim()
+        val format = filter.format?.trim()
         return teams.filter { team ->
-            val folderMatches = filter.folder == null || team.folder.equals(filter.folder, true)
-            val formatMatches = filter.format == null || team.format.equals(filter.format, true)
+            val folderMatches = folder == null || team.folder.trim().equals(folder, true)
+            val formatMatches = format == null || team.format.trim().equals(format, true)
             val searchText = buildString {
                 append(team.name)
                 append(' ')
