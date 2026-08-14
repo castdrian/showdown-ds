@@ -16,8 +16,7 @@ object BattleSceneTiming {
 
     fun statusCardAlpha(pokemon: String, condition: String, latestFaintedPokemon: String, faintAtNanos: Long, nowNanos: Long): Float {
         if (!condition.contains("FNT", true)) return 1f
-        if (!pokemon.equals(latestFaintedPokemon, true)) return 0f
-        return (1f - (nowNanos - faintAtNanos).toFloat() / statusFadeDurationNanos).coerceIn(0f, 1f)
+        return 1f
     }
 
     fun summonProgress(summonAtNanos: Long, nowNanos: Long) =

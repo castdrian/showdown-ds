@@ -80,7 +80,8 @@ object ShowdownChangelog {
                 "Sparse doubles and triples requests now keep each move list, active card, and choice attached to its real battle slot.",
                 "Multi-battle foe targets now use Showdown's required +slot choice syntax.",
                 "Live battle feeds now keep Showdown's move, effect, and damage messages readable without exposing parser diagnostics.",
-                "Anonymous guest battles now return to a truthful lobby after an app process restart instead of showing a stale battle transcript."
+                "Anonymous guest battles now return to a truthful lobby after an app process restart instead of showing a stale battle transcript.",
+                "Fainted Pokémon now keep their zero-HP card and party Poké Balls visible while their field sprite leaves play."
             )
         ),
         ShowdownChangelogEntry(

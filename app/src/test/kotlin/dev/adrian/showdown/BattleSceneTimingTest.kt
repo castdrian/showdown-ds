@@ -5,11 +5,12 @@ import org.junit.Test
 
 class BattleSceneTimingTest {
     @Test
-    fun faintedStatusCardReachesZeroThenFadesOutAtOfficialTiming() {
+    fun faintedStatusCardRemainsVisibleAfterTheSpriteLeavesTheField() {
         val faintAtNanos = 2_000_000_000L
 
         assertEquals(1f, BattleSceneTiming.statusCardAlpha("Tapu Koko", "FNT", "Tapu Koko", faintAtNanos, faintAtNanos), 0.001f)
-        assertEquals(0f, BattleSceneTiming.statusCardAlpha("Tapu Koko", "FNT", "Tapu Koko", faintAtNanos, faintAtNanos + BattleSceneTiming.statusFadeDurationNanos), 0.001f)
+        assertEquals(1f, BattleSceneTiming.statusCardAlpha("Tapu Koko", "FNT", "Tapu Koko", faintAtNanos, faintAtNanos + BattleSceneTiming.statusFadeDurationNanos), 0.001f)
+        assertEquals(1f, BattleSceneTiming.statusCardAlpha("Tapu Koko", "FNT", "Tapu Koko", faintAtNanos, faintAtNanos + BattleSceneTiming.statusFadeDurationNanos * 4), 0.001f)
     }
 
     @Test
