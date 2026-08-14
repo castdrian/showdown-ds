@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Team packed exports now match Showdown's current advanced field order while still reading teams saved by earlier client versions.",
                 "New teams now start with a competitive format instead of Random Battle when no format has been chosen.",
                 "Team sets now edit EVs and IVs in readable HP, Atk, Def, SpA, SpD, and Spe controls while preserving Showdown's packed and text formats.",
                 "The upper battle messages now behave like a Pokémon battle message box: one compact event at a time, with a steady speed-aware text reveal, readable dwell time, and a gentle fade between events.",

@@ -24,6 +24,73 @@ data class ShowdownTeamSet(
 )
 
 object ShowdownTeamCodec {
+    private data class PackedAdvanced(
+        val happiness: Int = 255,
+        val pokeBall: String = "",
+        val hiddenPowerType: String = "",
+        val gigantamax: Boolean = false,
+        val dynamaxLevel: Int = 10,
+        val teraType: String = ""
+    )
+
+    private val hiddenPowerTypeIds = setOf(
+        "bug",
+        "dark",
+        "dragon",
+        "electric",
+        "fairy",
+        "fighting",
+        "fire",
+        "flying",
+        "ghost",
+        "grass",
+        "ground",
+        "ice",
+        "normal",
+        "poison",
+        "psychic",
+        "rock",
+        "steel",
+        "stellar",
+        "water"
+    )
+
+    private val pokeBallIds = setOf(
+        "beastball",
+        "cherishball",
+        "diveball",
+        "dreamball",
+        "duskball",
+        "fastball",
+        "featherball",
+        "friendball",
+        "gigatonball",
+        "greatball",
+        "healball",
+        "heavyball",
+        "jetball",
+        "levelball",
+        "loveball",
+        "lureball",
+        "luxuryball",
+        "masterball",
+        "moonball",
+        "nestball",
+        "netball",
+        "originball",
+        "parkball",
+        "pokeball",
+        "premierball",
+        "quickball",
+        "repeatball",
+        "safariball",
+        "sportball",
+        "strangeball",
+        "timerball",
+        "ultraball",
+        "wingball"
+    )
+
     fun validate(sets: List<ShowdownTeamSet>): List<String> {
         val errors = mutableListOf<String>()
         val populated = sets.filter { it.hasContent() }
@@ -71,7 +138,7 @@ object ShowdownTeamCodec {
 
     private fun unpackSet(packed: String): ShowdownTeamSet {
         val fields = packed.split('|', limit = 12)
-        val advanced = fields.getOrNull(11).orEmpty().split(',', limit = 6)
+        val advanced = unpackAdvanced(fields.value(11))
         return ShowdownTeamSet(
             nickname = fields.value(0),
             species = fields.value(1).ifBlank { fields.value(0) },
@@ -84,13 +151,39 @@ object ShowdownTeamCodec {
             ivs = parseValues(fields.value(8), 31, 0, 31),
             shiny = fields.value(9) == "S",
             level = fields.value(10).toIntOrNull()?.coerceIn(1, 100) ?: 100,
-            happiness = advanced.value(0).toIntOrNull()?.coerceIn(0, 255) ?: 255,
-            pokeBall = advanced.value(1),
-            hiddenPowerType = advanced.value(2),
-            gigantamax = advanced.value(3) == "G",
-            dynamaxLevel = advanced.value(4).toIntOrNull()?.coerceIn(0, 10) ?: 10,
-            teraType = advanced.value(5)
+            happiness = advanced.happiness,
+            pokeBall = advanced.pokeBall,
+            hiddenPowerType = advanced.hiddenPowerType,
+            gigantamax = advanced.gigantamax,
+            dynamaxLevel = advanced.dynamaxLevel,
+            teraType = advanced.teraType
         )
+    }
+
+    private fun unpackAdvanced(value: String): PackedAdvanced {
+        if (value.isBlank()) return PackedAdvanced()
+        val values = value.split(',', limit = 6)
+        val legacyOrder = isLegacyAdvancedOrder(values)
+        val pokeBallIndex = if (legacyOrder) 1 else 2
+        val hiddenPowerIndex = if (legacyOrder) 2 else 1
+        return PackedAdvanced(
+            happiness = values.value(0).toIntOrNull()?.coerceIn(0, 255) ?: 255,
+            pokeBall = values.value(pokeBallIndex),
+            hiddenPowerType = values.value(hiddenPowerIndex),
+            gigantamax = values.value(3) == "G",
+            dynamaxLevel = values.value(4).toIntOrNull()?.coerceIn(0, 10) ?: 10,
+            teraType = values.value(5)
+        )
+    }
+
+    private fun isLegacyAdvancedOrder(values: List<String>): Boolean {
+        val pokeBall = values.value(1).lowercase()
+        val hiddenPowerType = values.value(2).lowercase()
+        return when {
+            pokeBall.isBlank() -> hiddenPowerType in hiddenPowerTypeIds
+            hiddenPowerType.isBlank() -> pokeBall in pokeBallIds
+            else -> pokeBall !in hiddenPowerTypeIds && hiddenPowerType in hiddenPowerTypeIds
+        }
     }
 
     private fun packSet(set: ShowdownTeamSet): String {
@@ -116,8 +209,8 @@ object ShowdownTeamCodec {
     private fun packAdvanced(set: ShowdownTeamSet): String {
         val values = listOf(
             set.happiness.coerceIn(0, 255).takeUnless { it == 255 }?.toString().orEmpty(),
-            packedId(set.pokeBall),
             set.hiddenPowerType.trim(),
+            packedId(set.pokeBall),
             if (set.gigantamax) "G" else "",
             set.dynamaxLevel.coerceIn(0, 10).takeUnless { it == 10 }?.toString().orEmpty(),
             set.teraType.trim()

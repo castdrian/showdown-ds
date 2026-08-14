@@ -48,7 +48,7 @@ class ShowdownTeamCodecTest {
 
         val packed = ShowdownTeamCodec.pack(listOf(set))
         assertEquals(
-            "Lead|Gholdengo|leftovers|goodasgold|makeitrain,shadowball,recover,nastyplot|Timid|4,,,252,,252||,,,0,,|S|50|200,premierball,Ice,G,8,Steel",
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain,shadowball,recover,nastyplot|Timid|4,,,252,,252||,,,0,,|S|50|200,Ice,premierball,G,8,Steel",
             packed
         )
         assertEquals(
@@ -77,6 +77,19 @@ class ShowdownTeamCodecTest {
         assertEquals("|Pikachu|||thunderbolt||,252,,,,4|||||", packed)
         assertEquals(listOf(0, 252, 0, 0, 0, 4), ShowdownTeamCodec.unpack(packed).single().evs)
         assertTrue(ShowdownTeamCodec.unpack("").isEmpty())
+    }
+
+    @Test
+    fun unpacksTeamsSavedWithThePreviousAdvancedFieldOrder() {
+        val team = ShowdownTeamCodec.unpack(
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,premierball,Ice,G,8,Steel"
+        ).single()
+
+        assertEquals("premierball", team.pokeBall)
+        assertEquals("Ice", team.hiddenPowerType)
+        assertTrue(team.gigantamax)
+        assertEquals(8, team.dynamaxLevel)
+        assertEquals("Steel", team.teraType)
     }
 
     @Test
