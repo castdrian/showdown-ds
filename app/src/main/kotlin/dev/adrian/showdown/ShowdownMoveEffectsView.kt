@@ -171,6 +171,25 @@ class ShowdownMoveEffectsView(
                         function nativeBattleStarted() {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.battleStarted();
                         }
+                        function clearNativeCueTimers(scene) {
+                            if (!scene || !scene.__showdownNativeCueTimers) return;
+                            scene.__showdownNativeCueTimers.forEach(function (timer) {
+                                clearTimeout(timer);
+                            });
+                            scene.__showdownNativeCueTimers = [];
+                        }
+                        function scheduleNativeCue(scene, value) {
+                            if (!scene || !scene.animating || scene.__showdownNativeAudioSilent) return;
+                            if (!scene.__showdownNativeCueTimers) scene.__showdownNativeCueTimers = [];
+                            var delay = Math.max(0, Number(scene.timeOffset) || 0);
+                            var timer = setTimeout(function () {
+                                var timers = scene.__showdownNativeCueTimers || [];
+                                var timerIndex = timers.indexOf(timer);
+                                if (timerIndex >= 0) timers.splice(timerIndex, 1);
+                                if (scene.animating && !scene.__showdownNativeAudioSilent) nativeCue(value);
+                            }, delay);
+                            scene.__showdownNativeCueTimers.push(timer);
+                        }
                         function nativeBattleLog(value) {
                             if (!window.ShowdownNativeBattleLog || !value) return;
                             window.ShowdownNativeBattleLog.entry(String(value));
@@ -202,6 +221,7 @@ class ShowdownMoveEffectsView(
                             }
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
+                                clearNativeCueTimers(this.scene);
                                 nativeMoveStarted();
                                 this.scene.__showdownNativeDamageArmed = moveCanDamage(move);
                                 this.scene.__showdownNativeDamageWindow = this.scene.__showdownNativeDamageArmed;
@@ -218,12 +238,17 @@ class ShowdownMoveEffectsView(
                                 }
                                 return originalRunMajor.apply(this, arguments);
                             };
+                            var originalStopAnimation = BattleScene.prototype.stopAnimation;
+                            BattleScene.prototype.stopAnimation = function () {
+                                clearNativeCueTimers(this);
+                                return originalStopAnimation.apply(this, arguments);
+                            };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
                             BattleScene.prototype.resultAnim = function () {
                                 var shouldCueResult = this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeResultCues && this.__showdownNativeResultCues.length;
                                 var resultCue = shouldCueResult ? this.__showdownNativeResultCues.shift() : null;
                                 if (resultCue) {
-                                    nativeCue(resultCue);
+                                    scheduleNativeCue(this, resultCue);
                                 }
                                 return originalResultAnim.apply(this, arguments);
                             };
@@ -233,7 +258,7 @@ class ShowdownMoveEffectsView(
                                 var shouldCueDamage = healthEvent === 'damage' && this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeDamageArmed && !this.__showdownNativeDamagePlayed;
                                 if (shouldCueDamage) {
                                     this.__showdownNativeDamagePlayed = true;
-                                    nativeCue('generic_damage');
+                                    scheduleNativeCue(this, 'generic_damage');
                                 }
                                 return originalDamageAnim.apply(this, arguments);
                             };

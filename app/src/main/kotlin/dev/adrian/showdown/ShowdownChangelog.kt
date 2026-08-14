@@ -10,6 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Damage, effectiveness, and stat audio now starts on Showdown's matching visual event and is cancelled when animation playback pauses or resets.",
+                "Compact multi-battle HP cards now keep their Poké Ball strip visible before party details arrive from the server.",
                 "Saved Random Doubles Battle selections now survive a server format refresh instead of silently falling back to singles.",
                 "Live battle decisions now become actionable immediately while the readable send-out and move playback continues, keeping the server timer in sync.",
                 "Battle-feed scrolling now moves cleanly past long entries without splitting the newest short event across the viewport.",
