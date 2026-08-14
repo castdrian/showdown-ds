@@ -17,7 +17,6 @@ import dev.adrian.showdown.R
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 class BattleSceneView(
     context: Context,
@@ -50,12 +49,11 @@ class BattleSceneView(
     private val playerInspectBounds = RectF()
     private val opponentInspectBounds = RectF()
     private val battleFeedBounds = RectF()
-    private var battleFeedScrollOffsetPixels = 0f
+    private val battleFeedPresentation = BattleFeedPresentation()
     private var battleFeedTouchDownY = 0f
     private var battleFeedTouchLastY = 0f
     private var battleFeedTouchActive = false
     private var battleFeedTouchMoved = false
-    private var battleFeedLastEventAtNanos = 0L
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -87,6 +85,7 @@ class BattleSceneView(
         val opponentCombatants = session.opponentActiveCombatants()
         val nowNanos = System.nanoTime()
         if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
+            battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
             return
         }
@@ -231,7 +230,6 @@ class BattleSceneView(
                 if (!battleFeedTouchActive) return false
                 val delta = event.y - battleFeedTouchLastY
                 if (abs(delta) > 0.5f) {
-                    battleFeedScrollOffsetPixels -= delta
                     battleFeedTouchMoved = battleFeedTouchMoved || abs(event.y - battleFeedTouchDownY) > 12f
                     battleFeedTouchLastY = event.y
                     invalidate()
@@ -1043,22 +1041,18 @@ class BattleSceneView(
     }
 
     private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        val nowMillis = SystemClock.elapsedRealtime()
         val feedEntries = session.battleFeedEntries()
-        if (feedEntries.isEmpty()) return
-        if (session.latestBattleEventAtNanos != battleFeedLastEventAtNanos) {
-            battleFeedLastEventAtNanos = session.latestBattleEventAtNanos
-            battleFeedScrollOffsetPixels = 0f
-        }
-        val age = (System.nanoTime() - session.latestBattleEventAtNanos) / 1_000_000_000f
-        val arrival = min(1f, age / 0.18f)
-        val alpha = min(1f, 0.3f + arrival)
+        battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis)
+        val frame = battleFeedPresentation.frame(nowMillis) ?: return
+        val alpha = frame.alpha
         val playerCardRight = width * 0.315f
         val sideGap = maxOf(48f * scale, width * 0.025f)
         val settledLeft = maxOf(width * 0.33f, playerCardRight + sideGap)
-        val left = settledLeft + (1f - arrival) * width * 0.035f
+        val left = settledLeft
         val right = width * 0.97f
-        val top = height * 0.75f
-        val bottom = min(height * 0.965f, height * 0.98f - 24f * scale)
+        val top = height * 0.78f
+        val bottom = min(height * 0.945f, height * 0.98f - 32f * scale)
         val bounds = RectF(left, top, right, bottom)
         battleFeedBounds.set(bounds)
         paint.shader = LinearGradient(
@@ -1084,14 +1078,8 @@ class BattleSceneView(
         val padding = 24f * scale
         val viewportHeight = (bounds.height() - padding * 2f).coerceAtLeast(lineHeight)
         val maxVisibleLines = (viewportHeight / lineHeight).toInt().coerceAtLeast(1)
-        val wrappedEntries = feedEntries.map { BattleFeedText.wrapForBattleFeed(it, maxWidth, paint::measureText) }
-        val totalLineCount = wrappedEntries.sumOf(List<String>::size)
-        val maxScroll = (totalLineCount - maxVisibleLines).coerceAtLeast(0) * lineHeight
-        battleFeedScrollOffsetPixels = battleFeedScrollOffsetPixels.coerceIn(0f, maxScroll)
-        battleFeedScrollOffsetPixels =
-            (battleFeedScrollOffsetPixels / lineHeight).roundToInt() * lineHeight
-        val scrollLines = (battleFeedScrollOffsetPixels / lineHeight).roundToInt()
-        val lines = BattleFeedText.window(wrappedEntries, maxVisibleLines, scrollLines).ifEmpty { listOf("…") }
+        val lines = BattleFeedText.wrap(frame.text, maxWidth, maxVisibleLines.coerceAtMost(2), paint::measureText)
+            .ifEmpty { listOf("…") }
         val contentHeight = lines.size * lineHeight
         val contentTop = bounds.top + padding + (viewportHeight - contentHeight).coerceAtLeast(0f) / 2f
         canvas.save()
@@ -1108,6 +1096,7 @@ class BattleSceneView(
             canvas.drawText(line, left + 24f * scale, baseline, paint)
         }
         canvas.restore()
+        if (battleFeedPresentation.needsAnimation(nowMillis)) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
     }
 
     private fun ellipsize(value: String, maximum: Int) = if (value.length <= maximum) value else "${value.take(maximum - 1)}…"

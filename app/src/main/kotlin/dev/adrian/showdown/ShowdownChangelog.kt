@@ -10,13 +10,12 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
-                "The upper battle log now preserves Showdown's block-separated events, including move and field messages, while hiding only diagnostics and controls.",
+                "The upper battle messages now behave like a Pokémon battle message box: one current event at a time, at most two readable lines, with a gentle fade and enough dwell time to read it.",
                 "Damage, effectiveness, and stat audio now starts on Showdown's matching visual event and is cancelled when animation playback pauses or resets.",
                 "Compact multi-battle HP cards now keep a readable Poké Ball strip on smaller Thor display surfaces, even before party details arrive from the server.",
                 "Saved Random Doubles Battle selections now survive a server format refresh instead of silently falling back to singles.",
                 "Live battle decisions now become actionable immediately while the readable send-out and move playback continues, keeping the server timer in sync.",
-                "Battle-feed scrolling now moves cleanly past long entries without splitting the newest short event across the viewport.",
-                "The upper battle log now keeps complete Showdown events together while you scroll, so it never opens on a clipped continuation line.",
+                "The full user-facing battle history remains available for activity and replay review without crowding the live battle surface.",
                 "Thor touch and controller focus now restores cleanly after the app returns from the background.",
                 "Team Library now keeps repeated confirmations from stacking duplicate custom dialogs.",
                 "Multi-Pokémon battles now keep the party Poké Ball strip on the remaining visible HP card while a partner faints.",
@@ -29,7 +28,6 @@ object ShowdownChangelog {
                 "Type icons remain on move selectors without repeating the type label in the card or detail panel.",
                 "Impact audio now starts with the damage animation instead of waiting behind longer status clips, with effectiveness cues following the hit.",
                 "Battle cues now preserve their original animation timestamp while audio samples finish loading, keeping late-loaded damage and effectiveness sounds in sync.",
-                "The upper battle transcript now keeps every user-facing Showdown entry available with swipe scrolling and removes non-battle registration controls.",
                 "Spread moves now play one effectiveness cue per move instead of stacking the same sound once per target.",
                 "Stat boost and drop audio now starts at the corresponding battle event instead of waiting for an earlier cue to finish.",
                 "Battle audio timing resets at each move boundary so faster playback cannot delay the next move's cue.",
