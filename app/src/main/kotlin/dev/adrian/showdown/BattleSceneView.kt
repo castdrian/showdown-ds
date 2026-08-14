@@ -752,7 +752,7 @@ class BattleSceneView(
         hp: String,
         scale: Float,
         alpha: Float,
-        party: List<BattleSession.PokemonDetails>?
+        party: List<BattleSession.PokemonDetails>
     ) {
         drawBattleStatusCard(
             canvas,
@@ -775,8 +775,7 @@ class BattleSceneView(
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
         val nowNanos = System.nanoTime()
-        val party = (if (player) session.playerPartyDetails() else session.opponentPartyDetails())
-            .takeIf { it.isNotEmpty() }
+        val party = if (player) session.playerPartyDetails() else session.opponentPartyDetails()
         combatants.forEachIndexed { index, combatant ->
             val alpha = statusCardAlpha(combatant.name, combatant.condition, nowNanos) *
                 BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, nowNanos)
@@ -801,7 +800,7 @@ class BattleSceneView(
         scale: Float,
         alpha: Float,
         layout: CompactBattleCardLayout,
-        party: List<BattleSession.PokemonDetails>?
+        party: List<BattleSession.PokemonDetails>
     ) {
         drawBattleStatusCard(
             canvas,
@@ -821,7 +820,7 @@ class BattleSceneView(
         scale: Float,
         alpha: Float,
         layout: CompactBattleCardLayout,
-        party: List<BattleSession.PokemonDetails>?
+        party: List<BattleSession.PokemonDetails>
     ) {
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
         val left = bounds.left + 20f * scale
@@ -839,7 +838,7 @@ class BattleSceneView(
         textRight: Float,
         scale: Float,
         layout: CompactBattleCardLayout,
-        party: List<BattleSession.PokemonDetails>?
+        party: List<BattleSession.PokemonDetails>
     ) {
         val height = bounds.height()
         val contentLayout = layout.content
@@ -876,7 +875,7 @@ class BattleSceneView(
         val ballGap = maxOf(ballSize * 0.12f, 2f * scale)
         val ballStart = textRight - ballSize * 6f - ballGap * 5f
         val ballTop = BattleCardLayout.partyIndicatorTop(bounds.bottom, ballSize, scale)
-        party?.let { drawPartyIndicators(canvas, it, ballStart, ballTop, ballSize, ballGap) }
+        drawPartyIndicators(canvas, party, ballStart, ballTop, ballSize, ballGap)
     }
 
     private fun drawPartyIndicators(
