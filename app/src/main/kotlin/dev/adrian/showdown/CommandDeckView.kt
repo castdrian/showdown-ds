@@ -53,6 +53,7 @@ class CommandDeckView(
     private var releasedMoveIndex: Int? = null
     private var releaseStartedAt = 0L
     private var lastRenderedTeamDecision = false
+    private var lastRenderedDecisionKind: BattleSession.DecisionKind? = null
 
     init {
         spriteCache.requestEffect("z-symbol.png") { asset ->
@@ -65,7 +66,10 @@ class CommandDeckView(
         val width = width.toFloat()
         val height = height.toFloat()
         val teamDecision = isTeamDecision()
-        if (teamDecision != lastRenderedTeamDecision) clearInteractiveBounds()
+        val decisionKind = session.decisionKind
+        if (teamDecision != lastRenderedTeamDecision || decisionKind != lastRenderedDecisionKind) {
+            resetDecisionTransitionState()
+        }
         val scale = minOf(
             width / ThorDisplayProfile.LOWER_WIDTH_PIXELS,
             height / ThorDisplayProfile.LOWER_HEIGHT_PIXELS
@@ -84,6 +88,7 @@ class CommandDeckView(
             drawTopBand(canvas, width, scale)
         }
         lastRenderedTeamDecision = teamDecision
+        lastRenderedDecisionKind = decisionKind
         if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         } else if (session.battleClockSeconds() != null) {
@@ -94,7 +99,9 @@ class CommandDeckView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val x = event.x
         val y = event.y
-        if (isTeamDecision() != lastRenderedTeamDecision) clearInteractiveBounds()
+        if (isTeamDecision() != lastRenderedTeamDecision || session.decisionKind != lastRenderedDecisionKind) {
+            resetDecisionTransitionState()
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pressedMoveIndex = moveBounds.indexOfFirst { it?.contains(x, y) == true }.takeIf { it >= 0 }
@@ -218,6 +225,12 @@ class CommandDeckView(
         cancelChoiceBounds = null
         shiftBounds = null
         testFightBounds = null
+    }
+
+    private fun resetDecisionTransitionState() {
+        clearInteractiveBounds()
+        pressedMoveIndex = null
+        releasedMoveIndex = null
     }
 
     private fun drawTopBand(canvas: Canvas, width: Float, scale: Float) {

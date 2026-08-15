@@ -71,11 +71,23 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
 
         assertTrue(source.contains("private var lastRenderedTeamDecision = false"))
-        assertTrue(source.contains("if (teamDecision != lastRenderedTeamDecision) clearInteractiveBounds()"))
-        assertTrue(source.contains("if (isTeamDecision() != lastRenderedTeamDecision) clearInteractiveBounds()"))
+        assertTrue(source.contains("if (teamDecision != lastRenderedTeamDecision || decisionKind != lastRenderedDecisionKind)"))
+        assertTrue(source.contains("resetDecisionTransitionState()"))
+        assertTrue(source.contains("if (isTeamDecision() != lastRenderedTeamDecision || session.decisionKind != lastRenderedDecisionKind)"))
         assertTrue(source.contains("teamBounds.fill(null)"))
         assertTrue(source.contains("moveBounds.fill(null)"))
         assertTrue(source.contains("targetBounds.fill(null)"))
+    }
+
+    @Test
+    fun clearsTransientMoveStateWhenTheDecisionKindChanges() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("private var lastRenderedDecisionKind: BattleSession.DecisionKind? = null"))
+        assertTrue(source.contains("decisionKind != lastRenderedDecisionKind"))
+        assertTrue(source.contains("lastRenderedDecisionKind = decisionKind"))
+        assertTrue(source.contains("pressedMoveIndex = null"))
+        assertTrue(source.contains("releasedMoveIndex = null"))
     }
 
     @Test
