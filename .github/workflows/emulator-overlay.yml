@@ -49,9 +49,12 @@ jobs:
           git -C "$qemu_root" apply "$GITHUB_WORKSPACE/tools/android-emulator/ayn-thor-single-window.patch"
           "$qemu_root/android/rebuild.sh" --out "$source_root/objs-showdown-ds"
           qemu_binary="$(find "$source_root/objs-showdown-ds" -type f -name qemu-system-aarch64 -print -quit)"
+          qemu_headless_binary="$(find "$source_root/objs-showdown-ds" -type f -name qemu-system-aarch64-headless -print -quit)"
           test -n "$qemu_binary"
+          test -n "$qemu_headless_binary"
           mkdir -p "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64"
           cp "$qemu_binary" "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64/qemu-system-aarch64"
+          cp "$qemu_headless_binary" "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64/qemu-system-aarch64-headless"
 
       - name: Upload patched emulator overlay
         uses: actions/upload-artifact@v4

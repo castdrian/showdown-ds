@@ -97,6 +97,8 @@ class ThorDisplayProfileTest {
         val displayProfile = File("../config/avd/ayn-thor.ini").readText()
         val createScript = File("../scripts/create-ayn-thor-avd.sh").readText()
         val runScript = File("../scripts/run-ayn-thor-avd.sh").readText()
+        val buildScript = File("../scripts/build-ayn-thor-emulator-overlay.sh").readText()
+        val installScript = File("../scripts/install-ayn-thor-emulator-overlay.sh").readText()
         val overlayPatch = File("../tools/android-emulator/ayn-thor-single-window.patch").readText()
 
         assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
@@ -110,6 +112,13 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("activate_secondary_display()"))
         assertTrue(runScript.contains("AYN_THOR_ALLOW_STOCK_EMULATOR"))
         assertTrue(runScript.contains("The patched AYN Thor emulator overlay is missing"))
+        assertTrue(buildScript.contains("apply --reverse --check"))
+        assertTrue(buildScript.contains("ccache_mode"))
+        assertTrue(buildScript.contains("rebuild.sh\" --ccache \"\$ccache_mode\""))
+        assertTrue(installScript.contains("The overlay path is not a directory"))
+        assertTrue(installScript.contains("qemu_headless_name"))
+        assertTrue(installScript.contains("qemu_headless_binary"))
+        assertTrue(buildScript.contains("install-ayn-thor-emulator-overlay.sh\" \"\$qemu_binary\" \"\$qemu_headless_binary\" \"\$build_root\""))
         val assignmentPattern = Regex("""^\+\s*(primary|thorDisplay)->second\.(width|height|pos_x|pos_y) = ([^;]+);$""")
         val layoutAssignments = overlayPatch.lineSequence()
             .mapNotNull { line ->
