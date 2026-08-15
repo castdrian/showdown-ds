@@ -87,6 +87,19 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun displayCallbacksCannotCreateAThorPresentationWhileTheActivityIsPaused() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val show = source.substringAfter("private fun showSecondaryDisplay()").substringBefore("private fun findThorDisplay")
+        val pause = source.substringAfter("override fun onPause() {").substringBefore("override fun onStop")
+        val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
+
+        assertTrue(source.contains("private var activityResumed = false"))
+        assertTrue(show.contains("!activityResumed"))
+        assertTrue(pause.contains("activityResumed = false"))
+        assertTrue(resume.contains("activityResumed = true"))
+    }
+
+    @Test
     fun defersTheAnimationWebViewUntilBattlePlaybackStarts() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val screenFactory = source.substringAfter("private fun createPrimaryScreen()").substringBefore("private fun ensureShowdownMoveEffects()")

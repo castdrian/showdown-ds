@@ -58,6 +58,7 @@ class MainActivity : Activity() {
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
     private var secondaryPresentationRequested = false
+    private var activityResumed = false
     private var battleScene: BattleSceneView? = null
     private var primaryFrame: FrameLayout? = null
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
@@ -399,6 +400,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        activityResumed = false
         dismissSecondaryDisplay()
         roomListDialog?.dismiss()
         roomListDialog = null
@@ -511,6 +513,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        activityResumed = false
         battleScene?.setPlaybackPaused(true)
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
@@ -522,6 +525,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        activityResumed = false
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
         dismissSecondaryDisplay()
@@ -535,6 +539,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        activityResumed = true
         configureWindow()
         showSecondaryDisplay()
         battleScene?.setPlaybackPaused(false)
@@ -610,7 +615,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSecondaryDisplay() {
-        if (isFinishing || displayManager == null) return
+        if (isFinishing || !activityResumed || displayManager == null) return
         secondaryPresentationRequested = true
         secondaryPresentation?.let { presentation ->
             presentation.requestControllerFocus()
