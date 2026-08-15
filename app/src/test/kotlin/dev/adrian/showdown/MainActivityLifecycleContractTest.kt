@@ -155,6 +155,31 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun flushesCriticalLiveRecoveryStateBeforeLifecycleOrProcessBoundaries() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val stop = source.substringAfter("override fun onStop() {").substringBefore("override fun onStart")
+        val join = source.substringAfter("private fun joinMatchedBattle(").substringBefore("private fun scheduleReconnect")
+        val start = source.substringAfter("private fun startLobbyConnection(").substringBefore("private fun dismissConnectionTransitionDialogs")
+        val battleStart = source.substringAfter("if (startsBattle) {").substringBefore("activeSearchFormat = null")
+        val persistence = source.substringAfter("private fun persistLobbyState(").substringBefore("private fun clearPersistedLobbyState")
+        val clear = source.substringAfter("private fun clearPersistedLobbyState()").substringBefore("private fun clearBattleRoomState")
+
+        assertTrue(source.contains("private fun persistLobbyState(flushToDisk: Boolean = false)"))
+        assertTrue(persistence.contains("if (flushToDisk)"))
+        assertTrue(persistence.contains("editor.commit()"))
+        assertTrue(stop.contains("persistLobbyState(flushToDisk = true)"))
+        assertTrue(join.contains("persistLobbyState(flushToDisk = true)"))
+        assertTrue(start.contains("persistLobbyState(flushToDisk = true)"))
+        assertTrue(battleStart.contains("persistLobbyState(flushToDisk = true)"))
+        assertTrue(source.contains("persistLobbyState(flushToDisk = true)"))
+        assertTrue(clear.contains(".commit()"))
+        assertTrue(source.contains("battleProtocolPlayerSlot(lines)?.let(session::restoreBattlePlayerSlot)"))
+        assertTrue(source.contains("private fun downgradeBattleRecoveryToGuest()"))
+        assertTrue(source.contains("downgradeBattleRecoveryToGuest()"))
+        assertTrue(source.contains("battleIsSpectator = true"))
+    }
+
+    @Test
     fun restoresSavedShowdownSessionsBeforeRejoiningPersistedRooms() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 
@@ -187,6 +212,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("battleWasParticipant = true"))
         assertTrue(source.contains("battleProtocolIdentifiesLocalPlayer(lines)"))
         assertTrue(source.contains("battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)"))
+        assertTrue(source.contains("battleProtocolPlayerSlot(lines)?.let(session::restoreBattlePlayerSlot)"))
     }
 
     @Test

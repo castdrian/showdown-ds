@@ -192,6 +192,7 @@ class MainActivity : Activity() {
             sessionRestorePending = false
             loginInFlight = false
             loginClient.clearSession()
+            downgradeBattleRecoveryToGuest()
             authenticated = true
             sendPendingLobbyCommands(connection)
             session.setConnectionStatus("Your Showdown session expired. Joining as a guest…")
@@ -239,16 +240,16 @@ class MainActivity : Activity() {
         val roomId = activeBattleRoomId
         pendingDecisionCommand = command
         pendingDecisionSentConnection = null
-        persistLobbyState()
+        persistLobbyState(flushToDisk = true)
         val connection = showdownConnection
         if (roomId != null && connection?.send(roomId, command) == true) {
             pendingDecisionSentConnection = connection
-            persistLobbyState()
+            persistLobbyState(flushToDisk = true)
         } else {
             if (roomId == null) {
                 pendingDecisionCommand = null
                 pendingDecisionSentConnection = null
-                persistLobbyState()
+                persistLobbyState(flushToDisk = true)
             }
             session.handleDecisionSendFailure()
         }
@@ -529,6 +530,7 @@ class MainActivity : Activity() {
         activityResumed = false
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
+        if (::session.isInitialized && shouldMaintainConnection) persistLobbyState(flushToDisk = true)
         dismissSecondaryDisplay()
         super.onStop()
     }
@@ -904,7 +906,7 @@ class MainActivity : Activity() {
         if (!ShowdownDecisionDelivery.shouldClearPendingCommand(command, lines)) return
         pendingDecisionCommand = null
         pendingDecisionSentConnection = null
-        persistLobbyState()
+        persistLobbyState(flushToDisk = true)
     }
 
     private fun findBattle() {
@@ -1988,7 +1990,7 @@ class MainActivity : Activity() {
         latestChallenge = null
         authenticated = false
         serverUserNamed = false
-        persistLobbyState()
+        persistLobbyState(flushToDisk = true)
         connectLobbySocket()
     }
 
@@ -2102,9 +2104,9 @@ class MainActivity : Activity() {
         connectLobbySocket()
     }
 
-    private fun persistLobbyState() {
+    private fun persistLobbyState(flushToDisk: Boolean = false) {
         rememberBattleIdentity()
-        getSharedPreferences("showdown_live", MODE_PRIVATE).edit()
+        val editor = getSharedPreferences("showdown_live", MODE_PRIVATE).edit()
             .putBoolean("maintain_connection", shouldMaintainConnection)
             .putBoolean("pending_search", pendingSearch)
             .putString("pending_search_team", pendingSearchTeamPacked)
@@ -2122,11 +2124,15 @@ class MainActivity : Activity() {
             .putString("pending_battle_search_team", pendingBattleSearchTeamPacked)
             .putString("battle_player_slot", activeBattleRoomId?.let { session.battlePlayerSlot() })
             .putString("pending_decision_command", pendingDecisionCommand)
-            .apply()
+        if (flushToDisk) {
+            editor.commit()
+        } else {
+            editor.apply()
+        }
     }
 
     private fun clearPersistedLobbyState() {
-        getSharedPreferences("showdown_live", MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences("showdown_live", MODE_PRIVATE).edit().clear().commit()
     }
 
     private fun clearBattleRoomState() {
@@ -2160,13 +2166,31 @@ class MainActivity : Activity() {
         if (!battleIsSpectator) battleWasParticipant = battleWasParticipant || session.isBattleParticipant()
     }
 
-    private fun battleProtocolIdentifiesLocalPlayer(lines: List<String>): Boolean {
+    private fun battleProtocolIdentifiesLocalPlayer(lines: List<String>): Boolean = battleProtocolPlayerSlot(lines) != null
+
+    private fun battleProtocolPlayerSlot(lines: List<String>): String? {
         val localUsername = session.localUsername().trim()
-        if (localUsername.isBlank()) return false
-        return lines.any { line ->
-            val fields = line.split('|')
-            fields.getOrNull(1) == "player" && fields.getOrNull(3)?.trim()?.equals(localUsername, true) == true
+        if (localUsername.isBlank()) return null
+        return lines.asSequence()
+            .map { it.split('|') }
+            .firstOrNull { fields ->
+                fields.getOrNull(1) == "player" && fields.getOrNull(3)?.trim()?.equals(localUsername, true) == true
+            }
+            ?.getOrNull(2)
+            ?.trim()
+            ?.takeIf { it.matches(Regex("p[1-4]")) }
+    }
+
+    private fun downgradeBattleRecoveryToGuest() {
+        if (activeBattleRoomId != null) {
+            battleWasRegistered = false
+            battleWasParticipant = false
+            battleIsSpectator = true
+            pendingDecisionCommand = null
+            pendingDecisionSentConnection = null
+            session.setSpectatorMode(true)
         }
+        persistLobbyState(flushToDisk = true)
     }
 
     private fun encodeLobbyCommands(commands: List<String>?) = commands?.joinToString("\u0000")
@@ -2287,6 +2311,7 @@ class MainActivity : Activity() {
                                         if (restored == null) {
                                             sessionRestorePending = false
                                             loginClient.clearSession()
+                                            downgradeBattleRecoveryToGuest()
                                             authenticated = true
                                             sendPendingLobbyCommands(connection)
                                             session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
@@ -2297,6 +2322,7 @@ class MainActivity : Activity() {
                                         } else {
                                             sessionRestorePending = false
                                             loginClient.clearSession()
+                                            downgradeBattleRecoveryToGuest()
                                             authenticated = true
                                             sendPendingLobbyCommands(connection)
                                             session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
@@ -2305,6 +2331,7 @@ class MainActivity : Activity() {
                                     result.onFailure {
                                         sessionRestorePending = false
                                         loginClient.clearSession()
+                                        downgradeBattleRecoveryToGuest()
                                         authenticated = true
                                         sendPendingLobbyCommands(connection)
                                         session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
@@ -2384,6 +2411,7 @@ class MainActivity : Activity() {
                                 reconnectHandler.removeCallbacks(sessionRestoreTimeout)
                                 loginInFlight = false
                                 loginClient.clearSession()
+                                downgradeBattleRecoveryToGuest()
                                 authenticated = true
                                 sendPendingLobbyCommands(connection)
                                 session.setConnectionStatus("Joining ${serverEndpoint.displayName}…")
@@ -2493,8 +2521,10 @@ class MainActivity : Activity() {
                         if (!battleIsSpectator) {
                             battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)
                         }
+                        battleProtocolPlayerSlot(lines)?.let(session::restoreBattlePlayerSlot)
                         if (startsBattle) {
                             rememberBattleIdentity()
+                            persistLobbyState(flushToDisk = true)
                         }
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
@@ -2545,7 +2575,7 @@ class MainActivity : Activity() {
         pendingDecisionSentConnection = null
         session.setLiveBattleActive(false)
         session.setConnectionStatus("Joining battle…")
-        persistLobbyState()
+        persistLobbyState(flushToDisk = true)
     }
 
     private fun scheduleReconnect() {
@@ -2622,7 +2652,7 @@ class MainActivity : Activity() {
         } else if (reconnectLobbyCommands != null) {
             session.setConnectionStatus("Restoring challenge…")
         }
-        persistLobbyState()
+        persistLobbyState(flushToDisk = rejoiningBattle)
     }
 
     private fun showChallengeComposer(prefilledUsername: String? = null) {
