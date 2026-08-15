@@ -19,6 +19,7 @@ class ShowdownMoveEffectsView(
     private val protocolHistoryProvider: () -> List<String>,
     private val audioMoveResetter: () -> Unit = {},
     private val battleLogListener: (String, Long) -> Unit = { _, _ -> },
+    private val battleMarkupListener: (String, String, Long) -> Unit = { _, _, _ -> },
     private val battleLogSyncListener: (Long) -> Unit = {}
 ) : WebView(context) {
     private val pendingPackets = ShowdownMoveEffectsQueue()
@@ -28,7 +29,7 @@ class ShowdownMoveEffectsView(
     private var battlePerspective = "p1"
     private var released = false
     private val nativeAudioBridge = NativeAudioBridge(audioCueListener, audioCueResetter, audioMoveResetter)
-    private val nativeBattleLogBridge = NativeBattleLogBridge(battleLogListener, battleLogSyncListener)
+    private val nativeBattleLogBridge = NativeBattleLogBridge(battleLogListener, battleMarkupListener, battleLogSyncListener)
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
@@ -205,9 +206,14 @@ class ShowdownMoveEffectsView(
                             scene.__showdownNativeCueTimers.push(timer);
                         }
                         var nativeBattleLogGeneration = 0;
+                        var nativeBattleLogMarkupActive = false;
                         function nativeBattleLog(value) {
                             if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
                             window.ShowdownNativeBattleLog.entry(String(value), nativeBattleLogGeneration);
+                        }
+                        function nativeBattleMarkup(id, value) {
+                            if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
+                            window.ShowdownNativeBattleLog.markup(String(id || ''), String(value), nativeBattleLogGeneration);
                         }
                         function nativeBattleLogSynchronized(generation) {
                             if (window.ShowdownNativeBattleLog) window.ShowdownNativeBattleLog.synced(Number(generation) || 0);
@@ -223,7 +229,7 @@ class ShowdownMoveEffectsView(
                             if (typeof BattleLog === 'undefined' || BattleLog.prototype.__showdownNativeBattleLogHooked) return;
                             var originalAddDiv = BattleLog.prototype.addDiv;
                             BattleLog.prototype.addDiv = function (className, html) {
-                                nativeBattleLog(html);
+                                if (!nativeBattleLogMarkupActive) nativeBattleLog(html);
                                 return originalAddDiv.apply(this, arguments);
                             };
                             var originalAddBattleMessage = BattleLog.prototype.addBattleMessage;
@@ -236,8 +242,15 @@ class ShowdownMoveEffectsView(
                             var originalChangeUhtml = BattleLog.prototype.changeUhtml;
                             if (originalChangeUhtml) {
                                 BattleLog.prototype.changeUhtml = function (id, htmlSrc, forceAdd) {
-                                    var result = originalChangeUhtml.apply(this, arguments);
-                                    if (!forceAdd && htmlSrc) nativeBattleLog(htmlSrc);
+                                    var previousNativeBattleLogMarkupActive = nativeBattleLogMarkupActive;
+                                    nativeBattleLogMarkupActive = true;
+                                    var result;
+                                    try {
+                                        result = originalChangeUhtml.apply(this, arguments);
+                                    } finally {
+                                        nativeBattleLogMarkupActive = previousNativeBattleLogMarkupActive;
+                                    }
+                                    if (htmlSrc) nativeBattleMarkup(id, htmlSrc);
                                     return result;
                                 };
                             }
@@ -511,12 +524,18 @@ class ShowdownMoveEffectsView(
 
     private class NativeBattleLogBridge(
         private val callback: (String, Long) -> Unit,
+        private val markupCallback: (String, String, Long) -> Unit,
         private val syncCallback: (Long) -> Unit
     ) {
         @JavascriptInterface
         fun entry(value: String, generation: Long) {
             val entries = ShowdownBattleLogFilter.visibleEntries(value)
             if (entries.isNotEmpty()) callback(entries.joinToString("<br />"), generation)
+        }
+
+        @JavascriptInterface
+        fun markup(key: String, value: String, generation: Long) {
+            markupCallback(key, value, generation)
         }
 
         @JavascriptInterface

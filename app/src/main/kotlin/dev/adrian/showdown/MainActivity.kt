@@ -604,6 +604,9 @@ class MainActivity : Activity() {
             battleLogListener = { value, generation ->
                 runOnUiThread { session.appendShowdownBattleLog(value, generation) }
             },
+            battleMarkupListener = { key, value, generation ->
+                runOnUiThread { session.replaceShowdownBattleMarkup(key, value, generation) }
+            },
             battleLogSyncListener = { generation ->
                 runOnUiThread { session.markNativeBattleLogSynchronized(generation) }
             }

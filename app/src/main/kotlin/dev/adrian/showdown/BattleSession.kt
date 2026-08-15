@@ -265,6 +265,7 @@ class BattleSession {
     private var protocolEventCollector: MutableList<String>? = null
     private val protocolHistory = mutableListOf<String>()
     private val showdownBattleLogEntries = mutableListOf<String>()
+    private val showdownBattleMarkupEntries = mutableMapOf<String, List<String>>()
     private var battleLogGeneration = 0L
     private var nativeBattleLogGeneration = -1L
     private var nativeBattleLogPending = false
@@ -675,6 +676,7 @@ class BattleSession {
 
     fun resetShowdownBattleLog() {
         showdownBattleLogEntries.clear()
+        showdownBattleMarkupEntries.clear()
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = false
         notifyListeners()
@@ -695,6 +697,42 @@ class BattleSession {
         entries.forEach(::appendActivity)
         latestBattleEvent = entries.last()
         latestBattleEventAtNanos = System.nanoTime()
+        battleFeedVisible = true
+        notifyListeners()
+    }
+
+    fun replaceShowdownBattleMarkup(key: String, value: String, generation: Long = battleLogGeneration) {
+        if (generation != battleLogGeneration) return
+        val normalizedKey = key.trim()
+        if (normalizedKey.isBlank()) {
+            appendShowdownBattleLog(value, generation)
+            return
+        }
+        val previous = showdownBattleMarkupEntries.remove(normalizedKey).orEmpty()
+        val entries = ShowdownBattleLogFilter.visibleEntries(value)
+            .mapNotNull(::sanitizeShowdownMarkup)
+            .filter(String::isNotBlank)
+        if (previous == entries) return
+        previous.forEach { entry ->
+            showdownBattleLogEntries.indexOfLast { it == entry }
+                .takeIf { it >= 0 }
+                ?.let(showdownBattleLogEntries::removeAt)
+            activityMessages.indexOfLast { it == entry }
+                .takeIf { it >= 0 }
+                ?.let(activityMessages::removeAt)
+        }
+        if (entries.isNotEmpty()) {
+            showdownBattleMarkupEntries[normalizedKey] = entries
+            showdownBattleLogEntries += entries
+            while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
+            entries.forEach(::appendActivity)
+            latestBattleEvent = entries.last()
+            latestBattleEventAtNanos = System.nanoTime()
+        } else {
+            latestBattleEvent = showdownBattleLogEntries.lastOrNull().orEmpty()
+            latestBattleEventAtNanos = System.nanoTime()
+        }
+        if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
         battleFeedVisible = true
         notifyListeners()
     }
@@ -992,6 +1030,7 @@ class BattleSession {
         protocolHistory.clear()
         battleLog.clear()
         showdownBattleLogEntries.clear()
+        showdownBattleMarkupEntries.clear()
         battleLog += "No battle in progress."
         chatMessages.clear()
         chatMessages += "[System] Ready for a battle."
@@ -1435,7 +1474,11 @@ class BattleSession {
                     "-unboost" -> applyBoost(fields, -1)
                     "-setboost" -> applySetBoost(fields)
                     "cant" -> applyCant(fields)
-                    "-fail" -> appendLog("${battleActor(fields.getOrNull(2))} failed to use ${battleEffectName(fields.getOrNull(3))}.")
+                    "-fail" -> {
+                        val actor = battleActor(fields.getOrNull(2))
+                        val effect = battleEffectName(fields.getOrNull(3))
+                        appendLog(if (effect.isBlank()) "$actor's move failed." else "$actor failed to use $effect.")
+                    }
                     "-block" -> applyBlock(fields)
                     "-notarget" -> appendLog("${battleActor(fields.getOrNull(2))} had no target.")
                     "-miss" -> appendLog("${battleActor(fields.getOrNull(2))}'s attack missed ${battleActor(fields.getOrNull(3))}.")
@@ -1568,6 +1611,7 @@ class BattleSession {
         hasBattleProtocolTranscript = true
         battleLog.clear()
         showdownBattleLogEntries.clear()
+        showdownBattleMarkupEntries.clear()
         battleLogGeneration += 1L
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = true

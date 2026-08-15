@@ -2528,6 +2528,18 @@ class BattleSessionTest {
     }
 
     @Test
+    fun nativeBattleMarkupUpdatesReplacePreviousEntries() {
+        val session = BattleSession()
+
+        session.replaceShowdownBattleMarkup("notice", "<b>Queue open</b>")
+        session.replaceShowdownBattleMarkup("notice", "<b>Queue closed</b>")
+
+        assertFalse(session.showdownBattleLog().contains("Queue open"))
+        assertEquals(listOf("Queue closed"), session.showdownBattleLog())
+        assertEquals(1, session.activityMessages().count { it == "Queue closed" })
+    }
+
+    @Test
     fun completedBattleMenuOffersReplaySaving() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()

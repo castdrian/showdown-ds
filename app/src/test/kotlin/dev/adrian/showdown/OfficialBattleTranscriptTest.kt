@@ -211,6 +211,15 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsFailureEventsWithoutAnOptionalEffectName() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|-fail|p1a: Plusle")
+
+        assertTrue(session.battleLog().contains("Plusle's move failed."))
+    }
+
+    @Test
     fun appliesTheOfficialMinorBattleActionVariants() {
         val session = BattleSession()
         session.applyProtocolPacket(
