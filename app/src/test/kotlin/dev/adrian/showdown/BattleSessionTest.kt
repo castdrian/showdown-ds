@@ -753,6 +753,23 @@ class BattleSessionTest {
     }
 
     @Test
+    fun teamPreviewKeepsDirectMoveEntryPointsOnTheReplacementGrid() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"rqid\":19,\"teamPreview\":true,\"maxChosenTeamSize\":2,\"side\":{\"pokemon\":[{\"ident\":\"p1: Pikachu\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\"},{\"ident\":\"p1: Eevee\",\"details\":\"Eevee, L50\",\"condition\":\"100/100\"}]}}"
+        )
+
+        session.focusMove(0)
+        session.selectMoveWithTouch(0)
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectPanel(BattleSession.Panel.ACTIVITY)
+        session.cyclePanel(1)
+
+        assertEquals(BattleSession.Panel.TEAM, session.panel)
+        assertTrue(session.decisionAvailable)
+    }
+
+    @Test
     fun teamPreviewUsesTheMaximumWhenBothRequestSizesArePresent() {
         val session = BattleSession()
         session.applyProtocolLine("|request|{\"rqid\":18,\"teamPreview\":true,\"chosenTeamSize\":6,\"maxChosenTeamSize\":2}")
@@ -2237,6 +2254,10 @@ class BattleSessionTest {
         assertEquals(1, session.focusedTeam)
         assertEquals("Fainted", session.teamCardStatus(0))
         assertEquals("Switch in", session.teamCardStatus(1))
+
+        session.selectPanel(BattleSession.Panel.MENU)
+
+        assertEquals(BattleSession.Panel.TEAM, session.panel)
     }
 
     @Test

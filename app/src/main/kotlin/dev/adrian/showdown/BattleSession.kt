@@ -1059,6 +1059,7 @@ class BattleSession {
     }
 
     fun focusMove(index: Int) {
+        if (redirectToTeamDecisionPanel()) return
         val selectableMoves = displayedMoves()
         if (index !in selectableMoves.indices) return
         panel = Panel.MOVES
@@ -1069,6 +1070,7 @@ class BattleSession {
     }
 
     fun selectMoveWithTouch(index: Int) {
+        if (redirectToTeamDecisionPanel()) return
         val selectableMoves = displayedMoves()
         if (index !in selectableMoves.indices) return
         if (selectableMoves[index].disabled) {
@@ -1126,15 +1128,15 @@ class BattleSession {
     }
 
     fun selectPanel(nextPanel: Panel) {
-        panel = nextPanel
+        panel = if (requiresTeamDecision()) Panel.TEAM else nextPanel
         focusedMessage = 0
-        if (nextPanel == Panel.MENU) focusedMenuItem = 0
+        if (panel == Panel.MENU) focusedMenuItem = 0
         if (!liveBattleActive && !battleFinished) {
-            if (nextPanel == Panel.MOVES || nextPanel == Panel.TEAM) status = LOBBY_STATUS
+            if (panel == Panel.MOVES || panel == Panel.TEAM) status = LOBBY_STATUS
         } else if (spectatorMode) {
             status = "Spectating battle"
         } else {
-            status = when (nextPanel) {
+            status = when (panel) {
                 Panel.MOVES -> "Choose a move"
                 Panel.TEAM -> when (decisionKind) {
                     DecisionKind.SWITCH -> "Choose a Pokémon to switch in"
@@ -3864,6 +3866,17 @@ class BattleSession {
         if (moves.isEmpty()) return
         val direction = if (vertical != 0) vertical else horizontal
         focusMove((focusedMove + direction).coerceIn(0, moves.lastIndex))
+    }
+
+    private fun requiresTeamDecision() = decisionKind == DecisionKind.SWITCH || decisionKind == DecisionKind.TEAM_PREVIEW
+
+    private fun redirectToTeamDecisionPanel(): Boolean {
+        if (!requiresTeamDecision()) return false
+        if (panel != Panel.TEAM) {
+            panel = Panel.TEAM
+            notifyListeners()
+        }
+        return true
     }
 
     private fun moveTeamFocus(horizontal: Int, vertical: Int) {
