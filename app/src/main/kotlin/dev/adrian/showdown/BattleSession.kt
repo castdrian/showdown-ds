@@ -888,6 +888,10 @@ class BattleSession {
     fun setLiveBattleActive(value: Boolean) {
         val changed = liveBattleActive != value
         liveBattleActive = value
+        if (value && changed && !battleFinished && !spectatorMode && panel == Panel.MENU) {
+            panel = Panel.MOVES
+            status = if (decisionAvailable) "Choose a move" else "Battle starting"
+        }
         if (!value) {
             spectatorMode = false
             decisionAvailable = false

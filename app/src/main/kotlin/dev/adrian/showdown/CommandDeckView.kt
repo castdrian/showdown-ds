@@ -389,6 +389,21 @@ class CommandDeckView(
             drawCompletedBattle(canvas, width, height, scale)
             return
         }
+        if (session.moves().isEmpty()) {
+            moveBounds.fill(null)
+            gimmickBounds.fill(null)
+            targetBounds.fill(null)
+            drawEmptyPanel(
+                canvas,
+                width,
+                height,
+                scale,
+                "Battle starting",
+                session.status,
+                "Battle controls will appear here"
+            )
+            return
+        }
         val moves = session.moves()
         val panelTop = 184f * scale
         val left = 44f * scale
@@ -456,12 +471,20 @@ class CommandDeckView(
         paint.color = PAPER
         canvas.drawText("Battle complete", card.centerX(), card.top + 128f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(30f, scale)
+        val outcome = session.status
+            .takeUnless { it.equals("Choose a move", true) || it.equals("Waiting for a battle decision…", true) }
+            ?: "The battle has ended."
+        paint.textSize = fittedTextSize(
+            outcome,
+            card.width() - 72f * scale,
+            readableTextSize(30f, scale),
+            readableTextSize(18f, scale, 16f)
+        )
         paint.color = Color.rgb(190, 218, 235)
-        canvas.drawText(session.status, card.centerX(), card.top + 190f * scale, paint)
+        canvas.drawText(outcome, card.centerX(), card.top + 190f * scale, paint)
         paint.textSize = readableTextSize(25f, scale)
         paint.color = Color.rgb(129, 205, 236)
-        canvas.drawText("Open Menu to find another battle", card.centerX(), card.top + 258f * scale, paint)
+        canvas.drawText("Open Menu  ·  Find battle", card.centerX(), card.top + 258f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
     }
 
