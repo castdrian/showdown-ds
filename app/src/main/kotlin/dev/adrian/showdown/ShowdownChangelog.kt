@@ -121,6 +121,7 @@ object ShowdownChangelog {
                 "Switch cards now reserve separate type and status regions at the Thor lower display density, keeping long type names inside their own card.",
                 "Switch cards now derive their sprite, header, HP, type, and status regions from each card's available height, preventing six-Pokémon switch screens from overlapping.",
                 "Switch-card text now fits both its width and vertical region, keeping names, HP, and status labels inside their cards across display sizes.",
+                "Lower-screen panel changes now clear the custom canvas state before drawing, preventing stale translucent controls from showing through the switch screen.",
                 "Switch cards now keep a visible gap between each content region and mark the active Pokémon as unavailable instead of presenting it as another switch choice.",
                 "Forced switch cards now keep selected replacements visibly marked and show multi-switch progress.",
                 "Switch-screen controller focus now follows the same two-column grid that is rendered on the Thor display.",

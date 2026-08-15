@@ -67,6 +67,11 @@ class CommandDeckView(
             width / ThorDisplayProfile.LOWER_WIDTH_PIXELS,
             height / ThorDisplayProfile.LOWER_HEIGHT_PIXELS
         )
+        paint.alpha = 255
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.LEFT
+        paint.clearShadowLayer()
         drawBackground(canvas, width, height)
         drawTabs(canvas, width, scale)
         drawActivePanel(canvas, width, height, scale)

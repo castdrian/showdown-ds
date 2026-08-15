@@ -60,14 +60,16 @@ object SwitchTeamLayout {
     }
 
     fun rowBounds(card: SwitchTeamCardBounds, scale: Float, typeCount: Int): SwitchTeamRowBounds {
-        val left = card.left + CARD_INSET * scale
-        val right = card.right - CARD_INSET * scale
-        val statusWidth = minOf(STATUS_WIDTH * scale, (right - left) * 0.42f)
-        val statusLeft = right - statusWidth
-        val typeRight = statusLeft - STATUS_GAP * scale
+        val inset = CARD_INSET * scale
+        val left = minOf(card.left + inset, card.right)
+        val right = maxOf(left, card.right - inset)
+        val availableWidth = (right - left).coerceAtLeast(0f)
+        val statusWidth = minOf(STATUS_WIDTH * scale, availableWidth * 0.42f)
+        val statusLeft = (right - statusWidth).coerceIn(left, right)
+        val typeRight = (statusLeft - STATUS_GAP * scale).coerceAtLeast(left)
         val count = typeCount.coerceAtLeast(1)
         val typeGap = TYPE_GAP * scale
-        val typeWidth = ((typeRight - left) - typeGap * (count - 1)) / count
+        val typeWidth = (((typeRight - left) - typeGap * (count - 1)).coerceAtLeast(0f)) / count
         return SwitchTeamRowBounds(left, typeRight, statusLeft, right, typeGap, typeWidth)
     }
 
@@ -91,8 +93,9 @@ object SwitchTeamLayout {
             card.right - inset,
             card.bottom - inset
         )
-        val hpBottom = bottomRow.top - CARD_HP_GAP * scale
-        val headerTop = card.top + CARD_HEADER_TOP_OFFSET * scale
+        val contentTop = card.top + inset
+        val hpBottom = (bottomRow.top - CARD_HP_GAP * scale).coerceAtLeast(contentTop)
+        val headerTop = (card.top + CARD_HEADER_TOP_OFFSET * scale).coerceAtMost(hpBottom)
         val upperHeight = (hpBottom - headerTop).coerceAtLeast(0f)
         val hpHeight = minOf(
             48f * scale,
@@ -100,21 +103,24 @@ object SwitchTeamLayout {
         )
         val hp = SwitchTeamCardBounds(
             minOf(card.left + CARD_HEADER_LEFT_OFFSET * scale, card.right - inset),
-            hpBottom - hpHeight,
+            (hpBottom - hpHeight).coerceAtLeast(headerTop),
             card.right - inset,
             hpBottom
         )
-        val headerBottom = hp.top - CONTENT_GAP * scale
+        val headerBottom = (hp.top - CONTENT_GAP * scale).coerceAtLeast(headerTop)
         val headerLeft = minOf(card.left + CARD_HEADER_LEFT_OFFSET * scale, card.right - inset)
-        val headerRight = if (reservesPreviewMarker) card.right - PREVIEW_MARKER_RESERVED_WIDTH * scale else card.right - inset
+        val headerRight = minOf(
+            if (reservesPreviewMarker) card.right - PREVIEW_MARKER_RESERVED_WIDTH * scale else card.right - inset,
+            card.right - inset
+        )
         val header = SwitchTeamCardBounds(
             headerLeft,
             headerTop,
             maxOf(headerLeft, headerRight),
-            maxOf(headerTop, headerBottom)
+            headerBottom
         )
-        val spriteTop = card.top + 16f * scale
-        val spriteBottom = bottomRow.top - CARD_BOTTOM_ROW_GAP * scale
+        val spriteTop = (card.top + 16f * scale).coerceAtMost(bottomRow.top)
+        val spriteBottom = (bottomRow.top - CARD_BOTTOM_ROW_GAP * scale).coerceAtLeast(spriteTop)
         val spriteSize = minOf(
             CARD_SPRITE_SIZE * scale,
             (spriteBottom - spriteTop).coerceAtLeast(0f)

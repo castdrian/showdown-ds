@@ -106,4 +106,24 @@ class SwitchTeamLayoutTest {
         assertTrue(last.top >= first.bottom)
         assertTrue(last.bottom >= last.top)
     }
+
+    @Test
+    fun compressedRowsNeverCreateInvertedRegions() {
+        val card = SwitchTeamLayout.bounds(420f, 240f, 0.34f, 0, 6)
+        val content = SwitchTeamLayout.contentBounds(card, 0.34f, true)
+        val row = SwitchTeamLayout.rowBounds(card, 0.34f, 2)
+
+        assertTrue(row.left <= row.typeRight)
+        assertTrue(row.typeRight <= row.statusLeft)
+        assertTrue(row.statusLeft <= row.right)
+        assertTrue(row.typeWidth >= 0f)
+        assertTrue(content.header.left <= content.header.right)
+        assertTrue(content.header.top <= content.header.bottom)
+        assertTrue(content.hp.left <= content.hp.right)
+        assertTrue(content.hp.top <= content.hp.bottom)
+        assertTrue(content.bottomRow.left <= content.bottomRow.right)
+        assertTrue(content.bottomRow.top <= content.bottomRow.bottom)
+        assertTrue(content.sprite.left <= content.sprite.right)
+        assertTrue(content.sprite.top <= content.sprite.bottom)
+    }
 }
