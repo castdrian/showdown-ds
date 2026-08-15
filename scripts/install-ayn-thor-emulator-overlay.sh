@@ -8,6 +8,7 @@ sdk_root="$(android_sdk_root)"
 sdk_emulator_root="$sdk_root/emulator"
 overlay_root="$repo_root/.emulator-overlay"
 qemu_binary="${1:?Usage: ./scripts/install-ayn-thor-emulator-overlay.sh /path/to/qemu-system-binary}"
+build_output_root="${2:-}"
 
 case "$(uname -s)-$(uname -m)" in
     Darwin-arm64|Darwin-aarch64)
@@ -42,6 +43,13 @@ if [[ ! -f "$qemu_binary" ]]; then
     exit 1
 fi
 
+if [[ -z "$build_output_root" ]]; then
+    candidate_build_root="$(cd "$(dirname "$qemu_binary")/../.." 2>/dev/null && pwd || true)"
+    if [[ -d "$candidate_build_root/lib64" ]]; then
+        build_output_root="$candidate_build_root"
+    fi
+fi
+
 if [[ -e "$overlay_root" ]]; then
     printf '%s\n' "The overlay already exists at $overlay_root. Move it aside before installing another build."
     exit 1
@@ -50,11 +58,18 @@ fi
 mkdir -p "$overlay_root/qemu/$host_directory"
 for sdk_entry in "$sdk_emulator_root"/*; do
     entry_name="$(basename "$sdk_entry")"
-    if [[ "$entry_name" != "emulator" && "$entry_name" != "qemu" ]]; then
+    if [[ "$entry_name" != "emulator" && "$entry_name" != "qemu" && "$entry_name" != "lib64" ]]; then
         ln -s "$sdk_entry" "$overlay_root/$entry_name"
     fi
 done
 cp "$sdk_emulator_root/emulator" "$overlay_root/emulator"
+if [[ -d "$build_output_root/lib64" ]]; then
+    mkdir "$overlay_root/lib64"
+    cp -R "$sdk_emulator_root/lib64/." "$overlay_root/lib64/"
+    find "$build_output_root/lib64" -maxdepth 1 -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.dll' \) -exec cp {} "$overlay_root/lib64/" \;
+else
+    ln -s "$sdk_emulator_root/lib64" "$overlay_root/lib64"
+fi
 cp "$qemu_binary" "$overlay_root/qemu/$host_directory/$qemu_name"
 chmod +x "$overlay_root/emulator"
 chmod +x "$overlay_root/qemu/$host_directory/$qemu_name"

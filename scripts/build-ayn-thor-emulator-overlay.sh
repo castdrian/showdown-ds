@@ -43,4 +43,28 @@ if [[ -z "$qemu_binary" ]]; then
     exit 1
 fi
 
+case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64|Darwin-aarch64)
+        ninja_host="darwin-x86"
+        ;;
+    Darwin-x86_64)
+        ninja_host="darwin-x86"
+        ;;
+    Linux-x86_64|Linux-amd64)
+        ninja_host="linux-x86"
+        ;;
+    *)
+        ninja_host=""
+        ;;
+esac
+
+if [[ -n "$ninja_host" && -f "$build_root/build.ninja" ]]; then
+    ninja_binary="$source_root/prebuilts/ninja/$ninja_host/ninja"
+    if [[ ! -x "$ninja_binary" ]]; then
+        printf '%s\n' "The Ninja binary was not found at $ninja_binary"
+        exit 1
+    fi
+    "$ninja_binary" -C "$build_root" "$qemu_name" gfxstream_backend
+fi
+
 "$repo_root/scripts/install-ayn-thor-emulator-overlay.sh" "$qemu_binary"
