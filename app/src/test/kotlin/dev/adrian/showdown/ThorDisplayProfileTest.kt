@@ -135,6 +135,12 @@ class ThorDisplayProfileTest {
             layoutAssignments.getValue("primary->second.pos_y").toInt() >
                 layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
         )
+        val panelHeight = 1080
+        val combinedHeight = panelHeight * 2
+        val primaryTop = combinedHeight - panelHeight - layoutAssignments.getValue("primary->second.pos_y").toInt()
+        val thorTop = combinedHeight - panelHeight - layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
+        assertEquals(0, primaryTop)
+        assertEquals(panelHeight, thorTop)
         assertFalse(baseConfig.contains("Vulkan", true))
         assertFalse(baseConfig.contains("lavapipe", true))
         assertFalse(createScript.contains("Vulkan", true))
