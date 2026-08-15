@@ -128,6 +128,7 @@ object ShowdownChangelog {
                 "Submitted switch choices now show a waiting state instead of leaving inactive cards looking selectable.",
                 "Mandatory switch and team-preview decisions now render in an isolated full-screen replacement grid, keeping the prompt and cards separate from regular battle controls.",
                 "Switch-screen transitions now discard the previous move interaction state before drawing the dedicated team decision surface, preventing controls from leaking into the switch page.",
+                "Forced switch requests now keep the dedicated card grid visible during live-state handoffs instead of falling back to an overlapping empty-team panel.",
                 "Lower-screen panel changes now clear the custom canvas state before drawing, preventing stale translucent controls from showing through the switch screen.",
                 "Thor presentation replacement now waits for the previous lower-screen surface to dismiss, preventing stacked switch screens after lifecycle or display changes.",
                 "Thor lower-screen presentation creation now recovers cleanly if Android removes the target display during the window handoff.",

@@ -91,6 +91,14 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun decisionTeamPanelDoesNotFallBackToTheEmptyPanelDuringBattleStateTransition() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+        val teamRenderer = source.substringAfter("private fun drawTeam(").substringBefore("val visibleTeam")
+
+        assertTrue(teamRenderer.contains("if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished())"))
+    }
+
+    @Test
     fun onStopDismissesTheThorPresentationBeforeTheActivityLeavesTheScreen() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val stop = source.substringAfter("override fun onStop() {").substringBefore("override fun onStart")

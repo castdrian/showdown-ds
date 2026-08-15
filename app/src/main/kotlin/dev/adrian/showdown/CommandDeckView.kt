@@ -1410,7 +1410,7 @@ class CommandDeckView(
         scale: Float,
         decisionLayout: Boolean = false
     ) {
-        if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
+        if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished()) {
             teamBounds.fill(null)
             drawEmptyPanel(
                 canvas,
