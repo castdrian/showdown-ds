@@ -248,26 +248,28 @@ class CommandDeckView(
         canvas.drawRoundRect(band, 24f * scale, 24f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(40f, scale, 34f)
+        val title = when {
+            session.isReplayMode() -> "Replay"
+            session.isSpectatorMode() -> "Spectating"
+            session.isBattleFinished() -> "Battle complete"
+            session.decisionKind == BattleSession.DecisionKind.SWITCH && !session.decisionAvailable -> "Waiting"
+            session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW && !session.decisionAvailable -> "Waiting"
+            session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Switch in"
+            session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> "Team preview"
+            session.isLiveBattleActive() -> "Battle"
+            else -> "Lobby"
+        }
+        paint.textSize = fittedTextSizeInRegion(
+            title,
+            band.width() - if (session.battleClockSeconds() != null) 340f * scale else 48f * scale,
+            band.height() - 10f * scale,
+            readableTextSize(40f, scale, 34f),
+            readableTextSize(18f, scale, 16f)
+        )
         paint.color = Color.rgb(226, 238, 244)
         paint.textAlign = Paint.Align.CENTER
         val titleBaseline = band.centerY() - (paint.ascent() + paint.descent()) / 2f
-        canvas.drawText(
-            when {
-                session.isReplayMode() -> "Replay"
-                session.isSpectatorMode() -> "Spectating"
-                session.isBattleFinished() -> "Battle complete"
-                session.decisionKind == BattleSession.DecisionKind.SWITCH && !session.decisionAvailable -> "Waiting"
-                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW && !session.decisionAvailable -> "Waiting"
-                session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Switch in"
-                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> "Team preview"
-                session.isLiveBattleActive() -> "Battle"
-                else -> "Lobby"
-            },
-            band.centerX(),
-            titleBaseline,
-            paint
-        )
+        canvas.drawText(title, band.centerX(), titleBaseline, paint)
         drawBattleClock(canvas, width, scale)
     }
 
@@ -284,7 +286,13 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = readableTextSize(24f, scale, 21f)
+        paint.textSize = fittedTextSizeInRegion(
+            "${seconds}s",
+            badge.width() - 12f * scale,
+            badge.height() - 10f * scale,
+            readableTextSize(24f, scale, 21f),
+            readableTextSize(14f, scale, 12f)
+        )
         paint.color = PAPER
         canvas.drawText("${seconds}s", badge.centerX(), centeredTextBaseline(badge.centerY()), paint)
         paint.textAlign = Paint.Align.LEFT
@@ -355,14 +363,18 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-        paint.textSize = fittedTextSize(
+        paint.textSize = fittedTextSizeInRegion(
             session.status,
             bounds.width() - 48f * scale,
+            bounds.height() - 8f * scale,
             readableTextSize(24f, scale, 20f),
             readableTextSize(14f, scale, 12f)
         )
         paint.color = Color.rgb(211, 239, 244)
+        canvas.save()
+        canvas.clipRect(bounds.left + 8f * scale, bounds.top + 4f * scale, bounds.right - 8f * scale, bounds.bottom - 4f * scale)
         canvas.drawText(session.status, bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        canvas.restore()
         paint.textAlign = Paint.Align.LEFT
     }
 

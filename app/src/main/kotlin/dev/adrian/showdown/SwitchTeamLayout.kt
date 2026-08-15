@@ -37,12 +37,11 @@ object SwitchTeamLayout {
     const val TYPE_GAP = 8f
     const val CARD_INSET = 18f
     const val CARD_HEADER_LEFT_OFFSET = 164f
-    const val CARD_HEADER_TOP_OFFSET = 14f
+    const val CARD_HEADER_TOP_OFFSET = 18f
     const val CONTENT_GAP = 12f
-    const val CARD_HP_GAP = CONTENT_GAP
-    const val CARD_BOTTOM_ROW_GAP = CONTENT_GAP
     const val PREVIEW_MARKER_RESERVED_WIDTH = 110f
     const val CARD_BOTTOM_ROW_HEIGHT = 52f
+    const val CARD_HP_HEIGHT = 44f
     const val CARD_SPRITE_SIZE = 134f
 
     fun rows(teamSize: Int) = (teamSize + COLUMNS - 1) / COLUMNS
@@ -96,34 +95,34 @@ object SwitchTeamLayout {
 
     fun contentBounds(card: SwitchTeamCardBounds, scale: Float, reservesPreviewMarker: Boolean): SwitchTeamCardContentBounds {
         val inset = CARD_INSET * scale
-        val height = cardHeight(card)
-        val availableHeight = (height - inset * 2f).coerceAtLeast(0f)
+        val contentTop = card.top + inset
+        val contentBottom = (card.bottom - inset).coerceAtLeast(contentTop)
+        val availableHeight = (contentBottom - contentTop).coerceAtLeast(0f)
+        val gap = CONTENT_GAP * scale
         val bottomRowHeight = minOf(
             CARD_BOTTOM_ROW_HEIGHT * scale,
-            maxOf(38f * scale, height * 0.24f),
+            maxOf(32f * scale, availableHeight * 0.24f),
             availableHeight
         )
         val bottomRow = SwitchTeamCardBounds(
             card.left + inset,
-            card.bottom - inset - bottomRowHeight,
+            (contentBottom - bottomRowHeight).coerceAtLeast(contentTop),
             card.right - inset,
-            card.bottom - inset
+            contentBottom
         )
-        val contentTop = card.top + inset
-        val hpBottom = (bottomRow.top - CARD_HP_GAP * scale).coerceAtLeast(contentTop)
-        val headerTop = (card.top + CARD_HEADER_TOP_OFFSET * scale).coerceAtMost(hpBottom)
-        val upperHeight = (hpBottom - headerTop).coerceAtLeast(0f)
+        val hpBottom = (bottomRow.top - gap).coerceAtLeast(contentTop)
         val hpHeight = minOf(
-            48f * scale,
-            (upperHeight * 0.36f).coerceAtLeast(0f)
+            CARD_HP_HEIGHT * scale,
+            (hpBottom - contentTop).coerceAtLeast(0f)
         )
         val hp = SwitchTeamCardBounds(
             minOf(card.left + CARD_HEADER_LEFT_OFFSET * scale, card.right - inset),
-            (hpBottom - hpHeight).coerceAtLeast(headerTop),
+            (hpBottom - hpHeight).coerceAtLeast(contentTop),
             card.right - inset,
             hpBottom
         )
-        val headerBottom = (hp.top - CONTENT_GAP * scale).coerceAtLeast(headerTop)
+        val headerTop = (card.top + CARD_HEADER_TOP_OFFSET * scale).coerceAtMost(hp.top)
+        val headerBottom = (hp.top - gap).coerceAtLeast(headerTop)
         val headerLeft = minOf(card.left + CARD_HEADER_LEFT_OFFSET * scale, card.right - inset)
         val headerRight = minOf(
             if (reservesPreviewMarker) card.right - PREVIEW_MARKER_RESERVED_WIDTH * scale else card.right - inset,
@@ -135,20 +134,23 @@ object SwitchTeamLayout {
             maxOf(headerLeft, headerRight),
             headerBottom
         )
-        val spriteTop = (card.top + 16f * scale).coerceAtMost(bottomRow.top)
-        val spriteBottom = (bottomRow.top - CARD_BOTTOM_ROW_GAP * scale).coerceAtLeast(spriteTop)
+        val spriteLeft = card.left + inset
+        val spriteRight = (headerLeft - gap).coerceAtLeast(spriteLeft)
+        val spriteTop = contentTop
+        val spriteBottom = (bottomRow.top - gap).coerceAtLeast(spriteTop)
         val spriteSize = minOf(
             CARD_SPRITE_SIZE * scale,
+            (spriteRight - spriteLeft).coerceAtLeast(0f),
             (spriteBottom - spriteTop).coerceAtLeast(0f)
         )
+        val spriteCenterX = (spriteLeft + spriteRight) / 2f
+        val spriteCenterY = (spriteTop + spriteBottom) / 2f
         val sprite = SwitchTeamCardBounds(
-            card.left + 16f * scale,
-            spriteTop + ((spriteBottom - spriteTop - spriteSize) / 2f).coerceAtLeast(0f),
-            card.left + 16f * scale + spriteSize,
-            spriteTop + ((spriteBottom - spriteTop - spriteSize) / 2f).coerceAtLeast(0f) + spriteSize
+            spriteCenterX - spriteSize / 2f,
+            spriteCenterY - spriteSize / 2f,
+            spriteCenterX + spriteSize / 2f,
+            spriteCenterY + spriteSize / 2f
         )
         return SwitchTeamCardContentBounds(sprite, header, hp, bottomRow)
     }
-
-    private fun cardHeight(card: SwitchTeamCardBounds) = card.bottom - card.top
 }

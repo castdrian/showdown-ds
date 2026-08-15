@@ -134,7 +134,7 @@ object ShowdownChangelog {
                 "Thor lower-screen presentation creation now recovers cleanly if Android removes the target display during the window handoff.",
                 "The lower-screen presentation now closes when the app leaves the foreground and is rebuilt on resume, preventing stale switch controls from surviving an app restart.",
                 "Thor display callbacks now wait for the activity to be resumed before creating a lower-screen presentation, closing a paused-state race during display handoffs.",
-                "Switch cards now keep a visible gap between each content region and mark the active Pokémon as unavailable instead of presenting it as another switch choice.",
+                "Switch cards now derive disjoint sprite, name, level, HP, type, and status regions at the Thor lower display size, with the active Pokémon marked unavailable instead of presented as another switch choice.",
                 "Forced switch cards now keep selected replacements visibly marked and show multi-switch progress.",
                 "Switch-screen controller focus now follows the same two-column grid that is rendered on the Thor display.",
                 "Native battle messages now follow the local player side, so move wording matches the upper HP cards in every matchup.",

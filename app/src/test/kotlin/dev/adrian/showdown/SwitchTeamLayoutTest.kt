@@ -51,6 +51,7 @@ class SwitchTeamLayoutTest {
         assertTrue(content.sprite.right <= card.right)
         assertTrue(content.sprite.top >= card.top)
         assertTrue(content.sprite.bottom <= content.bottomRow.top)
+        assertTrue(content.header.left - content.sprite.right >= SwitchTeamLayout.CONTENT_GAP)
         assertTrue(content.header.left >= card.left)
         assertTrue(content.header.right <= card.right)
         assertTrue(content.header.bottom <= content.hp.top)
@@ -70,6 +71,7 @@ class SwitchTeamLayoutTest {
                 assertTrue(content.hp.top - content.header.bottom >= SwitchTeamLayout.CONTENT_GAP)
                 assertTrue(content.bottomRow.top - content.hp.bottom >= SwitchTeamLayout.CONTENT_GAP)
                 assertTrue(content.bottomRow.top - content.sprite.bottom >= SwitchTeamLayout.CONTENT_GAP)
+                assertTrue(content.header.left - content.sprite.right >= SwitchTeamLayout.CONTENT_GAP)
             }
         }
     }
