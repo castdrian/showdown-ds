@@ -108,10 +108,31 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("com.android.emulator.multidisplay.START"))
         assertTrue(runScript.contains("wait_for_android_boot()"))
         assertTrue(runScript.contains("activate_secondary_display()"))
-        assertTrue(overlayPatch.contains("primary->second.pos_y = 1080;"))
-        assertTrue(overlayPatch.contains("thorDisplay->second.pos_y = 0;"))
-        assertFalse(overlayPatch.contains("primary->second.pos_y = 0;"))
-        assertFalse(overlayPatch.contains("thorDisplay->second.pos_y = 1080;"))
+        val assignmentPattern = Regex("""^\+\s*(primary|thorDisplay)->second\.(width|height|pos_x|pos_y) = ([^;]+);$""")
+        val layoutAssignments = overlayPatch.lineSequence()
+            .mapNotNull { line ->
+                assignmentPattern.matchEntire(line)?.let { match ->
+                    "${match.groupValues[1]}->second.${match.groupValues[2]}" to match.groupValues[3].trim()
+                }
+            }
+            .toMap()
+        assertEquals(
+            mapOf(
+                "primary->second.width" to "primary->second.originalWidth",
+                "primary->second.height" to "primary->second.originalHeight",
+                "primary->second.pos_x" to "0",
+                "primary->second.pos_y" to "0",
+                "thorDisplay->second.width" to "thorDisplay->second.originalWidth",
+                "thorDisplay->second.height" to "thorDisplay->second.originalHeight",
+                "thorDisplay->second.pos_x" to "340",
+                "thorDisplay->second.pos_y" to "1080"
+            ),
+            layoutAssignments
+        )
+        assertTrue(
+            layoutAssignments.getValue("primary->second.pos_y").toInt() <
+                layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
+        )
         assertFalse(baseConfig.contains("Vulkan", true))
         assertFalse(baseConfig.contains("lavapipe", true))
         assertFalse(createScript.contains("Vulkan", true))
