@@ -112,11 +112,13 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
-    fun doesNotRestoreAnAnonymousParticipantAsALiveBattleAfterProcessDeath() {
+    fun restoresAnAnonymousParticipantAsAReadOnlySpectatorAfterProcessDeath() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 
-        assertTrue(source.contains("ShowdownBattleRecovery.Mode.UNRESTORABLE_GUEST"))
-        assertTrue(source.contains("abandonUnrestorableGuestBattle()"))
+        assertTrue(source.contains("ShowdownBattleRecovery.Mode.GUEST_SPECTATOR"))
+        assertTrue(source.contains("session.setSpectatorMode(true)"))
+        assertTrue(source.contains("battle_spectator"))
+        assertFalse(source.contains("abandonUnrestorableGuestBattle()"))
         assertTrue(source.contains("battleWasParticipant = true"))
         assertTrue(source.contains("battleProtocolIdentifiesLocalPlayer(lines)"))
         assertTrue(source.contains("battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)"))

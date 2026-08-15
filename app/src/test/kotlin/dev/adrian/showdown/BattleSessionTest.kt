@@ -2693,6 +2693,68 @@ class BattleSessionTest {
     }
 
     @Test
+    fun spectatorModeKeepsTheBattleReadOnlyWithoutCallingItAReplay() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(listOf("|init|battle", "|player|p1|MISTY", "|player|p2|GLADION"))
+        session.setLiveBattleActive(true)
+        session.setSpectatorMode(true)
+
+        assertTrue(session.isSpectatorMode())
+        assertFalse(session.isReplayMode())
+        assertFalse(session.decisionAvailable)
+        assertEquals("Leave battle", session.menuItems()[3])
+        assertEquals("Battle controls", session.menuItems()[12])
+    }
+
+    @Test
+    fun recoveredSpectatorMenuLeavesTheBattleInsteadOfChallenging() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+
+        session.applyProtocolPacket(listOf("|init|battle", "|player|p1|MISTY", "|player|p2|GLADION"))
+        session.setLiveBattleActive(true)
+        session.setSpectatorMode(true)
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(3)
+        session.confirmSelection()
+
+        assertEquals("Leave battle", session.menuItems()[3])
+        assertEquals(listOf(BattleSession.ClientAction.LEAVE_BATTLE), actions)
+    }
+
+    @Test
+    fun spectatorModeClearsRequestsThatArriveWhileWatching() {
+        val session = BattleSession()
+
+        session.setLiveBattleActive(true)
+        session.setSpectatorMode(true)
+        session.applyProtocolLine(
+            "|request|{\"rqid\":1,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"maxpp\":35}]}]}"
+        )
+
+        assertFalse(session.decisionAvailable)
+        assertEquals(BattleSession.DecisionKind.WAIT, session.decisionKind)
+    }
+
+    @Test
+    fun spectatorModeNeverAutoPassesAForcedSwitchRequest() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener { decisions += it }
+        session.setLiveBattleActive(true)
+        session.setSpectatorMode(true)
+
+        session.applyProtocolPacket(
+            listOf("|request|{\"rqid\":2,\"forceSwitch\":[true],\"side\":{\"pokemon\":[]}}")
+        )
+
+        assertTrue(decisions.isEmpty())
+        assertFalse(session.decisionAvailable)
+    }
+
+    @Test
     fun replayMenuOpensReplayControls() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()

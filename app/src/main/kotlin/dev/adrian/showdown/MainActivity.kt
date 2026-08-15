@@ -104,6 +104,7 @@ class MainActivity : Activity() {
     private var activeBattleRoomId: String? = null
     private var battleWasRegistered = false
     private var battleWasParticipant = false
+    private var battleIsSpectator = false
     private var completedBattleRoomId: String? = null
     private var leftBattleRoomId: String? = null
     private var pendingBattleJoinRoomId: String? = null
@@ -225,6 +226,10 @@ class MainActivity : Activity() {
         runOnUiThread { applyBattleProtocolToEffects(lines) }
     }
     private val decisionListener = BattleSession.DecisionListener { command ->
+        if (session.isSpectatorMode()) {
+            session.setConnectionStatus("Spectators cannot make battle choices.")
+            return@DecisionListener
+        }
         if (session.isReplayMode()) {
             session.setConnectionStatus("Replays are read-only.")
             return@DecisionListener
@@ -372,6 +377,7 @@ class MainActivity : Activity() {
         outState.putString("active_battle_room", activeBattleRoomId)
         outState.putBoolean("battle_registered", battleWasRegistered)
         outState.putBoolean("battle_participant", battleWasParticipant)
+        outState.putBoolean("battle_spectator", battleIsSpectator)
         outState.putString("pending_battle_search_format", pendingBattleSearchFormat)
         outState.putString("pending_battle_search_label", pendingBattleSearchLabel)
         outState.putBoolean("pending_battle_search_random", pendingBattleSearchUsesRandomTeams == true)
@@ -855,6 +861,7 @@ class MainActivity : Activity() {
             lobbyState.clearBattle(roomId)
             completedBattleRoomId = roomId
             activeBattleRoomId = null
+            battleIsSpectator = false
             pendingBattleSearchFormat = null
             pendingBattleSearchLabel = null
             pendingBattleSearchUsesRandomTeams = null
@@ -867,7 +874,7 @@ class MainActivity : Activity() {
             return
         }
         persistLobbyState()
-        if (activeBattleRoomId == roomId && battleProtocolReady && session.decisionAvailable && pendingDecisionSentConnection !== packet.connection) {
+        if (activeBattleRoomId == roomId && battleProtocolReady && !session.isSpectatorMode() && session.decisionAvailable && pendingDecisionSentConnection !== packet.connection) {
             pendingDecisionCommand?.let { command ->
                 if (packet.connection.send(roomId, command)) pendingDecisionSentConnection = packet.connection
             }
@@ -1917,6 +1924,7 @@ class MainActivity : Activity() {
         serverUserNamed = false
         battleWasRegistered = false
         battleWasParticipant = false
+        battleIsSpectator = false
         pendingRegistration = null
         clearPersistedLobbyState()
         session.setConnectionStatus("Battle search cancelled.")
@@ -1941,6 +1949,7 @@ class MainActivity : Activity() {
         activeBattleRoomId = null
         battleWasRegistered = false
         battleWasParticipant = false
+        battleIsSpectator = false
         completedBattleRoomId = null
         battleProtocolReady = false
         pendingDecisionCommand = null
@@ -2041,7 +2050,12 @@ class MainActivity : Activity() {
         } else {
             preferences.getBoolean("battle_participant", false)
         }
-        if (activeBattleRoomId != null && !hasSavedBattleIdentity && !battleWasRegistered) battleWasParticipant = true
+        battleIsSpectator = if (savedInstanceState?.containsKey("battle_spectator") == true) {
+            savedInstanceState.getBoolean("battle_spectator")
+        } else {
+            preferences.getBoolean("battle_spectator", false)
+        }
+        if (activeBattleRoomId != null && !hasSavedBattleIdentity && !battleWasRegistered && !battleIsSpectator) battleWasParticipant = true
         pendingBattleSearchFormat = savedInstanceState?.getString("pending_battle_search_format")
             ?: preferences.getString("pending_battle_search_format", null)
         pendingBattleSearchLabel = savedInstanceState?.getString("pending_battle_search_label")
@@ -2054,9 +2068,10 @@ class MainActivity : Activity() {
         pendingBattleSearchTeamPacked = savedInstanceState?.getString("pending_battle_search_team")
             ?: preferences.getString("pending_battle_search_team", null)
         val battlePlayerSlot = savedInstanceState?.getString("battle_player_slot") ?: preferences.getString("battle_player_slot", null)
-        if (ShowdownBattleRecovery.mode(activeBattleRoomId, battleWasRegistered, battleWasParticipant) == ShowdownBattleRecovery.Mode.UNRESTORABLE_GUEST) {
-            abandonUnrestorableGuestBattle()
-            return
+        val recoveryMode = ShowdownBattleRecovery.mode(activeBattleRoomId, battleWasRegistered, battleWasParticipant, battleIsSpectator)
+        if (recoveryMode == ShowdownBattleRecovery.Mode.GUEST_SPECTATOR) {
+            battleIsSpectator = true
+            battleWasParticipant = false
         }
         if (activeBattleRoomId != null) session.restoreBattlePlayerSlot(battlePlayerSlot)
         completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
@@ -2065,6 +2080,7 @@ class MainActivity : Activity() {
         pendingDecisionSentConnection = null
         battleProtocolReady = false
         session.setLiveBattleActive(false)
+        if (battleIsSpectator) session.setSpectatorMode(true)
         connectLobbySocket()
     }
 
@@ -2081,6 +2097,7 @@ class MainActivity : Activity() {
             .putString("active_battle_room", activeBattleRoomId)
             .putBoolean("battle_registered", battleWasRegistered)
             .putBoolean("battle_participant", battleWasParticipant)
+            .putBoolean("battle_spectator", battleIsSpectator)
             .putString("pending_battle_search_format", pendingBattleSearchFormat)
             .putString("pending_battle_search_label", pendingBattleSearchLabel)
             .putBoolean("pending_battle_search_random", pendingBattleSearchUsesRandomTeams == true)
@@ -2098,6 +2115,7 @@ class MainActivity : Activity() {
         activeBattleRoomId = null
         battleWasRegistered = false
         battleWasParticipant = false
+        battleIsSpectator = false
         completedBattleRoomId = null
         pendingBattleJoinRoomId = null
         pendingBattleSearchFormat = null
@@ -2121,7 +2139,7 @@ class MainActivity : Activity() {
     private fun rememberBattleIdentity() {
         if (activeBattleRoomId == null) return
         battleWasRegistered = battleWasRegistered || serverUserNamed
-        battleWasParticipant = battleWasParticipant || session.isBattleParticipant()
+        if (!battleIsSpectator) battleWasParticipant = battleWasParticipant || session.isBattleParticipant()
     }
 
     private fun battleProtocolIdentifiesLocalPlayer(lines: List<String>): Boolean {
@@ -2131,15 +2149,6 @@ class MainActivity : Activity() {
             val fields = line.split('|')
             fields.getOrNull(1) == "player" && fields.getOrNull(3)?.trim()?.equals(localUsername, true) == true
         }
-    }
-
-    private fun abandonUnrestorableGuestBattle() {
-        shouldMaintainConnection = false
-        reconnectHandler.removeCallbacksAndMessages(null)
-        showdownConnection?.close()
-        showdownConnection = null
-        clearBattleRoomState()
-        session.setConnectionStatus("The previous guest battle cannot be restored after the app was closed. Find another battle.")
     }
 
     private fun encodeLobbyCommands(commands: List<String>?) = commands?.joinToString("\u0000")
@@ -2463,7 +2472,9 @@ class MainActivity : Activity() {
                         }
                         if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
                         activeBattleRoomId = roomId
-                        battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)
+                        if (!battleIsSpectator) {
+                            battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)
+                        }
                         if (startsBattle) {
                             rememberBattleIdentity()
                         }
@@ -2471,6 +2482,7 @@ class MainActivity : Activity() {
                         reconnectLobbyCommands = null
                         if (startsBattle) battleProtocolReady = true
                         session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
+                        if (battleIsSpectator) session.setSpectatorMode(true)
                         reconcilePendingDecisionCommand(lines)
                         enqueueBattlePlayback(connection, roomId, lines)
                     }
@@ -2509,6 +2521,7 @@ class MainActivity : Activity() {
         activeBattleRoomId = roomId
         battleWasRegistered = serverUserNamed || credentialsStore.load() != null || loginClient.hasSession()
         battleWasParticipant = true
+        battleIsSpectator = false
         battleProtocolReady = false
         pendingDecisionCommand = null
         pendingDecisionSentConnection = null
@@ -3504,6 +3517,9 @@ class MainActivity : Activity() {
         teamPrivacyButton?.isEnabled = true
         teamPrivacyButton = null
         activeBattleRoomId = null
+        battleWasRegistered = false
+        battleWasParticipant = false
+        battleIsSpectator = false
         completedBattleRoomId = null
         pendingBattleJoinRoomId = null
         pendingBattleSearchFormat = null
@@ -4880,6 +4896,7 @@ class MainActivity : Activity() {
     private fun showReplay(replay: ShowdownReplayPayload) {
         if (isFinishing) return
         activeBattleRoomId = null
+        battleIsSpectator = false
         completedBattleRoomId = null
         pendingBattleJoinRoomId = null
         pendingBattleSearchFormat = null
@@ -5013,7 +5030,7 @@ class MainActivity : Activity() {
 
     private fun toggleBattleTimer() {
         val roomId = activeBattleRoomId
-        if (roomId == null || !session.isLiveBattleActive() || session.isReplayMode()) {
+        if (roomId == null || !session.isLiveBattleActive() || session.isReplayMode() || session.isSpectatorMode()) {
             session.setConnectionStatus("There is no live battle timer to change.")
             return
         }
@@ -5027,7 +5044,7 @@ class MainActivity : Activity() {
 
     private fun cancelChoice() {
         val roomId = activeBattleRoomId
-        if (roomId == null || !session.canCancelChoice() || !session.isBattleParticipant() || session.isReplayMode()) {
+        if (roomId == null || !session.canCancelChoice() || !session.isBattleParticipant() || session.isReplayMode() || session.isSpectatorMode()) {
             session.setConnectionStatus("There is no cancellable battle choice.")
             return
         }

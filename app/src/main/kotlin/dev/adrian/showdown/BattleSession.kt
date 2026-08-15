@@ -354,6 +354,7 @@ class BattleSession {
     private var localUsername: String? = null
     private var liveBattleActive = false
     private var replayMode = false
+    private var spectatorMode = false
     private var openingEntrances = 0
     private var latestOpeningEntranceAtNanos = 0L
     private var weather = ""
@@ -487,7 +488,7 @@ class BattleSession {
 
     fun isBattleTimerEnabled() = battleTimerEnabled
 
-    fun canCancelChoice() = choiceCanBeCancelled && !decisionAvailable && !battleFinished && !replayMode && liveBattleActive
+    fun canCancelChoice() = choiceCanBeCancelled && !decisionAvailable && !battleFinished && !replayMode && !spectatorMode && liveBattleActive
 
     private fun clearBattleClock() {
         battleClock = null
@@ -778,10 +779,12 @@ class BattleSession {
 
     fun canTestFight() = decisionAvailable &&
         decisionKind == DecisionKind.MOVE &&
+        !spectatorMode &&
         activeRequests.getOrNull(activeSlotIndex)?.optBoolean("maybeLocked") == true
 
     fun canShift() = decisionAvailable &&
         decisionKind == DecisionKind.MOVE &&
+        !spectatorMode &&
         gameType.equals("triples", true) &&
         activeRequests.size >= 3 &&
         (activeSlotIndex == 0 || activeSlotIndex == 2)
@@ -880,6 +883,7 @@ class BattleSession {
         val changed = liveBattleActive != value
         liveBattleActive = value
         if (!value) {
+            spectatorMode = false
             decisionAvailable = false
             choiceCanBeCancelled = false
             requestNoCancel = false
@@ -921,6 +925,7 @@ class BattleSession {
     fun setReplayMode(value: Boolean) {
         replayMode = value
         if (value) {
+            spectatorMode = false
             decisionAvailable = false
             choiceCanBeCancelled = false
             decisionKind = DecisionKind.WAIT
@@ -937,10 +942,43 @@ class BattleSession {
 
     fun isReplayMode() = replayMode
 
+    fun setSpectatorMode(value: Boolean) {
+        spectatorMode = value
+        if (value) {
+            replayMode = false
+            decisionAvailable = false
+            choiceCanBeCancelled = false
+            requestNoCancel = false
+            requestTargetable = true
+            decisionKind = DecisionKind.WAIT
+            selectedGimmick = null
+            selectedTargetIndex = -1
+            activeSlotIndex = 0
+            requiredSwitches = 0
+            requestId = null
+            clearMoveOptions()
+            availableGimmicks.clear()
+            availableTeraType = ""
+            activeRequests.clear()
+            activeChoices.clear()
+            autoPassActiveSlots.clear()
+            revivingTeamIndices.clear()
+            usedGimmickFamilies.clear()
+            forceSwitchChoices.clear()
+            forceSwitchSlots.clear()
+            targetOptions.clear()
+            status = "Spectating battle"
+        }
+        notifyListeners()
+    }
+
+    fun isSpectatorMode() = spectatorMode
+
     fun prepareForLobby() {
         restoredPlayerSlot = null
         applyInit(listOf("", "init", "battle"))
         replayMode = false
+        spectatorMode = false
         protocolHistory.clear()
         battleLog.clear()
         showdownBattleLogEntries.clear()
@@ -1087,6 +1125,8 @@ class BattleSession {
         if (nextPanel == Panel.MENU) focusedMenuItem = 0
         if (!liveBattleActive && !battleFinished) {
             if (nextPanel == Panel.MOVES || nextPanel == Panel.TEAM) status = LOBBY_STATUS
+        } else if (spectatorMode) {
+            status = "Spectating battle"
         } else {
             status = when (nextPanel) {
                 Panel.MOVES -> "Choose a move"
@@ -1119,6 +1159,11 @@ class BattleSession {
     }
 
     fun confirmSelection() {
+        if (spectatorMode && panel != Panel.MENU && panel != Panel.ACTIVITY) {
+            status = "Spectators cannot make battle choices."
+            notifyListeners()
+            return
+        }
         when (panel) {
             Panel.MOVES -> {
                 val selectableMoves = displayedMoves()
@@ -1443,7 +1488,7 @@ class BattleSession {
                 }
             }
             publishPendingHit()
-            if (replayMode) {
+            if (replayMode || spectatorMode) {
                 decisionAvailable = false
                 decisionKind = DecisionKind.WAIT
                 activeRequests.clear()
@@ -2524,7 +2569,7 @@ class BattleSession {
                 panel = Panel.TEAM
                 focusFirstAvailableTeamChoice()
                 status = if (requiredSwitches > 1) "Choose a Pokémon to switch in 1/$requiredSwitches" else "Choose a Pokémon to switch in"
-                if (!decisionAvailable) submitAutomaticForcedSwitchPasses()
+                if (!spectatorMode && !decisionAvailable) submitAutomaticForcedSwitchPasses()
                 return@runCatching
             }
             val active = request.optJSONArray("active") ?: run {
@@ -2542,7 +2587,7 @@ class BattleSession {
             }
             requestTargetable = request.optBoolean("targetable", activeRequests.size > 1)
             if (!prepareNextActiveRequest()) {
-                if (!submitAutomaticActivePasses()) {
+                if (!spectatorMode && !submitAutomaticActivePasses()) {
                     decisionKind = DecisionKind.WAIT
                     decisionAvailable = false
                     status = "Waiting for a battle decision…"
@@ -2846,6 +2891,7 @@ class BattleSession {
     }
 
     private fun submitAutomaticActivePasses(): Boolean {
+        if (spectatorMode) return false
         if (activeRequests.isEmpty() || activeChoices.size < activeRequests.size || activeChoices.any { it != "pass" }) return false
         val choice = "/choose ${activeChoices.joinToString(", ")}${requestId?.let { "|$it" } ?: ""}"
         decisionAvailable = false
@@ -3843,7 +3889,7 @@ class BattleSession {
         1 -> "Battle format ${matchFormat.menuLabel}"
         2 -> "Open battle chat"
         3 -> when {
-            liveBattleActive && !replayMode && isBattleParticipant() -> "Forfeit"
+            liveBattleActive && !replayMode && !spectatorMode && isBattleParticipant() -> "Forfeit"
             liveBattleActive && !replayMode -> "Leave battle"
             else -> "Challenge player"
         }
@@ -3875,7 +3921,7 @@ class BattleSession {
                 }
                 3 -> {
                     if (liveBattleActive && !replayMode) {
-                        if (isBattleParticipant()) {
+                        if (!spectatorMode && isBattleParticipant()) {
                             publishClientAction(ClientAction.FORFEIT)
                             "Forfeit requires confirmation."
                         } else {
@@ -4015,6 +4061,7 @@ class BattleSession {
     }
 
     private fun submitAutomaticForcedSwitchPasses() {
+        if (spectatorMode) return
         if (requiredSwitches <= 0) return
         forceSwitchChoices.clear()
         repeat(requiredSwitches) { forceSwitchChoices += "pass" }

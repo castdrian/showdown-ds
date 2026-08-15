@@ -19,10 +19,18 @@ class ShowdownBattleRecoveryTest {
     }
 
     @Test
-    fun anonymousParticipantsMustNotSeeAStaleBattleAfterProcessDeath() {
+    fun anonymousParticipantsRejoinAsReadOnlySpectatorsAfterProcessDeath() {
         assertEquals(
-            ShowdownBattleRecovery.Mode.UNRESTORABLE_GUEST,
+            ShowdownBattleRecovery.Mode.GUEST_SPECTATOR,
             ShowdownBattleRecovery.mode("battle-test", false, true)
+        )
+    }
+
+    @Test
+    fun persistedSpectatorRecoveryRemainsReadOnly() {
+        assertEquals(
+            ShowdownBattleRecovery.Mode.SPECTATOR,
+            ShowdownBattleRecovery.mode("battle-test", false, true, true)
         )
     }
 

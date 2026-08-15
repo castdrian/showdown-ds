@@ -207,6 +207,7 @@ class CommandDeckView(
         canvas.drawText(
             when {
                 session.isReplayMode() -> "Replay"
+                session.isSpectatorMode() -> "Spectating"
                 session.isBattleFinished() -> "Battle complete"
                 session.isLiveBattleActive() -> "Battle"
                 else -> "Lobby"
