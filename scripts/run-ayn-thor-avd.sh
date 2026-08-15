@@ -13,6 +13,7 @@ audio_args=()
 vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
 gpu_mode="${AYN_THOR_GPU_MODE:-auto}"
 boot_animation_args=()
+snapshot_args=(-no-snapshot)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
 case "$vsync_rate" in
@@ -106,6 +107,22 @@ activate_secondary_display() {
     return 1
 }
 
+verify_thor_displays() {
+    local attempt=0
+    local display_info
+    while (( attempt < 20 )); do
+        (( attempt += 1 ))
+        display_info="$($adb_binary -s "$device_serial" shell dumpsys display 2>/dev/null || true)"
+        if printf '%s\n' "$display_info" | grep -Eq 'DisplayViewport\{type=INTERNAL,.*displayId=0,.*orientation=0,.*logicalFrame=Rect\(0, 0 - 1920, 1080\)' &&
+            printf '%s\n' "$display_info" | grep -Eq 'DisplayViewport\{type=VIRTUAL,.*displayId=2,.*orientation=0,.*logicalFrame=Rect\(0, 0 - 1240, 1080\)'; then
+            return 0
+        fi
+        sleep 1
+    done
+    printf '%s\n' "The AYN Thor displays did not come up as upright 1920x1080 and 1240x1080 panels."
+    return 1
+}
+
 stop_emulator() {
     if kill -0 "$emulator_pid" 2>/dev/null; then
         kill "$emulator_pid" 2>/dev/null || true
@@ -119,7 +136,8 @@ stop_emulator() {
     "${boot_animation_args[@]}" \
     "${audio_args[@]}" \
     "${multidisplay_args[@]}" \
-    "$@" &
+    "$@" \
+    "${snapshot_args[@]}" &
 emulator_pid=$!
 trap stop_emulator EXIT INT TERM
 
@@ -130,6 +148,10 @@ fi
 
 if ! activate_secondary_display; then
     printf '%s\n' "The AYN Thor secondary display did not become available."
+    exit 1
+fi
+
+if ! verify_thor_displays; then
     exit 1
 fi
 
