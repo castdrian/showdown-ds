@@ -150,6 +150,8 @@ class ThorDisplayProfileTest {
         val thorTop = combinedHeight - panelHeight - layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
         assertEquals(0, primaryTop)
         assertEquals(panelHeight, thorTop)
+        assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
+        assertTrue(overlayPatch.contains("if (mOrientation == SKIN_ROTATION_0) {"))
         assertFalse(baseConfig.contains("Vulkan", true))
         assertFalse(baseConfig.contains("lavapipe", true))
         assertFalse(createScript.contains("Vulkan", true))

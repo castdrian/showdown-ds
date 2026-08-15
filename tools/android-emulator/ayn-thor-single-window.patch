@@ -1,7 +1,41 @@
 diff --git a/android/android-emu/android/emulation/MultiDisplay.cpp b/android/android-emu/android/emulation/MultiDisplay.cpp
-index 8cacba4027a..dd4cb03c4e6 100644
+index 8cacba4027a..1fe07d814020 100644
 --- a/android/android-emu/android/emulation/MultiDisplay.cpp
 +++ b/android/android-emu/android/emulation/MultiDisplay.cpp
+@@ -732,4 +732,33 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
+ void MultiDisplay::performRotationLocked(int mOrientation) {
++    if (mOrientation == SKIN_ROTATION_0) {
++        auto primary = mMultiDisplay.find(0);
++        auto thorDisplay = mMultiDisplay.end();
++        for (auto it = mMultiDisplay.begin(); it != mMultiDisplay.end(); ++it) {
++            if (it->first != 0 && it->second.cb != 0 &&
++                it->second.originalWidth == 1240 &&
++                it->second.originalHeight == 1080) {
++                thorDisplay = it;
++                break;
++            }
++        }
++        if (primary != mMultiDisplay.end() &&
++            primary->second.originalWidth == 1920 &&
++            primary->second.originalHeight == 1080 &&
++            thorDisplay != mMultiDisplay.end() &&
++            getNumberActiveMultiDisplaysLocked() == 2) {
++            primary->second.width = primary->second.originalWidth;
++            primary->second.height = primary->second.originalHeight;
++            primary->second.pos_x = 0;
++            primary->second.pos_y = 1080;
++            primary->second.rotation = mOrientation;
++            thorDisplay->second.width = thorDisplay->second.originalWidth;
++            thorDisplay->second.height = thorDisplay->second.originalHeight;
++            thorDisplay->second.pos_x = 340;
++            thorDisplay->second.pos_y = 0;
++            thorDisplay->second.rotation = mOrientation;
++            return;
++        }
++    }
+     if (android_foldable_is_pixel_fold()) {
+         constexpr int primary_display_id = 0;
+         const int secondary_display_id =
 @@ -1042,4 +1042,31 @@ void MultiDisplay::recomputeLayoutLocked() {
      if (layout) {
          rotation = layout->orientation;

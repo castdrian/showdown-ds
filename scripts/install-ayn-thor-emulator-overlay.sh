@@ -81,15 +81,14 @@ for sdk_entry in "$sdk_emulator_root"/*; do
     fi
 done
 cp "$sdk_emulator_root/emulator" "$overlay_root/emulator"
+if [[ -L "$overlay_root/lib64" ]]; then
+    unlink "$overlay_root/lib64"
+fi
+mkdir -p "$overlay_root/lib64"
+find "$overlay_root/lib64" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+cp -R "$sdk_emulator_root/lib64/." "$overlay_root/lib64/"
 if [[ -d "$build_output_root/lib64" ]]; then
-    if [[ -L "$overlay_root/lib64" ]]; then
-        unlink "$overlay_root/lib64"
-    fi
-    mkdir -p "$overlay_root/lib64"
-    cp -R "$sdk_emulator_root/lib64/." "$overlay_root/lib64/"
     find "$build_output_root/lib64" -maxdepth 1 -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.dll' \) -exec cp {} "$overlay_root/lib64/" \;
-elif [[ ! -e "$overlay_root/lib64" && ! -L "$overlay_root/lib64" ]]; then
-    ln -s "$sdk_emulator_root/lib64" "$overlay_root/lib64"
 fi
 qemu_overlay_binary="$overlay_root/qemu/$host_directory/$qemu_name"
 qemu_headless_overlay_binary="$overlay_root/qemu/$host_directory/$qemu_headless_name"
