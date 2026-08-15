@@ -17,6 +17,7 @@ import dev.adrian.showdown.R
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.pow
 
 class BattleSceneView(
     context: Context,
@@ -1059,6 +1060,9 @@ class BattleSceneView(
         battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis)
         val frame = battleFeedPresentation.frame(nowMillis) ?: return
         val alpha = frame.alpha
+        val glassAlpha = alpha.pow(0.62f)
+        val textAlpha = alpha.pow(0.25f)
+        val outlineAlpha = alpha.pow(0.18f)
         val sideGap = maxOf(48f * scale, width * 0.025f)
         val playerCardRight = if (session.isSinglesBattle()) {
             ShowdownBattleLayout.singlePlayerCardRight(width, scale)
@@ -1100,15 +1104,15 @@ class BattleSceneView(
             bounds.top,
             bounds.right,
             bounds.bottom,
-            Color.argb((78f * alpha).toInt(), 21, 42, 57),
-            Color.argb((32f * alpha).toInt(), 52, 79, 94),
+            Color.argb((78f * glassAlpha).toInt(), 21, 42, 57),
+            Color.argb((32f * glassAlpha).toInt(), 52, 79, 94),
             Shader.TileMode.CLAMP
         )
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.shader = null
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1.5f * scale
-        paint.color = Color.argb((132f * alpha).toInt(), 183, 229, 235)
+        paint.color = Color.argb((132f * glassAlpha).toInt(), 183, 229, 235)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.FILL
         val viewportHeight = (bounds.height() - padding * 2f).coerceAtLeast(lineHeight)
@@ -1121,10 +1125,10 @@ class BattleSceneView(
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 2.25f * scale
             paint.strokeJoin = Paint.Join.ROUND
-            paint.color = Color.argb((220f * alpha).toInt(), 3, 12, 18)
+            paint.color = Color.argb((220f * outlineAlpha).toInt(), 3, 12, 18)
             canvas.drawText(line, left + 24f * scale, baseline, paint)
             paint.style = Paint.Style.FILL
-            paint.color = Color.argb((255f * alpha).toInt(), 255, 255, 255)
+            paint.color = Color.argb((255f * textAlpha).toInt(), 255, 255, 255)
             canvas.drawText(line, left + 24f * scale, baseline, paint)
         }
         canvas.restore()

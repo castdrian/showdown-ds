@@ -14,6 +14,7 @@ object ShowdownChangelog {
                 "New teams now start with a competitive format instead of Random Battle when no format has been chosen.",
                 "Team sets now edit EVs and IVs in readable HP, Atk, Def, SpA, SpD, and Spe controls while preserving Showdown's packed and text formats.",
                 "The upper battle messages now behave like a Pokémon battle message box: one complete compact event at a time, with a readable dwell and gentle fade between events.",
+                "Battle message fades now keep the white text and dark outline readable until the event leaves the upper display.",
                 "The lower command deck now keeps battle-action text on the upper display and shows only the current choice prompt below.",
                 "Thor party indicators now use smooth high-definition ready, statused, and fainted Poké Ball artwork instead of enlarged pixel glyphs.",
                 "Singles battle sprites now use Showdown's near-side and far-side field anchors, including the correct player-side baseline and scale.",
