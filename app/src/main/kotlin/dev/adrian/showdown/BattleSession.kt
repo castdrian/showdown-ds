@@ -760,15 +760,19 @@ class BattleSession {
         return when {
             details?.condition?.contains("FNT", true) == true -> "Fainted"
             decisionKind == DecisionKind.TEAM_PREVIEW -> {
-                val previewPosition = teamPreviewOrder.indexOf(index)
-                if (previewPosition >= 0) "Order ${previewPosition + 1}/$teamPreviewRequiredSize" else "Tap to order"
+                if (!decisionAvailable) {
+                    "Waiting"
+                } else {
+                    val previewPosition = teamPreviewOrder.indexOf(index)
+                    if (previewPosition >= 0) "Order ${previewPosition + 1}/$teamPreviewRequiredSize" else "Tap to order"
+                }
             }
             pokemon?.let { it.equals(playerPokemon, true) || details?.matchesIdentifier(playerPokemon) == true } == true -> "In battle"
             decisionKind == DecisionKind.SWITCH && "switch ${index + 1}" in forceSwitchChoices -> {
                 val selectedCount = forceSwitchChoices.count { it.startsWith("switch ") }
                 if (requiredSwitches > 1) "Selected $selectedCount/$requiredSwitches" else "Selected"
             }
-            decisionKind == DecisionKind.SWITCH -> "Switch in"
+            decisionKind == DecisionKind.SWITCH -> if (decisionAvailable) "Switch in" else "Waiting"
             else -> "Available"
         }
     }

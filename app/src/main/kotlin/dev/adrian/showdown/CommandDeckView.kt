@@ -214,6 +214,8 @@ class CommandDeckView(
                 session.isReplayMode() -> "Replay"
                 session.isSpectatorMode() -> "Spectating"
                 session.isBattleFinished() -> "Battle complete"
+                session.decisionKind == BattleSession.DecisionKind.SWITCH && !session.decisionAvailable -> "Waiting"
+                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW && !session.decisionAvailable -> "Waiting"
                 session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Switch in"
                 session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> "Team preview"
                 session.isLiveBattleActive() -> "Battle"

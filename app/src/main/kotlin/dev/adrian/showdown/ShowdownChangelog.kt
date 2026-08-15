@@ -124,6 +124,7 @@ object ShowdownChangelog {
                 "Switch-card text now fits both its width and vertical region, keeping names, HP, and status labels inside their cards across display sizes.",
                 "Switch-card text is now clipped to its own name, level, HP, type, and status region so no label can bleed into another control.",
                 "Forced switch and team-preview states now use concise lower-screen titles so the current decision is clear without covering the card grid.",
+                "Submitted switch choices now show a waiting state instead of leaving inactive cards looking selectable.",
                 "Lower-screen panel changes now clear the custom canvas state before drawing, preventing stale translucent controls from showing through the switch screen.",
                 "Switch cards now keep a visible gap between each content region and mark the active Pokémon as unavailable instead of presenting it as another switch choice.",
                 "Forced switch cards now keep selected replacements visibly marked and show multi-switch progress.",
