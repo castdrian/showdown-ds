@@ -48,9 +48,10 @@ object SwitchTeamLayout {
         val left = LEFT * scale
         val top = TOP * scale
         val gap = GAP * scale
-        val rows = rows(teamSize)
+        val rowCount = rows(teamSize).coerceAtLeast(1)
         val cardWidth = (width - left * 2f - gap) / COLUMNS
-        val cardHeight = (height - top - BOTTOM_MARGIN * scale - gap * (rows - 1)) / rows
+        val availableHeight = (height - top - BOTTOM_MARGIN * scale - gap * (rowCount - 1)).coerceAtLeast(0f)
+        val cardHeight = availableHeight / rowCount
         val row = index / COLUMNS
         val column = index % COLUMNS
         val cardLeft = left + column * (cardWidth + gap)

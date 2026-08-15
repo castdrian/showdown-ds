@@ -95,4 +95,15 @@ class SwitchTeamLayoutTest {
         assertTrue(content.sprite.bottom <= content.bottomRow.top)
         assertTrue(content.bottomRow.bottom <= card.bottom)
     }
+
+    @Test
+    fun switchTeamCardsRemainOrderedWhenTheAvailableSurfaceIsVeryShort() {
+        val first = SwitchTeamLayout.bounds(1240f, 240f, 1f, 0, 6)
+        val last = SwitchTeamLayout.bounds(1240f, 240f, 1f, 5, 6)
+
+        assertTrue(first.top >= 0f)
+        assertTrue(first.bottom >= first.top)
+        assertTrue(last.top >= first.bottom)
+        assertTrue(last.bottom >= last.top)
+    }
 }

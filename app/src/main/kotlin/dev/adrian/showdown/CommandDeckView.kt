@@ -1385,7 +1385,7 @@ class CommandDeckView(
             val nameMinimumSize = readableTextSize(16f, scale, 12f, 10f).coerceAtMost(namePreferredSize)
             paint.textSize = namePreferredSize
             val name = fitTextToWidth(displayPokemon, headerWidth)
-            paint.textSize = fittedTextSize(name, headerWidth, namePreferredSize, nameMinimumSize)
+            paint.textSize = fittedTextSizeInRegion(name, headerWidth, nameSlotHeight - 4f * scale, namePreferredSize, nameMinimumSize)
             paint.color = PAPER
             canvas.drawText(name, content.header.left, centeredTextBaseline(content.header.top + nameSlotHeight / 2f), paint)
             val level = "Lv. ${details.level}${details.gender.ifBlank { "" }}"
@@ -1398,7 +1398,7 @@ class CommandDeckView(
             val levelPreferredSize = readableTextSize(24f, scale, 18f, 12f)
                 .coerceAtMost(levelArea.height() * 0.82f)
             val levelMinimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(levelPreferredSize)
-            paint.textSize = fittedTextSize(level, levelArea.width(), levelPreferredSize, levelMinimumSize)
+            paint.textSize = fittedTextSizeInRegion(level, levelArea.width(), levelArea.height() - 4f * scale, levelPreferredSize, levelMinimumSize)
             paint.color = MUTED
             canvas.drawText(level, levelArea.left, centeredTextBaseline(levelArea.centerY()), paint)
             drawTeamHp(canvas, RectF(content.hp.left, content.hp.top, content.hp.right, content.hp.bottom), details.hp, scale)
@@ -1414,9 +1414,10 @@ class CommandDeckView(
                 paint.textAlign = Paint.Align.CENTER
                 val typePreferredSize = readableTextSize(20f, scale, 15f, 11f).coerceAtMost(typeBounds.height() * 0.72f)
                 val typeMinimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(typePreferredSize)
-                paint.textSize = fittedTextSize(
+                paint.textSize = fittedTextSizeInRegion(
                     type,
                     typeBounds.width() - 18f * scale,
+                    typeBounds.height() - 4f * scale,
                     typePreferredSize,
                     typeMinimumSize
                 )
@@ -1430,9 +1431,10 @@ class CommandDeckView(
             paint.textAlign = Paint.Align.CENTER
             val statePreferredSize = readableTextSize(17f, scale, 13f, 11f).coerceAtMost(stateBounds.height() * 0.72f)
             val stateMinimumSize = readableTextSize(11f, scale, 10f, 10f).coerceAtMost(statePreferredSize)
-            paint.textSize = fittedTextSize(
+            paint.textSize = fittedTextSizeInRegion(
                 state,
                 stateBounds.width() - 18f * scale,
+                stateBounds.height() - 4f * scale,
                 statePreferredSize,
                 stateMinimumSize
             )
@@ -1470,9 +1472,10 @@ class CommandDeckView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         val preferredSize = readableTextSize(24f, scale, 18f, 12f).coerceAtMost(bounds.height() * 0.72f)
         val minimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(preferredSize)
-        paint.textSize = fittedTextSize(
+        paint.textSize = fittedTextSizeInRegion(
             "HP ${hp.substringBefore(' ')}",
             bounds.width() - 18f * scale,
+            bounds.height() - 4f * scale,
             preferredSize,
             minimumSize
         )
@@ -1688,6 +1691,23 @@ class CommandDeckView(
             paint.textSize = size
         }
         return size
+    }
+
+    private fun fittedTextSizeInRegion(
+        text: String,
+        maximumWidth: Float,
+        maximumHeight: Float,
+        preferredSize: Float,
+        minimumSize: Float
+    ): Float {
+        val widthFittedSize = fittedTextSize(text, maximumWidth, preferredSize, minimumSize)
+        if (maximumHeight <= 0f) return widthFittedSize
+        paint.textSize = widthFittedSize
+        val fontHeight = (paint.fontMetrics.bottom - paint.fontMetrics.top).coerceAtLeast(1f)
+        val heightFittedSize = widthFittedSize * maximumHeight / fontHeight
+        val result = minOf(widthFittedSize, heightFittedSize).coerceAtLeast(1f)
+        paint.textSize = result
+        return result
     }
 
     private fun wrapText(text: String, maximumWidth: Float): List<String> {
