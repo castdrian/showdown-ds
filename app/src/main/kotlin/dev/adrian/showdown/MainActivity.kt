@@ -299,6 +299,7 @@ class MainActivity : Activity() {
 
         override fun onDisplayChanged(displayId: Int) {
             refreshDisplays()
+            showSecondaryDisplay()
         }
     }
 
@@ -646,13 +647,13 @@ class MainActivity : Activity() {
     }
 
     private fun findThorDisplay(): Display? {
-        var fallback: Display? = null
-        displayManager?.displays?.forEach { display ->
-            if (display.displayId == Display.DEFAULT_DISPLAY) return@forEach
-            if (display.mode.physicalWidth == 1240 && display.mode.physicalHeight == 1080) return display
-            if (fallback == null) fallback = display
+        return displayManager?.displays?.firstOrNull { display ->
+            display.displayId != Display.DEFAULT_DISPLAY &&
+                ThorDisplayProfile.isThorLowerDisplay(
+                    display.mode.physicalWidth,
+                    display.mode.physicalHeight
+                )
         }
-        return fallback
     }
 
     private fun dismissSecondaryDisplay() {

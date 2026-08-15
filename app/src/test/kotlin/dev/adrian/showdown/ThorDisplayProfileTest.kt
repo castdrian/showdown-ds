@@ -20,6 +20,14 @@ class ThorDisplayProfileTest {
     }
 
     @Test
+    fun onlyAcceptsTheThorLowerDisplayGeometry() {
+        assertTrue(ThorDisplayProfile.isThorLowerDisplay(1240, 1080))
+        assertTrue(ThorDisplayProfile.isThorLowerDisplay(1080, 1240))
+        assertFalse(ThorDisplayProfile.isThorLowerDisplay(590, 1280))
+        assertFalse(ThorDisplayProfile.isThorLowerDisplay(1920, 1080))
+    }
+
+    @Test
     fun givesTheSmallerPanelAReadablePixelFloor() {
         assertTrue(
             ThorDisplayProfile.minimumReadablePixels(

@@ -17,6 +17,10 @@ object ThorDisplayProfile {
     const val ENCLOSURE_DEPTH_MILLIMETRES = 25.6f
     const val LOWER_MINIMUM_TEXT_SP = 18f
 
+    fun isThorLowerDisplay(widthPixels: Int, heightPixels: Int): Boolean =
+        (widthPixels == LOWER_WIDTH_PIXELS && heightPixels == LOWER_HEIGHT_PIXELS) ||
+            (widthPixels == LOWER_HEIGHT_PIXELS && heightPixels == LOWER_WIDTH_PIXELS)
+
     fun kindFor(widthPixels: Int, heightPixels: Int): ThorDisplayKind = if (
         widthPixels <= 1400 && heightPixels >= 900 && widthPixels.toFloat() / heightPixels < 1.4f
     ) {
