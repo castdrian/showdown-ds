@@ -72,10 +72,14 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.LEFT
         paint.clearShadowLayer()
-        drawBackground(canvas, width, height)
-        drawTabs(canvas, width, scale)
-        drawActivePanel(canvas, width, height, scale)
-        drawTopBand(canvas, width, scale)
+        if (isTeamDecision()) {
+            drawTeamDecisionPanel(canvas, width, height, scale)
+        } else {
+            drawBackground(canvas, width, height)
+            drawTabs(canvas, width, scale)
+            drawActivePanel(canvas, width, height, scale)
+            drawTopBand(canvas, width, scale)
+        }
         if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         } else if (session.battleClockSeconds() != null) {
@@ -111,11 +115,16 @@ class CommandDeckView(
             }
             else -> return true
         }
-        tabBounds.forEachIndexed { index, bounds ->
-            if (bounds?.contains(x, y) == true) {
-                session.selectPanel(TABS[index])
-                interactionListener.onNavigation()
-                return true
+        if (isTeamDecision() && session.panel != BattleSession.Panel.TEAM) {
+            session.selectPanel(BattleSession.Panel.TEAM)
+        }
+        if (!isTeamDecision()) {
+            tabBounds.forEachIndexed { index, bounds ->
+                if (bounds?.contains(x, y) == true) {
+                    session.selectPanel(TABS[index])
+                    interactionListener.onNavigation()
+                    return true
+                }
             }
         }
         if (session.panel == BattleSession.Panel.MOVES) {
@@ -155,7 +164,7 @@ class CommandDeckView(
                 }
             }
         }
-        if (session.panel == BattleSession.Panel.TEAM) {
+        if (isTeamDecision() || session.panel == BattleSession.Panel.TEAM) {
             teamBounds.forEachIndexed { index, bounds ->
                 if (bounds?.contains(x, y) == true) {
                     session.selectTeamWithTouch(index)
@@ -189,6 +198,9 @@ class CommandDeckView(
         canvas.drawRect(0f, 0f, width, height, paint)
         paint.shader = null
     }
+
+    private fun isTeamDecision() = session.decisionKind == BattleSession.DecisionKind.SWITCH ||
+        session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW
 
     private fun drawTopBand(canvas: Canvas, width: Float, scale: Float) {
         paint.alpha = 255
@@ -286,6 +298,49 @@ class CommandDeckView(
             BattleSession.Panel.ACTIVITY -> drawActivity(canvas, width, height, scale)
             BattleSession.Panel.MENU -> drawMenu(canvas, width, height, scale)
         }
+    }
+
+    private fun drawTeamDecisionPanel(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        tabBounds.fill(null)
+        moveBounds.fill(null)
+        gimmickBounds.fill(null)
+        targetBounds.fill(null)
+        menuBounds.fill(null)
+        shiftBounds = null
+        testFightBounds = null
+        cancelChoiceBounds = null
+        activityChatBounds = null
+        drawBackground(canvas, width, height)
+        drawTopBand(canvas, width, scale)
+        drawTeamDecisionPrompt(canvas, width, scale)
+        drawTeam(canvas, width, height, scale, decisionLayout = true)
+    }
+
+    private fun drawTeamDecisionPrompt(canvas: Canvas, width: Float, scale: Float) {
+        val bounds = RectF(
+            44f * scale,
+            SwitchTeamLayout.DECISION_PROMPT_TOP * scale,
+            width - 44f * scale,
+            SwitchTeamLayout.DECISION_PROMPT_BOTTOM * scale
+        )
+        paint.color = Color.argb(148, 10, 34, 50)
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f * scale
+        paint.color = Color.argb(148, 115, 209, 224)
+        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = fittedTextSize(
+            session.status,
+            bounds.width() - 48f * scale,
+            readableTextSize(24f, scale, 20f),
+            readableTextSize(14f, scale, 12f)
+        )
+        paint.color = Color.rgb(211, 239, 244)
+        canvas.drawText(session.status, bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawMoves(canvas: Canvas, width: Float, height: Float, scale: Float) {
@@ -1325,7 +1380,13 @@ class CommandDeckView(
         }
     }
 
-    private fun drawTeam(canvas: Canvas, width: Float, height: Float, scale: Float) {
+    private fun drawTeam(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        decisionLayout: Boolean = false
+    ) {
         if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
             teamBounds.fill(null)
             drawEmptyPanel(
@@ -1343,7 +1404,11 @@ class CommandDeckView(
         teamBounds.fill(null)
         val previewOrder = session.teamPreviewOrder()
         visibleTeam.forEachIndexed { index, pokemon ->
-            val layoutBounds = SwitchTeamLayout.bounds(width, height, scale, index, visibleTeam.size)
+            val layoutBounds = if (decisionLayout) {
+                SwitchTeamLayout.decisionBounds(width, height, scale, index, visibleTeam.size)
+            } else {
+                SwitchTeamLayout.bounds(width, height, scale, index, visibleTeam.size)
+            }
             val bounds = RectF(layoutBounds.left, layoutBounds.top, layoutBounds.right, layoutBounds.bottom)
             teamBounds[index] = bounds
             val focused = index == session.focusedTeam

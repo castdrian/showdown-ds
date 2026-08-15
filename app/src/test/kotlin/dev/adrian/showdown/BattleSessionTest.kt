@@ -2256,6 +2256,8 @@ class BattleSessionTest {
         assertEquals("Switch in", session.teamCardStatus(1))
 
         session.selectPanel(BattleSession.Panel.MENU)
+        session.focusMove(0)
+        session.selectMoveWithTouch(0)
 
         assertEquals(BattleSession.Panel.TEAM, session.panel)
     }

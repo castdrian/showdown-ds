@@ -27,6 +27,9 @@ object SwitchTeamLayout {
     const val COLUMNS = 2
     const val LEFT = 44f
     const val TOP = 220f
+    const val DECISION_PROMPT_TOP = 112f
+    const val DECISION_PROMPT_BOTTOM = 160f
+    const val DECISION_TOP = 180f
     const val GAP = 14f
     const val BOTTOM_MARGIN = 28f
     const val STATUS_WIDTH = 204f
@@ -44,18 +47,31 @@ object SwitchTeamLayout {
 
     fun rows(teamSize: Int) = (teamSize + COLUMNS - 1) / COLUMNS
 
-    fun bounds(width: Float, height: Float, scale: Float, index: Int, teamSize: Int): SwitchTeamCardBounds {
+    fun bounds(width: Float, height: Float, scale: Float, index: Int, teamSize: Int): SwitchTeamCardBounds =
+        boundsForTop(width, height, scale, index, teamSize, TOP)
+
+    fun decisionBounds(width: Float, height: Float, scale: Float, index: Int, teamSize: Int): SwitchTeamCardBounds =
+        boundsForTop(width, height, scale, index, teamSize, DECISION_TOP)
+
+    private fun boundsForTop(
+        width: Float,
+        height: Float,
+        scale: Float,
+        index: Int,
+        teamSize: Int,
+        top: Float
+    ): SwitchTeamCardBounds {
         val left = LEFT * scale
-        val top = TOP * scale
+        val topPosition = top * scale
         val gap = GAP * scale
         val rowCount = rows(teamSize).coerceAtLeast(1)
         val cardWidth = (width - left * 2f - gap) / COLUMNS
-        val availableHeight = (height - top - BOTTOM_MARGIN * scale - gap * (rowCount - 1)).coerceAtLeast(0f)
+        val availableHeight = (height - topPosition - BOTTOM_MARGIN * scale - gap * (rowCount - 1)).coerceAtLeast(0f)
         val cardHeight = availableHeight / rowCount
         val row = index / COLUMNS
         val column = index % COLUMNS
         val cardLeft = left + column * (cardWidth + gap)
-        val cardTop = top + row * (cardHeight + gap)
+        val cardTop = topPosition + row * (cardHeight + gap)
         return SwitchTeamCardBounds(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight)
     }
 

@@ -29,7 +29,7 @@ gradle assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Set `AYN_THOR_VSYNC_RATE=120` when validating the upper display at its target refresh rate.
+Set `AYN_THOR_VSYNC_RATE=120` when validating the upper display at its target refresh rate. The guest renders at the Thor's native display sizes and calibrated densities; the host emulator window does not change those guest metrics.
 
 The APK uses Android Canvas and WebView, so it does not have separate graphics-backend builds. The AVD launcher defaults to `AYN_THOR_GPU_MODE=auto`, which lets the emulator select the best available renderer. Use `AYN_THOR_GPU_MODE=host` to use the host GPU or `swiftshader` for software rendering.
 

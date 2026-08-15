@@ -20,6 +20,16 @@ class SwitchTeamLayoutTest {
     }
 
     @Test
+    fun mandatoryDecisionGridStartsBelowItsDedicatedPrompt() {
+        val first = SwitchTeamLayout.decisionBounds(1240f, 1080f, 1f, 0, 6)
+        val last = SwitchTeamLayout.decisionBounds(1240f, 1080f, 1f, 5, 6)
+
+        assertEquals(SwitchTeamLayout.DECISION_TOP, first.top, 0.001f)
+        assertTrue(first.top > SwitchTeamLayout.DECISION_PROMPT_BOTTOM)
+        assertTrue(last.bottom <= 1080f - SwitchTeamLayout.BOTTOM_MARGIN)
+    }
+
+    @Test
     fun switchTeamBottomRowReservesStatusBeforeSizingTypeBadges() {
         val card = SwitchTeamLayout.bounds(1240f, 1080f, 1f, 0, 6)
         val row = SwitchTeamLayout.rowBounds(card, 1f, 2)
