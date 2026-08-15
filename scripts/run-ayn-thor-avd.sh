@@ -48,6 +48,13 @@ fi
 
 if [[ -x "$overlay_emulator" ]]; then
     emulator="$overlay_emulator"
+elif [[ "${AYN_THOR_ALLOW_STOCK_EMULATOR:-0}" == "1" ]]; then
+    printf '%s\n' "Warning: using the stock emulator; the Thor screen order is not guaranteed."
+else
+    printf '%s\n' "The patched AYN Thor emulator overlay is missing at $overlay_emulator."
+    printf '%s\n' "Build it with AEMU_SOURCE_ROOT=/path/to/aemu ./scripts/build-ayn-thor-emulator-overlay.sh"
+    printf '%s\n' "Set AYN_THOR_ALLOW_STOCK_EMULATOR=1 only for diagnostics."
+    exit 1
 fi
 
 if [[ ! -f "$avd_home/$avd_name.ini" ]]; then

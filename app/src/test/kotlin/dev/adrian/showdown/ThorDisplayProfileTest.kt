@@ -108,6 +108,8 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("com.android.emulator.multidisplay.START"))
         assertTrue(runScript.contains("wait_for_android_boot()"))
         assertTrue(runScript.contains("activate_secondary_display()"))
+        assertTrue(runScript.contains("AYN_THOR_ALLOW_STOCK_EMULATOR"))
+        assertTrue(runScript.contains("The patched AYN Thor emulator overlay is missing"))
         val assignmentPattern = Regex("""^\+\s*(primary|thorDisplay)->second\.(width|height|pos_x|pos_y) = ([^;]+);$""")
         val layoutAssignments = overlayPatch.lineSequence()
             .mapNotNull { line ->

@@ -26,10 +26,13 @@ The repository AVD uses the two display resolutions and densities from the Thor 
 ```sh
 ./scripts/setup-android.sh
 ./scripts/create-ayn-thor-avd.sh
+AEMU_SOURCE_ROOT=/path/to/aemu ./scripts/build-ayn-thor-emulator-overlay.sh
 ./scripts/run-ayn-thor-avd.sh
 gradle assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+The AYN Thor launcher requires the patched emulator overlay so the 1920 × 1080 upper display is rendered above the 1240 × 1080 lower display. It stops with an actionable message instead of silently using a stock compositor with the wrong physical order. Set `AYN_THOR_ALLOW_STOCK_EMULATOR=1` only when diagnosing the Android app without validating the Thor window layout.
 
 Set `AYN_THOR_VSYNC_RATE=120` when validating the upper display at its target refresh rate. The guest renders at the Thor's native display sizes and calibrated densities; the host emulator window does not change those guest metrics.
 
