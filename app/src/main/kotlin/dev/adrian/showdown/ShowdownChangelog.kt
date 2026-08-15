@@ -129,6 +129,7 @@ object ShowdownChangelog {
                 "Mandatory switch and team-preview decisions now render in an isolated full-screen replacement grid, keeping the prompt and cards separate from regular battle controls.",
                 "Lower-screen panel changes now clear the custom canvas state before drawing, preventing stale translucent controls from showing through the switch screen.",
                 "Thor presentation replacement now waits for the previous lower-screen surface to dismiss, preventing stacked switch screens after lifecycle or display changes.",
+                "Thor lower-screen presentation creation now recovers cleanly if Android removes the target display during the window handoff.",
                 "Switch cards now keep a visible gap between each content region and mark the active Pokémon as unavailable instead of presenting it as another switch choice.",
                 "Forced switch cards now keep selected replacements visibly marked and show multi-switch progress.",
                 "Switch-screen controller focus now follows the same two-column grid that is rendered on the Thor display.",

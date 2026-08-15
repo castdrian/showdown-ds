@@ -42,6 +42,16 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun clearsAStalePresentationWhenTheDisplayDisappearsDuringShow() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val show = source.substringAfter("private fun showSecondaryDisplay()").substringBefore("private fun findThorDisplay")
+
+        assertTrue(show.contains("catch (_: WindowManager.BadTokenException)"))
+        assertTrue(show.contains("catch (_: WindowManager.InvalidDisplayException)"))
+        assertTrue(show.contains("if (secondaryPresentation === presentation) secondaryPresentation = null"))
+    }
+
+    @Test
     fun keepsTheThorPresentationFocusableAndTouchableAfterItsContentIsAttached() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val presentation = source.substringAfter("private inner class ThorPresentation")

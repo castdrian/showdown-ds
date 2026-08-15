@@ -625,7 +625,15 @@ class MainActivity : Activity() {
                     window.decorView.post { showSecondaryDisplay() }
                 }
             }
-            presentation.show()
+            try {
+                presentation.show()
+            } catch (_: WindowManager.BadTokenException) {
+                if (secondaryPresentation === presentation) secondaryPresentation = null
+                return@let
+            } catch (_: WindowManager.InvalidDisplayException) {
+                if (secondaryPresentation === presentation) secondaryPresentation = null
+                return@let
+            }
             configurePresentationWindow(presentation.window)
             presentation.requestControllerFocus()
         }
