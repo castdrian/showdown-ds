@@ -32,7 +32,6 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.AutoCompleteTextView
-import android.widget.MultiAutoCompleteTextView
 import android.widget.ScrollView
 import android.widget.TextView
 import android.view.inputmethod.EditorInfo
@@ -4202,21 +4201,7 @@ class MainActivity : Activity() {
             }
         }
         moveDex.load {
-            val pokemonNames = moveDex.pokemonNames()
-            val moveNames = moveDex.moveNames()
-            val itemNames = moveDex.itemNames()
-            val abilityNames = moveDex.abilityNames()
-            val natureNames = moveDex.natureNames()
-            val typeNames = moveDex.typeNames()
-            setEditors.forEach { editor ->
-                updateTeamSuggestions(editor.species, pokemonNames)
-                updateTeamSuggestions(editor.item, itemNames)
-                updateTeamSuggestions(editor.ability, abilityNames)
-                updateTeamSuggestions(editor.moves, moveNames)
-                updateTeamSuggestions(editor.nature, natureNames)
-                updateTeamSuggestions(editor.hiddenPowerType, typeNames)
-                updateTeamSuggestions(editor.teraType, typeNames)
-            }
+            setEditors.filter { it.details.visibility == View.VISIBLE }.forEach(::updateTeamEditorSuggestions)
         }
         val importButton = Button(this).apply {
             text = "Load Showdown export into editor"
@@ -4417,7 +4402,8 @@ class MainActivity : Activity() {
         val species: EditText,
         val item: EditText,
         val ability: EditText,
-        val moves: EditText,
+        val moves: List<AutoCompleteTextView>,
+        val movesContainer: LinearLayout,
         val nature: EditText,
         val evs: TeamStatEditor,
         val gender: EditText,
@@ -4443,11 +4429,28 @@ class MainActivity : Activity() {
             setPadding((18f * density).toInt(), (8f * density).toInt(), (18f * density).toInt(), (8f * density).toInt())
         }
         val nickname = teamField("Nickname", set.nickname)
-        val species = teamAutocompleteField("Species", set.species, moveDex.pokemonNames())
-        val item = teamAutocompleteField("Item", set.item, moveDex.itemNames())
-        val ability = teamAutocompleteField("Ability", set.ability, moveDex.abilityNames())
-        val moves = teamMovesField(set.moves.joinToString(","), moveDex.moveNames())
-        val nature = teamAutocompleteField("Nature", set.nature, moveDex.natureNames())
+        val species = teamAutocompleteField("Species", set.species, emptyList())
+        val item = teamAutocompleteField("Item", set.item, emptyList())
+        val ability = teamAutocompleteField("Ability", set.ability, emptyList())
+        val moves = (0 until 4).map { moveIndex ->
+            teamAutocompleteField("Move ${moveIndex + 1}", set.moves.getOrNull(moveIndex).orEmpty(), emptyList())
+        }
+        val movesContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, (8f * density).toInt(), 0, (4f * density).toInt())
+            addView(TextView(this@MainActivity).apply {
+                text = "Moves · choose up to four"
+                setTextSize(15f)
+                setTextColor(0xffa9e8e2.toInt())
+                setPadding((2f * density).toInt(), 0, 0, (6f * density).toInt())
+            }, LinearLayout.LayoutParams(-1, -2))
+            moves.forEachIndexed { index, field ->
+                addView(field, LinearLayout.LayoutParams(-1, -2).apply {
+                    if (index > 0) topMargin = (6f * density).toInt()
+                })
+            }
+        }
+        val nature = teamAutocompleteField("Nature", set.nature, emptyList())
         val evs = teamStatEditor("EVs · max 252 each / 510 total", set.evs, 0)
         val gender = teamField("Gender M or F", set.gender)
         val ivs = teamStatEditor("IVs · max 31", set.ivs, 31)
@@ -4455,10 +4458,10 @@ class MainActivity : Activity() {
         val level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty())
         val happiness = teamField("Happiness", set.happiness.takeUnless { it == 255 }?.toString().orEmpty())
         val pokeBall = teamField("Poké Ball", set.pokeBall)
-        val hiddenPowerType = teamAutocompleteField("Hidden Power type", set.hiddenPowerType, moveDex.typeNames())
+        val hiddenPowerType = teamAutocompleteField("Hidden Power type", set.hiddenPowerType, emptyList())
         val gigantamax = CheckBox(this).apply { text = "Gigantamax"; isChecked = set.gigantamax }
         val dynamaxLevel = teamField("Dynamax level", set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty())
-        val teraType = teamAutocompleteField("Tera type", set.teraType, moveDex.typeNames())
+        val teraType = teamAutocompleteField("Tera type", set.teraType, emptyList())
         val advancedFields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = if (set.hasAdvancedDetails()) View.VISIBLE else View.GONE
@@ -4486,6 +4489,7 @@ class MainActivity : Activity() {
             item = item,
             ability = ability,
             moves = moves,
+            movesContainer = movesContainer,
             nature = nature,
             evs = evs,
             gender = gender,
@@ -4517,7 +4521,7 @@ class MainActivity : Activity() {
             editor.species,
             editor.item,
             editor.ability,
-            editor.moves,
+            editor.movesContainer,
             editor.nature,
             editor.evs.container,
             editor.ivs.container,
@@ -4536,13 +4540,13 @@ class MainActivity : Activity() {
         }
         slotHeader.setOnClickListener {
             details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            if (details.visibility == View.VISIBLE) moveDex.load { updateTeamEditorSuggestions(editor) }
         }
         val summaryFields = listOf<EditText>(
             nickname,
             species,
             item,
             ability,
-            moves,
             nature,
             gender,
             level,
@@ -4551,7 +4555,7 @@ class MainActivity : Activity() {
             hiddenPowerType,
             dynamaxLevel,
             teraType
-        ) + evs.fields + ivs.fields
+        ) + moves + evs.fields + ivs.fields
         summaryFields
             .forEach { field ->
                 field.addTextChangedListener(object : TextWatcher {
@@ -4670,18 +4674,24 @@ class MainActivity : Activity() {
         setText(value)
     }
 
-    private fun teamMovesField(value: String, suggestions: List<String>): MultiAutoCompleteTextView = MultiAutoCompleteTextView(this).apply {
-        hint = "Moves, comma-separated"
-        setSingleLine(true)
-        imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
-        threshold = 1
-        setTokenizer(MultiAutoCompleteTextView.CommaTokenizer())
-        styleTeamSuggestions(this, suggestions)
-        setText(value)
-    }
-
     private fun updateTeamSuggestions(field: EditText, suggestions: List<String>) {
         (field as? AutoCompleteTextView)?.let { styleTeamSuggestions(it, suggestions) }
+    }
+
+    private fun updateTeamEditorSuggestions(editor: TeamSetEditor) {
+        val pokemonNames = moveDex.pokemonNames()
+        val itemNames = moveDex.itemNames()
+        val abilityNames = moveDex.abilityNames()
+        val moveNames = moveDex.moveNames()
+        val natureNames = moveDex.natureNames()
+        val typeNames = moveDex.typeNames()
+        updateTeamSuggestions(editor.species, pokemonNames)
+        updateTeamSuggestions(editor.item, itemNames)
+        updateTeamSuggestions(editor.ability, abilityNames)
+        editor.moves.forEach { updateTeamSuggestions(it, moveNames) }
+        updateTeamSuggestions(editor.nature, natureNames)
+        updateTeamSuggestions(editor.hiddenPowerType, typeNames)
+        updateTeamSuggestions(editor.teraType, typeNames)
     }
 
     private fun styleTeamSuggestions(field: AutoCompleteTextView, suggestions: List<String>) {
@@ -4699,7 +4709,7 @@ class MainActivity : Activity() {
         editor.species.setText(set.species)
         editor.item.setText(set.item)
         editor.ability.setText(set.ability)
-        editor.moves.setText(set.moves.joinToString(","))
+        editor.moves.forEachIndexed { index, field -> field.setText(set.moves.getOrNull(index).orEmpty()) }
         editor.nature.setText(set.nature)
         populateTeamStatEditor(editor.evs.fields, set.evs, 0)
         editor.gender.setText(set.gender)
@@ -4723,7 +4733,7 @@ class MainActivity : Activity() {
         species = editor.species.text.toString(),
         item = editor.item.text.toString(),
         ability = editor.ability.text.toString(),
-        moves = editor.moves.text.toString().split(',').map(String::trim).filter(String::isNotBlank),
+        moves = editor.moves.map { it.text.toString().trim() }.filter(String::isNotBlank),
         nature = editor.nature.text.toString(),
         evs = editorValues(editor.evs.fields, 0),
         gender = editor.gender.text.toString(),

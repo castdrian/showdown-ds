@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Team sets now use four separate searchable move slots, matching Showdown's editor while preserving packed and text exports.",
                 "Team packed exports now match Showdown's current advanced field order while still reading teams saved by earlier client versions.",
                 "New teams now start with a competitive format instead of Random Battle when no format has been chosen.",
                 "Team sets now edit EVs and IVs in readable HP, Atk, Def, SpA, SpD, and Spe controls while preserving Showdown's packed and text formats.",

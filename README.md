@@ -9,6 +9,8 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
   </tr>
 </table>
 
+Includes live Showdown battles, readable two-screen playback, a searchable team library with four move slots per Pokémon, replays, rooms, chat, and account tools.
+
 ## Hardware target
 
 All physical measurements use metric units.
