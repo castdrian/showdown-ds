@@ -123,16 +123,16 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "0",
+                "primary->second.pos_y" to "1080",
                 "thorDisplay->second.width" to "thorDisplay->second.originalWidth",
                 "thorDisplay->second.height" to "thorDisplay->second.originalHeight",
                 "thorDisplay->second.pos_x" to "340",
-                "thorDisplay->second.pos_y" to "1080"
+                "thorDisplay->second.pos_y" to "0"
             ),
             layoutAssignments
         )
         assertTrue(
-            layoutAssignments.getValue("primary->second.pos_y").toInt() <
+            layoutAssignments.getValue("primary->second.pos_y").toInt() >
                 layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
         )
         assertFalse(baseConfig.contains("Vulkan", true))
