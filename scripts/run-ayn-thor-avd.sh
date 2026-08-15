@@ -56,11 +56,74 @@ fi
 
 export ANDROID_AVD_HOME="$avd_home"
 export ANDROID_SDK_ROOT="$sdk_root"
-exec "$emulator" \
+adb_binary="$sdk_root/platform-tools/adb"
+device_serial="${ANDROID_SERIAL:-emulator-5554}"
+
+wait_for_android_boot() {
+    local attempt=0
+    local boot_completed
+    local device_state
+    while (( attempt < 120 )); do
+        (( attempt += 1 ))
+        device_state="$($adb_binary -s "$device_serial" get-state 2>/dev/null || true)"
+        if [[ "$device_state" == "device" ]]; then
+            boot_completed="$($adb_binary -s "$device_serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            if [[ "$boot_completed" == "1" ]]; then
+                return 0
+            fi
+        fi
+        if ! kill -0 "$emulator_pid" 2>/dev/null; then
+            return 1
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+activate_secondary_display() {
+    local attempt=0
+    local display_info
+    while (( attempt < 20 )); do
+        (( attempt += 1 ))
+        if "$adb_binary" -s "$device_serial" shell am broadcast \
+            -a com.android.emulator.multidisplay.START \
+            -n com.android.emulator.multidisplay/.MultiDisplayServiceReceiver \
+            --user 0 >/dev/null 2>&1; then
+            display_info="$($adb_binary -s "$device_serial" shell dumpsys display 2>/dev/null || true)"
+            if [[ "$display_info" == *"virtual:com.android.emulator.multidisplay"* ]]; then
+                return 0
+            fi
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+stop_emulator() {
+    if kill -0 "$emulator_pid" 2>/dev/null; then
+        kill "$emulator_pid" 2>/dev/null || true
+    fi
+}
+
+"$emulator" \
     -avd "$avd_name" \
     -gpu "$gpu_mode" \
     -vsync-rate "$vsync_rate" \
     "${boot_animation_args[@]}" \
     "${audio_args[@]}" \
     "${multidisplay_args[@]}" \
-    "$@"
+    "$@" &
+emulator_pid=$!
+trap stop_emulator EXIT INT TERM
+
+if ! wait_for_android_boot; then
+    printf '%s\n' "The AYN Thor emulator exited before Android finished booting."
+    exit 1
+fi
+
+if ! activate_secondary_display; then
+    printf '%s\n' "The AYN Thor secondary display did not become available."
+    exit 1
+fi
+
+wait "$emulator_pid"
