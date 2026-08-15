@@ -761,6 +761,10 @@ class BattleSession {
                 if (previewPosition >= 0) "Order ${previewPosition + 1}/$teamPreviewRequiredSize" else "Tap to order"
             }
             pokemon?.let { it.equals(playerPokemon, true) || details?.matchesIdentifier(playerPokemon) == true } == true -> "In battle"
+            decisionKind == DecisionKind.SWITCH && "switch ${index + 1}" in forceSwitchChoices -> {
+                val selectedCount = forceSwitchChoices.count { it.startsWith("switch ") }
+                if (requiredSwitches > 1) "Selected $selectedCount/$requiredSwitches" else "Selected"
+            }
             decisionKind == DecisionKind.SWITCH -> "Switch in"
             else -> "Available"
         }

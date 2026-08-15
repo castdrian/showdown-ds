@@ -2240,6 +2240,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun selectedForcedSwitchCardsShowTheirSelectionProgress() {
+        val session = BattleSession()
+
+        session.applyProtocolLine(
+            "|request|{\"rqid\":35,\"forceSwitch\":[true,true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\"},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\"},{\"ident\":\"p1: Mimikyu\",\"details\":\"Mimikyu, L50\",\"condition\":\"100/100\"}]}}"
+        )
+
+        session.selectTeamWithTouch(1)
+
+        assertEquals("Selected 1/2", session.teamCardStatus(1))
+        assertEquals("Switch in", session.teamCardStatus(2))
+    }
+
+    @Test
     fun multiForceSwitchCollectsAllReplacementChoices() {
         val session = BattleSession()
         val decisions = mutableListOf<String>()
