@@ -2708,6 +2708,23 @@ class BattleSessionTest {
     }
 
     @Test
+    fun spectatorBattleInitializationKeepsWatchingStatus() {
+        val session = BattleSession()
+        session.setSpectatorMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100"
+            )
+        )
+
+        assertEquals("Spectating battle", session.status)
+        assertEquals("Go! Pikachu!", session.battleLog().last())
+        assertEquals("Go! Pikachu!", session.latestBattleFeedEntry())
+    }
+
+    @Test
     fun recoveredSpectatorMenuLeavesTheBattleInsteadOfChallenging() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()

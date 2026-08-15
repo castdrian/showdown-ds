@@ -125,7 +125,8 @@ object ShowdownChangelog {
                 "Switch cards now keep a visible gap between each content region and mark the active Pokémon as unavailable instead of presenting it as another switch choice.",
                 "Forced switch cards now keep selected replacements visibly marked and show multi-switch progress.",
                 "Switch-screen controller focus now follows the same two-column grid that is rendered on the Thor display.",
-                "Native battle messages now follow the local player side, so move wording matches the upper HP cards in every matchup."
+                "Native battle messages now follow the local player side, so move wording matches the upper HP cards in every matchup.",
+                "Recovered guest battles now clearly show WATCHING and the latest battle event on the lower display instead of a stale waiting message."
             )
         ),
         ShowdownChangelogEntry(

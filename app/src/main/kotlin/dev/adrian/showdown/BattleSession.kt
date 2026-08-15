@@ -669,6 +669,8 @@ class BattleSession {
             .takeLast(limit.coerceAtLeast(0))
     }
 
+    fun latestBattleFeedEntry() = battleFeedEntries(1).lastOrNull()
+
     fun showdownBattleLog() = showdownBattleLogEntries.toList()
 
     fun resetShowdownBattleLog() {
@@ -1651,7 +1653,7 @@ class BattleSession {
         availableTeraType = ""
         decisionKind = DecisionKind.WAIT
         panel = Panel.MOVES
-        status = "Battle starting"
+        status = if (spectatorMode) "Spectating battle" else "Battle starting"
     }
 
     private fun applyGameType(fields: List<String>) {

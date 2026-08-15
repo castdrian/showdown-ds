@@ -786,11 +786,20 @@ class CommandDeckView(
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(24f, scale, 21f)
-        val title = if (session.decisionAvailable) "YOUR TURN" else "WAITING"
+        val watching = session.isSpectatorMode()
+        val title = when {
+            watching -> "WATCHING"
+            session.decisionAvailable -> "YOUR TURN"
+            else -> "WAITING"
+        }
         val titleHeight = paint.descent() - paint.ascent()
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         var messageSize = readableTextSize(30f, scale, 26f)
-        val message = session.status
+        val message = if (watching) {
+            session.latestBattleFeedEntry()?.takeIf(String::isNotBlank) ?: session.status
+        } else {
+            session.status
+        }
         var messageLines: List<String>
         var messageLineHeight: Float
         var messageHeight: Float
