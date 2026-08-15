@@ -1409,7 +1409,10 @@ class BattleSession {
                             appendLog("${sideNames[side] ?: side} team size: $size")
                         }
                     }
-                    "rated" -> appendLog("Rated battle.")
+                    "rated" -> {
+                        val message = sanitizeMarkup(fields.drop(2).joinToString("|"))
+                        appendLog(message?.takeIf { it.isNotBlank() } ?: "Rated battle.")
+                    }
                     "teampreview" -> {
                         battlePhase = BattlePhase.TEAM_PREVIEW
                         fields.getOrNull(2)?.toIntOrNull()?.takeIf { it > 0 }?.let { protocolTeamPreviewSize = it }
@@ -1536,6 +1539,11 @@ class BattleSession {
                     "inactiveoff" -> {
                         clearBattleClock()
                         battleTimerEnabled = false
+                        fields.drop(2).joinToString("|")
+                            .takeIf(String::isNotBlank)
+                            ?.let(::sanitizeMarkup)
+                            ?.takeIf(String::isNotBlank)
+                            ?.let(::appendLog)
                     }
                     "message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "raw", "html" -> appendMarkup(fields.drop(2).joinToString("|"))

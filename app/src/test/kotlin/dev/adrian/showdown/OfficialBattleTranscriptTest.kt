@@ -220,6 +220,21 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun preservesOptionalRatedAndTimerMessages() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|rated|Tournament battle",
+                "|inactiveoff|The battle timer is off."
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Tournament battle"))
+        assertTrue(session.battleLog().contains("The battle timer is off."))
+    }
+
+    @Test
     fun appliesTheOfficialMinorBattleActionVariants() {
         val session = BattleSession()
         session.applyProtocolPacket(
