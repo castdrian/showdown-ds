@@ -524,6 +524,7 @@ class MainActivity : Activity() {
     override fun onStop() {
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
+        dismissSecondaryDisplay()
         super.onStop()
     }
 

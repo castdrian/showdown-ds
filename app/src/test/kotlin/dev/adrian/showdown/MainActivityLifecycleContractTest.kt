@@ -79,6 +79,14 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun onStopDismissesTheThorPresentationBeforeTheActivityLeavesTheScreen() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val stop = source.substringAfter("override fun onStop() {").substringBefore("override fun onStart")
+
+        assertTrue(stop.contains("dismissSecondaryDisplay()"))
+    }
+
+    @Test
     fun defersTheAnimationWebViewUntilBattlePlaybackStarts() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val screenFactory = source.substringAfter("private fun createPrimaryScreen()").substringBefore("private fun ensureShowdownMoveEffects()")
