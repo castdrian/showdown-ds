@@ -69,4 +69,13 @@ class ShowdownMoveDexTest {
 
         assertEquals("FIGHTING", types["focusblast"])
     }
+
+    @Test
+    fun exposesStellarForTeraTypesWithoutAddingItToHiddenPowerTypes() {
+        assertEquals(16, ShowdownMoveDex.typeNames().size)
+        assertFalse(ShowdownMoveDex.typeNames().contains("Fairy"))
+        assertFalse(ShowdownMoveDex.typeNames().contains("Normal"))
+        assertFalse(ShowdownMoveDex.typeNames().contains("Stellar"))
+        assertTrue(ShowdownMoveDex.teraTypeNames().contains("Stellar"))
+    }
 }

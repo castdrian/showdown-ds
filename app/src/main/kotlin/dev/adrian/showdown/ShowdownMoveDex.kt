@@ -41,8 +41,6 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     fun natureNames() = NATURE_NAMES
 
-    fun typeNames() = TYPE_NAMES
-
     fun load(listener: () -> Unit) {
         if (moveTypes.isNotEmpty() && pokemonTypes.isNotEmpty() && moveNames.isNotEmpty() && pokemonNames.isNotEmpty() && itemNames.isNotEmpty() && abilityNames.isNotEmpty()) {
             listener()
@@ -156,6 +154,10 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
         fun parsePokemonNames(contents: String): List<String> = parseNames(contents)
 
+        fun typeNames() = HIDDEN_POWER_TYPE_NAMES
+
+        fun teraTypeNames() = TERA_TYPE_NAMES
+
         fun parseScriptNames(contents: String): List<String> = Regex("name:\"((?:\\\\.|[^\"])*)\"")
             .findAll(contents)
             .map { it.groupValues[1].replace("\\\\\"", "\"") }
@@ -191,9 +193,11 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
             "Rash", "Relaxed", " sassy", "Serious", "Timid"
         ).map(String::trim)
 
-        private val TYPE_NAMES = listOf(
+        private val TERA_TYPE_NAMES = listOf(
             "Bug", "Dark", "Dragon", "Electric", "Fairy", "Fighting", "Fire", "Flying", "Ghost", "Grass",
-            "Ground", "Ice", "Normal", "Poison", "Psychic", "Rock", "Steel", "Water"
+            "Ground", "Ice", "Normal", "Poison", "Psychic", "Rock", "Steel", "Water", "Stellar"
         )
+
+        private val HIDDEN_POWER_TYPE_NAMES = TERA_TYPE_NAMES.filterNot { it == "Fairy" || it == "Normal" || it == "Stellar" }
     }
 }

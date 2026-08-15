@@ -100,6 +100,8 @@ object ShowdownTeamCodec {
             val label = "Pokémon ${index + 1}"
             if (set.species.isBlank() && set.nickname.isBlank()) errors += "$label needs a species."
             if (set.moves.size > 4) errors += "$label can have at most four moves."
+            val moveIds = set.moves.map(ShowdownMoveDex::moveId).filter(String::isNotBlank)
+            if (moveIds.size != moveIds.distinct().size) errors += "$label contains duplicate moves."
             if (set.evs.size != 6 || set.evs.any { it !in 0..252 }) errors += "$label has invalid EVs."
             if (set.evs.sum() > 510) errors += "$label has more than 510 total EVs."
             if (set.ivs.size != 6 || set.ivs.any { it !in 0..31 }) errors += "$label has invalid IVs."

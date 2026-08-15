@@ -4806,14 +4806,15 @@ class MainActivity : Activity() {
         val abilityNames = moveDex.abilityNames()
         val moveNames = moveDex.moveNames()
         val natureNames = moveDex.natureNames()
-        val typeNames = moveDex.typeNames()
+        val typeNames = ShowdownMoveDex.typeNames()
+        val teraTypeNames = ShowdownMoveDex.teraTypeNames()
         updateTeamSuggestions(editor.species, pokemonNames)
         updateTeamSuggestions(editor.item, itemNames)
         updateTeamSuggestions(editor.ability, abilityNames)
         editor.moves.forEach { updateTeamSuggestions(it, moveNames) }
         updateTeamSuggestions(editor.nature, natureNames)
         updateTeamSuggestions(editor.hiddenPowerType, typeNames)
-        updateTeamSuggestions(editor.teraType, typeNames)
+        updateTeamSuggestions(editor.teraType, teraTypeNames)
     }
 
     private fun styleTeamSuggestions(field: AutoCompleteTextView, suggestions: List<String>) {

@@ -109,6 +109,20 @@ class ShowdownTeamCodecTest {
     }
 
     @Test
+    fun rejectsDuplicateMovesWithinOneSet() {
+        val errors = ShowdownTeamCodec.validate(
+            listOf(
+                ShowdownTeamSet(
+                    species = "Pikachu",
+                    moves = listOf("Thunderbolt", "thunderbolt")
+                )
+            )
+        )
+
+        assertTrue(errors.any { it.contains("duplicate move") })
+    }
+
+    @Test
     fun parsesAndExportsShowdownText() {
         val set = ShowdownTeamCodec.parse(
             """Lead (Gholdengo) (F) @ Leftovers
