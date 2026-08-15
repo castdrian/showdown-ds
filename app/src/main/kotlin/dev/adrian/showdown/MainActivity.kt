@@ -57,6 +57,7 @@ class MainActivity : Activity() {
 
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
+    private var secondaryPresentationRequested = false
     private var battleScene: BattleSceneView? = null
     private var primaryFrame: FrameLayout? = null
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
@@ -608,22 +609,25 @@ class MainActivity : Activity() {
     }
 
     private fun showSecondaryDisplay() {
-        if (secondaryPresentation?.isShowing == false) secondaryPresentation = null
         if (isFinishing || displayManager == null) return
-        secondaryPresentation?.let {
-            it.requestControllerFocus()
+        secondaryPresentationRequested = true
+        secondaryPresentation?.let { presentation ->
+            presentation.requestControllerFocus()
             return
         }
         findThorDisplay()?.let { display ->
-            secondaryPresentation = ThorPresentation(this, display).also { presentation ->
-                presentation.setOnDismissListener {
-                    secondaryPresentation = null
-                    if (!isFinishing) window.decorView.post { showSecondaryDisplay() }
+            val presentation = ThorPresentation(this, display)
+            secondaryPresentation = presentation
+            presentation.setOnDismissListener {
+                if (secondaryPresentation !== presentation) return@setOnDismissListener
+                secondaryPresentation = null
+                if (secondaryPresentationRequested && !isFinishing) {
+                    window.decorView.post { showSecondaryDisplay() }
                 }
-                presentation.show()
-                configurePresentationWindow(presentation.window)
-                presentation.requestControllerFocus()
             }
+            presentation.show()
+            configurePresentationWindow(presentation.window)
+            presentation.requestControllerFocus()
         }
     }
 
@@ -638,8 +642,8 @@ class MainActivity : Activity() {
     }
 
     private fun dismissSecondaryDisplay() {
+        secondaryPresentationRequested = false
         secondaryPresentation?.dismiss()
-        secondaryPresentation = null
     }
 
     private fun handleControllerKey(keyCode: Int): Boolean {

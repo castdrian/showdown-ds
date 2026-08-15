@@ -34,9 +34,11 @@ class MainActivityLifecycleContractTest {
         val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
 
         assertTrue(resume.contains("showSecondaryDisplay()"))
-        assertTrue(source.contains("secondaryPresentation?.isShowing == false"))
-        assertTrue(source.contains("secondaryPresentation?.let {"))
-        assertTrue(source.contains("it.requestControllerFocus()"))
+        assertTrue(source.contains("secondaryPresentationRequested = true"))
+        assertTrue(source.contains("secondaryPresentation?.let { presentation ->"))
+        assertTrue(source.contains("presentation.requestControllerFocus()"))
+        assertTrue(source.contains("if (secondaryPresentation !== presentation)"))
+        assertFalse(source.contains("if (secondaryPresentation?.isShowing == false) secondaryPresentation = null"))
     }
 
     @Test
@@ -52,6 +54,18 @@ class MainActivityLifecycleContractTest {
         assertTrue(presentation.contains("controllerFrame.requestFocusFromTouch()"))
         assertTrue(source.contains("FLAG_NOT_FOCUSABLE or"))
         assertTrue(source.contains("FLAG_NOT_TOUCHABLE"))
+    }
+
+    @Test
+    fun clearsSwitchHitRegionsAcrossDecisionModeTransitions() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("private var lastRenderedTeamDecision = false"))
+        assertTrue(source.contains("if (teamDecision != lastRenderedTeamDecision) clearInteractiveBounds()"))
+        assertTrue(source.contains("if (isTeamDecision() != lastRenderedTeamDecision) clearInteractiveBounds()"))
+        assertTrue(source.contains("teamBounds.fill(null)"))
+        assertTrue(source.contains("moveBounds.fill(null)"))
+        assertTrue(source.contains("targetBounds.fill(null)"))
     }
 
     @Test

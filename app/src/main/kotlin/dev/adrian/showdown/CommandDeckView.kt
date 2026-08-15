@@ -52,6 +52,7 @@ class CommandDeckView(
     private var pressStartedAt = 0L
     private var releasedMoveIndex: Int? = null
     private var releaseStartedAt = 0L
+    private var lastRenderedTeamDecision = false
 
     init {
         spriteCache.requestEffect("z-symbol.png") { asset ->
@@ -63,6 +64,8 @@ class CommandDeckView(
     override fun onDraw(canvas: Canvas) {
         val width = width.toFloat()
         val height = height.toFloat()
+        val teamDecision = isTeamDecision()
+        if (teamDecision != lastRenderedTeamDecision) clearInteractiveBounds()
         val scale = minOf(
             width / ThorDisplayProfile.LOWER_WIDTH_PIXELS,
             height / ThorDisplayProfile.LOWER_HEIGHT_PIXELS
@@ -72,7 +75,7 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.LEFT
         paint.clearShadowLayer()
-        if (isTeamDecision()) {
+        if (teamDecision) {
             drawTeamDecisionPanel(canvas, width, height, scale)
         } else {
             drawBackground(canvas, width, height)
@@ -80,6 +83,7 @@ class CommandDeckView(
             drawActivePanel(canvas, width, height, scale)
             drawTopBand(canvas, width, scale)
         }
+        lastRenderedTeamDecision = teamDecision
         if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         } else if (session.battleClockSeconds() != null) {
@@ -90,6 +94,7 @@ class CommandDeckView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val x = event.x
         val y = event.y
+        if (isTeamDecision() != lastRenderedTeamDecision) clearInteractiveBounds()
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pressedMoveIndex = moveBounds.indexOfFirst { it?.contains(x, y) == true }.takeIf { it >= 0 }
@@ -202,6 +207,19 @@ class CommandDeckView(
     private fun isTeamDecision() = session.decisionKind == BattleSession.DecisionKind.SWITCH ||
         session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW
 
+    private fun clearInteractiveBounds() {
+        tabBounds.fill(null)
+        moveBounds.fill(null)
+        teamBounds.fill(null)
+        menuBounds.fill(null)
+        gimmickBounds.fill(null)
+        targetBounds.fill(null)
+        activityChatBounds = null
+        cancelChoiceBounds = null
+        shiftBounds = null
+        testFightBounds = null
+    }
+
     private fun drawTopBand(canvas: Canvas, width: Float, scale: Float) {
         paint.alpha = 255
         paint.shader = null
@@ -301,15 +319,7 @@ class CommandDeckView(
     }
 
     private fun drawTeamDecisionPanel(canvas: Canvas, width: Float, height: Float, scale: Float) {
-        tabBounds.fill(null)
-        moveBounds.fill(null)
-        gimmickBounds.fill(null)
-        targetBounds.fill(null)
-        menuBounds.fill(null)
-        shiftBounds = null
-        testFightBounds = null
-        cancelChoiceBounds = null
-        activityChatBounds = null
+        clearInteractiveBounds()
         drawBackground(canvas, width, height)
         drawTopBand(canvas, width, scale)
         drawTeamDecisionPrompt(canvas, width, scale)
