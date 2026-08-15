@@ -4125,6 +4125,35 @@ class MainActivity : Activity() {
                 )
             }
         }
+        fun refreshTeamSetOrderControls() {
+            setEditors.forEachIndexed { index, editor ->
+                editor.index = index
+                editor.moveUpButton.isEnabled = index > 0
+                editor.moveDownButton.isEnabled = index < setEditors.lastIndex
+                editor.moveUpButton.alpha = if (editor.moveUpButton.isEnabled) 1f else 0.45f
+                editor.moveDownButton.alpha = if (editor.moveDownButton.isEnabled) 1f else 0.45f
+                updateTeamSetSummary(editor)
+            }
+        }
+        fun moveTeamSet(index: Int, direction: Int) {
+            val reordered = ShowdownTeamOrder.move(setEditors, index, direction)
+            if (reordered === setEditors) return
+            val editor = setEditors[index]
+            setEditors.clear()
+            setEditors.addAll(reordered)
+            setFields.removeView(editor.section)
+            setFields.addView(editor.section, setEditors.indexOf(editor))
+            refreshTeamSetOrderControls()
+        }
+        setEditors.forEach { editor ->
+            editor.moveUpButton.setOnClickListener {
+                moveTeamSet(setEditors.indexOf(editor), -1)
+            }
+            editor.moveDownButton.setOnClickListener {
+                moveTeamSet(setEditors.indexOf(editor), 1)
+            }
+        }
+        refreshTeamSetOrderControls()
         fun readTeamDraft(): TeamDraft {
             val editedSets = setEditors.map(::readTeamSetEditor)
             val editedPacked = ShowdownTeamCodec.pack(editedSets)
@@ -4413,8 +4442,11 @@ class MainActivity : Activity() {
     )
 
     private data class TeamSetEditor(
-        val index: Int,
+        var index: Int,
+        val section: LinearLayout,
         val slotHeader: Button,
+        val moveUpButton: Button,
+        val moveDownButton: Button,
         val details: LinearLayout,
         val nickname: EditText,
         val species: EditText,
@@ -4445,6 +4477,41 @@ class MainActivity : Activity() {
             minLines = 2
             gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
             setPadding((18f * density).toInt(), (8f * density).toInt(), (18f * density).toInt(), (8f * density).toInt())
+        }
+        val moveUpButton = Button(this).apply {
+            isAllCaps = false
+            text = "↑ Move up"
+            setTextSize(14f)
+            minHeight = (44f * density).toInt()
+            minimumHeight = minHeight
+            setPadding((10f * density).toInt(), 0, (10f * density).toInt(), 0)
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(15, 50, 67))
+                setStroke((1f * density).toInt(), Color.rgb(53, 117, 127))
+                cornerRadius = 12f * density
+            }
+        }
+        val moveDownButton = Button(this).apply {
+            isAllCaps = false
+            text = "↓ Move down"
+            setTextSize(14f)
+            minHeight = (44f * density).toInt()
+            minimumHeight = minHeight
+            setPadding((10f * density).toInt(), 0, (10f * density).toInt(), 0)
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(15, 50, 67))
+                setStroke((1f * density).toInt(), Color.rgb(53, 117, 127))
+                cornerRadius = 12f * density
+            }
+        }
+        val orderBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(moveUpButton, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                rightMargin = (6f * density).toInt()
+            })
+            addView(moveDownButton, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                leftMargin = (6f * density).toInt()
+            })
         }
         val nickname = teamField("Nickname", set.nickname)
         val species = teamAutocompleteField("Species", set.species, emptyList())
@@ -4500,7 +4567,17 @@ class MainActivity : Activity() {
         }
         val editor = TeamSetEditor(
             index = index,
+            section = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = GradientDrawable().apply {
+                    setColor(Color.rgb(12, 37, 52))
+                    setStroke((1f * density).toInt(), Color.rgb(45, 110, 123))
+                    cornerRadius = 18f * density
+                }
+            },
             slotHeader = slotHeader,
+            moveUpButton = moveUpButton,
+            moveDownButton = moveDownButton,
             details = details,
             nickname = nickname,
             species = species,
@@ -4543,19 +4620,12 @@ class MainActivity : Activity() {
             editor.nature,
             editor.evs.container,
             editor.ivs.container,
+            orderBar,
             editor.advancedToggle,
             editor.advancedFields
         ).forEach(details::addView)
-        val section = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(12, 37, 52))
-                setStroke((1f * density).toInt(), Color.rgb(45, 110, 123))
-                cornerRadius = 18f * density
-            }
-            addView(slotHeader, LinearLayout.LayoutParams(-1, -2))
-            addView(details, LinearLayout.LayoutParams(-1, -2))
-        }
+        editor.section.addView(slotHeader, LinearLayout.LayoutParams(-1, -2))
+        editor.section.addView(details, LinearLayout.LayoutParams(-1, -2))
         slotHeader.setOnClickListener {
             details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             if (details.visibility == View.VISIBLE) moveDex.load { updateTeamEditorSuggestions(editor) }
@@ -4585,7 +4655,7 @@ class MainActivity : Activity() {
         shiny.setOnCheckedChangeListener { _, _ -> updateTeamSetSummary(editor) }
         gigantamax.setOnCheckedChangeListener { _, _ -> updateTeamSetSummary(editor) }
         updateTeamSetSummary(editor)
-        parent.addView(section, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (10f * density).toInt() })
+        parent.addView(editor.section, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (10f * density).toInt() })
         return editor
     }
 
