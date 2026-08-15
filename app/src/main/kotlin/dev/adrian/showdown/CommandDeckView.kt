@@ -214,6 +214,8 @@ class CommandDeckView(
                 session.isReplayMode() -> "Replay"
                 session.isSpectatorMode() -> "Spectating"
                 session.isBattleFinished() -> "Battle complete"
+                session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Switch in"
+                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> "Team preview"
                 session.isLiveBattleActive() -> "Battle"
                 else -> "Lobby"
             },
@@ -1402,7 +1404,10 @@ class CommandDeckView(
             val name = fitTextToWidth(displayPokemon, headerWidth)
             paint.textSize = fittedTextSizeInRegion(name, headerWidth, nameSlotHeight - 4f * scale, namePreferredSize, nameMinimumSize)
             paint.color = PAPER
+            canvas.save()
+            canvas.clipRect(content.header.left, content.header.top, content.header.right, content.header.top + nameSlotHeight)
             canvas.drawText(name, content.header.left, centeredTextBaseline(content.header.top + nameSlotHeight / 2f), paint)
+            canvas.restore()
             val level = "Lv. ${details.level}${details.gender.ifBlank { "" }}"
             val levelArea = RectF(
                 content.header.left,
@@ -1415,7 +1420,10 @@ class CommandDeckView(
             val levelMinimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(levelPreferredSize)
             paint.textSize = fittedTextSizeInRegion(level, levelArea.width(), levelArea.height() - 4f * scale, levelPreferredSize, levelMinimumSize)
             paint.color = MUTED
+            canvas.save()
+            canvas.clipRect(levelArea)
             canvas.drawText(level, levelArea.left, centeredTextBaseline(levelArea.centerY()), paint)
+            canvas.restore()
             drawTeamHp(canvas, RectF(content.hp.left, content.hp.top, content.hp.right, content.hp.bottom), details.hp, scale)
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val bottomRow = RectF(content.bottomRow.left, content.bottomRow.top, content.bottomRow.right, content.bottomRow.bottom)
@@ -1436,7 +1444,10 @@ class CommandDeckView(
                     typePreferredSize,
                     typeMinimumSize
                 )
+                canvas.save()
+                canvas.clipRect(typeBounds)
                 drawOutlinedText(canvas, type, typeBounds.centerX(), centeredTextBaseline(typeBounds.centerY()), Color.rgb(7, 18, 26), PAPER, 1.5f * scale)
+                canvas.restore()
                 paint.textAlign = Paint.Align.LEFT
             }
             val state = session.teamCardStatus(index)
@@ -1454,7 +1465,10 @@ class CommandDeckView(
                 stateMinimumSize
             )
             paint.color = if (details.condition.contains("FNT", true)) MAGENTA else Color.rgb(174, 244, 217)
+            canvas.save()
+            canvas.clipRect(stateBounds)
             canvas.drawText(state, stateBounds.centerX(), centeredTextBaseline(stateBounds.centerY()), paint)
+            canvas.restore()
             paint.textAlign = Paint.Align.LEFT
             canvas.restore()
         }
@@ -1474,6 +1488,8 @@ class CommandDeckView(
         val ratio = hp.substringBefore(' ').split('/').let { values ->
             values.getOrNull(0)?.toFloatOrNull()?.div(values.getOrNull(1)?.toFloatOrNull() ?: 1f)?.coerceIn(0f, 1f) ?: 0f
         }
+        canvas.save()
+        canvas.clipRect(bounds)
         paint.color = Color.rgb(8, 19, 28)
         canvas.drawRoundRect(bounds, 12f * scale, 12f * scale, paint)
         val color = when {
@@ -1496,6 +1512,7 @@ class CommandDeckView(
         )
         drawOutlinedText(canvas, "HP ${hp.substringBefore(' ')}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.8f * scale)
         paint.textAlign = Paint.Align.LEFT
+        canvas.restore()
     }
 
     private fun drawEmptyPanel(
