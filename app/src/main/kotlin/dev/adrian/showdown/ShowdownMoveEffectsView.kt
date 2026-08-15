@@ -233,6 +233,14 @@ class ShowdownMoveEffectsView(
                                 }
                                 return originalAddBattleMessage.apply(this, arguments);
                             };
+                            var originalChangeUhtml = BattleLog.prototype.changeUhtml;
+                            if (originalChangeUhtml) {
+                                BattleLog.prototype.changeUhtml = function (id, htmlSrc, forceAdd) {
+                                    var result = originalChangeUhtml.apply(this, arguments);
+                                    if (!forceAdd && htmlSrc) nativeBattleLog(htmlSrc);
+                                    return result;
+                                };
+                            }
                             BattleLog.prototype.__showdownNativeBattleLogHooked = true;
                         }
                         function installAudioHooks() {
