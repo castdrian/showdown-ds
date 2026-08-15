@@ -89,6 +89,7 @@ class ThorDisplayProfileTest {
         val displayProfile = File("../config/avd/ayn-thor.ini").readText()
         val createScript = File("../scripts/create-ayn-thor-avd.sh").readText()
         val runScript = File("../scripts/run-ayn-thor-avd.sh").readText()
+        val overlayPatch = File("../tools/android-emulator/ayn-thor-single-window.patch").readText()
 
         assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
         assertTrue(baseConfig.contains("hw.gpu.mode = auto"))
@@ -99,6 +100,10 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("com.android.emulator.multidisplay.START"))
         assertTrue(runScript.contains("wait_for_android_boot()"))
         assertTrue(runScript.contains("activate_secondary_display()"))
+        assertTrue(overlayPatch.contains("primary->second.pos_y = 0;"))
+        assertTrue(overlayPatch.contains("thorDisplay->second.pos_y = 1080;"))
+        assertFalse(overlayPatch.contains("primary->second.pos_y = 1080;"))
+        assertFalse(overlayPatch.contains("thorDisplay->second.pos_y = 0;"))
         assertFalse(baseConfig.contains("Vulkan", true))
         assertFalse(baseConfig.contains("lavapipe", true))
         assertFalse(createScript.contains("Vulkan", true))
