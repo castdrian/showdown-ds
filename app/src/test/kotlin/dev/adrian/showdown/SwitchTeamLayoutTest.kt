@@ -51,6 +51,20 @@ class SwitchTeamLayoutTest {
     }
 
     @Test
+    fun switchTeamContentKeepsAVisibleGapBetweenEveryVerticalRegion() {
+        (1..6).forEach { teamSize ->
+            (0 until teamSize).forEach { index ->
+                val card = SwitchTeamLayout.bounds(1240f, 1080f, 1f, index, teamSize)
+                val content = SwitchTeamLayout.contentBounds(card, 1f, false)
+
+                assertTrue(content.hp.top - content.header.bottom >= SwitchTeamLayout.CONTENT_GAP)
+                assertTrue(content.bottomRow.top - content.hp.bottom >= SwitchTeamLayout.CONTENT_GAP)
+                assertTrue(content.bottomRow.top - content.sprite.bottom >= SwitchTeamLayout.CONTENT_GAP)
+            }
+        }
+    }
+
+    @Test
     fun switchTeamContentRemainsSeparatedWhenThePresentationHasLessHeight() {
         val card = SwitchTeamLayout.bounds(1240f, 900f, 1f, 5, 6)
         val content = SwitchTeamLayout.contentBounds(card, 1f, false)

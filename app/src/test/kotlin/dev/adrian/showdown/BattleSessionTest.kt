@@ -2229,6 +2229,17 @@ class BattleSessionTest {
     }
 
     @Test
+    fun forcedSwitchCardsIdentifyTheActivePokemonAsUnavailable() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|request|{\"rqid\":34,\"forceSwitch\":[true],\"side\":{\"pokemon\":[{\"ident\":\"p1: Incineroar\",\"details\":\"Incineroar, L50\",\"condition\":\"0 fnt\",\"active\":true},{\"ident\":\"p1: Naganadel\",\"details\":\"Naganadel, L50\",\"condition\":\"100/100\",\"active\":false}]}}")
+
+        assertEquals(1, session.focusedTeam)
+        assertEquals("Fainted", session.teamCardStatus(0))
+        assertEquals("Switch in", session.teamCardStatus(1))
+    }
+
+    @Test
     fun multiForceSwitchCollectsAllReplacementChoices() {
         val session = BattleSession()
         val decisions = mutableListOf<String>()

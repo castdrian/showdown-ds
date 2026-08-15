@@ -751,6 +751,21 @@ class BattleSession {
 
     fun teamCondition(index: Int) = teamDetails.getOrNull(index)?.condition.orEmpty()
 
+    fun teamCardStatus(index: Int): String {
+        val details = teamDetails.getOrNull(index)
+        val pokemon = team.getOrNull(index)
+        return when {
+            details?.condition?.contains("FNT", true) == true -> "Fainted"
+            decisionKind == DecisionKind.TEAM_PREVIEW -> {
+                val previewPosition = teamPreviewOrder.indexOf(index)
+                if (previewPosition >= 0) "Order ${previewPosition + 1}/$teamPreviewRequiredSize" else "Tap to order"
+            }
+            pokemon?.let { it.equals(playerPokemon, true) || details?.matchesIdentifier(playerPokemon) == true } == true -> "In battle"
+            decisionKind == DecisionKind.SWITCH -> "Switch in"
+            else -> "Available"
+        }
+    }
+
     fun availableGimmicks() = availableGimmicks.toList()
 
     fun terastallizeType() = availableTeraType
@@ -2488,6 +2503,7 @@ class BattleSession {
                 teamPreviewRequiredSize = requestedTeamSize.coerceIn(1, maxOf(1, availableTeamSize))
                 decisionAvailable = availableTeamSize > 0
                 panel = Panel.TEAM
+                focusFirstAvailableTeamChoice()
                 status = teamPreviewPrompt()
                 return@runCatching
             }
@@ -2502,6 +2518,7 @@ class BattleSession {
                 decisionKind = DecisionKind.SWITCH
                 decisionAvailable = team.indices.any { canSwitchTo(it) }
                 panel = Panel.TEAM
+                focusFirstAvailableTeamChoice()
                 status = if (requiredSwitches > 1) "Choose a Pokémon to switch in 1/$requiredSwitches" else "Choose a Pokémon to switch in"
                 if (!decisionAvailable) submitAutomaticForcedSwitchPasses()
                 return@runCatching
@@ -3965,6 +3982,7 @@ class BattleSession {
                     val availableSwitches = availableSwitchChoices().size
                     repeat((remainingChoices - availableSwitches).coerceAtLeast(0)) { forceSwitchChoices += "pass" }
                     if (forceSwitchChoices.size < requiredSwitches) {
+                        focusFirstAvailableTeamChoice()
                         status = "Choose a Pokémon to switch in ${forceSwitchChoices.size + 1}/$requiredSwitches"
                         return
                     }
@@ -4260,6 +4278,17 @@ class BattleSession {
         if (index !in team.indices || index in playerActivePartyIndices.values) return false
         val fainted = teamCondition(index).contains("FNT", true)
         return !fainted || index in revivingTeamIndices
+    }
+
+    private fun focusFirstAvailableTeamChoice() {
+        val candidate = team.indices.firstOrNull { index ->
+            when (decisionKind) {
+                DecisionKind.TEAM_PREVIEW -> !teamCondition(index).contains("FNT", true) && index !in teamPreviewOrder
+                DecisionKind.SWITCH -> canSwitchTo(index) && "switch ${index + 1}" !in forceSwitchChoices
+                else -> false
+            }
+        }
+        if (candidate != null) focusedTeam = candidate
     }
 
     private fun rebuildOpponentPartyIdentifiers() {

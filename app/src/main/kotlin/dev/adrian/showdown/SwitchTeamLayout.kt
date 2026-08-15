@@ -35,8 +35,10 @@ object SwitchTeamLayout {
     const val CARD_INSET = 18f
     const val CARD_HEADER_LEFT_OFFSET = 164f
     const val CARD_HEADER_TOP_OFFSET = 14f
-    const val CARD_HP_GAP = 10f
-    const val CARD_BOTTOM_ROW_GAP = 8f
+    const val CONTENT_GAP = 12f
+    const val CARD_HP_GAP = CONTENT_GAP
+    const val CARD_BOTTOM_ROW_GAP = CONTENT_GAP
+    const val PREVIEW_MARKER_RESERVED_WIDTH = 110f
     const val CARD_BOTTOM_ROW_HEIGHT = 52f
     const val CARD_SPRITE_SIZE = 134f
 
@@ -101,9 +103,9 @@ object SwitchTeamLayout {
             card.right - inset,
             hpBottom
         )
-        val headerBottom = hp.top - 8f * scale
+        val headerBottom = hp.top - CONTENT_GAP * scale
         val headerLeft = minOf(card.left + CARD_HEADER_LEFT_OFFSET * scale, card.right - inset)
-        val headerRight = if (reservesPreviewMarker) card.right - 106f * scale else card.right - inset
+        val headerRight = if (reservesPreviewMarker) card.right - PREVIEW_MARKER_RESERVED_WIDTH * scale else card.right - inset
         val header = SwitchTeamCardBounds(
             headerLeft,
             headerTop,

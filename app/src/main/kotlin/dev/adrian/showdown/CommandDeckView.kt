@@ -1323,7 +1323,6 @@ class CommandDeckView(
         val visibleTeam = session.team().take(teamBounds.size)
         teamBounds.fill(null)
         val previewOrder = session.teamPreviewOrder()
-        val previewLimit = session.teamPreviewRequiredSize()
         visibleTeam.forEachIndexed { index, pokemon ->
             val layoutBounds = SwitchTeamLayout.bounds(width, height, scale, index, visibleTeam.size)
             val bounds = RectF(layoutBounds.left, layoutBounds.top, layoutBounds.right, layoutBounds.bottom)
@@ -1424,13 +1423,7 @@ class CommandDeckView(
                 drawOutlinedText(canvas, type, typeBounds.centerX(), centeredTextBaseline(typeBounds.centerY()), Color.rgb(7, 18, 26), PAPER, 1.5f * scale)
                 paint.textAlign = Paint.Align.LEFT
             }
-            val state = when {
-                details.condition.contains("FNT", true) -> "Fainted"
-                session.decisionKind == BattleSession.DecisionKind.SWITCH -> "Switch in"
-                session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW -> if (previewPosition >= 0) "Order ${previewPosition + 1}/$previewLimit" else "Tap to order"
-                pokemon.equals(session.playerPokemon, true) -> "In battle"
-                else -> "Available"
-            }
+            val state = session.teamCardStatus(index)
             val stateBounds = RectF(rowBounds.statusLeft, bottomRow.top, rowBounds.right, bottomRow.bottom)
             paint.color = if (details.condition.contains("FNT", true)) Color.rgb(95, 31, 66) else Color.rgb(12, 69, 82)
             canvas.drawRoundRect(stateBounds, 14f * scale, 14f * scale, paint)
