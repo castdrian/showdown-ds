@@ -140,7 +140,9 @@ object ShowdownChangelog {
                 "Forced switch cards now keep selected replacements visibly marked and show multi-switch progress.",
                 "Switch-screen controller focus now follows the same two-column grid that is rendered on the Thor display.",
                 "Native battle messages now follow the local player side, so move wording matches the upper HP cards in every matchup.",
-                "Recovered guest battles now clearly show WATCHING and the latest battle event on the lower display instead of a stale waiting message."
+                "Recovered guest battles now clearly show WATCHING and the latest battle event on the lower display instead of a stale waiting message.",
+                "Dynamic Showdown battle announcements now replace their previous text instead of leaving stale duplicate lines in the feed.",
+                "Battle failure messages now stay readable when Showdown omits the optional effect name."
             )
         ),
         ShowdownChangelogEntry(
