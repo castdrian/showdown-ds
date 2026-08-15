@@ -83,7 +83,7 @@ class ThorDisplayProfileTest {
         assertTrue(source.contains("clearFlags("))
         assertTrue(source.contains("WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or"))
         assertTrue(source.contains("WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE"))
-        assertTrue(source.contains("context.createDisplayContext(display)"))
+        assertTrue(source.contains("val presentationContext = getContext()"))
         assertTrue(source.contains("FrameLayout(presentationContext)"))
         assertTrue(source.contains("CommandDeckView(presentationContext"))
         assertTrue(source.contains("frame.isFocusableInTouchMode = true"))

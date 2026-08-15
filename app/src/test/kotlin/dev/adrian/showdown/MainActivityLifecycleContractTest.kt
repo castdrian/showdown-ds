@@ -58,6 +58,7 @@ class MainActivityLifecycleContractTest {
             .substringBefore("private fun configurePresentationWindow")
 
         assertTrue(presentation.contains("setContentView(frame)"))
+        assertTrue(presentation.contains("val presentationContext = getContext()"))
         assertTrue(presentation.contains("configurePresentationWindow(window)"))
         assertTrue(presentation.contains("window?.takeKeyEvents(true)"))
         assertTrue(presentation.contains("frame.requestFocusFromTouch()"))

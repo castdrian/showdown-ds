@@ -5316,7 +5316,7 @@ class MainActivity : Activity() {
             super.onCreate(savedInstanceState)
             setCancelable(false)
             configurePresentationWindow(window)
-            val presentationContext = context.createDisplayContext(display)
+            val presentationContext = getContext()
             val frame = FrameLayout(presentationContext)
             controllerFrame = frame
             commandDeck = CommandDeckView(presentationContext, session, spriteCache, object : CommandDeckView.InteractionListener {
