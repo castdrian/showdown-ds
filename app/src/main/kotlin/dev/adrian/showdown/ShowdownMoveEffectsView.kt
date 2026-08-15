@@ -238,10 +238,22 @@ class ShowdownMoveEffectsView(
                         function installAudioHooks() {
                             if (BattleScene.prototype.__showdownNativeAudioHooked) return;
                             function moveCanDamage(move) {
-                                if (!move || move.category === 'Status') return false;
+                                if (!move) return false;
+                                var category = String(move.category || '').toLowerCase();
+                                if (category === 'status') return false;
+                                if (category === 'physical' || category === 'special') return true;
                                 var basePower = Number(move.basePower);
                                 var hasFixedDamage = move.damage !== undefined && move.damage !== null && move.damage !== 0 && move.damage !== false;
-                                var hasDamageCallback = typeof move.damageCallback === 'function';
+                                var hasDamageCallback = typeof move.damageCallback === 'function' || move.basePowerCallback === true;
+                                var dexMove = window.BattleMovedex && window.BattleMovedex[move.id];
+                                if (dexMove) {
+                                    var dexCategory = String(dexMove.category || '').toLowerCase();
+                                    if (dexCategory === 'status') return false;
+                                    if (dexCategory === 'physical' || dexCategory === 'special') return true;
+                                    basePower = Number(dexMove.basePower);
+                                    hasFixedDamage = hasFixedDamage || (dexMove.damage !== undefined && dexMove.damage !== null && dexMove.damage !== 0 && dexMove.damage !== false);
+                                    hasDamageCallback = hasDamageCallback || typeof dexMove.damageCallback === 'function' || dexMove.basePowerCallback === true;
+                                }
                                 return (isFinite(basePower) && basePower > 0) || hasFixedDamage || hasDamageCallback;
                             }
                             var originalUseMove = Battle.prototype.useMove;
