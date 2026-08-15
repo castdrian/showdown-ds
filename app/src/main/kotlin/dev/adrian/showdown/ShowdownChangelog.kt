@@ -120,7 +120,7 @@ object ShowdownChangelog {
                 "Effectiveness cues now stay attached when Showdown reports them after damage, while indirect damage still stays silent.",
                 "Anonymous guest battles now reconnect as read-only spectators after an app process restart instead of showing a stale battle transcript.",
                 "Live battle rooms and pending choices now flush to disk before the app is backgrounded or the process is killed.",
-                "AYN Thor emulator sessions now keep the 1920×1080 upper panel above the 1240×1080 lower panel.",
+                "AYN Thor emulator sessions now keep the 1920×1080 upper panel above the 1240×1080 lower panel using the compositor's bottom-origin display coordinates.",
                 "Fainted Pokémon now keep their zero-HP card and party Poké Balls visible while their field sprite leaves play.",
                 "Switch cards now reserve separate type and status regions at the Thor lower display density, keeping long type names inside their own card.",
                 "Switch cards now derive their sprite, header, HP, type, and status regions from each card's available height, preventing six-Pokémon switch screens from overlapping.",
