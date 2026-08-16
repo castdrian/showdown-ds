@@ -2,7 +2,7 @@ diff --git a/android/android-emu/android/emulation/MultiDisplay.cpp b/android/an
 index 8cacba4027a..1fe07d814020 100644
 --- a/android/android-emu/android/emulation/MultiDisplay.cpp
 +++ b/android/android-emu/android/emulation/MultiDisplay.cpp
-@@ -405,10 +405,17 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
+@@ -405,10 +405,19 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
                  pos_x = iter.second.pos_x;
                  pos_y = totalH - iter.second.height - iter.second.pos_y;
                  w = iter.second.width;
@@ -12,15 +12,17 @@ index 8cacba4027a..1fe07d814020 100644
                      *y = *y - pos_y;
 +                    if (iter.second.width != iter.second.originalWidth ||
 +                        iter.second.height != iter.second.originalHeight) {
-+                        *x = std::min(*x * iter.second.originalWidth / iter.second.width,
++                        *x = std::min(*x * (iter.second.originalWidth - 1) /
++                                          (iter.second.width - 1),
 +                                      iter.second.originalWidth - 1);
-+                        *y = std::min(*y * iter.second.originalHeight / iter.second.height,
++                        *y = std::min(*y * (iter.second.originalHeight - 1) /
++                                          (iter.second.height - 1),
 +                                      iter.second.originalHeight - 1);
 +                    }
                      *displayId = iter.first;
                      return true;
                  }
-@@ -732,4 +732,37 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
+@@ -732,4 +732,38 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
  void MultiDisplay::performRotationLocked(int mOrientation) {
 +    if (mOrientation == SKIN_ROTATION_0) {
 +        auto primary = mMultiDisplay.find(0);
@@ -39,9 +41,10 @@ index 8cacba4027a..1fe07d814020 100644
 +            primary->second.originalWidth == 1920 &&
 +            primary->second.originalHeight == 1080 &&
 +            thorDisplay != mMultiDisplay.end() &&
-+            (getNumberActiveMultiDisplaysLocked() == 2 ||
-+             (getNumberActiveMultiDisplaysLocked() == 1 &&
-+              thorDisplay->second.cb == 0))) {
++            ((thorDisplay->second.cb != 0 &&
++              getNumberActiveMultiDisplaysLocked() == 2) ||
++             (thorDisplay->second.cb == 0 &&
++              getNumberActiveMultiDisplaysLocked() == 1))) {
 +            primary->second.width = primary->second.originalWidth;
 +            primary->second.height = primary->second.originalHeight;
 +            primary->second.pos_x = 0;
@@ -58,7 +61,7 @@ index 8cacba4027a..1fe07d814020 100644
      if (android_foldable_is_pixel_fold()) {
          constexpr int primary_display_id = 0;
          const int secondary_display_id =
-@@ -1042,4 +1042,35 @@ void MultiDisplay::recomputeLayoutLocked() {
+@@ -1042,4 +1042,36 @@ void MultiDisplay::recomputeLayoutLocked() {
      if (layout) {
          rotation = layout->orientation;
      }
@@ -76,9 +79,10 @@ index 8cacba4027a..1fe07d814020 100644
 +        primary->second.originalWidth == 1920 &&
 +        primary->second.originalHeight == 1080 &&
 +        thorDisplay != mMultiDisplay.end() &&
-+        (getNumberActiveMultiDisplaysLocked() == 2 ||
-+         (getNumberActiveMultiDisplaysLocked() == 1 &&
-+          thorDisplay->second.cb == 0))) {
++        ((thorDisplay->second.cb != 0 &&
++          getNumberActiveMultiDisplaysLocked() == 2) ||
++         (thorDisplay->second.cb == 0 &&
++          getNumberActiveMultiDisplaysLocked() == 1))) {
 +        constexpr uint32_t thorPreviewWidth = 1086;
 +        constexpr uint32_t thorPreviewHeight = 946;
 +        primary->second.width = primary->second.originalWidth;
