@@ -111,6 +111,7 @@ jobs:
             prebuilts/android-emulator-build/qemu-android-deps
             prebuilts/android-emulator-build/qt
             tools/netsim
+            tools/rootcanal
           )
           "$RUNNER_TEMP/repo" sync -c -j2 --no-clone-bundle --no-tags --optimized-fetch "${projects[@]}"
           df -h /
