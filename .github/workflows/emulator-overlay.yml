@@ -30,12 +30,19 @@ jobs:
       - name: Reclaim runner disk
         run: |
           df -h /
-          xcode_app="/Applications/Xcode.app"
-          if [[ ! -d "$xcode_app" ]]; then
-            xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print -quit)"
-          fi
-          test -d "$xcode_app"
-          sudo find /Applications -maxdepth 1 -type d -name 'Xcode*.app' ! -path "$xcode_app" -exec rm -rf {} +
+          xcode_app=""
+          while IFS= read -r candidate; do
+            if [[ -d "$candidate/Contents/Developer" ]]; then
+              xcode_app="$candidate"
+              break
+            fi
+          done < <(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print)
+          test -n "$xcode_app"
+          while IFS= read -r candidate; do
+            if [[ "$candidate" != "$xcode_app" ]]; then
+              sudo rm -rf "$candidate"
+            fi
+          done < <(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print)
           sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes
           sudo rm -rf /Applications/Android\ Studio.app
           sudo rm -rf /Applications/Visual\ Studio\ Code.app
