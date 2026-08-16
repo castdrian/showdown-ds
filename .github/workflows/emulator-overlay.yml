@@ -78,6 +78,15 @@ jobs:
             external/tink
             external/crashpad
             external/google-breakpad
+            external/googletest
+            external/regex-re2
+            external/libusb
+            external/curl
+            external/lz4
+            external/rapidjson
+            external/libdrm
+            external/wpa_supplicant_8
+            external/google-benchmark
             external/glib
             external/astc-codec
             external/tinyobjloader
