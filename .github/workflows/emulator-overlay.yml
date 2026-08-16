@@ -72,6 +72,7 @@ jobs:
             external/abseil-cpp
             external/zlib
             external/protobuf
+            external/libpng
             external/libslirp
             external/boringssl
             external/tink
