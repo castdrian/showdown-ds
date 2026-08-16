@@ -20,7 +20,7 @@ index 8cacba4027a..1fe07d814020 100644
                      *displayId = iter.first;
                      return true;
                  }
-@@ -732,4 +732,35 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
+@@ -732,4 +732,37 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
  void MultiDisplay::performRotationLocked(int mOrientation) {
 +    if (mOrientation == SKIN_ROTATION_0) {
 +        auto primary = mMultiDisplay.find(0);
@@ -28,7 +28,7 @@ index 8cacba4027a..1fe07d814020 100644
 +        constexpr uint32_t thorPreviewWidth = 1086;
 +        constexpr uint32_t thorPreviewHeight = 946;
 +        for (auto it = mMultiDisplay.begin(); it != mMultiDisplay.end(); ++it) {
-+            if (it->first != 0 && it->second.cb != 0 &&
++            if (it->first != 0 &&
 +                it->second.originalWidth == 1240 &&
 +                it->second.originalHeight == 1080) {
 +                thorDisplay = it;
@@ -39,7 +39,9 @@ index 8cacba4027a..1fe07d814020 100644
 +            primary->second.originalWidth == 1920 &&
 +            primary->second.originalHeight == 1080 &&
 +            thorDisplay != mMultiDisplay.end() &&
-+            getNumberActiveMultiDisplaysLocked() == 2) {
++            (getNumberActiveMultiDisplaysLocked() == 2 ||
++             (getNumberActiveMultiDisplaysLocked() == 1 &&
++              thorDisplay->second.cb == 0))) {
 +            primary->second.width = primary->second.originalWidth;
 +            primary->second.height = primary->second.originalHeight;
 +            primary->second.pos_x = 0;
@@ -56,14 +58,14 @@ index 8cacba4027a..1fe07d814020 100644
      if (android_foldable_is_pixel_fold()) {
          constexpr int primary_display_id = 0;
          const int secondary_display_id =
-@@ -1042,4 +1042,33 @@ void MultiDisplay::recomputeLayoutLocked() {
+@@ -1042,4 +1042,35 @@ void MultiDisplay::recomputeLayoutLocked() {
      if (layout) {
          rotation = layout->orientation;
      }
 +    auto primary = mMultiDisplay.find(0);
 +    auto thorDisplay = mMultiDisplay.end();
 +    for (auto it = mMultiDisplay.begin(); it != mMultiDisplay.end(); ++it) {
-+        if (it->first != 0 && it->second.cb != 0 &&
++        if (it->first != 0 &&
 +            it->second.originalWidth == 1240 &&
 +            it->second.originalHeight == 1080) {
 +            thorDisplay = it;
@@ -74,7 +76,9 @@ index 8cacba4027a..1fe07d814020 100644
 +        primary->second.originalWidth == 1920 &&
 +        primary->second.originalHeight == 1080 &&
 +        thorDisplay != mMultiDisplay.end() &&
-+        getNumberActiveMultiDisplaysLocked() == 2) {
++        (getNumberActiveMultiDisplaysLocked() == 2 ||
++         (getNumberActiveMultiDisplaysLocked() == 1 &&
++          thorDisplay->second.cb == 0))) {
 +        constexpr uint32_t thorPreviewWidth = 1086;
 +        constexpr uint32_t thorPreviewHeight = 946;
 +        primary->second.width = primary->second.originalWidth;

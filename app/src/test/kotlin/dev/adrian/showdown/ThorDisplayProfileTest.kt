@@ -178,6 +178,8 @@ class ThorDisplayProfileTest {
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
         assertTrue(overlayPatch.contains("std::min(*x * iter.second.originalWidth / iter.second.width"))
         assertTrue(overlayPatch.contains("std::min(*y * iter.second.originalHeight / iter.second.height"))
+        assertTrue(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 1"))
+        assertTrue(overlayPatch.contains("thorDisplay->second.cb == 0"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
         assertTrue(overlayPatch.contains("if (mOrientation == SKIN_ROTATION_0) {"))
         assertFalse(baseConfig.contains("Vulkan", true))
