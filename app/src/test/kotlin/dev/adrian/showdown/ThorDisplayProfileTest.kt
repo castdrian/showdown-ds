@@ -147,24 +147,16 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "1080",
+                "primary->second.pos_y" to "thorDisplay->second.originalHeight",
                 "thorDisplay->second.width" to "thorDisplay->second.originalWidth",
                 "thorDisplay->second.height" to "thorDisplay->second.originalHeight",
-                "thorDisplay->second.pos_x" to "340",
+                "thorDisplay->second.pos_x" to "primary->second.originalWidth - thorDisplay->second.originalWidth",
                 "thorDisplay->second.pos_y" to "0"
             ),
             layoutAssignments
         )
-        assertTrue(
-            layoutAssignments.getValue("primary->second.pos_y").toInt() >
-                layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
-        )
-        val panelHeight = 1080
-        val combinedHeight = panelHeight * 2
-        val primaryTop = combinedHeight - panelHeight - layoutAssignments.getValue("primary->second.pos_y").toInt()
-        val thorTop = combinedHeight - panelHeight - layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
-        assertEquals(0, primaryTop)
-        assertEquals(panelHeight, thorTop)
+        assertEquals("thorDisplay->second.originalHeight", layoutAssignments.getValue("primary->second.pos_y"))
+        assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
         assertTrue(overlayPatch.contains("if (mOrientation == SKIN_ROTATION_0) {"))
         assertFalse(baseConfig.contains("Vulkan", true))
