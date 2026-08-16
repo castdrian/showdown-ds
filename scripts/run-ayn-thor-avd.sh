@@ -74,7 +74,7 @@ set_avd_config() {
 }
 
 set_avd_config "hw.display1.xOffset" "340"
-set_avd_config "hw.display1.yOffset" "0"
+set_avd_config "hw.display1.yOffset" "1080"
 set_avd_config "hw.multi_display_window" "no"
 set_avd_config "hw.hotplug_multi_display" "no"
 set_avd_config "hw.initialOrientation" "landscape"

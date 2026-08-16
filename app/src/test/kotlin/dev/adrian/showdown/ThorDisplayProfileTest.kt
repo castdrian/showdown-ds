@@ -103,9 +103,9 @@ class ThorDisplayProfileTest {
 
         assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
         assertTrue(baseConfig.contains("hw.gpu.mode = auto"))
-        assertTrue(baseConfig.contains("hw.display1.yOffset = 0"))
+        assertTrue(baseConfig.contains("hw.display1.yOffset = 1080"))
         assertTrue(displayProfile.contains("hw.gpu.mode=auto"))
-        assertTrue(displayProfile.contains("hw.display1.yOffset=0"))
+        assertTrue(displayProfile.contains("hw.display1.yOffset=1080"))
         assertTrue(createScript.contains("avd_name=\"AYN_Thor_API_34\""))
         assertTrue(runScript.contains("-feature MultiDisplay"))
         assertTrue(runScript.contains("-multidisplay \"1,1240,1080,420,1347\""))
@@ -113,7 +113,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("wait_for_android_boot()"))
         assertTrue(runScript.contains("activate_secondary_display()"))
         assertTrue(runScript.contains("verify_thor_displays()"))
-        assertTrue(runScript.contains("set_avd_config \"hw.display1.yOffset\" \"0\""))
+        assertTrue(runScript.contains("set_avd_config \"hw.display1.yOffset\" \"1080\""))
         assertTrue(runScript.contains("logicalFrame=Rect\\(0, 0 - 1920, 1080\\)"))
         assertTrue(runScript.contains("logicalFrame=Rect\\(0, 0 - 1240, 1080\\)"))
         assertTrue(runScript.contains("AYN_THOR_ALLOW_STOCK_EMULATOR"))
@@ -142,24 +142,24 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "1080",
+                "primary->second.pos_y" to "0",
                 "thorDisplay->second.width" to "thorDisplay->second.originalWidth",
                 "thorDisplay->second.height" to "thorDisplay->second.originalHeight",
                 "thorDisplay->second.pos_x" to "340",
-                "thorDisplay->second.pos_y" to "0"
+                "thorDisplay->second.pos_y" to "1080"
             ),
             layoutAssignments
         )
         assertTrue(
-            layoutAssignments.getValue("primary->second.pos_y").toInt() >
+            layoutAssignments.getValue("primary->second.pos_y").toInt() <
                 layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
         )
         val panelHeight = 1080
         val combinedHeight = panelHeight * 2
         val primaryTop = combinedHeight - panelHeight - layoutAssignments.getValue("primary->second.pos_y").toInt()
         val thorTop = combinedHeight - panelHeight - layoutAssignments.getValue("thorDisplay->second.pos_y").toInt()
-        assertEquals(0, primaryTop)
-        assertEquals(panelHeight, thorTop)
+        assertEquals(panelHeight, primaryTop)
+        assertEquals(0, thorTop)
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
         assertTrue(overlayPatch.contains("if (mOrientation == SKIN_ROTATION_0) {"))
         assertFalse(baseConfig.contains("Vulkan", true))
