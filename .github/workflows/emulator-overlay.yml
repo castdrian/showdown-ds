@@ -20,12 +20,21 @@ concurrency:
 
 jobs:
   build:
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: macos-14
     timeout-minutes: 360
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Reclaim runner disk
+        run: |
+          df -h /
+          sudo find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -exec rm -rf {} +
+          sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes
+          rm -rf "$HOME/Library/Developer/Xcode/DerivedData"
+          rm -rf "$HOME/Library/Caches/Homebrew"
+          df -h /
 
       - name: Download Android Emulator source
         env:
@@ -37,8 +46,9 @@ jobs:
           curl --fail --silent --show-error --location https://storage.googleapis.com/git-repo-downloads/repo --output "$RUNNER_TEMP/repo"
           chmod +x "$RUNNER_TEMP/repo"
           cd "$source_root"
-          "$RUNNER_TEMP/repo" init -u https://android.googlesource.com/platform/manifest -b "$EMULATOR_REF"
-          "$RUNNER_TEMP/repo" sync -c -j4
+          "$RUNNER_TEMP/repo" init -u https://android.googlesource.com/platform/manifest -b "$EMULATOR_REF" --depth=1 --partial-clone --clone-filter=blob:limit=1M --no-use-superproject --groups=default,platform-darwin,pdk
+          "$RUNNER_TEMP/repo" sync -c -j2 --no-clone-bundle --no-tags --optimized-fetch
+          df -h /
           printf '%s' "$source_root" > "$RUNNER_TEMP/aemu-source-root"
 
       - name: Build patched QEMU
@@ -47,7 +57,12 @@ jobs:
           qemu_root="$source_root/external/qemu"
           git -C "$qemu_root" apply --check "$GITHUB_WORKSPACE/tools/android-emulator/ayn-thor-single-window.patch"
           git -C "$qemu_root" apply "$GITHUB_WORKSPACE/tools/android-emulator/ayn-thor-single-window.patch"
-          "$qemu_root/android/rebuild.sh" --out "$source_root/objs-showdown-ds"
+          find "$source_root" -type f -name .git -delete
+          find "$source_root" -type d -name .git -prune -exec rm -rf {} +
+          rm -rf "$source_root/.repo"
+          "$qemu_root/android/rebuild.sh" --target darwin_aarch64 --ccache none --task configure --out "$source_root/objs-showdown-ds"
+          ninja_binary="$source_root/prebuilts/ninja/darwin-x86/ninja"
+          "$ninja_binary" -C "$source_root/objs-showdown-ds" qemu-system-aarch64 qemu-system-aarch64-headless gfxstream_backend
           qemu_binary="$(find "$source_root/objs-showdown-ds" -type f -name qemu-system-aarch64 -print -quit)"
           qemu_headless_binary="$(find "$source_root/objs-showdown-ds" -type f -name qemu-system-aarch64-headless -print -quit)"
           test -n "$qemu_binary"
