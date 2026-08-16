@@ -62,6 +62,23 @@ if [[ ! -f "$avd_home/$avd_name.ini" ]]; then
     "$repo_root/scripts/create-ayn-thor-avd.sh"
 fi
 
+avd_config_file="$avd_home/$avd_name.avd/config.ini"
+set_avd_config() {
+    local config_key="$1"
+    local config_value="$2"
+    if rg -q "^${config_key}[[:space:]]*=" "$avd_config_file"; then
+        perl -0pi -e "s|^\\Q$config_key\\E[[:space:]]*=.*$|$config_key = $config_value|m" "$avd_config_file"
+    else
+        printf '%s = %s\n' "$config_key" "$config_value" >> "$avd_config_file"
+    fi
+}
+
+set_avd_config "hw.display1.xOffset" "340"
+set_avd_config "hw.display1.yOffset" "0"
+set_avd_config "hw.multi_display_window" "no"
+set_avd_config "hw.hotplug_multi_display" "no"
+set_avd_config "hw.initialOrientation" "landscape"
+
 export ANDROID_AVD_HOME="$avd_home"
 export ANDROID_SDK_ROOT="$sdk_root"
 adb_binary="$sdk_root/platform-tools/adb"
@@ -114,7 +131,7 @@ verify_thor_displays() {
         (( attempt += 1 ))
         display_info="$($adb_binary -s "$device_serial" shell dumpsys display 2>/dev/null || true)"
         if printf '%s\n' "$display_info" | grep -Eq 'DisplayViewport\{type=INTERNAL,.*displayId=0,.*orientation=0,.*logicalFrame=Rect\(0, 0 - 1920, 1080\)' &&
-            printf '%s\n' "$display_info" | grep -Eq 'DisplayViewport\{type=VIRTUAL,.*displayId=2,.*orientation=0,.*logicalFrame=Rect\(0, 0 - 1240, 1080\)'; then
+            printf '%s\n' "$display_info" | grep -Eq 'DisplayViewport\{type=VIRTUAL,.*displayId=[1-9][0-9]*,.*orientation=0,.*logicalFrame=Rect\(0, 0 - 1240, 1080\)'; then
             return 0
         fi
         sleep 1
