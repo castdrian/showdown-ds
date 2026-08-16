@@ -325,6 +325,40 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsStatAnnouncementsLikeTheShowdownBattleLog() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-boost|p1a: Mewtwo|spa|2",
+                "|-unboost|p1a: Mewtwo|atk|2",
+                "|-boost|p1a: Mewtwo|spe|1|[silent]"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo's Special Attack rose sharply."))
+        assertTrue(session.battleLog().contains("Mewtwo's Attack fell harshly."))
+        assertFalse(session.battleLog().any { it.contains("Speed") })
+    }
+
+    @Test
+    fun formatsStatusAnnouncementsLikeTheShowdownBattleLog() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-status|p1a: Mewtwo|brn",
+                "|-status|p2a: Magikarp|par",
+                "|-status|p1a: Mewtwo|tox"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo was burned."))
+        assertTrue(session.battleLog().contains("Magikarp is paralyzed! It may be unable to move."))
+        assertTrue(session.battleLog().contains("Mewtwo was badly poisoned."))
+    }
+
+    @Test
     fun appliesOfficialBoostTransferDirectionAndAnnouncements() {
         val session = BattleSession()
         session.applyProtocolPacket(

@@ -2275,7 +2275,10 @@ class BattleSession {
                 updateOpponentPartyForSlot(slot) { details -> details.copy(condition = opponentCondition) }
             }
         }
-        appendLog(if (cured) "${battleActor(actor)}'s status was cured." else "${battleActor(actor)} became ${statusLabel(status)}.")
+        appendLog(
+            if (cured) "${battleActor(actor)}'s status was cured."
+            else formatStatusAnnouncement(actor, status)
+        )
     }
 
     private fun cureTeam(fields: List<String>) {
@@ -3282,10 +3285,11 @@ class BattleSession {
         val stat = fields.getOrNull(3)?.lowercase()?.takeIf { it in BOOST_STATS } ?: return
         val amount = fields.getOrNull(4)?.toIntOrNull() ?: return
         val boosts = boostSlots(side).getOrPut(targetSlot(side)) { mutableMapOf() }
-        updateBoost(boosts, stat, (boosts[stat] ?: 0) + amount * direction)
+        val delta = amount * direction
+        updateBoost(boosts, stat, (boosts[stat] ?: 0) + delta)
         removeEmptyBoostSlot(side)
         refreshVisibleBoosts()
-        appendLog("${battleActor(side)} ${if (direction > 0) "gained" else "lost"} $amount $stat.")
+        if (!isSilent(fields) && delta != 0) appendLog(formatStatChange(side, stat, delta))
     }
 
     private fun applySetBoost(fields: List<String>) {
@@ -3296,7 +3300,7 @@ class BattleSession {
         updateBoost(boosts, stat, amount)
         removeEmptyBoostSlot(side)
         refreshVisibleBoosts()
-        appendLog("${battleActor(side)}'s $stat was set to $amount.")
+        if (!isSilent(fields)) appendLog("${battleActor(side)}'s ${statLabel(stat)} was set to $amount.")
     }
 
     private fun clearAllBoosts() {
@@ -3431,6 +3435,27 @@ class BattleSession {
     private fun battleActor(value: String?) = displayPokemonName(value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" })
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
+
+    private fun formatStatChange(actor: String, stat: String, delta: Int): String {
+        val strength = when (kotlin.math.abs(delta)) {
+            1 -> ""
+            2 -> " sharply"
+            else -> " drastically"
+        }
+        val verb = if (delta > 0) "rose$strength" else "fell${if (strength.isBlank()) "" else if (kotlin.math.abs(delta) == 2) " harshly" else " severely"}"
+        return "${battleActor(actor)}'s ${statLabel(stat)} $verb."
+    }
+
+    private fun statLabel(stat: String) = when (stat.lowercase()) {
+        "atk" -> "Attack"
+        "def" -> "Defense"
+        "spa" -> "Special Attack"
+        "spd" -> "Special Defense"
+        "spe" -> "Speed"
+        "accuracy" -> "accuracy"
+        "evasion" -> "evasiveness"
+        else -> stat
+    }
 
     private fun protocolSource(fields: List<String>): String? = fields.drop(4)
         .firstOrNull { it.trim().startsWith("[from]", true) }
@@ -3762,6 +3787,16 @@ class BattleSession {
         "TOX" -> "badly poisoned"
         "SLP" -> "asleep"
         else -> status.lowercase()
+    }
+
+    private fun formatStatusAnnouncement(actor: String, status: String) = when (status) {
+        "BRN" -> "${battleActor(actor)} was burned."
+        "FRZ" -> "${battleActor(actor)} was frozen solid."
+        "PAR" -> "${battleActor(actor)} is paralyzed! It may be unable to move."
+        "PSN" -> "${battleActor(actor)} was poisoned."
+        "TOX" -> "${battleActor(actor)} was badly poisoned."
+        "SLP" -> "${battleActor(actor)} fell asleep."
+        else -> "${battleActor(actor)} became ${statusLabel(status)}."
     }
 
     private fun updateAvailableGimmicks(active: JSONObject) {

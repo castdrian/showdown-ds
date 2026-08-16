@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Battle protocol fallbacks now surface ability, item, stat-change, and status announcements in readable Showdown-style wording.",
                 "Team sets now use four separate searchable move slots, matching Showdown's editor while preserving packed and text exports.",
                 "Team editors now offer Stellar as a Tera type and reject duplicate moves before saving.",
                 "Team packed exports now match Showdown's current advanced field order while still reading teams saved by earlier client versions.",
