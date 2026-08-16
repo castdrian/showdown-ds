@@ -70,6 +70,7 @@ jobs:
           projects=(
             external/qemu
             external/abseil-cpp
+            external/dtc
             external/zlib
             external/protobuf
             external/libpng
@@ -87,6 +88,9 @@ jobs:
             external/mesa3d
             external/wpa_supplicant_8
             external/google-benchmark
+            external/flex
+            external/m4
+            external/nasm
             external/glib
             external/astc-codec
             external/tinyobjloader
@@ -98,6 +102,7 @@ jobs:
             external/gfxstream-protocols
             hardware/google/aemu
             hardware/google/gfxstream
+            device/google/cuttlefish
             prebuilts/clang/host/darwin-x86
             prebuilts/cmake/darwin-x86
             prebuilts/ninja/darwin-x86
