@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 360
 
     steps:
@@ -37,8 +37,8 @@ jobs:
           curl --fail --silent --show-error --location https://storage.googleapis.com/git-repo-downloads/repo --output "$RUNNER_TEMP/repo"
           chmod +x "$RUNNER_TEMP/repo"
           cd "$source_root"
-          "$RUNNER_TEMP/repo" init --depth=1 --partial-clone --clone-filter=blob:limit=10M --no-use-superproject -u https://android.googlesource.com/platform/manifest -b "$EMULATOR_REF"
-          "$RUNNER_TEMP/repo" sync -c -j4 --no-clone-bundle --no-tags
+          "$RUNNER_TEMP/repo" init -u https://android.googlesource.com/platform/manifest -b "$EMULATOR_REF"
+          "$RUNNER_TEMP/repo" sync -c -j4
           printf '%s' "$source_root" > "$RUNNER_TEMP/aemu-source-root"
 
       - name: Build patched QEMU
