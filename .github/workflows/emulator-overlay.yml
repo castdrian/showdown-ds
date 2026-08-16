@@ -84,7 +84,7 @@ jobs:
             external/curl
             external/lz4
             external/rapidjson
-            external/libdrm
+            external/mesa3d
             external/wpa_supplicant_8
             external/google-benchmark
             external/glib
