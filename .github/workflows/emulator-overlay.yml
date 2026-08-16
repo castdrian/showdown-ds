@@ -136,11 +136,15 @@ jobs:
           "$ninja_binary" -C "$source_root/objs-showdown-ds" qemu-system-aarch64 qemu-system-aarch64-headless gfxstream_backend
           qemu_binary="$(find "$source_root/objs-showdown-ds" -type f -name qemu-system-aarch64 -print -quit)"
           qemu_headless_binary="$(find "$source_root/objs-showdown-ds" -type f -name qemu-system-aarch64-headless -print -quit)"
+          gfxstream_backend="$source_root/objs-showdown-ds/lib64/libgfxstream_backend.dylib"
           test -n "$qemu_binary"
           test -n "$qemu_headless_binary"
+          test -f "$gfxstream_backend"
           mkdir -p "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64"
+          mkdir -p "$RUNNER_TEMP/ayn-thor-emulator-overlay/lib64"
           cp "$qemu_binary" "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64/qemu-system-aarch64"
           cp "$qemu_headless_binary" "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64/qemu-system-aarch64-headless"
+          cp "$gfxstream_backend" "$RUNNER_TEMP/ayn-thor-emulator-overlay/lib64/libgfxstream_backend.dylib"
 
       - name: Upload patched emulator overlay
         uses: actions/upload-artifact@v7
