@@ -99,6 +99,9 @@ jobs:
           qemu_root="$source_root/external/qemu"
           git -C "$qemu_root" apply --check "$GITHUB_WORKSPACE/tools/android-emulator/ayn-thor-single-window.patch"
           git -C "$qemu_root" apply "$GITHUB_WORKSPACE/tools/android-emulator/ayn-thor-single-window.patch"
+          sdk_toolchain_script="$qemu_root/android/scripts/unix/gen-android-sdk-toolchain.sh"
+          grep -q 'OSX_SDK_SUPPORTED="13.3 15.2' "$sdk_toolchain_script"
+          sed -i '' 's/OSX_SDK_SUPPORTED="13.3 15.2/OSX_SDK_SUPPORTED="13.3 15.1 15.2/' "$sdk_toolchain_script"
           find "$source_root" -type f -name .git -delete
           find "$source_root" -type d -name .git -prune -exec rm -rf {} +
           rm -rf "$source_root/.repo"
