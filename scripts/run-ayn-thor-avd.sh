@@ -20,6 +20,21 @@ boot_animation_args=()
 snapshot_args=(-no-snapshot)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
+verify_thor_layout_patch() {
+    local upper_y_count
+    local lower_y_count
+    local lower_x_count
+    upper_y_count="$(rg -c 'primary->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
+    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = primary->second\.originalHeight;' "$overlay_patch_file" 2>/dev/null || true)"
+    lower_x_count="$(rg -c 'thorDisplay->second\.pos_x = \(primary->second\.originalWidth - thorDisplay->second\.originalWidth\) / 2;' "$overlay_patch_file" 2>/dev/null || true)"
+    if [[ "$upper_y_count" != "2" || "$lower_y_count" != "2" || "$lower_x_count" != "2" ]]; then
+        printf '%s\n' "The AYN Thor compositor patch does not describe an upright upper-over-lower centered display layout."
+        exit 1
+    fi
+}
+
+verify_thor_layout_patch
+
 if [[ "$window_scale" != "auto" && ! "$window_scale" =~ ^0\.[1-9][0-9]*$|^1(\.0*)?$ ]]; then
     printf '%s\n' "AYN_THOR_WINDOW_SCALE must be auto or a value between 0.1 and 1.0."
     exit 1
