@@ -70,6 +70,12 @@ jobs:
           projects=(
             external/qemu
             external/abseil-cpp
+            external/zlib
+            external/protobuf
+            external/libslirp
+            external/boringssl
+            external/tink
+            external/crashpad
             external/glib
             external/astc-codec
             external/tinyobjloader
