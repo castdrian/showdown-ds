@@ -17,7 +17,7 @@ boot_animation_args=()
 snapshot_args=(-no-snapshot)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
-if [[ ! "$window_scale" =~ ^0\.[0-9]+$|^1(\.0*)?$ ]]; then
+if [[ ! "$window_scale" =~ ^0\.[1-9][0-9]*$|^1(\.0*)?$ ]]; then
     printf '%s\n' "AYN_THOR_WINDOW_SCALE must be between 0.1 and 1.0."
     exit 1
 fi
@@ -80,7 +80,7 @@ set_avd_config() {
 }
 
 set_avd_config "hw.display1.xOffset" "340"
-set_avd_config "hw.display1.yOffset" "1080"
+set_avd_config "hw.display1.yOffset" "0"
 set_avd_config "hw.multi_display_window" "no"
 set_avd_config "hw.hotplug_multi_display" "no"
 set_avd_config "hw.initialOrientation" "landscape"
@@ -152,14 +152,17 @@ scale_macos_preview() {
     fi
     if ! command -v osascript >/dev/null 2>&1; then
         printf '%s\n' "osascript is required to scale the macOS Thor preview window."
-        return 1
+        return 0
     fi
-    osascript - "$window_scale" <<'APPLESCRIPT'
+    if ! osascript - "$window_scale" <<'APPLESCRIPT'
 on run argv
     set previewScale to (item 1 of argv) as real
     tell application "System Events"
         tell process "qemu-system-aarch64"
-            repeat with windowItem in windows
+            set windowItems to windows
+            set windowCount to count of windowItems
+            repeat with windowIndex from 1 to windowCount
+                set windowItem to item windowIndex of windowItems
                 if (name of windowItem as text) contains "Android Emulator" then
                     set currentSize to size of windowItem
                     set size of windowItem to {round((item 1 of currentSize) * previewScale), round((item 2 of currentSize) * previewScale)}
@@ -170,6 +173,9 @@ on run argv
     end tell
 end run
 APPLESCRIPT
+    then
+        printf '%s\n' "Unable to scale the macOS Thor preview window; continuing with the native guest displays."
+    fi
 }
 
 stop_emulator() {

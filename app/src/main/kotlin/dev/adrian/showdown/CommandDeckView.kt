@@ -379,6 +379,21 @@ class CommandDeckView(
     }
 
     private fun drawMoves(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        if (session.isSpectatorMode() && !session.isBattleFinished()) {
+            moveBounds.fill(null)
+            gimmickBounds.fill(null)
+            targetBounds.fill(null)
+            drawEmptyPanel(
+                canvas,
+                width,
+                height,
+                scale,
+                "Watching battle",
+                session.latestBattleFeedEntry()?.takeIf(String::isNotBlank) ?: session.status,
+                "Spectators cannot choose moves"
+            )
+            return
+        }
         if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
             moveBounds.fill(null)
             gimmickBounds.fill(null)
