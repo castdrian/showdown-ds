@@ -103,7 +103,9 @@ class ThorDisplayProfileTest {
 
         assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
         assertTrue(baseConfig.contains("hw.gpu.mode = auto"))
+        assertTrue(baseConfig.contains("hw.display1.yOffset = 0"))
         assertTrue(displayProfile.contains("hw.gpu.mode=auto"))
+        assertTrue(displayProfile.contains("hw.display1.yOffset=0"))
         assertTrue(createScript.contains("avd_name=\"AYN_Thor_API_34\""))
         assertTrue(runScript.contains("-feature MultiDisplay"))
         assertTrue(runScript.contains("-multidisplay \"1,1240,1080,420,1347\""))
@@ -111,6 +113,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("wait_for_android_boot()"))
         assertTrue(runScript.contains("activate_secondary_display()"))
         assertTrue(runScript.contains("verify_thor_displays()"))
+        assertTrue(runScript.contains("set_avd_config \"hw.display1.yOffset\" \"0\""))
         assertTrue(runScript.contains("logicalFrame=Rect\\(0, 0 - 1920, 1080\\)"))
         assertTrue(runScript.contains("logicalFrame=Rect\\(0, 0 - 1240, 1080\\)"))
         assertTrue(runScript.contains("AYN_THOR_ALLOW_STOCK_EMULATOR"))
