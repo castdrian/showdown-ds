@@ -7,6 +7,7 @@ source "$repo_root/scripts/android-sdk-root.sh"
 sdk_root="$(android_sdk_root)"
 sdk_emulator_root="$sdk_root/emulator"
 overlay_root="$repo_root/.emulator-overlay"
+patch_file="$repo_root/tools/android-emulator/ayn-thor-single-window.patch"
 qemu_binary="${1:?Usage: ./scripts/install-ayn-thor-emulator-overlay.sh /path/to/qemu-system-binary /path/to/qemu-system-headless-binary [build-output-root]}"
 qemu_headless_binary="${2:?Usage: ./scripts/install-ayn-thor-emulator-overlay.sh /path/to/qemu-system-binary /path/to/qemu-system-headless-binary [build-output-root]}"
 build_output_root="${3:-}"
@@ -101,5 +102,7 @@ fi
 chmod +x "$overlay_root/emulator"
 chmod +x "$qemu_overlay_binary"
 chmod +x "$qemu_headless_overlay_binary"
+
+shasum -a 256 "$patch_file" | awk '{print $1}' > "$overlay_root/ayn-thor-single-window.patch.sha256"
 
 printf '%s\n' "Installed the AYN Thor emulator overlay in $overlay_root"

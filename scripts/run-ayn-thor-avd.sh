@@ -9,6 +9,8 @@ avd_home="$repo_root/.android/avd"
 emulator="$sdk_root/emulator/emulator"
 avd_name="AYN_Thor_API_34"
 overlay_emulator="$repo_root/.emulator-overlay/emulator"
+overlay_patch_digest_file="$repo_root/.emulator-overlay/ayn-thor-single-window.patch.sha256"
+overlay_patch_file="$repo_root/tools/android-emulator/ayn-thor-single-window.patch"
 audio_args=()
 vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
 gpu_mode="${AYN_THOR_GPU_MODE:-auto}"
@@ -54,6 +56,10 @@ if [[ ! -x "$emulator" ]]; then
 fi
 
 if [[ -x "$overlay_emulator" ]]; then
+    if [[ ! -f "$overlay_patch_digest_file" || "$(cat "$overlay_patch_digest_file")" != "$(shasum -a 256 "$overlay_patch_file" | awk '{print $1}')" ]]; then
+        printf '%s\n' "The AYN Thor emulator overlay is stale for the checked-in display layout patch. Reinstall it with ./scripts/install-ayn-thor-emulator-overlay.sh."
+        exit 1
+    fi
     emulator="$overlay_emulator"
 elif [[ "${AYN_THOR_ALLOW_STOCK_EMULATOR:-0}" == "1" ]]; then
     printf '%s\n' "Warning: using the stock emulator; the Thor screen order is not guaranteed."
