@@ -118,7 +118,7 @@ jobs:
           cp "$qemu_headless_binary" "$RUNNER_TEMP/ayn-thor-emulator-overlay/qemu/darwin-aarch64/qemu-system-aarch64-headless"
 
       - name: Upload patched emulator overlay
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ayn-thor-emulator-overlay-darwin-aarch64
           path: ${{ runner.temp }}/ayn-thor-emulator-overlay

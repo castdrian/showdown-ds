@@ -65,7 +65,7 @@ jobs:
 
       - name: Upload JUnit results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: showdown-ds-test-results
           path: |
@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload debug APK
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: showdown-ds-debug
           path: app/build/outputs/apk/debug/app-debug.apk
