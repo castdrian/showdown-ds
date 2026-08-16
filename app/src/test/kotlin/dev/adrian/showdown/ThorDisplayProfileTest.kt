@@ -165,16 +165,16 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "0",
+                "primary->second.pos_y" to "thorPreviewHeight",
                 "thorDisplay->second.width" to "thorPreviewWidth",
                 "thorDisplay->second.height" to "thorPreviewHeight",
                 "thorDisplay->second.pos_x" to "(primary->second.originalWidth - thorPreviewWidth) / 2",
-                "thorDisplay->second.pos_y" to "thorPreviewHeight"
+                "thorDisplay->second.pos_y" to "0"
             ),
             layoutAssignments
         )
-        assertEquals("0", layoutAssignments.getValue("primary->second.pos_y"))
-        assertEquals("thorPreviewHeight", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertEquals("thorPreviewHeight", layoutAssignments.getValue("primary->second.pos_y"))
+        assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1086;"))
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
