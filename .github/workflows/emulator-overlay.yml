@@ -47,7 +47,29 @@ jobs:
           chmod +x "$RUNNER_TEMP/repo"
           cd "$source_root"
           "$RUNNER_TEMP/repo" init -u https://android.googlesource.com/platform/manifest -b "$EMULATOR_REF" --depth=1 --partial-clone --clone-filter=blob:limit=1M --no-use-superproject --groups=default,platform-darwin,pdk
-          "$RUNNER_TEMP/repo" sync -c -j2 --no-clone-bundle --no-tags --optimized-fetch
+          projects=(
+            external/qemu
+            external/glib
+            external/astc-codec
+            external/tinyobjloader
+            external/webrtc
+            external/cares
+            external/grpc
+            external/flatbuffers
+            external/angle
+            external/gfxstream-protocols
+            hardware/google/aemu
+            hardware/google/gfxstream
+            prebuilts/clang/host/darwin-x86
+            prebuilts/cmake/darwin-x86
+            prebuilts/ninja/darwin-x86
+            prebuilts/python/darwin-x86
+            prebuilts/android-emulator-build/common
+            prebuilts/android-emulator-build/qemu-android-deps
+            prebuilts/android-emulator-build/qt
+            tools/netsim
+          )
+          "$RUNNER_TEMP/repo" sync -c -j2 --no-clone-bundle --no-tags --optimized-fetch "${projects[@]}"
           df -h /
           printf '%s' "$source_root" > "$RUNNER_TEMP/aemu-source-root"
 
