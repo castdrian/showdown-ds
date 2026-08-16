@@ -300,6 +300,54 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun keepsOfficialAbilityAndItemAnnouncementsInTheBattleFeed() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Gholdengo|Gholdengo, L50|100/100",
+                "|-ability|p1a: Gholdengo|Good as Gold",
+                "|-item|p1a: Gholdengo|Air Balloon",
+                "|-ability|p1a: Gholdengo|Klutz|[from] ability: Skill Swap",
+                "|-item|p1a: Gholdengo|Leftovers|[from] move: Trick",
+                "|-ability|p1a: Gholdengo|Unburden|[silent]",
+                "|-item|p1a: Gholdengo|Choice Scarf|[silent]"
+            )
+        )
+
+        assertEquals("Unburden", session.playerDetails().ability)
+        assertEquals("Choice Scarf", session.playerDetails().item)
+        assertTrue(session.battleLog().contains("Gholdengo's Good as Gold activated."))
+        assertTrue(session.battleLog().contains("Gholdengo's Air Balloon activated."))
+        assertTrue(session.battleLog().contains("Gholdengo's ability became Klutz."))
+        assertTrue(session.battleLog().contains("Gholdengo obtained Leftovers."))
+        assertFalse(session.battleLog().any { it.contains("Unburden") })
+        assertFalse(session.battleLog().any { it.contains("Choice Scarf") })
+    }
+
+    @Test
+    fun appliesOfficialBoostTransferDirectionAndAnnouncements() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",
+                "|-boost|p1a: Mewtwo|spa|2",
+                "|-copyboost|p1a: Mewtwo|p1b: Mimikyu",
+                "|-invertboost|p1b: Mimikyu",
+                "|-clearnegativeboost|p1b: Mimikyu",
+                "|-unboost|p1a: Mewtwo|atk|2",
+                "|-restoreboost|p1a: Mewtwo"
+            )
+        )
+
+        assertTrue(session.battleInfo().playerBoosts.containsKey("spa"))
+        assertTrue(session.battleLog().any { it.contains("Mimikyu copied stat changes from Mewtwo.") })
+        assertTrue(session.battleLog().any { it.contains("Mimikyu's stat changes were inverted.") })
+        assertTrue(session.battleLog().any { it.contains("Mimikyu's negative stat changes were removed.") })
+        assertTrue(session.battleLog().any { it.contains("Mewtwo restored its lowered stats.") })
+    }
+
+    @Test
     fun hidesInternalAbilityStateTokensFromTheBattleFeed() {
         val session = BattleSession()
         session.applyProtocolPacket(

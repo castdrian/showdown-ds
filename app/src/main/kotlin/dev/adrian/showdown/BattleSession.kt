@@ -1504,6 +1504,7 @@ class BattleSession {
                     "-zbroken" -> appendLog("${battleActor(fields.getOrNull(2))}'s protection was broken by Z-Power.")
                     "-clearallboost" -> clearAllBoosts()
                     "-clearboost" -> clearBoosts(fields)
+                    "-restoreboost" -> clearNegativeBoosts(fields, restored = true)
                     "-clearnegativeboost" -> clearNegativeBoosts(fields)
                     "-clearpositiveboost" -> clearPositiveBoosts(fields)
                     "-copyboost" -> copyBoosts(fields)
@@ -3152,8 +3153,21 @@ class BattleSession {
     }
 
     private fun applyAbility(fields: List<String>) {
-        if (fields.size < 4) return
-        updateActorDetails(fields[2]) { it.copy(ability = fields[3]) }
+        val actor = fields.getOrNull(2) ?: return
+        val rawAbility = fields.getOrNull(3)?.takeIf(String::isNotBlank) ?: return
+        val ability = abilityNameResolver?.invoke(rawAbility) ?: rawAbility
+        updateActorDetails(actor) { it.copy(ability = ability) }
+        if (isSilent(fields)) return
+        val previousAbility = fields.drop(4)
+            .firstOrNull { !it.trim().startsWith("[") && it.isNotBlank() }
+            ?.let { abilityNameResolver?.invoke(it) ?: it }
+        appendLog(
+            when {
+                previousAbility != null -> "${battleActor(actor)}'s ability changed from $previousAbility to $ability."
+                protocolSource(fields) != null -> "${battleActor(actor)}'s ability became $ability."
+                else -> "${battleActor(actor)}'s $ability activated."
+            }
+        )
     }
 
     private fun applyEndAbility(fields: List<String>) {
@@ -3182,9 +3196,16 @@ class BattleSession {
     }
 
     private fun applyItem(fields: List<String>, replacement: String? = null) {
-        if (fields.size < 3) return
-        val item = replacement ?: fields.getOrNull(3) ?: return
-        updateActorDetails(fields[2]) { it.copy(item = item) }
+        val actor = fields.getOrNull(2) ?: return
+        val rawItem = replacement ?: fields.getOrNull(3)?.takeIf(String::isNotBlank) ?: return
+        val item = itemNameResolver?.invoke(rawItem) ?: rawItem
+        updateActorDetails(actor) { it.copy(item = item) }
+        if (replacement == null && !isSilent(fields)) {
+            appendLog(
+                if (protocolSource(fields) != null) "${battleActor(actor)} obtained $item."
+                else "${battleActor(actor)}'s $item activated."
+            )
+        }
     }
 
     private fun applyGimmickFormChange(fields: List<String>, message: String) {
@@ -3293,12 +3314,18 @@ class BattleSession {
         appendLog("${if (isPlayerSide(side)) "Your" else "The opponent's"} stat changes were reset.")
     }
 
-    private fun clearNegativeBoosts(fields: List<String>) {
+    private fun clearNegativeBoosts(fields: List<String>, restored: Boolean = false) {
         val side = fields.getOrNull(2) ?: return
         boostSlots(side)[targetSlot(side)]?.let { boosts ->
             boosts.filterValues { it < 0 }.keys.toList().forEach(boosts::remove)
             removeEmptyBoostSlot(side)
             refreshVisibleBoosts()
+        }
+        if (!isSilent(fields)) {
+            appendLog(
+                if (restored) "${battleActor(side)} restored its lowered stats."
+                else "${battleActor(side)}'s negative stat changes were removed."
+            )
         }
     }
 
@@ -3309,6 +3336,7 @@ class BattleSession {
             removeEmptyBoostSlot(side)
             refreshVisibleBoosts()
         }
+        if (!isSilent(fields)) appendLog("${battleActor(side)}'s positive stat changes were removed.")
     }
 
     private fun copyBoosts(fields: List<String>) {
@@ -3403,6 +3431,12 @@ class BattleSession {
     private fun battleActor(value: String?) = displayPokemonName(value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" })
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
+
+    private fun protocolSource(fields: List<String>): String? = fields.drop(4)
+        .firstOrNull { it.trim().startsWith("[from]", true) }
+        ?.substringAfter(']')
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
 
     private fun activeSlotNumber(slot: String): Int? = slot.lastOrNull()
         ?.lowercaseChar()
