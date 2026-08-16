@@ -24,8 +24,8 @@ verify_thor_layout_patch() {
     local upper_y_count
     local lower_y_count
     local lower_x_count
-    upper_y_count="$(rg -c 'primary->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
-    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = primary->second\.originalHeight;' "$overlay_patch_file" 2>/dev/null || true)"
+    upper_y_count="$(rg -c 'primary->second\.pos_y = thorDisplay->second\.originalHeight;' "$overlay_patch_file" 2>/dev/null || true)"
+    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_x_count="$(rg -c 'thorDisplay->second\.pos_x = \(primary->second\.originalWidth - thorDisplay->second\.originalWidth\) / 2;' "$overlay_patch_file" 2>/dev/null || true)"
     if [[ "$upper_y_count" != "2" || "$lower_y_count" != "2" || "$lower_x_count" != "2" ]]; then
         printf '%s\n' "The AYN Thor compositor patch does not describe an upright upper-over-lower centered display layout."
