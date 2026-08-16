@@ -23,12 +23,12 @@ index 8cacba4027a..1fe07d814020 100644
 +            primary->second.width = primary->second.originalWidth;
 +            primary->second.height = primary->second.originalHeight;
 +            primary->second.pos_x = 0;
-+            primary->second.pos_y = 0;
++            primary->second.pos_y = thorDisplay->second.originalHeight;
 +            primary->second.rotation = mOrientation;
 +            thorDisplay->second.width = thorDisplay->second.originalWidth;
 +            thorDisplay->second.height = thorDisplay->second.originalHeight;
 +            thorDisplay->second.pos_x = primary->second.originalWidth - thorDisplay->second.originalWidth;
-+            thorDisplay->second.pos_y = primary->second.originalHeight;
++            thorDisplay->second.pos_y = 0;
 +            thorDisplay->second.rotation = mOrientation;
 +            return;
 +        }
@@ -58,12 +58,12 @@ index 8cacba4027a..1fe07d814020 100644
 +        primary->second.width = primary->second.originalWidth;
 +        primary->second.height = primary->second.originalHeight;
 +        primary->second.pos_x = 0;
-+        primary->second.pos_y = 0;
++        primary->second.pos_y = thorDisplay->second.originalHeight;
 +        primary->second.rotation = rotation;
 +        thorDisplay->second.width = thorDisplay->second.originalWidth;
 +        thorDisplay->second.height = thorDisplay->second.originalHeight;
 +        thorDisplay->second.pos_x = primary->second.originalWidth - thorDisplay->second.originalWidth;
-+        thorDisplay->second.pos_y = primary->second.originalHeight;
++        thorDisplay->second.pos_y = 0;
 +        thorDisplay->second.rotation = rotation;
 +        return;
 +    }
