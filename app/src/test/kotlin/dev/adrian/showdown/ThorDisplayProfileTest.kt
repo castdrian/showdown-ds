@@ -129,6 +129,9 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("wait_for_android_boot()"))
         assertTrue(runScript.contains("activate_secondary_display()"))
         assertTrue(runScript.contains("verify_thor_displays()"))
+        assertTrue(runScript.contains("thorPreviewWidth"))
+        assertTrue(runScript.contains("thorPreviewHeight"))
+        assertTrue(runScript.contains("lower_input_scale_count"))
         assertTrue(runScript.contains("set_avd_config \"hw.display1.yOffset\" \"0\""))
         assertTrue(runScript.contains("logicalFrame=Rect\\(0, 0 - 1920, 1080\\)"))
         assertTrue(runScript.contains("logicalFrame=Rect\\(0, 0 - 1240, 1080\\)"))
@@ -161,16 +164,20 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "thorDisplay->second.originalHeight",
-                "thorDisplay->second.width" to "thorDisplay->second.originalWidth",
-                "thorDisplay->second.height" to "thorDisplay->second.originalHeight",
-                "thorDisplay->second.pos_x" to "(primary->second.originalWidth - thorDisplay->second.originalWidth) / 2",
+                "primary->second.pos_y" to "thorPreviewHeight",
+                "thorDisplay->second.width" to "thorPreviewWidth",
+                "thorDisplay->second.height" to "thorPreviewHeight",
+                "thorDisplay->second.pos_x" to "(primary->second.originalWidth - thorPreviewWidth) / 2",
                 "thorDisplay->second.pos_y" to "0"
             ),
             layoutAssignments
         )
-        assertEquals("thorDisplay->second.originalHeight", layoutAssignments.getValue("primary->second.pos_y"))
+        assertEquals("thorPreviewHeight", layoutAssignments.getValue("primary->second.pos_y"))
         assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1086;"))
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
+        assertTrue(overlayPatch.contains("std::min(*x * iter.second.originalWidth / iter.second.width"))
+        assertTrue(overlayPatch.contains("std::min(*y * iter.second.originalHeight / iter.second.height"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
         assertTrue(overlayPatch.contains("if (mOrientation == SKIN_ROTATION_0) {"))
         assertFalse(baseConfig.contains("Vulkan", true))
