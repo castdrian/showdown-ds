@@ -4538,7 +4538,12 @@ class BattleSession {
 
     private fun isBattleFeedTurnMarker(value: String) = value.trim().matches(Regex("^Turn\\s+\\d+\\.?$", RegexOption.IGNORE_CASE))
 
-    private fun isBattleFeedEntry(value: String) = value.isNotBlank() && !isBattleFeedTurnMarker(value)
+    private fun isBattleFeedEntry(value: String): Boolean {
+        val normalized = value.trim()
+        return normalized.isNotBlank() &&
+            !isBattleFeedTurnMarker(normalized) &&
+            !BATTLE_FEED_NON_ACTION_ENTRY.matches(normalized)
+    }
 
     private fun mergeBattleFeedEntries(protocolEntries: List<String>, nativeEntries: List<String>): List<String> {
         val merged = mutableListOf<String>()
@@ -4617,6 +4622,9 @@ class BattleSession {
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
         private const val BATTLE_HISTORY_LIMIT = 1024
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
+        private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
+            "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*)$"
+        )
         private val SHOWDOWN_LOG_BREAK_TAG = Regex(
             "(?i)<br(?:\\s+[^>]*)?\\s*/?>|</?(?:address|article|aside|blockquote|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)(?:\\s+[^>]*)?\\s*/?>"
         )

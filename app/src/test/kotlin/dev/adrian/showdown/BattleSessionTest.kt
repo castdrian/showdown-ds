@@ -22,6 +22,24 @@ class BattleSessionTest {
     }
 
     @Test
+    fun upperBattleFeedOmitsTimerAndRatingMetadataWhileActivityKeepsIt() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog(
+            "Pikachu used Thunderbolt!<br />Guest 26464262 has 15 seconds left.<br />ADRIAN's rating: 1053 → 1080"
+        )
+
+        assertEquals(listOf("Pikachu used Thunderbolt!"), session.battleFeedEntries())
+        assertEquals(
+            listOf(
+                "Pikachu used Thunderbolt!",
+                "Guest 26464262 has 15 seconds left.",
+                "ADRIAN's rating: 1053 → 1080"
+            ),
+            session.activityMessages().takeLast(3)
+        )
+    }
+
+    @Test
     fun upperBattleFeedKeepsMoreThanThePreviousFiveVisibleEntries() {
         val session = BattleSession()
         session.appendShowdownBattleLog((1..7).joinToString("<br />") { "Event $it" })
