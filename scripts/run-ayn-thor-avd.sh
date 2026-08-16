@@ -12,9 +12,15 @@ overlay_emulator="$repo_root/.emulator-overlay/emulator"
 audio_args=()
 vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
 gpu_mode="${AYN_THOR_GPU_MODE:-auto}"
+window_scale="${AYN_THOR_WINDOW_SCALE:-0.68}"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
+
+if [[ ! "$window_scale" =~ ^0\.[0-9]+$|^1(\.0*)?$ ]]; then
+    printf '%s\n' "AYN_THOR_WINDOW_SCALE must be between 0.1 and 1.0."
+    exit 1
+fi
 
 case "$vsync_rate" in
     60|90|120) ;;
@@ -140,6 +146,32 @@ verify_thor_displays() {
     return 1
 }
 
+scale_macos_preview() {
+    if [[ "$(uname -s)" != "Darwin" || "$window_scale" == "1" ]]; then
+        return 0
+    fi
+    if ! command -v osascript >/dev/null 2>&1; then
+        printf '%s\n' "osascript is required to scale the macOS Thor preview window."
+        return 1
+    fi
+    osascript - "$window_scale" <<'APPLESCRIPT'
+on run argv
+    set previewScale to (item 1 of argv) as real
+    tell application "System Events"
+        tell process "qemu-system-aarch64"
+            repeat with windowItem in windows
+                if (name of windowItem as text) contains "Android Emulator" then
+                    set currentSize to size of windowItem
+                    set size of windowItem to {round((item 1 of currentSize) * previewScale), round((item 2 of currentSize) * previewScale)}
+                    return
+                end if
+            end repeat
+        end tell
+    end tell
+end run
+APPLESCRIPT
+}
+
 stop_emulator() {
     if kill -0 "$emulator_pid" 2>/dev/null; then
         kill "$emulator_pid" 2>/dev/null || true
@@ -171,5 +203,7 @@ fi
 if ! verify_thor_displays; then
     exit 1
 fi
+
+scale_macos_preview
 
 wait "$emulator_pid"

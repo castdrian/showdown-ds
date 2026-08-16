@@ -36,6 +36,8 @@ The AYN Thor launcher requires the patched emulator overlay so the 1920 × 1080 
 
 Set `AYN_THOR_VSYNC_RATE=120` when validating the upper display at its target refresh rate. The guest renders at the Thor's native display sizes and calibrated densities; the host emulator window does not change those guest metrics.
 
+The launcher scales the host preview to approximately the Thor's 150 mm enclosure width by default. Set `AYN_THOR_WINDOW_SCALE` between `0.1` and `1.0` to adjust the desktop preview without changing the guest display metrics.
+
 The APK uses Android Canvas and WebView, so it does not have separate graphics-backend builds. The AVD launcher defaults to `AYN_THOR_GPU_MODE=auto`, which lets the emulator select the best available renderer. Use `AYN_THOR_GPU_MODE=host` to use the host GPU or `swiftshader` for software rendering.
 
 ## Support the project
