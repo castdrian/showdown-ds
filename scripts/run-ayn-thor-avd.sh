@@ -57,10 +57,16 @@ fi
 
 if [[ -x "$overlay_emulator" ]]; then
     if [[ ! -f "$overlay_patch_digest_file" || "$(cat "$overlay_patch_digest_file")" != "$(shasum -a 256 "$overlay_patch_file" | awk '{print $1}')" ]]; then
-        printf '%s\n' "The AYN Thor emulator overlay is stale for the checked-in display layout patch. Reinstall it with ./scripts/install-ayn-thor-emulator-overlay.sh."
-        exit 1
+        if [[ "${AYN_THOR_ALLOW_STOCK_EMULATOR:-0}" == "1" ]]; then
+            printf '%s\n' "Warning: the AYN Thor emulator overlay is stale; using the stock emulator for diagnostics."
+            emulator="$sdk_root/emulator/emulator"
+        else
+            printf '%s\n' "The AYN Thor emulator overlay is stale for the checked-in display layout patch. Reinstall it with ./scripts/install-ayn-thor-emulator-overlay.sh."
+            exit 1
+        fi
+    else
+        emulator="$overlay_emulator"
     fi
-    emulator="$overlay_emulator"
 elif [[ "${AYN_THOR_ALLOW_STOCK_EMULATOR:-0}" == "1" ]]; then
     printf '%s\n' "Warning: using the stock emulator; the Thor screen order is not guaranteed."
 else
