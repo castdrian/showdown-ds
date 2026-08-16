@@ -28,6 +28,14 @@ class ThorDisplayProfileTest {
     }
 
     @Test
+    fun exposesPhysicalPanelBoundsForSizingChecks() {
+        assertEquals(132.83f, ThorDisplayProfile.physicalWidthMillimetres(ThorDisplayKind.UPPER), 0.01f)
+        assertEquals(74.72f, ThorDisplayProfile.physicalHeightMillimetres(ThorDisplayKind.UPPER), 0.01f)
+        assertEquals(75.11f, ThorDisplayProfile.physicalWidthMillimetres(ThorDisplayKind.LOWER), 0.01f)
+        assertEquals(65.42f, ThorDisplayProfile.physicalHeightMillimetres(ThorDisplayKind.LOWER), 0.01f)
+    }
+
+    @Test
     fun givesTheSmallerPanelAReadablePixelFloor() {
         assertTrue(
             ThorDisplayProfile.minimumReadablePixels(
@@ -109,8 +117,11 @@ class ThorDisplayProfileTest {
         assertTrue(createScript.contains("avd_name=\"AYN_Thor_API_34\""))
         assertTrue(runScript.contains("-feature MultiDisplay"))
         assertTrue(runScript.contains("-multidisplay \"1,1240,1080,420,1347\""))
-        assertTrue(runScript.contains("window_scale=\"\${AYN_THOR_WINDOW_SCALE:-0.68}\""))
+        assertTrue(runScript.contains("window_scale=\"\${AYN_THOR_WINDOW_SCALE:-auto}\""))
+        assertTrue(runScript.contains("thor_preview_width_millimetres=\"132.83\""))
         assertTrue(runScript.contains("scale_macos_preview()"))
+        assertTrue(runScript.contains("CGDisplayScreenSize"))
+        assertTrue(runScript.contains("targetWidthMillimetres"))
         assertTrue(runScript.contains("tell process \"qemu-system-aarch64\""))
         assertTrue(runScript.contains("previewScale"))
         assertTrue(runScript.contains("Unable to scale the macOS Thor preview window"))
@@ -150,16 +161,16 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "0",
+                "primary->second.pos_y" to "thorDisplay->second.originalHeight",
                 "thorDisplay->second.width" to "thorDisplay->second.originalWidth",
                 "thorDisplay->second.height" to "thorDisplay->second.originalHeight",
                 "thorDisplay->second.pos_x" to "primary->second.originalWidth - thorDisplay->second.originalWidth",
-                "thorDisplay->second.pos_y" to "primary->second.originalHeight"
+                "thorDisplay->second.pos_y" to "0"
             ),
             layoutAssignments
         )
-        assertEquals("0", layoutAssignments.getValue("primary->second.pos_y"))
-        assertEquals("primary->second.originalHeight", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertEquals("thorDisplay->second.originalHeight", layoutAssignments.getValue("primary->second.pos_y"))
+        assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
         assertTrue(overlayPatch.contains("if (mOrientation == SKIN_ROTATION_0) {"))
         assertFalse(baseConfig.contains("Vulkan", true))

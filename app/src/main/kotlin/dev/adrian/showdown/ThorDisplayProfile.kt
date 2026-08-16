@@ -12,6 +12,10 @@ object ThorDisplayProfile {
     const val LOWER_HEIGHT_PIXELS = 1080
     const val UPPER_DIAGONAL_MILLIMETRES = 152.4f
     const val LOWER_DIAGONAL_MILLIMETRES = 99.6f
+    const val UPPER_WIDTH_MILLIMETRES = 132.83f
+    const val UPPER_HEIGHT_MILLIMETRES = 74.72f
+    const val LOWER_WIDTH_MILLIMETRES = 75.11f
+    const val LOWER_HEIGHT_MILLIMETRES = 65.42f
     const val ENCLOSURE_WIDTH_MILLIMETRES = 150f
     const val ENCLOSURE_HEIGHT_MILLIMETRES = 94f
     const val ENCLOSURE_DEPTH_MILLIMETRES = 25.6f
@@ -27,6 +31,16 @@ object ThorDisplayProfile {
         ThorDisplayKind.LOWER
     } else {
         ThorDisplayKind.UPPER
+    }
+
+    fun physicalWidthMillimetres(kind: ThorDisplayKind): Float = when (kind) {
+        ThorDisplayKind.UPPER -> UPPER_WIDTH_MILLIMETRES
+        ThorDisplayKind.LOWER -> LOWER_WIDTH_MILLIMETRES
+    }
+
+    fun physicalHeightMillimetres(kind: ThorDisplayKind): Float = when (kind) {
+        ThorDisplayKind.UPPER -> UPPER_HEIGHT_MILLIMETRES
+        ThorDisplayKind.LOWER -> LOWER_HEIGHT_MILLIMETRES
     }
 
     fun minimumReadablePixels(

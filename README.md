@@ -19,6 +19,8 @@ All physical measurements use metric units.
 - Lower display: 1240 × 1080 pixels, 99.6 mm diagonal, 60 Hz.
 - Closed enclosure: 150 × 94 × 25.6 mm, approximately 380 g.
 
+The active panel areas are approximately 132.83 × 74.72 mm on top and 75.11 × 65.42 mm on the bottom, derived from the listed diagonals and native pixel aspect ratios.
+
 The repository AVD uses the two display resolutions and densities from the Thor target. The display sizes are listed by [AYN](https://www.ayntec.com/products/ayn-thor), with the resolution and enclosure dimensions cross-checked against [Android Central](https://www.androidcentral.com/gaming/android-games/ayn-thor-pre-orders-open-tonight-and-its-much-cheaper-than-i-thought).
 
 ## Build
@@ -36,7 +38,7 @@ The AYN Thor launcher requires the patched emulator overlay so the 1920 × 1080 
 
 Set `AYN_THOR_VSYNC_RATE=120` when validating the upper display at its target refresh rate. The guest renders at the Thor's native display sizes and calibrated densities; the host emulator window does not change those guest metrics.
 
-The launcher scales the host preview to approximately the Thor's 150 mm enclosure width by default. Set `AYN_THOR_WINDOW_SCALE` between `0.1` and `1.0` to adjust the desktop preview without changing the guest display metrics.
+On macOS, the launcher scales the host preview to the upper panel's physical width by default using the host display's reported millimetres. Set `AYN_THOR_WINDOW_SCALE` to `auto` or a value between `0.1` and `1.0` to adjust the desktop preview without changing the guest display metrics.
 
 The APK uses Android Canvas and WebView, so it does not have separate graphics-backend builds. The AVD launcher defaults to `AYN_THOR_GPU_MODE=auto`, which lets the emulator select the best available renderer. Use `AYN_THOR_GPU_MODE=host` to use the host GPU or `swiftshader` for software rendering.
 

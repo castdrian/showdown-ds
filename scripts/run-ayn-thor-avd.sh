@@ -14,13 +14,14 @@ overlay_patch_file="$repo_root/tools/android-emulator/ayn-thor-single-window.pat
 audio_args=()
 vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
 gpu_mode="${AYN_THOR_GPU_MODE:-auto}"
-window_scale="${AYN_THOR_WINDOW_SCALE:-0.68}"
+window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
+thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
-if [[ ! "$window_scale" =~ ^0\.[1-9][0-9]*$|^1(\.0*)?$ ]]; then
-    printf '%s\n' "AYN_THOR_WINDOW_SCALE must be between 0.1 and 1.0."
+if [[ "$window_scale" != "auto" && ! "$window_scale" =~ ^0\.[1-9][0-9]*$|^1(\.0*)?$ ]]; then
+    printf '%s\n' "AYN_THOR_WINDOW_SCALE must be auto or a value between 0.1 and 1.0."
     exit 1
 fi
 
@@ -166,9 +167,23 @@ scale_macos_preview() {
         printf '%s\n' "osascript is required to scale the macOS Thor preview window."
         return 0
     fi
-    if ! osascript - "$window_scale" <<'APPLESCRIPT'
+    if ! osascript - "$window_scale" "$thor_preview_width_millimetres" <<'APPLESCRIPT'
+use framework "CoreGraphics"
+
 on run argv
-    set previewScale to (item 1 of argv) as real
+    set requestedScale to item 1 of argv
+    set targetWidthMillimetres to (item 2 of argv) as real
+    set previewScale to 1
+    if requestedScale is "auto" then
+        set displayId to current application's CGMainDisplayID()
+        set displaySize to current application's CGDisplayScreenSize(displayId)
+        set screenWidthMillimetres to (displaySize's width) as real
+        tell application "Finder" to set desktopBounds to bounds of window of desktop
+        set desktopWidth to item 3 of desktopBounds
+        set targetWidth to (desktopWidth * targetWidthMillimetres / screenWidthMillimetres) as integer
+    else
+        set previewScale to requestedScale as real
+    end if
     tell application "System Events"
         tell process "qemu-system-aarch64"
             set windowItems to windows
@@ -177,7 +192,10 @@ on run argv
                 set windowItem to item windowIndex of windowItems
                 if (name of windowItem as text) contains "Android Emulator" then
                     set currentSize to size of windowItem
-                    set size of windowItem to {round((item 1 of currentSize) * previewScale), round((item 2 of currentSize) * previewScale)}
+                    if requestedScale is "auto" then
+                        set previewScale to targetWidth / (item 1 of currentSize)
+                    end if
+                    set size of windowItem to {((item 1 of currentSize) * previewScale) as integer, ((item 2 of currentSize) * previewScale) as integer}
                     return
                 end if
             end repeat
