@@ -30,10 +30,23 @@ jobs:
       - name: Reclaim runner disk
         run: |
           df -h /
-          sudo find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -exec rm -rf {} +
+          xcode_app="/Applications/Xcode.app"
+          if [[ ! -d "$xcode_app" ]]; then
+            xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print -quit)"
+          fi
+          test -d "$xcode_app"
+          sudo find /Applications -maxdepth 1 -type d -name 'Xcode*.app' ! -path "$xcode_app" -exec rm -rf {} +
           sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes
+          sudo rm -rf /Applications/Android\ Studio.app
+          sudo rm -rf /Applications/Visual\ Studio\ Code.app
+          sudo rm -rf /Applications/Google\ Chrome.app
+          sudo rm -rf /Applications/Firefox.app
           rm -rf "$HOME/Library/Developer/Xcode/DerivedData"
           rm -rf "$HOME/Library/Caches/Homebrew"
+          rm -rf "$HOME/Library/Android/sdk"
+          rm -rf "$HOME/hostedtoolcache"
+          sudo xcode-select --switch "$xcode_app/Contents/Developer"
+          xcodebuild -version
           df -h /
 
       - name: Download Android Emulator source
