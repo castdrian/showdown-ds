@@ -69,6 +69,7 @@ jobs:
           "$RUNNER_TEMP/repo" init -u https://android.googlesource.com/platform/manifest -b "$EMULATOR_REF" --depth=1 --partial-clone --clone-filter=blob:limit=1M --no-use-superproject --groups=default,platform-darwin,pdk
           projects=(
             external/qemu
+            external/abseil-cpp
             external/glib
             external/astc-codec
             external/tinyobjloader
