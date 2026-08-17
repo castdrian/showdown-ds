@@ -35,7 +35,7 @@ verify_thor_layout_patch() {
     lower_height_count="$(rg -c 'thorDisplay->second\.height = thorPreviewHeight;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_input_x_scale_count="$(rg -c '\*x \* \(iter\.second\.originalWidth - 1\)' "$overlay_patch_file" 2>/dev/null || true)"
     lower_input_y_scale_count="$(rg -c '\*y \* \(iter\.second\.originalHeight - 1\)' "$overlay_patch_file" 2>/dev/null || true)"
-    if [[ "$upper_y_count" != "2" || "$lower_y_count" != "2" || "$lower_x_count" != "2" || "$lower_width_count" != "2" || "$lower_height_count" != "2" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" ]]; then
+    if [[ "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$lower_x_count" != "3" || "$lower_width_count" != "3" || "$lower_height_count" != "3" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" ]]; then
         printf '%s\n' "The AYN Thor compositor patch does not describe an upright upper-over-lower centered display layout."
         exit 1
     fi

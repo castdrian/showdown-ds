@@ -22,7 +22,42 @@ index 8cacba4027a..1fe07d814020 100644
                      *displayId = iter.first;
                      return true;
                  }
-@@ -732,4 +732,35 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
+@@ -640,6 +640,35 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
+         mMultiDisplay[displayId].pos_y = y;
+         mMultiDisplay[displayId].rotation = current_rotation;
++        if (current_rotation == SKIN_ROTATION_0) {
++            auto primary = mMultiDisplay.find(0);
++            auto thorDisplay = mMultiDisplay.end();
++            for (auto it = mMultiDisplay.begin(); it != mMultiDisplay.end(); ++it) {
++                if (it->first != 0 &&
++                    it->second.originalWidth == 1240 &&
++                    it->second.originalHeight == 1080) {
++                    thorDisplay = it;
++                    break;
++                }
++            }
++            if (primary != mMultiDisplay.end() &&
++                primary->second.originalWidth == 1920 &&
++                primary->second.originalHeight == 1080 &&
++                thorDisplay != mMultiDisplay.end()) {
++                constexpr uint32_t thorPreviewWidth = 1086;
++                constexpr uint32_t thorPreviewHeight = 946;
++                primary->second.width = primary->second.originalWidth;
++                primary->second.height = primary->second.originalHeight;
++                primary->second.pos_x = 0;
++                primary->second.pos_y = thorPreviewHeight;
++                primary->second.rotation = current_rotation;
++                thorDisplay->second.width = thorPreviewWidth;
++                thorDisplay->second.height = thorPreviewHeight;
++                thorDisplay->second.pos_x =
++                        (primary->second.originalWidth - thorPreviewWidth) / 2;
++                thorDisplay->second.pos_y = 0;
++                thorDisplay->second.rotation = current_rotation;
++            }
++        }
+         if (mMultiDisplay[displayId].cb != 0) {
+
+@@ -732,4 +761,35 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
  void MultiDisplay::performRotationLocked(int mOrientation) {
 +    if (mOrientation == SKIN_ROTATION_0) {
 +        auto primary = mMultiDisplay.find(0);

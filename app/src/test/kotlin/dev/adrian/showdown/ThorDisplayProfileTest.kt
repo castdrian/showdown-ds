@@ -179,6 +179,8 @@ class ThorDisplayProfileTest {
         )
         assertEquals("thorPreviewHeight", layoutAssignments.getValue("primary->second.pos_y"))
         assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1086;"))
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
