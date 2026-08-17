@@ -225,11 +225,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestSpriteCandidates(plan.preferredRemoteCandidates) { asset ->
             if (asset != null) {
                 receiver(asset)
-            } else if (request.side == BattleSpriteSide.PLAYER) {
-                requestSpriteCandidates(plan.fallbackCandidates) { fallbackAsset ->
-                    if (fallbackAsset != null) receiver(fallbackAsset)
-                    else requestPokeApiModernSprite(request, receiver)
-                }
             } else {
                 requestPokeApiModernSprite(request) { fallback ->
                     if (fallback != null) receiver(fallback)
@@ -301,7 +296,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun loadBytes(path: String): File? {
-        val extension = path.substringAfterLast('.', "bin")
+        val extension = showdownCacheExtension(path)
         val file = File(diskCache, "${digest(path)}.$extension")
         return runCatching {
             if (!file.isFile) write(file, download(path) ?: return null)

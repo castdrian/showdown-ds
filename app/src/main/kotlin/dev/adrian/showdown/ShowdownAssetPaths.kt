@@ -17,9 +17,9 @@ object ShowdownAssetPaths {
         "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/"
     )
 
-    private val hdBackSpriteRoots = listOf(
-        "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/",
-        "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/"
+    private val communityAnimatedSpriteRoots = mapOf(
+        BattleSpriteSide.OPPONENT to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/FRONT/",
+        BattleSpriteSide.PLAYER to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/BACK/"
     )
 
     fun battleSprite(request: BattleSpriteRequest): String {
@@ -57,8 +57,10 @@ object ShowdownAssetPaths {
         if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
             if (request.backFacing) {
                 hdBackSpriteCandidates(speciesNames).forEach { candidates += it }
+                communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.PLAYER).forEach { candidates += it }
             } else {
                 hdFrontSpriteCandidates(speciesNames).forEach { candidates += it }
+                communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT).forEach { candidates += it }
             }
         }
         val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
@@ -93,6 +95,7 @@ object ShowdownAssetPaths {
         val speciesNames = spriteSpeciesNames(species)
         return linkedSetOf<String>().apply {
             hdFrontSpriteCandidates(speciesNames).forEach { add(it) }
+            communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT).forEach { add(it) }
             add(dexSprite(species))
             add("sprites/dex/${animationId(species)}.png")
         }.toList()
@@ -146,10 +149,26 @@ object ShowdownAssetPaths {
     private fun hdBackSpriteCandidates(speciesNames: List<String>): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
-                hdBackSpriteRoots.map { root -> "$root$spriteName.gif" } +
-                    hdSpriteRoots.map { root -> "$root${spriteName}-back.gif" }
+                hdSpriteRoots.map { root -> "$root${spriteName}-back.gif" }
             }
         }
+
+    private fun communityAnimatedSpriteCandidates(
+        speciesNames: List<String>,
+        side: BattleSpriteSide
+    ): List<String> = speciesNames.flatMap { species ->
+        communityAnimatedSpriteNames(species).flatMap { spriteName ->
+            buildList {
+                communityAnimatedSpriteRoots[side]?.let { root ->
+                    add("$root$spriteName.gif")
+                    if (side == BattleSpriteSide.PLAYER) {
+                        add("$root${spriteName}_back.gif")
+                        add("$root${spriteName}%20back.gif")
+                    }
+                }
+            }
+        }
+    }
 
     private fun spriteSpeciesNames(species: String): List<String> {
         val baseSpecies = species.substringBefore('-').trim()
@@ -172,6 +191,15 @@ object ShowdownAssetPaths {
     private fun hdSpriteNames(species: String): List<String> {
         val normalized = normalizeSpriteName(species)
         return linkedSetOf(animationId(species), normalized, dexId(species)).toList()
+    }
+
+    private fun communityAnimatedSpriteNames(species: String): List<String> {
+        val normalized = normalizeSpriteName(species)
+        return linkedSetOf(
+            normalized.uppercase(Locale.ROOT),
+            normalized.replace('-', '_').uppercase(Locale.ROOT),
+            animationId(species).uppercase(Locale.ROOT)
+        ).toList()
     }
 
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"

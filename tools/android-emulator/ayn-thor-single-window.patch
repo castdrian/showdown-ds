@@ -4,7 +4,7 @@ index 8cacba4027a..1fe07d814020 100644
 +++ b/android/android-emu/android/emulation/MultiDisplay.cpp
 @@ -405,10 +405,19 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
                  pos_x = iter.second.pos_x;
-                 pos_y = totalH - iter.second.height - iter.second.pos_y;
+                 pos_y = iter.second.pos_y;
                  w = iter.second.width;
                  h = iter.second.height;
                  if ((*x - pos_x) < w && (*y - pos_y) < h) {
@@ -46,13 +46,13 @@ index 8cacba4027a..1fe07d814020 100644
 +                primary->second.width = primary->second.originalWidth;
 +                primary->second.height = primary->second.originalHeight;
 +                primary->second.pos_x = 0;
-+                primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
++                primary->second.pos_y = 0;
 +                primary->second.rotation = current_rotation;
 +                thorDisplay->second.width = thorPreviewWidth;
 +                thorDisplay->second.height = thorPreviewHeight;
 +                thorDisplay->second.pos_x =
 +                        (primary->second.originalWidth - thorPreviewWidth) / 2;
-+                thorDisplay->second.pos_y = 0;
++                thorDisplay->second.pos_y = primary->second.height + thorPreviewGap;
 +                thorDisplay->second.rotation = current_rotation;
 +            }
 +        }
@@ -80,13 +80,13 @@ index 8cacba4027a..1fe07d814020 100644
 +            primary->second.width = primary->second.originalWidth;
 +            primary->second.height = primary->second.originalHeight;
 +            primary->second.pos_x = 0;
-+            primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
++            primary->second.pos_y = 0;
 +            primary->second.rotation = mOrientation;
 +            thorDisplay->second.width = thorPreviewWidth;
 +            thorDisplay->second.height = thorPreviewHeight;
 +            thorDisplay->second.pos_x =
 +                    (primary->second.originalWidth - thorPreviewWidth) / 2;
-+            thorDisplay->second.pos_y = 0;
++            thorDisplay->second.pos_y = primary->second.height + thorPreviewGap;
 +            thorDisplay->second.rotation = mOrientation;
 +            return;
 +        }
@@ -118,13 +118,13 @@ index 8cacba4027a..1fe07d814020 100644
 +        primary->second.width = primary->second.originalWidth;
 +        primary->second.height = primary->second.originalHeight;
 +        primary->second.pos_x = 0;
-+        primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
++        primary->second.pos_y = 0;
 +        primary->second.rotation = rotation;
 +        thorDisplay->second.width = thorPreviewWidth;
 +        thorDisplay->second.height = thorPreviewHeight;
 +        thorDisplay->second.pos_x =
 +                (primary->second.originalWidth - thorPreviewWidth) / 2;
-+        thorDisplay->second.pos_y = 0;
++        thorDisplay->second.pos_y = primary->second.height + thorPreviewGap;
 +        thorDisplay->second.rotation = rotation;
 +        return;
 +    }

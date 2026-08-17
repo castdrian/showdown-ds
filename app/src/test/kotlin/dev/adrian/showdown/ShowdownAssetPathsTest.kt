@@ -40,7 +40,7 @@ class ShowdownAssetPathsTest {
             ),
             candidates.takeLast(10)
         )
-        assertTrue(candidates.take(candidates.size - 10).all { it.startsWith("https://www.pkparaiso.com/") })
+        assertTrue(candidates.take(candidates.size - 10).all { it.startsWith("https://") })
     }
 
     @Test
@@ -59,7 +59,7 @@ class ShowdownAssetPathsTest {
             ),
             candidates.takeLast(6)
         )
-        assertTrue(candidates.dropLast(6).all { it.startsWith("https://www.pkparaiso.com/") })
+        assertTrue(candidates.dropLast(6).all { it.startsWith("https://") })
     }
 
     @Test
@@ -78,6 +78,22 @@ class ShowdownAssetPathsTest {
         val hdCandidate = candidates.first { it.endsWith("/rotom-wash.gif") }
         assertTrue(hdCandidate.startsWith("https://www.pkparaiso.com/"))
         assertTrue(candidates.indexOf(hdCandidate) < candidates.indexOf("sprites/dex/rotom-wash.png"))
+    }
+
+    @Test
+    fun probesCreditPermittedAnimatedCommunityArtworkBeforePixelFallbacks() {
+        val frontCandidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forOpponent("Skeledirge", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val backCandidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forPlayer("Sneasler", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val frontCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/FRONT/SKELEDIRGE.gif"
+        val backCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/BACK/SNEASLER.gif"
+        assertTrue(frontCandidates.contains(frontCandidate))
+        assertTrue(backCandidates.contains(backCandidate))
+        assertTrue(frontCandidates.indexOf(frontCandidate) < frontCandidates.indexOf("sprites/xyani/skeledirge.gif"))
+        assertTrue(backCandidates.indexOf(backCandidate) < backCandidates.indexOf("sprites/xyani-back/sneasler.gif"))
     }
 
     @Test
@@ -154,13 +170,12 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun probesSeparatePkParaisoHdBackRootsBeforeLegacyBackArtwork() {
+    fun doesNotTreatLegacyBackRootsAsHdArtwork() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forPlayer("Uxie", BattleSession.SpriteStyle.MODERN_3D)
         )
-        val hdCandidate = candidates.first { it.endsWith("/uxie.gif") && it.contains("animados-espalda") }
-        assertTrue(hdCandidate.startsWith("https://www.pkparaiso.com/"))
-        assertTrue(candidates.indexOf(hdCandidate) < candidates.indexOf("sprites/xyani-back/uxie.gif"))
+        assertTrue(candidates.none { it.contains("animados-espalda") })
+        assertTrue(candidates.indexOf("sprites/xyani-back/uxie.gif") < candidates.indexOf("sprites/gen5ani-back/uxie.gif"))
     }
 
     @Test
