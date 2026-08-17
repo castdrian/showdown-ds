@@ -42,7 +42,7 @@ index 8cacba4027a..1fe07d814020 100644
 +                thorDisplay != mMultiDisplay.end()) {
 +                constexpr uint32_t thorPreviewWidth = 1086;
 +                constexpr uint32_t thorPreviewHeight = 946;
-+                constexpr uint32_t thorPreviewGap = 16;
++                constexpr uint32_t thorPreviewGap = 32;
 +                primary->second.width = primary->second.originalWidth;
 +                primary->second.height = primary->second.originalHeight;
 +                primary->second.pos_x = 0;
@@ -64,7 +64,7 @@ index 8cacba4027a..1fe07d814020 100644
 +        auto thorDisplay = mMultiDisplay.end();
 +        constexpr uint32_t thorPreviewWidth = 1086;
 +        constexpr uint32_t thorPreviewHeight = 946;
-+        constexpr uint32_t thorPreviewGap = 16;
++        constexpr uint32_t thorPreviewGap = 32;
 +        for (auto it = mMultiDisplay.begin(); it != mMultiDisplay.end(); ++it) {
 +            if (it->first != 0 &&
 +                it->second.originalWidth == 1240 &&
@@ -114,7 +114,7 @@ index 8cacba4027a..1fe07d814020 100644
 +        thorDisplay != mMultiDisplay.end()) {
 +        constexpr uint32_t thorPreviewWidth = 1086;
 +        constexpr uint32_t thorPreviewHeight = 946;
-+        constexpr uint32_t thorPreviewGap = 16;
++        constexpr uint32_t thorPreviewGap = 32;
 +        primary->second.width = primary->second.originalWidth;
 +        primary->second.height = primary->second.originalHeight;
 +        primary->second.pos_x = 0;

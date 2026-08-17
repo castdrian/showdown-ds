@@ -1754,7 +1754,11 @@ class CommandDeckView(
 
     private fun requestTeamSprite(species: String) {
         if (teamSprites.containsKey(species) || !requestedTeamSprites.add(species)) return
-        spriteCache.requestDexSprite(species) { sprite ->
+        spriteCache.requestPlaceholder(BattleSpriteSide.OPPONENT) { placeholder ->
+            if (!teamSprites.containsKey(species) && placeholder != null) teamSprites[species] = placeholder
+            postInvalidateOnAnimation()
+        }
+        spriteCache.requestPokemon(BattleSpriteRequest.forOpponent(species, session.spriteStyle)) { sprite ->
             if (sprite != null) teamSprites[species] = sprite
             postInvalidateOnAnimation()
         }

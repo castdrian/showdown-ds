@@ -2,6 +2,7 @@ package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BattleSpriteRequestTest {
@@ -42,13 +43,15 @@ class BattleSpriteRequestTest {
         val player = BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
         val opponent = BattleSpriteRequest.forOpponent("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
 
+        val playerCandidates = ShowdownAssetPaths.battleSpriteCandidates(player)
         assertEquals(
             listOf(
                 "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
                 "sprites/ani-back/substitute.gif"
             ),
-            ShowdownAssetPaths.battleSpriteCandidates(player)
+            playerCandidates.takeLast(2)
         )
+        assertTrue(playerCandidates.dropLast(2).all { it.startsWith("https://") })
         assertEquals(
             "sprites/xyani/ironvaliant.gif",
             ShowdownAssetPaths.battleSprite(opponent)

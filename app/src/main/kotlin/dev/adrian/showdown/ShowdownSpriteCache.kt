@@ -26,6 +26,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.min
+import org.json.JSONObject
 
 class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
@@ -113,11 +114,20 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(ShowdownAssetPaths.battleSpriteCandidates(request), receiver)
+        requestResolutionPlan(
+            request = request,
+            plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request),
+            receiver = receiver
+        )
     }
 
     fun requestDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
-        requestSprite(ShowdownAssetPaths.dexSprite(species), receiver)
+        val request = BattleSpriteRequest.forOpponent(species, BattleSession.SpriteStyle.MODERN_3D)
+        requestResolutionPlan(
+            request = request,
+            plan = ShowdownAssetPaths.dexSpriteResolutionPlan(species),
+            receiver = receiver
+        )
     }
 
     fun requestPlaceholder(side: BattleSpriteSide, receiver: (SpriteAsset?) -> Unit) {
@@ -201,6 +211,61 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             }
         }
         request(0)
+    }
+
+    private fun requestResolutionPlan(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        if (!plan.usesModernAnimatedFallback) {
+            requestSpriteCandidates(plan.allCandidates, receiver)
+            return
+        }
+        requestSpriteCandidates(plan.preferredRemoteCandidates) { asset ->
+            if (asset != null) {
+                receiver(asset)
+            } else {
+                requestPokeApiModernSprite(request) { fallback ->
+                    if (fallback != null) receiver(fallback)
+                    else requestSpriteCandidates(plan.fallbackCandidates, receiver)
+                }
+            }
+        }
+    }
+
+    private fun requestPokeApiModernSprite(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        fun requestLookup(index: Int) {
+            val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
+            if (index >= names.size) {
+                receiver(null)
+                return
+            }
+            val lookupUrl = "https://pokeapi.co/api/v2/pokemon/${names[index]}"
+            requestBytes(lookupUrl) { file ->
+                val number = file?.let { cachedFile ->
+                    runCatching { JSONObject(cachedFile.readText()).optInt("id", 0) }
+                        .getOrNull()
+                        ?.takeIf { it > 0 }
+                }
+                if (number == null) {
+                    requestLookup(index + 1)
+                    return@requestBytes
+                }
+                requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
+                    if (animatedAsset != null) {
+                        receiver(animatedAsset)
+                    } else if (request.side == BattleSpriteSide.OPPONENT) {
+                        requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(number)) { highResolutionAsset ->
+                            if (highResolutionAsset != null) receiver(highResolutionAsset) else requestLookup(index + 1)
+                        }
+                    } else {
+                        requestLookup(index + 1)
+                    }
+                }
+            }
+        }
+        requestLookup(0)
     }
 
     private fun requestBytes(path: String, receiver: (File?) -> Unit) {
@@ -300,7 +365,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private companion object {
-        const val MAX_FILE_BYTES = 8 * 1024 * 1024
-        const val MAX_DISK_BYTES = 96L * 1024L * 1024L
+        const val MAX_FILE_BYTES = 64 * 1024 * 1024
+        const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }
 }
