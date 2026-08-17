@@ -18,6 +18,7 @@ window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
+renderer_feature_args=(-feature -Vulkan)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
 verify_thor_layout_patch() {
@@ -28,8 +29,8 @@ verify_thor_layout_patch() {
     local lower_height_count
     local lower_input_x_scale_count
     local lower_input_y_scale_count
-    upper_y_count="$(rg -c 'primary->second\.pos_y = thorPreviewHeight;' "$overlay_patch_file" 2>/dev/null || true)"
-    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
+    upper_y_count="$(rg -c 'primary->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
+    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = primary->second\.originalHeight;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_x_count="$(rg -c '\(primary->second\.originalWidth - thorPreviewWidth\) / 2;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_width_count="$(rg -c 'thorDisplay->second\.width = thorPreviewWidth;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_height_count="$(rg -c 'thorDisplay->second\.height = thorPreviewHeight;' "$overlay_patch_file" 2>/dev/null || true)"
@@ -243,6 +244,7 @@ stop_emulator() {
     -vsync-rate "$vsync_rate" \
     "${boot_animation_args[@]}" \
     "${audio_args[@]}" \
+    "${renderer_feature_args[@]}" \
     "${multidisplay_args[@]}" \
     "$@" \
     "${snapshot_args[@]}" &
