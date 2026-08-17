@@ -33,7 +33,7 @@ object ShowdownChangelog {
                 "Battle messages now appear one readable event at a time instead of building a wall of text, and the feed freezes cleanly when the app leaves the foreground.",
                 "Effectiveness battle audio now waits for the generic damage sample to finish, keeping the hit and result cues audibly sequential.",
                 "Battle message separators now let the current event finish before the next queued event appears.",
-                "Modern battles now fall back to static Showdown front artwork for newer Pokémon without animated sprite files.",
+                "Modern battles now prefer high-resolution artwork before regular animated Showdown sprites when an HD animation is unavailable.",
                 "Damage, effectiveness, and stat audio now starts on Showdown's matching visual event and is cancelled when animation playback pauses or resets.",
                 "Compact multi-battle HP cards now keep a readable Poké Ball strip on smaller Thor display surfaces, even before party details arrive from the server.",
                 "Saved Random Doubles Battle selections now survive a server format refresh instead of silently falling back to singles.",

@@ -252,15 +252,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     requestLookup(index + 1)
                     return@requestBytes
                 }
-                requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
-                    if (animatedAsset != null) {
-                        receiver(animatedAsset)
-                    } else if (request.side == BattleSpriteSide.OPPONENT) {
-                        requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(number)) { highResolutionAsset ->
-                            if (highResolutionAsset != null) receiver(highResolutionAsset) else requestLookup(index + 1)
+                if (request.side == BattleSpriteSide.OPPONENT) {
+                    requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(number)) { highResolutionAsset ->
+                        if (highResolutionAsset != null) {
+                            receiver(highResolutionAsset)
+                        } else {
+                            requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
+                                if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
+                            }
                         }
-                    } else {
-                        requestLookup(index + 1)
+                    }
+                } else {
+                    requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
+                        if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
                     }
                 }
             }
