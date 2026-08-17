@@ -12,6 +12,7 @@ object ShowdownChangelog {
             listOf(
                 "Move health and result audio events now survive renderer handoffs, while cues only play when Showdown renders the matching animation.",
                 "AYN Thor display-pose updates now preserve the upper-screen-over-lower-screen physical order after the emulator reconfigures its displays.",
+                "AYN Thor's lower preview now starts after the complete upper panel and its gap, so the two screens never overlap.",
                 "Lower-screen touch regions now refresh immediately when panels or battle decisions change, so fast move, switch, target, and menu taps are not dropped.",
                 "Battle protocol fallbacks now surface ability, item, stat-change, and status announcements in readable Showdown-style wording.",
                 "Team sets now use four separate searchable move slots, matching Showdown's editor while preserving packed and text exports.",

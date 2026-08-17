@@ -31,7 +31,7 @@ verify_thor_layout_patch() {
     local lower_input_y_scale_count
     local lower_input_y_origin_count
     upper_y_count="$(rg -c 'primary->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
-    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = thorPreviewHeight \+ thorPreviewGap;' "$overlay_patch_file" 2>/dev/null || true)"
+    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = primary->second\.height \+ thorPreviewGap;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_x_count="$(rg -c '\(primary->second\.originalWidth - thorPreviewWidth\) / 2;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_width_count="$(rg -c 'thorDisplay->second\.width = thorPreviewWidth;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_height_count="$(rg -c 'thorDisplay->second\.height = thorPreviewHeight;' "$overlay_patch_file" 2>/dev/null || true)"

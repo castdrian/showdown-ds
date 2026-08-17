@@ -48,7 +48,7 @@ verify_patched_source() {
     local lower_y_count
     lower_input_y_origin_count="$(rg -c 'pos_y = iter\.second\.pos_y;' "$multidisplay_source" 2>/dev/null || true)"
     upper_y_count="$(rg -c 'primary->second\.pos_y = 0;' "$multidisplay_source" 2>/dev/null || true)"
-    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = thorPreviewHeight \+ thorPreviewGap;' "$multidisplay_source" 2>/dev/null || true)"
+    lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = primary->second\.height \+ thorPreviewGap;' "$multidisplay_source" 2>/dev/null || true)"
     if [[ ! -f "$multidisplay_source" || "$lower_input_y_origin_count" -lt "1" || "$upper_y_count" != "3" || "$lower_y_count" != "3" ]]; then
         printf '%s\n' "The checked-out AEMU source does not contain the complete AYN Thor patch."
         exit 1

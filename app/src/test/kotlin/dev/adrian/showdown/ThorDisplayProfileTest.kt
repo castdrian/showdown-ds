@@ -175,15 +175,15 @@ class ThorDisplayProfileTest {
                 "thorDisplay->second.width" to "thorPreviewWidth",
                 "thorDisplay->second.height" to "thorPreviewHeight",
                 "thorDisplay->second.pos_x" to "(primary->second.originalWidth - thorPreviewWidth) / 2",
-                "thorDisplay->second.pos_y" to "thorPreviewHeight + thorPreviewGap"
+                "thorDisplay->second.pos_y" to "primary->second.height + thorPreviewGap"
             ),
             layoutAssignments
         )
         assertEquals("0", layoutAssignments.getValue("primary->second.pos_y"))
-        assertEquals("thorPreviewHeight + thorPreviewGap", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertEquals("primary->second.height + thorPreviewGap", layoutAssignments.getValue("thorDisplay->second.pos_y"))
         assertEquals(3, Regex("primary->second\\.pos_y = 0;").findAll(overlayPatch).count())
         assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 32;").findAll(overlayPatch).count())
-        assertEquals(3, Regex("thorDisplay->second\\.pos_y = thorPreviewHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("thorDisplay->second\\.pos_y = primary->second\\.height \\+ thorPreviewGap;").findAll(overlayPatch).count())
         val previewGap = Regex("constexpr uint32_t thorPreviewGap = (\\d+);")
             .find(overlayPatch)
             ?.groupValues
