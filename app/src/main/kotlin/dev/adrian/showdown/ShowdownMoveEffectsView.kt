@@ -262,7 +262,6 @@ class ShowdownMoveEffectsView(
                                 if (!move) return false;
                                 var category = String(move.category || '').toLowerCase();
                                 if (category === 'status') return false;
-                                if (category === 'physical' || category === 'special') return true;
                                 var basePower = Number(move.basePower);
                                 var hasFixedDamage = move.damage !== undefined && move.damage !== null && move.damage !== 0 && move.damage !== false;
                                 var hasDamageCallback = typeof move.damageCallback === 'function' || move.basePowerCallback === true;
@@ -270,12 +269,14 @@ class ShowdownMoveEffectsView(
                                 if (dexMove) {
                                     var dexCategory = String(dexMove.category || '').toLowerCase();
                                     if (dexCategory === 'status') return false;
-                                    if (dexCategory === 'physical' || dexCategory === 'special') return true;
+                                    if (dexCategory === 'physical' || dexCategory === 'special') category = dexCategory;
                                     basePower = Number(dexMove.basePower);
                                     hasFixedDamage = hasFixedDamage || (dexMove.damage !== undefined && dexMove.damage !== null && dexMove.damage !== 0 && dexMove.damage !== false);
                                     hasDamageCallback = hasDamageCallback || typeof dexMove.damageCallback === 'function' || dexMove.basePowerCallback === true;
                                 }
-                                return (isFinite(basePower) && basePower > 0) || hasFixedDamage || hasDamageCallback;
+                                return hasDamageCallback ||
+                                    ((category === 'physical' || category === 'special') &&
+                                        ((isFinite(basePower) && basePower > 0) || hasFixedDamage));
                             }
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
