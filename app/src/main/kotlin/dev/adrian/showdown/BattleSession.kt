@@ -250,6 +250,13 @@ class BattleSession {
         val sources: MoveResolutionSources
     )
 
+    private enum class ActivityOrigin {
+        SYSTEM,
+        PROTOCOL,
+        NATIVE,
+        CHAT
+    }
+
     private enum class MoveVariantKind {
         Z_POWER,
         DYNAMAX
@@ -284,6 +291,7 @@ class BattleSession {
         addAll(battleLog)
         addAll(chatMessages)
     }
+    private val activityOrigins = MutableList(activityMessages.size) { ActivityOrigin.SYSTEM }
     private val moves = mutableListOf(
         MoveOption("Fake Out", "NORMAL", 10, 10, "Physical", "40", "100"),
         MoveOption("Flare Blitz", "FIRE", 15, 15, "Physical", "120", "100"),
@@ -694,7 +702,7 @@ class BattleSession {
         showdownBattleLogEntries += entries
         while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
         if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
-        entries.forEach(::appendActivity)
+        entries.forEach(::appendNativeActivity)
         latestBattleEvent = entries.last()
         latestBattleEventAtNanos = System.nanoTime()
         battleFeedVisible = true
@@ -719,13 +727,13 @@ class BattleSession {
                 ?.let(showdownBattleLogEntries::removeAt)
             activityMessages.indexOfLast { it == entry }
                 .takeIf { it >= 0 }
-                ?.let(activityMessages::removeAt)
+                ?.let(::removeActivityAt)
         }
         if (entries.isNotEmpty()) {
             showdownBattleMarkupEntries[normalizedKey] = entries
             showdownBattleLogEntries += entries
             while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
-            entries.forEach(::appendActivity)
+            entries.forEach(::appendNativeActivity)
             latestBattleEvent = entries.last()
             latestBattleEventAtNanos = System.nanoTime()
         } else {
@@ -1037,6 +1045,9 @@ class BattleSession {
         activityMessages.clear()
         activityMessages += battleLog
         activityMessages += chatMessages
+        activityOrigins.clear()
+        repeat(battleLog.size) { activityOrigins += ActivityOrigin.SYSTEM }
+        repeat(chatMessages.size) { activityOrigins += ActivityOrigin.CHAT }
         hasBattleProtocolTranscript = false
         liveBattleActive = false
         battleFinished = false
@@ -1172,7 +1183,7 @@ class BattleSession {
 
     fun selectPanel(nextPanel: Panel) {
         panel = if (requiresTeamDecision()) Panel.TEAM else nextPanel
-        focusedMessage = 0
+        focusedMessage = if (panel == Panel.ACTIVITY) activityMessages.lastIndex.coerceAtLeast(0) else 0
         if (panel == Panel.MENU) focusedMenuItem = 0
         if (!liveBattleActive && !battleFinished) {
             if (panel == Panel.MOVES || panel == Panel.TEAM) status = LOBBY_STATUS
@@ -1308,7 +1319,7 @@ class BattleSession {
         val displayMessage = "[You] $value"
         chatMessages += displayMessage
         if (chatMessages.size > 32) chatMessages.removeAt(0)
-        appendActivity(displayMessage)
+        appendActivity(displayMessage, ActivityOrigin.CHAT)
         status = "Message sent."
         chatListeners.toList().forEach { it.onChat(value) }
         notifyListeners()
@@ -1317,7 +1328,7 @@ class BattleSession {
     fun removeLocalChat(message: String) {
         val displayMessage = "[You] ${message.trim()}"
         chatMessages.indexOfLast { it == displayMessage }.takeIf { it >= 0 }?.let(chatMessages::removeAt)
-        activityMessages.indexOfLast { it == displayMessage }.takeIf { it >= 0 }?.let(activityMessages::removeAt)
+        activityMessages.indexOfLast { it == displayMessage }.takeIf { it >= 0 }?.let(::removeActivityAt)
         notifyListeners()
     }
 
@@ -1629,6 +1640,8 @@ class BattleSession {
         chatMessages.clear()
         activityMessages.clear()
         activityMessages += battleLog
+        activityOrigins.clear()
+        repeat(battleLog.size) { activityOrigins += ActivityOrigin.PROTOCOL }
         latestBattleEvent = "Battle starting"
         latestBattleEventAtNanos = System.nanoTime()
         battleFeedVisible = true
@@ -3125,7 +3138,7 @@ class BattleSession {
         val message = "[${parsed.first}] ${parsed.second}"
         chatMessages += message
         if (chatMessages.size > 32) chatMessages.removeAt(0)
-        appendActivity(message)
+        appendActivity(message, ActivityOrigin.CHAT)
     }
 
     private fun applyCant(fields: List<String>) {
@@ -3920,16 +3933,46 @@ class BattleSession {
         if (battleLog.size > 32) battleLog.removeAt(0)
         battleLogGeneration += 1L
         nativeBattleLogPending = true
-        appendActivity(entry)
+        appendActivity(entry, ActivityOrigin.PROTOCOL)
         protocolEventCollector?.add(entry) ?: run {
             latestBattleEvent = entry
             latestBattleEventAtNanos = System.nanoTime()
         }
     }
 
-    private fun appendActivity(entry: String) {
+    private fun appendActivity(entry: String, origin: ActivityOrigin = ActivityOrigin.PROTOCOL) {
+        if (activityMessages.lastOrNull()?.let { BattleFeedMessageIdentity.matches(it, entry) } == true) return
+        val followsTail = activityMessages.isEmpty() || focusedMessage >= activityMessages.lastIndex
         activityMessages += entry
-        while (activityMessages.size > BATTLE_HISTORY_LIMIT) activityMessages.removeAt(0)
+        activityOrigins += origin
+        while (activityMessages.size > BATTLE_HISTORY_LIMIT) {
+            activityMessages.removeAt(0)
+            activityOrigins.removeAt(0)
+            if (!followsTail) focusedMessage = (focusedMessage - 1).coerceAtLeast(0)
+        }
+        if (followsTail) focusedMessage = activityMessages.lastIndex.coerceAtLeast(0)
+    }
+
+    private fun appendNativeActivity(entry: String) {
+        val fallbackIndex = (activityMessages.lastIndex downTo 0).firstOrNull { index ->
+            activityOrigins[index] == ActivityOrigin.PROTOCOL && nativeMatchesProtocolFallback(activityMessages[index], entry)
+        }
+        fallbackIndex?.let(::removeActivityAt)
+        appendActivity(entry, ActivityOrigin.NATIVE)
+    }
+
+    private fun nativeMatchesProtocolFallback(protocolEntry: String, nativeEntry: String): Boolean {
+        if (BattleFeedMessageIdentity.matches(protocolEntry, nativeEntry)) return true
+        val withoutOpponentPrefix = nativeEntry.replace(Regex("(?i)^the opposing\\s+"), "")
+        return BattleFeedMessageIdentity.matches(protocolEntry, withoutOpponentPrefix)
+    }
+
+    private fun removeActivityAt(index: Int) {
+        if (index !in activityMessages.indices) return
+        activityMessages.removeAt(index)
+        activityOrigins.removeAt(index)
+        if (focusedMessage > index) focusedMessage -= 1
+        else if (focusedMessage == index) focusedMessage = focusedMessage.coerceAtMost(activityMessages.lastIndex).coerceAtLeast(0)
     }
 
     private fun appendMarkup(value: String) {
@@ -3942,7 +3985,7 @@ class BattleSession {
         if (previous == message) return
         previous?.let { oldMessage ->
             battleLog.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(battleLog::removeAt)
-            activityMessages.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(activityMessages::removeAt)
+            activityMessages.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(::removeActivityAt)
         }
         appendLog(message)
     }

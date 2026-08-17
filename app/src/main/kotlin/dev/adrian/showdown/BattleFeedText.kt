@@ -1,6 +1,11 @@
 package dev.adrian.showdown
 
 object BattleFeedText {
+    data class ActivityLine(
+        val messageIndex: Int,
+        val text: String
+    )
+
     fun window(entries: List<List<String>>, maxLines: Int, scrollLines: Int): List<String> {
         if (entries.isEmpty() || maxLines <= 0) return emptyList()
         val totalLines = entries.sumOf(List<String>::size)
@@ -37,6 +42,30 @@ object BattleFeedText {
 
     fun wrapForBattleFeed(value: String, maxWidth: Float, measure: (String) -> Float): List<String> =
         wrap(value, maxWidth, Int.MAX_VALUE, measure)
+
+    fun activityWindow(
+        messages: List<String>,
+        focusedMessage: Int,
+        maxLines: Int,
+        maxWidth: Float,
+        measure: (String) -> Float
+    ): List<ActivityLine> {
+        if (messages.isEmpty() || maxLines <= 0 || maxWidth <= 0f) return emptyList()
+        val entries = messages.mapIndexed { index, message ->
+            wrapForBattleFeed(message, maxWidth, measure)
+                .ifEmpty { listOf("") }
+                .map { ActivityLine(index, it) }
+        }
+        val flattened = entries.flatten()
+        if (flattened.isEmpty()) return emptyList()
+        val focusedIndex = focusedMessage.coerceIn(0, messages.lastIndex)
+        val focusedLine = entries
+            .take(focusedIndex)
+            .sumOf { it.size } + entries[focusedIndex].lastIndex
+        val maxStart = (flattened.size - maxLines).coerceAtLeast(0)
+        val start = (focusedLine - maxLines + 1).coerceIn(0, maxStart)
+        return flattened.subList(start, (start + maxLines).coerceAtMost(flattened.size))
+    }
 
     fun wrap(value: String, maxWidth: Float, maxLines: Int, measure: (String) -> Float): List<String> {
         if (maxWidth <= 0f || maxLines <= 0) return emptyList()

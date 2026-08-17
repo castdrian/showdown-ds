@@ -1709,20 +1709,30 @@ class CommandDeckView(
         paint.textSize = readableTextSize(36f, scale, 31f)
         paint.color = CYAN
         canvas.drawText("Activity", left + 28f * scale, top + 45f * scale, paint)
-        var rowY = top + 94f * scale
-        val start = maxOf(0, minOf(messages.size - 4, session.focusedMessage - 3))
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = readableTextSize(34f, scale, 29f)
-        for (index in start until messages.size) {
-            if (rowY >= bottom - 24f * scale) break
-            val focused = index == session.focusedMessage
+        val textLeft = left + 28f * scale
+        val textWidth = width - left * 2f - 56f * scale
+        val rowTop = top + 94f * scale
+        val rowBottom = bottom - 20f * scale
+        val rowHeight = 72f * scale
+        val maxLines = ((rowBottom - rowTop) / rowHeight).toInt().coerceAtLeast(1)
+        val lines = BattleFeedText.activityWindow(
+            messages,
+            session.focusedMessage,
+            maxLines,
+            textWidth
+        ) { value -> paint.measureText(value) }
+        var rowY = rowTop
+        lines.forEach { line ->
+            val focused = line.messageIndex == session.focusedMessage
             if (focused) {
                 paint.color = Color.rgb(20, 119, 126)
                 canvas.drawRoundRect(RectF(left + 14f * scale, rowY - 29f * scale, width - left - 14f * scale, rowY + 14f * scale), 10f * scale, 10f * scale, paint)
             }
-            paint.color = if (focused || index % 2 == 0) PAPER else MUTED
-            canvas.drawText(fitTextToWidth(messages[index], width - left * 2f - 56f * scale), left + 28f * scale, rowY, paint)
-            rowY += 72f * scale
+            paint.color = if (focused || line.messageIndex % 2 == 0) PAPER else MUTED
+            canvas.drawText(line.text, textLeft, rowY, paint)
+            rowY += rowHeight
         }
         activityChatBounds = RectF(left, height - buttonHeight - 28f * scale, width - left, height - 28f * scale)
         paint.shader = LinearGradient(

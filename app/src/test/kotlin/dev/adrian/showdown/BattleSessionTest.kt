@@ -73,6 +73,22 @@ class BattleSessionTest {
     }
 
     @Test
+    fun activityPanelStartsAtTheLatestBattleEntry() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee",
+                "|-damage|p2a: Eevee|50/100"
+            )
+        )
+
+        session.selectPanel(BattleSession.Panel.ACTIVITY)
+
+        assertEquals(session.activityMessages().lastIndex, session.focusedMessage)
+    }
+
+    @Test
     fun upperBattleFeedRemovesAdjacentDuplicateMessages() {
         val session = BattleSession()
 
@@ -82,12 +98,33 @@ class BattleSessionTest {
     }
 
     @Test
-    fun activityKeepsConsecutiveIdenticalBattleMessages() {
+    fun activityRemovesConsecutiveIdenticalBattleMessages() {
         val session = BattleSession()
         session.appendShowdownBattleLog("<div>It had no effect.</div><div>It had no effect.</div>")
 
+        assertEquals("It had no effect.", session.activityMessages().last())
+    }
+
+    @Test
+    fun nativeActivityReplacesProtocolFallbacksWithoutRepeatingTheAction() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee",
+                "|-boost|p2a: Eevee|atk|-1"
+            )
+        )
+
+        session.appendShowdownBattleLog(
+            "Pikachu used Thunderbolt!<br />The opposing Eevee's Attack fell!"
+        )
+
         assertEquals(
-            listOf("It had no effect.", "It had no effect."),
+            listOf(
+                "Pikachu used Thunderbolt!",
+                "The opposing Eevee's Attack fell!"
+            ),
             session.activityMessages().takeLast(2)
         )
     }
@@ -1019,8 +1056,9 @@ class BattleSessionTest {
         session.moveFocus(1, 1)
         assertEquals(3, session.focusedTeam)
         session.selectPanel(BattleSession.Panel.ACTIVITY)
+        assertEquals(session.activityMessages().lastIndex, session.focusedMessage)
         session.moveFocus(0, 1)
-        assertEquals(1, session.focusedMessage)
+        assertEquals(session.activityMessages().lastIndex, session.focusedMessage)
         session.selectPanel(BattleSession.Panel.MENU)
         session.moveFocus(0, 1)
 

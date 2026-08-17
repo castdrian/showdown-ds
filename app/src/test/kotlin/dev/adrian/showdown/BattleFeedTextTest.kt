@@ -132,4 +132,27 @@ class BattleFeedTextTest {
         assertEquals(listOf("😀😀", "😀"), lines)
         assertEquals("😀😀😀", lines.joinToString(""))
     }
+
+    @Test
+    fun activityWindowWrapsEntriesAndFollowsTheFocusedMessage() {
+        val lines = BattleFeedText.activityWindow(
+            listOf(
+                "Rule: HP is shown in percentage.",
+                "Pikachu used Thunderbolt!"
+            ),
+            focusedMessage = 1,
+            maxLines = 3,
+            maxWidth = 18f
+        ) { it.length.toFloat() }
+
+        assertEquals(
+            listOf(
+                BattleFeedText.ActivityLine(0, "in percentage."),
+                BattleFeedText.ActivityLine(1, "Pikachu used"),
+                BattleFeedText.ActivityLine(1, "Thunderbolt!"),
+            ),
+            lines
+        )
+        assertTrue(lines.none { it.text.contains('…') })
+    }
 }
