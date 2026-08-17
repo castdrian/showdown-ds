@@ -340,7 +340,7 @@ class ShowdownMoveEffectsView(
                             }
                             function isDirectMoveDamage(source) {
                                 var normalized = String(source || '').trim().toLowerCase();
-                                return !normalized;
+                                return !normalized || /^move\s*:/i.test(normalized);
                             }
                             function keepsDirectMoveDamageWindow(args) {
                                 return args[0] === '-crit' || args[0] === '-supereffective' || args[0] === '-resisted';
