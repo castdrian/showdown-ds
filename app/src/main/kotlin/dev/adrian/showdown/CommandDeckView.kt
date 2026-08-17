@@ -102,6 +102,7 @@ class CommandDeckView(
         if (isTeamDecision() != lastRenderedTeamDecision || session.decisionKind != lastRenderedDecisionKind) {
             resetDecisionTransitionState()
         }
+        refreshTouchBoundsForCurrentState()
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pressedMoveIndex = moveBounds.indexOfFirst { it?.contains(x, y) == true }.takeIf { it >= 0 }
@@ -231,6 +232,141 @@ class CommandDeckView(
         clearInteractiveBounds()
         pressedMoveIndex = null
         releasedMoveIndex = null
+    }
+
+    private fun refreshTouchBoundsForCurrentState() {
+        if (width <= 0 || height <= 0) return
+        val widthPixels = width.toFloat()
+        val heightPixels = height.toFloat()
+        val scale = minOf(
+            widthPixels / ThorDisplayProfile.LOWER_WIDTH_PIXELS,
+            heightPixels / ThorDisplayProfile.LOWER_HEIGHT_PIXELS
+        )
+        val tabTop = 108f * scale
+        val tabGap = 12f * scale
+        val tabLeft = 34f * scale
+        val tabWidth = (widthPixels - tabLeft * 2f - tabGap * 3f) / 4f
+        val tabHeight = 56f * scale
+        TABS.forEachIndexed { index, _ ->
+            val left = tabLeft + index * (tabWidth + tabGap)
+            tabBounds[index] = RectF(left, tabTop, left + tabWidth, tabTop + tabHeight)
+        }
+        when {
+            isTeamDecision() -> layoutTeamTouchBounds(widthPixels, heightPixels, scale, true)
+            session.panel == BattleSession.Panel.TEAM -> layoutTeamTouchBounds(widthPixels, heightPixels, scale, false)
+            session.panel == BattleSession.Panel.MOVES -> layoutMoveTouchBounds(widthPixels, heightPixels, scale)
+            session.panel == BattleSession.Panel.ACTIVITY -> layoutActivityTouchBounds(widthPixels, heightPixels, scale)
+            session.panel == BattleSession.Panel.MENU -> layoutMenuTouchBounds(widthPixels, heightPixels, scale)
+        }
+    }
+
+    private fun layoutTeamTouchBounds(width: Float, height: Float, scale: Float, decisionLayout: Boolean) {
+        teamBounds.fill(null)
+        if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished()) return
+        val visibleTeam = session.team().take(teamBounds.size)
+        visibleTeam.forEachIndexed { index, _ ->
+            val layoutBounds = if (decisionLayout) {
+                SwitchTeamLayout.decisionBounds(width, height, scale, index, visibleTeam.size)
+            } else {
+                SwitchTeamLayout.bounds(width, height, scale, index, visibleTeam.size)
+            }
+            teamBounds[index] = RectF(layoutBounds.left, layoutBounds.top, layoutBounds.right, layoutBounds.bottom)
+        }
+    }
+
+    private fun layoutMoveTouchBounds(width: Float, height: Float, scale: Float) {
+        moveBounds.fill(null)
+        gimmickBounds.fill(null)
+        targetBounds.fill(null)
+        shiftBounds = null
+        testFightBounds = null
+        if (session.isSpectatorMode() && !session.isBattleFinished()) return
+        if (!session.isLiveBattleActive() && !session.isBattleFinished()) return
+        if (session.isBattleFinished() || session.moves().isEmpty()) return
+        val panelTop = 184f * scale
+        val left = 44f * scale
+        val consoleRight = 438f * scale
+        val moveLeft = 470f * scale
+        val moveRight = width - 38f * scale
+        val gap = 12f * scale
+        val cardHeight = minOf(158f * scale, (height - panelTop - 188f * scale - gap * 3f) / 4f)
+        repeat(4) { index ->
+            val top = panelTop + index * (cardHeight + gap)
+            moveBounds[index] = RectF(moveLeft, top, moveRight, top + cardHeight)
+        }
+        layoutBattleConsoleTouchBounds(RectF(left, panelTop, consoleRight, panelTop + cardHeight * 4f + gap * 3f), scale)
+    }
+
+    private fun layoutBattleConsoleTouchBounds(bounds: RectF, scale: Float) {
+        val inset = 18f * scale
+        val content = RectF(bounds.left + inset, bounds.top + inset, bounds.right - inset, bounds.bottom - inset)
+        var contentTop = content.top
+        if (session.canShift()) {
+            shiftBounds = RectF(content.left, contentTop, content.right, contentTop + 66f * scale)
+            contentTop += 80f * scale
+        }
+        if (session.canTestFight()) {
+            testFightBounds = RectF(content.left, contentTop, content.right, contentTop + 66f * scale)
+            contentTop += 80f * scale
+        }
+        val targets = session.targetOptions()
+        if (targets.isNotEmpty()) {
+            layoutTargetTouchBounds(content.left, content.right, contentTop, scale, targets)
+            contentTop += BattleTargetLayout.sectionHeight(targets.size, scale)
+        }
+        val gimmicks = session.availableGimmicks()
+        if (gimmicks.isNotEmpty()) {
+            val gimmickHeight = minOf(214f * scale, content.bottom - contentTop - 244f * scale)
+            layoutGimmickTouchBounds(RectF(content.left, contentTop, content.right, contentTop + gimmickHeight), scale, gimmicks.size)
+        }
+    }
+
+    private fun layoutTargetTouchBounds(left: Float, right: Float, top: Float, scale: Float, targets: List<BattleSession.TargetOption>) {
+        targetBounds.fill(null)
+        val totalWidth = right - left
+        val targetWidth = BattleTargetLayout.optionWidth(totalWidth, targets.size, scale)
+        val targetHeight = BattleTargetLayout.optionHeight(scale)
+        targets.forEachIndexed { index, _ ->
+            val optionTop = BattleTargetLayout.optionTop(index, targets.size, top, scale)
+            val optionLeft = BattleTargetLayout.optionLeft(left, index, targets.size, totalWidth, scale)
+            targetBounds[index] = RectF(optionLeft, optionTop, optionLeft + targetWidth, optionTop + targetHeight)
+        }
+    }
+
+    private fun layoutGimmickTouchBounds(bounds: RectF, scale: Float, count: Int) {
+        gimmickBounds.fill(null)
+        val gap = 10f * scale
+        val cardWidth = (bounds.width() - gap * (count - 1)) / count
+        repeat(count) { index ->
+            val left = bounds.left + index * (cardWidth + gap)
+            gimmickBounds[index] = RectF(left, bounds.top, left + cardWidth, bounds.bottom)
+        }
+    }
+
+    private fun layoutActivityTouchBounds(width: Float, height: Float, scale: Float) {
+        val left = 44f * scale
+        val buttonHeight = 88f * scale
+        activityChatBounds = RectF(left, height - buttonHeight - 28f * scale, width - left, height - 28f * scale)
+    }
+
+    private fun layoutMenuTouchBounds(width: Float, height: Float, scale: Float) {
+        val entries = session.menuItems()
+        val columns = BattleSession.MENU_COLUMNS
+        val rows = (entries.size + columns - 1) / columns
+        val left = 36f * scale
+        val top = 202f * scale
+        val bottomMargin = 28f * scale
+        val gap = 14f * scale
+        val cardWidth = (width - left * 2f - gap * (columns - 1)) / columns
+        val cardHeight = (height - top - bottomMargin - gap * (rows - 1)) / rows
+        menuBounds.fill(null)
+        entries.indices.forEach { index ->
+            val row = index / columns
+            val column = index % columns
+            val x = left + column * (cardWidth + gap)
+            val y = top + row * (cardHeight + gap)
+            menuBounds[index] = RectF(x, y, x + cardWidth, y + cardHeight)
+        }
     }
 
     private fun drawTopBand(canvas: Canvas, width: Float, scale: Float) {

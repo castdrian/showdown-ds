@@ -92,6 +92,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun refreshesCanvasHitRegionsBeforeHandlingRapidStateTransitions() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("refreshTouchBoundsForCurrentState()"))
+        assertTrue(source.contains("private fun layoutMoveTouchBounds"))
+        assertTrue(source.contains("private fun layoutTeamTouchBounds"))
+        assertTrue(source.contains("private fun layoutMenuTouchBounds"))
+        assertTrue(source.contains("private fun layoutTargetTouchBounds"))
+    }
+
+    @Test
     fun decisionTeamPanelDoesNotFallBackToTheEmptyPanelDuringBattleStateTransition() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
         val teamRenderer = source.substringAfter("private fun drawTeam(").substringBefore("val visibleTeam")
