@@ -209,4 +209,16 @@ class ThorDisplayProfileTest {
         assertTrue(installScript.contains("The QEMU binary was not built from the checked-in Thor layout patch."))
         assertTrue(installScript.contains("if [[ -n \"\$build_output_root\" ]]"))
     }
+
+    @Test
+    fun verifiesTheCompleteThorPatchBeforeBuildingTheOverlay() {
+        val buildScript = File("../scripts/build-ayn-thor-emulator-overlay.sh").readText()
+        val runScript = File("../scripts/run-ayn-thor-avd.sh").readText()
+
+        assertTrue(buildScript.contains("verify_patched_source()"))
+        assertTrue(buildScript.contains("pos_y = iter.second.pos_y;"))
+        assertTrue(buildScript.contains("The checked-out AEMU source does not contain the complete AYN Thor patch."))
+        assertTrue(runScript.contains("lower_input_y_origin_count"))
+        assertTrue(runScript.contains("pos_y = iter\\.second\\.pos_y;"))
+    }
 }

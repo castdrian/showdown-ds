@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_root="${AEMU_SOURCE_ROOT:?Set AEMU_SOURCE_ROOT to a synced Android Emulator source checkout}"
 qemu_root="$source_root/external/qemu"
 patch_file="$repo_root/tools/android-emulator/ayn-thor-single-window.patch"
+multidisplay_source="$qemu_root/android/android-emu/android/emulation/MultiDisplay.cpp"
 build_root="$source_root/objs-showdown-ds"
 ccache_mode="${AEMU_THOR_CCACHE:-auto}"
 
@@ -40,6 +41,21 @@ elif ! git -C "$qemu_root" apply --reverse --check "$patch_file"; then
     printf '%s\n' "The AYN Thor patch does not apply to this emulator source revision."
     exit 1
 fi
+
+verify_patched_source() {
+    local lower_input_y_origin_count
+    local upper_y_count
+    local lower_y_count
+    lower_input_y_origin_count="$(rg -c 'pos_y = iter.second.pos_y;' "$multidisplay_source" 2>/dev/null || true)"
+    upper_y_count="$(rg -c 'primary->second.pos_y = 0;' "$multidisplay_source" 2>/dev/null || true)"
+    lower_y_count="$(rg -c 'thorDisplay->second.pos_y = primary->second.originalHeight;' "$multidisplay_source" 2>/dev/null || true)"
+    if [[ ! -f "$multidisplay_source" || "$lower_input_y_origin_count" != "1" || "$upper_y_count" != "3" || "$lower_y_count" != "3" ]]; then
+        printf '%s\n' "The checked-out AEMU source does not contain the complete AYN Thor patch."
+        exit 1
+    fi
+}
+
+verify_patched_source
 "$qemu_root/android/rebuild.sh" --ccache "$ccache_mode" --out "$build_root"
 
 case "$(uname -s)-$(uname -m)" in
