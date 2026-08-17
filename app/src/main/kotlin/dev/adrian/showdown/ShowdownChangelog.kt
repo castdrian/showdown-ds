@@ -24,6 +24,7 @@ object ShowdownChangelog {
                 "The lower command deck now keeps battle-action text on the upper display and shows only the current choice prompt below.",
                 "Thor party indicators now use smooth high-definition ready, statused, and fainted Poké Ball artwork instead of enlarged pixel glyphs.",
                 "Singles battle sprites now use Showdown's near-side and far-side field anchors, including the correct player-side baseline and scale.",
+                "The sprite preference now names Showdown's actual X/Y and Black/White animated families instead of the misleading 3D and classic labels.",
                 "Singles HP cards now share one Pokémon-style frame, keep their full names readable, and stay clear of the sprites.",
                 "The switch screen now uses two wide columns with separated sprite, name, level, HP, type, and status regions.",
                 "Battle history snapshots no longer replay as a burst when the live Showdown feed takes over; only new events enter the readable message queue.",

@@ -2689,6 +2689,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun spriteMenuNamesTheShowdownSpriteFamilyThatWillBeUsed() {
+        val session = BattleSession()
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        assertEquals("Sprite style X/Y (Anim)", session.menuItems()[7])
+
+        session.selectMenuItem(7)
+        session.confirmSelection()
+
+        assertEquals(BattleSession.SpriteStyle.CLASSIC_2D, session.spriteStyle)
+        assertEquals("Sprite style Black/White (Anim)", session.menuItems()[7])
+        assertEquals("Black/White (Anim) sprite style enabled.", session.status)
+    }
+
+    @Test
     fun changingClientSettingsEmitsASettingsChangedAction() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()

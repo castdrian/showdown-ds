@@ -1957,7 +1957,7 @@ class CommandDeckView(
         4 -> "SFX: ${entry.substringAfterLast(' ')}"
         5 -> "Music: ${entry.substringAfterLast(' ')}"
         6 -> "Haptics: ${entry.substringAfterLast(' ')}"
-        7 -> "Sprites: ${entry.substringAfterLast(' ')}"
+        7 -> "Sprites: ${entry.removePrefix("Sprite style ")}"
         8 -> "Team library"
         9 -> "Rooms"
         10 -> "Account"

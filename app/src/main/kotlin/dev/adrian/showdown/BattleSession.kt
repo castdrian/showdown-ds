@@ -59,9 +59,13 @@ class BattleSession {
         }
     }
 
-    enum class SpriteStyle {
-        MODERN_3D,
-        CLASSIC_2D
+    enum class SpriteStyle(
+        val displayName: String,
+        val animatedCollection: String,
+        val staticCollections: List<String>
+    ) {
+        MODERN_3D("X/Y (Anim)", "xyani", listOf("xy", "gen5")),
+        CLASSIC_2D("Black/White (Anim)", "gen5ani", listOf("gen5"))
     }
 
     enum class FeedbackType {
@@ -4096,7 +4100,7 @@ class BattleSession {
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
         5 -> "Background music ${if (musicEnabled) "on" else "off"}"
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
-        7 -> "Sprite style ${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "classic"}"
+        7 -> "Sprite style ${spriteStyle.displayName}"
         8 -> "Team library"
         9 -> "Rooms"
         10 -> "Showdown account"
@@ -4147,7 +4151,7 @@ class BattleSession {
                 }
                 7 -> {
                     spriteStyle = if (spriteStyle == SpriteStyle.MODERN_3D) SpriteStyle.CLASSIC_2D else SpriteStyle.MODERN_3D
-                    "${if (spriteStyle == SpriteStyle.MODERN_3D) "3D" else "Classic"} sprite style enabled."
+                    "${spriteStyle.displayName} sprite style enabled."
                 }
                 8 -> {
                     publishClientAction(ClientAction.CONFIGURE_TEAM)

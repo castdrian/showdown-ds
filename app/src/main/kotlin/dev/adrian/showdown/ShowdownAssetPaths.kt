@@ -4,8 +4,7 @@ import java.util.Locale
 
 object ShowdownAssetPaths {
     fun battleSprite(request: BattleSpriteRequest): String {
-        val collection = if (request.style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani"
-        return "sprites/${if (request.backFacing) "$collection-back" else collection}/${animationId(request.species)}.gif"
+        return animatedBattleSprite(request.species, request.side, request.style.animatedCollection)
     }
 
     fun battleSpriteCandidates(request: BattleSpriteRequest): List<String> {
@@ -16,17 +15,13 @@ object ShowdownAssetPaths {
             if (baseSpecies.isNotEmpty() && !baseSpecies.equals(request.species.trim(), ignoreCase = true)) add(baseSpecies)
         }
         val collections = buildList {
-            add(if (request.style == BattleSession.SpriteStyle.MODERN_3D) "xyani" else "gen5ani")
-            if (request.style == BattleSession.SpriteStyle.MODERN_3D) add("gen5ani")
+            add(request.style.animatedCollection)
+            if (request.style != BattleSession.SpriteStyle.CLASSIC_2D) add(BattleSession.SpriteStyle.CLASSIC_2D.animatedCollection)
         }
         val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
         verifiedBackPaths.forEach { candidates += it }
         val hasVerifiedBackSprite = verifiedBackPaths.isNotEmpty()
-        val staticCollections = if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
-            listOf("xy", "gen5")
-        } else {
-            listOf("gen5")
-        }
+        val staticCollections = request.style.staticCollections
         if (!hasVerifiedBackSprite) {
             collections.forEach { collection ->
                 speciesNames.forEach { name -> candidates += battleSprite(name, request.side, collection) }
@@ -57,6 +52,9 @@ object ShowdownAssetPaths {
     }
 
     private fun battleSprite(species: String, side: BattleSpriteSide, collection: String) =
+        animatedBattleSprite(species, side, collection)
+
+    private fun animatedBattleSprite(species: String, side: BattleSpriteSide, collection: String) =
         "sprites/${if (side == BattleSpriteSide.PLAYER) "$collection-back" else collection}/${animationId(species)}.gif"
 
     private fun staticBattleSprite(species: String, side: BattleSpriteSide, collection: String) =
