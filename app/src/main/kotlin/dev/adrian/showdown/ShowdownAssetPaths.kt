@@ -128,6 +128,11 @@ object ShowdownAssetPaths {
     fun pokeApiHighResolutionSprite(number: Int): String =
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/$number.png"
 
+    fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide): List<String> =
+        hdSpriteRoots.map { root ->
+            "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}.gif"
+        }
+
     private fun trueBackSpritePaths(species: String): List<String> = when (animationId(species)) {
         "ironvaliant" -> listOf(
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"

@@ -184,6 +184,20 @@ class ShowdownAssetPathsTest {
     fun exposesAnimatedPokeApiFallbacksWithTheCorrectFacing() {
         assertEquals(listOf("shaymin-sky", "shaymin"), ShowdownAssetPaths.pokeApiLookupNames("Shaymin-Sky"))
         assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901.gif",
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901.gif"
+            ),
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(901, BattleSpriteSide.OPPONENT)
+        )
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901-back.gif",
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901-back.gif"
+            ),
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(901, BattleSpriteSide.PLAYER)
+        )
+        assertEquals(
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/901.gif",
             ShowdownAssetPaths.pokeApiAnimatedSprite(901, BattleSpriteSide.OPPONENT)
         )

@@ -255,19 +255,23 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     requestLookup(index + 1)
                     return@requestBytes
                 }
-                if (request.side == BattleSpriteSide.OPPONENT) {
-                    requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(number)) { highResolutionAsset ->
-                        if (highResolutionAsset != null) {
-                            receiver(highResolutionAsset)
-                        } else {
-                            requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
-                                if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
+                requestSpriteCandidates(ShowdownAssetPaths.hdAnimatedSpriteCandidates(number, request.side)) { hdAsset ->
+                    if (hdAsset != null) {
+                        receiver(hdAsset)
+                    } else if (request.side == BattleSpriteSide.OPPONENT) {
+                        requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(number)) { highResolutionAsset ->
+                            if (highResolutionAsset != null) {
+                                receiver(highResolutionAsset)
+                            } else {
+                                requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
+                                    if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
+                                }
                             }
                         }
-                    }
-                } else {
-                    requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
-                        if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
+                    } else {
+                        requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
+                            if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
+                        }
                     }
                 }
             }
