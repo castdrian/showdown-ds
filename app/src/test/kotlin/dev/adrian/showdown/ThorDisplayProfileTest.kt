@@ -169,24 +169,24 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "thorPreviewHeight",
+                "primary->second.pos_y" to "0",
                 "thorDisplay->second.width" to "thorPreviewWidth",
                 "thorDisplay->second.height" to "thorPreviewHeight",
                 "thorDisplay->second.pos_x" to "(primary->second.originalWidth - thorPreviewWidth) / 2",
-                "thorDisplay->second.pos_y" to "0"
+                "thorDisplay->second.pos_y" to "primary->second.originalHeight"
             ),
             layoutAssignments
         )
-        assertEquals("thorPreviewHeight", layoutAssignments.getValue("primary->second.pos_y"))
-        assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
-        assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight;").findAll(overlayPatch).count())
-        assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
+        assertEquals("0", layoutAssignments.getValue("primary->second.pos_y"))
+        assertEquals("primary->second.originalHeight", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertEquals(3, Regex("primary->second\\.pos_y = 0;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("thorDisplay->second\\.pos_y = primary->second\\.originalHeight;").findAll(overlayPatch).count())
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1086;"))
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
         assertTrue(overlayPatch.contains("*y * (iter.second.originalHeight - 1)"))
-        assertTrue(overlayPatch.contains("pos_y = totalH - iter.second.height - iter.second.pos_y;"))
-        assertFalse(Regex("(?m)^\\+\\s+pos_y = iter\\.second\\.pos_y;").containsMatchIn(overlayPatch))
+        assertTrue(overlayPatch.contains("pos_y = iter.second.pos_y;"))
+        assertFalse(overlayPatch.contains("pos_y = totalH - iter.second.height - iter.second.pos_y;"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 2"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 1"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
