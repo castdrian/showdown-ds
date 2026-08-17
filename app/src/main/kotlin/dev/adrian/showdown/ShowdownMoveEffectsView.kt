@@ -304,16 +304,15 @@ class ShowdownMoveEffectsView(
                             };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
                             BattleScene.prototype.resultAnim = function () {
-                                var shouldCueResult = this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeResultCues && this.__showdownNativeResultCues.length;
-                                var resultCue = shouldCueResult ? this.__showdownNativeResultCues.shift() : null;
-                                if (resultCue) {
+                                var resultCue = this.__showdownNativeResultCues && this.__showdownNativeResultCues.length ? this.__showdownNativeResultCues.shift() : null;
+                                if (resultCue && this.animating && !this.__showdownNativeAudioSilent) {
                                     scheduleNativeCue(this, resultCue);
                                 }
                                 return originalResultAnim.apply(this, arguments);
                             };
                             var originalDamageAnim = BattleScene.prototype.damageAnim;
                             BattleScene.prototype.damageAnim = function () {
-                                var healthEvent = this.__showdownNativeHealthEvents && this.__showdownNativeHealthEvents.length ? this.__showdownNativeHealthEvents.shift() : null;
+                                var healthEvent = takeNativeHealthEvent(this, arguments[0]);
                                 var shouldCueDamage = healthEvent === 'damage' && this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeDamageArmed && !this.__showdownNativeDamagePlayed;
                                 if (shouldCueDamage) {
                                     this.__showdownNativeDamagePlayed = true;
@@ -323,10 +322,25 @@ class ShowdownMoveEffectsView(
                             };
                             var originalHealAnim = BattleScene.prototype.healAnim;
                             BattleScene.prototype.healAnim = function () {
-                                if (this.__showdownNativeHealthEvents && this.__showdownNativeHealthEvents.length) this.__showdownNativeHealthEvents.shift();
+                                takeNativeHealthEvent(this, arguments[0]);
                                 return originalHealAnim.apply(this, arguments);
                             };
                             var originalRunMinor = Battle.prototype.runMinor;
+                            function nativeTargetKey(value) {
+                                return String(value || '').split(':')[0].trim().toLowerCase();
+                            }
+                            function queueNativeHealthEvent(scene, target, kind) {
+                                if (!scene.__showdownNativeHealthEvents) scene.__showdownNativeHealthEvents = [];
+                                scene.__showdownNativeHealthEvents.push({target: nativeTargetKey(target), kind: kind});
+                            }
+                            function takeNativeHealthEvent(scene, pokemon) {
+                                var events = scene.__showdownNativeHealthEvents || [];
+                                var target = nativeTargetKey(pokemon && (pokemon.ident || pokemon.searchid));
+                                for (var eventIndex = 0; eventIndex < events.length; eventIndex++) {
+                                    if (events[eventIndex].target === target) return events.splice(eventIndex, 1)[0].kind;
+                                }
+                                return null;
+                            }
                             function setHpValue(pokemon, health) {
                                 var hp = String(health || '').split(' ')[0];
                                 if (hp === '0' || hp === '0.0') return 0;
@@ -355,7 +369,26 @@ class ShowdownMoveEffectsView(
                                 }
                                 this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;
                                 if (!this.scene.__showdownNativeResultCues) this.scene.__showdownNativeResultCues = [];
-                                if (this.scene.animating && !kwArgs.silent) {
+                                var healthEventAllowed = !kwArgs.silent;
+                                if (healthEventAllowed && !this.scene.__showdownNativeHealthEvents) this.scene.__showdownNativeHealthEvents = [];
+                                if (healthEventAllowed && args[0] === '-damage') {
+                                    queueNativeHealthEvent(this.scene, args[1], directMoveDamage ? 'damage' : 'other');
+                                    this.scene.__showdownNativeDamageWindow = false;
+                                }
+                                if (healthEventAllowed && args[0] === '-heal') queueNativeHealthEvent(this.scene, args[1], 'heal');
+                                if (healthEventAllowed && args[0] === '-sethp') {
+                                    if (directMoveDamage) {
+                                        for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
+                                            var setHpTarget = this.getPokemon(args[setHpIndex]);
+                                            var nextHp = setHpValue(setHpTarget, args[setHpIndex + 1]);
+                                            if (setHpTarget && nextHp !== null) queueNativeHealthEvent(this.scene, args[setHpIndex], nextHp < setHpTarget.hp ? 'damage' : nextHp > setHpTarget.hp ? 'heal' : 'other');
+                                        }
+                                        this.scene.__showdownNativeDamageWindow = false;
+                                    } else {
+                                        this.scene.__showdownNativeDamageWindow = false;
+                                    }
+                                }
+                                if (!kwArgs.silent) {
                                     var magnitude = Number(args[3]);
                                     if (args[0] === '-supereffective') resultCue = 'super_effective';
                                     if (args[0] === '-resisted') resultCue = 'not_very_effective';
@@ -365,23 +398,6 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-clearpositiveboost') resultCue = 'stat_drop';
                                     if (args[0] === '-clearnegativeboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
-                                    if (!this.scene.__showdownNativeHealthEvents) this.scene.__showdownNativeHealthEvents = [];
-                                    if (args[0] === '-damage') {
-                                        this.scene.__showdownNativeHealthEvents.push(directMoveDamage ? 'damage' : 'other');
-                                        if (!directMoveDamage) this.scene.__showdownNativeDamageWindow = false;
-                                    }
-                                    if (args[0] === '-heal') this.scene.__showdownNativeHealthEvents.push('heal');
-                                    if (args[0] === '-sethp') {
-                                        if (directMoveDamage) {
-                                            for (var setHpIndex = 1; setHpIndex + 1 < args.length; setHpIndex += 2) {
-                                                var setHpTarget = this.getPokemon(args[setHpIndex]);
-                                                var nextHp = setHpValue(setHpTarget, args[setHpIndex + 1]);
-                                                if (setHpTarget && nextHp !== null) this.scene.__showdownNativeHealthEvents.push(nextHp < setHpTarget.hp ? 'damage' : nextHp > setHpTarget.hp ? 'heal' : 'other');
-                                            }
-                                        } else {
-                                            this.scene.__showdownNativeDamageWindow = false;
-                                        }
-                                    }
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
                                 this.scene.__showdownNativeAudioSilent = previousAudioSilent;
