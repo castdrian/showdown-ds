@@ -230,7 +230,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     if (fallback != null) receiver(fallback)
                     else requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
                         if (communityAsset != null) receiver(communityAsset)
-                        else requestSpriteCandidates(plan.fallbackCandidates, receiver)
+                        else requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
+                            if (verifiedAsset != null) receiver(verifiedAsset)
+                            else requestSpriteCandidates(plan.fallbackCandidates, receiver)
+                        }
                     }
                 }
             }
@@ -246,30 +249,32 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             }
             val lookupUrl = "https://pokeapi.co/api/v2/pokemon/${names[index]}"
             requestBytes(lookupUrl) { file ->
-                val number = file?.let { cachedFile ->
-                    runCatching { JSONObject(cachedFile.readText()).optInt("id", 0) }
-                        .getOrNull()
-                        ?.takeIf { it > 0 }
+                val payload = file?.let { cachedFile ->
+                    runCatching { JSONObject(cachedFile.readText()) }.getOrNull()
                 }
-                if (number == null) {
+                val resourceNumber = payload?.optInt("id", 0)?.takeIf { it > 0 }
+                val nationalDexNumber = file?.let { cachedFile ->
+                    ShowdownAssetPaths.pokeApiNationalDexNumber(cachedFile.readText())
+                } ?: resourceNumber
+                if (resourceNumber == null || nationalDexNumber == null) {
                     requestLookup(index + 1)
                     return@requestBytes
                 }
-                requestSpriteCandidates(ShowdownAssetPaths.hdAnimatedSpriteCandidates(number, request.side)) { hdAsset ->
+                requestSpriteCandidates(ShowdownAssetPaths.hdAnimatedSpriteCandidates(nationalDexNumber, request.side)) { hdAsset ->
                     if (hdAsset != null) {
                         receiver(hdAsset)
                     } else if (request.side == BattleSpriteSide.OPPONENT) {
-                        requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(number)) { highResolutionAsset ->
+                        requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber)) { highResolutionAsset ->
                             if (highResolutionAsset != null) {
                                 receiver(highResolutionAsset)
                             } else {
-                                requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
+                                requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { animatedAsset ->
                                     if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
                                 }
                             }
                         }
                     } else {
-                        requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side)) { animatedAsset ->
+                        requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { animatedAsset ->
                             if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
                         }
                     }

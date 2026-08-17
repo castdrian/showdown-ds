@@ -109,6 +109,29 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun extractsNationalDexNumberFromAlternatePokeApiForms() {
+        assertEquals(
+            892,
+            ShowdownAssetPaths.pokeApiNationalDexNumber(
+                """{"id":10191,"species":{"url":"https://pokeapi.co/api/v2/pokemon-species/892/"}}"""
+            )
+        )
+        assertEquals(null, ShowdownAssetPaths.pokeApiNationalDexNumber("{}"))
+    }
+
+    @Test
+    fun defersVerifiedStaticBackArtworkUntilAnimatedFallbacksHaveBeenChecked() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val verifiedBack = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
+
+        assertTrue(plan.preferredRemoteCandidates.none { it == verifiedBack })
+        assertEquals(listOf(verifiedBack), plan.verifiedRemoteCandidates)
+        assertTrue(plan.fallbackCandidates.first().contains("sprites/xyani-back/ironvaliant.gif"))
+    }
+
+    @Test
     fun modernResolutionPlanDefersLocalLegacySpritesUntilAfterAnimatedFallback() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forOpponent("Iron Hands", BattleSession.SpriteStyle.MODERN_3D)

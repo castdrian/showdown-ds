@@ -1,15 +1,17 @@
 package dev.adrian.showdown
 
+import org.json.JSONObject
 import java.util.Locale
 
 data class ShowdownSpriteResolutionPlan(
     val preferredRemoteCandidates: List<String>,
     val communityRemoteCandidates: List<String>,
+    val verifiedRemoteCandidates: List<String>,
     val fallbackCandidates: List<String>,
     val usesModernAnimatedFallback: Boolean
 ) {
     val allCandidates: List<String>
-        get() = preferredRemoteCandidates + communityRemoteCandidates + fallbackCandidates
+        get() = preferredRemoteCandidates + communityRemoteCandidates + verifiedRemoteCandidates + fallbackCandidates
 }
 
 object ShowdownAssetPaths {
@@ -66,18 +68,13 @@ object ShowdownAssetPaths {
         }
         val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
         verifiedBackPaths.forEach { candidates += it }
-        val hasVerifiedBackSprite = verifiedBackPaths.isNotEmpty()
         val staticCollections = request.style.staticCollections
-        if (!hasVerifiedBackSprite) {
-            collections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += battleSprite(name, request.side, collection) }
-            }
+        collections.forEach { collection ->
+            speciesNames.forEach { name -> candidates += battleSprite(name, request.side, collection) }
         }
         if (request.backFacing) {
-            if (!hasVerifiedBackSprite) {
-                staticCollections.forEach { collection ->
-                    speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection) }
-                }
+            staticCollections.forEach { collection ->
+                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection) }
             }
             candidates += placeholder(BattleSpriteSide.PLAYER)
         } else {
@@ -109,9 +106,11 @@ object ShowdownAssetPaths {
         val firstLocalCandidate = candidates.indexOfFirst { it.startsWith("sprites/") }
             .takeIf { it >= 0 }
             ?: candidates.size
+        val remoteCandidates = candidates.take(firstLocalCandidate)
         return ShowdownSpriteResolutionPlan(
-            preferredRemoteCandidates = candidates.take(firstLocalCandidate).filterNot(::isCommunityAnimatedCandidate),
-            communityRemoteCandidates = candidates.take(firstLocalCandidate).filter(::isCommunityAnimatedCandidate),
+            preferredRemoteCandidates = remoteCandidates.filterNot(::isCommunityAnimatedCandidate).filterNot(::isVerifiedRemoteCandidate),
+            communityRemoteCandidates = remoteCandidates.filter(::isCommunityAnimatedCandidate),
+            verifiedRemoteCandidates = remoteCandidates.filter(::isVerifiedRemoteCandidate),
             fallbackCandidates = candidates.drop(firstLocalCandidate),
             usesModernAnimatedFallback = usesModernAnimatedFallback
         )
@@ -120,7 +119,21 @@ object ShowdownAssetPaths {
     private fun isCommunityAnimatedCandidate(path: String) =
         path.startsWith("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/")
 
+    private fun isVerifiedRemoteCandidate(path: String) =
+        path == "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
+
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
+
+    fun pokeApiNationalDexNumber(payload: String): Int? {
+        return runCatching {
+            JSONObject(payload)
+                .optJSONObject("species")
+                ?.optString("url")
+                ?.trimEnd('/')
+                ?.substringAfterLast('/')
+                ?.toIntOrNull()
+        }.getOrNull()?.takeIf { it > 0 }
+    }
 
     fun pokeApiAnimatedSprite(number: Int, side: BattleSpriteSide): String =
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}$number.gif"
