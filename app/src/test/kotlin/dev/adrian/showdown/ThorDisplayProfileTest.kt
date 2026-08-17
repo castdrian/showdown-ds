@@ -116,6 +116,8 @@ class ThorDisplayProfileTest {
         assertTrue(displayProfile.contains("hw.display1.yOffset=0"))
         assertTrue(createScript.contains("avd_name=\"AYN_Thor_API_34\""))
         assertTrue(runScript.contains("-feature MultiDisplay"))
+        assertTrue(runScript.contains("-feature Vulkan"))
+        assertFalse(runScript.contains("-feature -Vulkan"))
         assertTrue(runScript.contains("-multidisplay \"1,1240,1080,420,1347\""))
         assertTrue(runScript.contains("window_scale=\"\${AYN_THOR_WINDOW_SCALE:-auto}\""))
         assertTrue(runScript.contains("thor_preview_width_millimetres=\"132.83\""))

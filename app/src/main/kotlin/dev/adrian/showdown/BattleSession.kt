@@ -276,6 +276,7 @@ class BattleSession {
     private var battleLogGeneration = 0L
     private var nativeBattleLogGeneration = -1L
     private var nativeBattleLogPending = false
+    private val battleFeedEntriesCache = mutableMapOf<Int, List<String>>()
     private var hasBattleProtocolTranscript = false
     private var moveTypeResolver: ((String) -> String?)? = null
     private var moveInfoResolver: ((String) -> MoveInfo?)? = null
@@ -653,10 +654,13 @@ class BattleSession {
         if (generation != battleLogGeneration) return
         nativeBattleLogGeneration = generation
         nativeBattleLogPending = false
+        battleFeedEntriesCache.clear()
         notifyListeners()
     }
 
     fun battleFeedEntries(limit: Int = SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT): List<String> {
+        val normalizedLimit = limit.coerceAtLeast(0)
+        battleFeedEntriesCache[normalizedLimit]?.let { return it }
         val protocolEntries = battleLog.filter(::isBattleFeedEntry)
         val nativeEntries = if (nativeBattleLogGeneration == battleLogGeneration) {
             showdownBattleLogEntries.filter(::isBattleFeedEntry)
@@ -668,14 +672,17 @@ class BattleSession {
             nativeEntries.isEmpty() -> protocolEntries
             else -> mergeBattleFeedEntries(protocolEntries, nativeEntries)
         }
-        return source
+        val entries = source
             .fold(mutableListOf<String>()) { uniqueEntries, entry ->
                 if (uniqueEntries.lastOrNull()?.let { BattleFeedMessageIdentity.matches(it, entry) } != true) {
                     uniqueEntries += entry
                 }
                 uniqueEntries
             }
-            .takeLast(limit.coerceAtLeast(0))
+            .takeLast(normalizedLimit)
+            .toList()
+        battleFeedEntriesCache[normalizedLimit] = entries
+        return entries
     }
 
     fun latestBattleFeedEntry() = battleFeedEntries(1).lastOrNull()
@@ -687,6 +694,7 @@ class BattleSession {
         showdownBattleMarkupEntries.clear()
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = false
+        battleFeedEntriesCache.clear()
         notifyListeners()
     }
 
@@ -702,6 +710,7 @@ class BattleSession {
         showdownBattleLogEntries += entries
         while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
         if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
+        battleFeedEntriesCache.clear()
         entries.forEach(::appendNativeActivity)
         latestBattleEvent = entries.last()
         latestBattleEventAtNanos = System.nanoTime()
@@ -721,6 +730,7 @@ class BattleSession {
             .mapNotNull(::sanitizeShowdownMarkup)
             .filter(String::isNotBlank)
         if (previous == entries) return
+        battleFeedEntriesCache.clear()
         previous.forEach { entry ->
             showdownBattleLogEntries.indexOfLast { it == entry }
                 .takeIf { it >= 0 }
@@ -1039,6 +1049,7 @@ class BattleSession {
         battleLog.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
+        battleFeedEntriesCache.clear()
         battleLog += "No battle in progress."
         chatMessages.clear()
         chatMessages += "[System] Ready for a battle."
@@ -1632,6 +1643,7 @@ class BattleSession {
         battleLog.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
+        battleFeedEntriesCache.clear()
         battleLogGeneration += 1L
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = true
@@ -3932,6 +3944,7 @@ class BattleSession {
         battleLog += entry
         if (battleLog.size > 32) battleLog.removeAt(0)
         battleLogGeneration += 1L
+        battleFeedEntriesCache.clear()
         nativeBattleLogPending = true
         appendActivity(entry, ActivityOrigin.PROTOCOL)
         protocolEventCollector?.add(entry) ?: run {

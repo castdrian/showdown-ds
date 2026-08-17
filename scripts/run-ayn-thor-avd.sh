@@ -18,7 +18,7 @@ window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
-renderer_feature_args=(-feature -Vulkan)
+renderer_feature_args=(-feature Vulkan)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
 verify_thor_layout_patch() {

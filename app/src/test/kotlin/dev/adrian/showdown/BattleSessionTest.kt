@@ -2,6 +2,7 @@ package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -19,6 +20,23 @@ class BattleSessionTest {
 
         assertEquals(listOf("Battle started!", "Go! Pikachu!"), session.battleFeedEntries())
         assertEquals(listOf("Battle started!", "Turn 1", "Go! Pikachu!"), session.showdownBattleLog())
+    }
+
+    @Test
+    fun upperBattleFeedReusesUnchangedEntriesAndInvalidatesAfterNewEvents() {
+        val session = BattleSession()
+
+        val first = session.battleFeedEntries()
+        val latest = session.battleFeedEntries(1)
+
+        assertSame(first, session.battleFeedEntries())
+        assertSame(latest, session.battleFeedEntries(1))
+
+        session.appendShowdownBattleLog("Pikachu used Thunderbolt!")
+        val second = session.battleFeedEntries()
+
+        assertEquals("Pikachu used Thunderbolt!", second.last())
+        assertSame(second, session.battleFeedEntries())
     }
 
     @Test

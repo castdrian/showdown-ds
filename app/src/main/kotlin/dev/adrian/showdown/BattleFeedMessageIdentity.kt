@@ -8,7 +8,21 @@ object BattleFeedMessageIdentity {
         .replace("restored hp", "recovered health")
         .replace("restored health", "recovered health")
         .replace("recovered hp", "recovered health")
-        .replace(Regex("[.!?]+$"), "")
-        .replace(Regex("\\s+"), " ")
-        .trim()
+        .let(::collapseWhitespace)
+        .trimEnd { it == '.' || it == '!' || it == '?' }
+
+    private fun collapseWhitespace(value: String): String {
+        val collapsed = StringBuilder(value.length)
+        var pendingSpace = false
+        value.forEach { character ->
+            if (character.isWhitespace()) {
+                pendingSpace = collapsed.isNotEmpty()
+            } else {
+                if (pendingSpace) collapsed.append(' ')
+                collapsed.append(character)
+                pendingSpace = false
+            }
+        }
+        return collapsed.toString()
+    }
 }

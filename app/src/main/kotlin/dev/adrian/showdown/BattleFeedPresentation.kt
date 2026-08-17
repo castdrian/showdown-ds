@@ -74,6 +74,7 @@ class BattleFeedPresentation(
     }
 
     fun update(entries: List<String>, visible: Boolean, nowMillis: Long) {
+        if (observedEntries === entries && feedVisible == visible) return
         val presentationNowMillis = presentationNowMillis(nowMillis)
         feedVisible = visible
         if (entries.isEmpty()) {

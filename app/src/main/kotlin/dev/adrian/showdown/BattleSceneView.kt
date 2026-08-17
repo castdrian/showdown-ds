@@ -48,6 +48,12 @@ class BattleSceneView(
     private val opponentInspectBounds = RectF()
     private val battleFeedBounds = RectF()
     private val battleFeedPresentation = BattleFeedPresentation()
+    private var cachedBattleFeedText: String? = null
+    private var cachedBattleFeedVisibleText: String? = null
+    private var cachedBattleFeedWidth = -1f
+    private var cachedBattleFeedTextSize = -1f
+    private var cachedBattleFeedFullLines = emptyList<String>()
+    private var cachedBattleFeedLines = emptyList<String>()
     private var battleFeedTouchDownY = 0f
     private var battleFeedTouchLastY = 0f
     private var battleFeedTouchActive = false
@@ -1087,14 +1093,27 @@ class BattleSceneView(
         paint.shader = null
         paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-        paint.textSize = readableTextSize(36f, scale, 11f)
+        val textSize = readableTextSize(36f, scale, 11f)
+        paint.textSize = textSize
         val maxWidth = right - left - 48f * scale
         val lineHeight = maxOf(42f * scale, paint.descent() - paint.ascent() + 8f * scale)
         val padding = 22f * scale
-        val fullLines = BattleFeedText.wrap(frame.text, maxWidth, 2, paint::measureText)
-            .ifEmpty { listOf("") }
-        val lines = BattleFeedText.wrap(frame.visibleText, maxWidth, fullLines.size, paint::measureText)
-            .ifEmpty { listOf("") }
+        if (cachedBattleFeedText != frame.text ||
+            cachedBattleFeedVisibleText != frame.visibleText ||
+            cachedBattleFeedWidth != maxWidth ||
+            cachedBattleFeedTextSize != textSize
+        ) {
+            cachedBattleFeedText = frame.text
+            cachedBattleFeedVisibleText = frame.visibleText
+            cachedBattleFeedWidth = maxWidth
+            cachedBattleFeedTextSize = textSize
+            cachedBattleFeedFullLines = BattleFeedText.wrap(frame.text, maxWidth, 2, paint::measureText)
+                .ifEmpty { listOf("") }
+            cachedBattleFeedLines = BattleFeedText.wrap(frame.visibleText, maxWidth, cachedBattleFeedFullLines.size, paint::measureText)
+                .ifEmpty { listOf("") }
+        }
+        val fullLines = cachedBattleFeedFullLines
+        val lines = cachedBattleFeedLines
         val boundsHeight = fullLines.size * lineHeight + padding * 2f
         val top = (bottom - boundsHeight).coerceAtLeast(height * 0.70f)
         val bounds = RectF(left, top, right, bottom)
