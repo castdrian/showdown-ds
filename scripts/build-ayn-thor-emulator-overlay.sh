@@ -35,9 +35,9 @@ if ! git -C "$qemu_root" rev-parse --git-dir >/dev/null 2>&1; then
     exit 1
 fi
 
-if git -C "$qemu_root" apply --check "$patch_file"; then
-    git -C "$qemu_root" apply "$patch_file"
-elif ! git -C "$qemu_root" apply --reverse --check "$patch_file"; then
+if git -C "$qemu_root" apply --unidiff-zero --check "$patch_file"; then
+    git -C "$qemu_root" apply --unidiff-zero "$patch_file"
+elif ! git -C "$qemu_root" apply --unidiff-zero --reverse --check "$patch_file"; then
     printf '%s\n' "The AYN Thor patch does not apply to this emulator source revision."
     exit 1
 fi
@@ -46,10 +46,10 @@ verify_patched_source() {
     local lower_input_y_origin_count
     local upper_y_count
     local lower_y_count
-    lower_input_y_origin_count="$(rg -c 'pos_y = totalH - iter.second.height - iter.second.pos_y;' "$multidisplay_source" 2>/dev/null || true)"
-    upper_y_count="$(rg -c 'primary->second.pos_y = thorPreviewHeight;' "$multidisplay_source" 2>/dev/null || true)"
-    lower_y_count="$(rg -c 'thorDisplay->second.pos_y = 0;' "$multidisplay_source" 2>/dev/null || true)"
-    if [[ ! -f "$multidisplay_source" || "$lower_input_y_origin_count" != "2" || "$upper_y_count" != "3" || "$lower_y_count" != "3" ]]; then
+    lower_input_y_origin_count="$(rg -c 'pos_y = iter.second.pos_y;' "$multidisplay_source" 2>/dev/null || true)"
+    upper_y_count="$(rg -c 'primary->second.pos_y = 0;' "$multidisplay_source" 2>/dev/null || true)"
+    lower_y_count="$(rg -c 'thorDisplay->second.pos_y = primary->second.originalHeight;' "$multidisplay_source" 2>/dev/null || true)"
+    if [[ ! -f "$multidisplay_source" || "$lower_input_y_origin_count" != "3" || "$upper_y_count" != "3" || "$lower_y_count" != "3" ]]; then
         printf '%s\n' "The checked-out AEMU source does not contain the complete AYN Thor patch."
         exit 1
     fi
