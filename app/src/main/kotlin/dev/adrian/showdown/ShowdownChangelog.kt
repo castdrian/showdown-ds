@@ -81,6 +81,7 @@ object ShowdownChangelog {
                 "Fresh installs now default to the current Gen 9 Random Battle format.",
                 "Team JSON import and export now preserve Showdown's advanced set fields.",
                 "Team imports now also accept the beta client's bracketed ability and inline nature format.",
+                "Shared PokePaste, Gist, and Showdown team exports now open directly in the team library.",
                 "Remote team imports now keep every Pokémon from the selected Showdown export.",
                 "Imported team backups now return to a refreshed team library so new teams appear immediately.",
                 "Team library navigation now filters saved teams by Showdown format as well as folder and search.",

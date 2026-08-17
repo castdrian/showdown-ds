@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import android.content.Intent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -48,5 +49,40 @@ class ShowdownTeamUrlImporterTest {
 
         assertEquals("Monotype sample", payload.name)
         assertEquals("gen9monotype", payload.format)
+    }
+
+    @Test
+    fun acceptsSharedTeamTextAsAnIncomingIntent() {
+        assertEquals(
+            "Gholdengo @ Leftovers\n- Make It Rain",
+            ShowdownTeamUrlImporter.intentSource(
+                Intent.ACTION_SEND,
+                null,
+                "Gholdengo @ Leftovers\n- Make It Rain"
+            )
+        )
+    }
+
+    @Test
+    fun acceptsPokePasteViewLinksAsAnIncomingIntent() {
+        assertEquals(
+            "https://pokepast.es/0f9d6738de156f45",
+            ShowdownTeamUrlImporter.intentSource(
+                Intent.ACTION_VIEW,
+                "https://pokepast.es/0f9d6738de156f45",
+                null
+            )
+        )
+    }
+
+    @Test
+    fun doesNotConsumeUnrelatedSharedText() {
+        assertNull(
+            ShowdownTeamUrlImporter.intentSource(
+                Intent.ACTION_SEND,
+                null,
+                "This is just a message"
+            )
+        )
     }
 }

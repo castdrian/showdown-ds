@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import org.json.JSONObject
@@ -17,6 +18,15 @@ data class ShowdownTeamUrlPayload(
 )
 
 object ShowdownTeamUrlImporter {
+    fun intentSource(action: String?, data: String?, sharedText: String?): String? {
+        val source = when (action) {
+            Intent.ACTION_VIEW -> data
+            Intent.ACTION_SEND -> sharedText
+            else -> null
+        }?.trim()?.takeIf(String::isNotBlank) ?: return null
+        return source.takeIf { normalize(it) != null || isLikelyTeamText(it) }
+    }
+
     fun normalize(input: String): String? {
         val uri = runCatching { URI(input.trim()) }.getOrNull() ?: return null
         val scheme = uri.scheme?.lowercase(Locale.ROOT)
@@ -36,6 +46,21 @@ object ShowdownTeamUrlImporter {
             }
             else -> null
         }
+    }
+
+    fun isLikelyTeamText(value: String): Boolean {
+        val text = value.trim()
+        return text.isNotBlank() && (
+            normalize(text) != null ||
+                text.contains("===") ||
+                text.contains("]") && text.contains("|") ||
+                text.contains("\n-") ||
+                text.contains(" @ ") ||
+                text.contains("Ability:", true) ||
+                text.contains("EVs:", true) ||
+                text.contains("IVs:", true) ||
+                text.contains("Tera Type:", true)
+            )
     }
 
     fun payload(body: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9"): ShowdownTeamUrlPayload {

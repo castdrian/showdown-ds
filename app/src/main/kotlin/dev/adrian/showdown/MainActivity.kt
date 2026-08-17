@@ -4012,7 +4012,7 @@ class MainActivity : Activity() {
             setMinLines(8)
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             val clipboardValue = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString().orEmpty()
-            if (clipboardValue.isLikelyTeamBackup()) {
+            if (ShowdownTeamUrlImporter.isLikelyTeamText(clipboardValue)) {
                 setText(clipboardValue)
             }
         }
@@ -4056,9 +4056,6 @@ class MainActivity : Activity() {
             if (!isFinishing) showTeamLibrary()
         }
     }
-
-    private fun String.isLikelyTeamBackup() = ShowdownTeamUrlImporter.normalize(this) != null || contains("===") || contains("]") && contains("|") ||
-        contains("\n-") || contains("Ability:", true) || contains(" @ ")
 
     private fun showTeamEditor(existing: ShowdownTeam? = null, initialFolder: String = "", initialFormat: String? = null) {
         val localId = existing?.id ?: java.util.UUID.randomUUID().toString()
@@ -4998,14 +4995,38 @@ class MainActivity : Activity() {
     }
 
     private fun handleIncomingIntent(intent: Intent): Boolean {
-        val source = ShowdownReplayImporter.intentSource(
+        val sharedText = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        val replaySource = ShowdownReplayImporter.intentSource(
             intent.action,
             intent.dataString,
-            intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-        ) ?: return false
-        val normalized = ShowdownReplayImporter.normalize(source) ?: return false
-        loadReplay(normalized)
+            sharedText
+        )
+        if (replaySource != null) {
+            val normalized = ShowdownReplayImporter.normalize(replaySource) ?: return false
+            loadReplay(normalized)
+            return true
+        }
+        val teamSource = ShowdownTeamUrlImporter.intentSource(intent.action, intent.dataString, sharedText) ?: return false
+        importIncomingTeam(teamSource)
         return true
+    }
+
+    private fun importIncomingTeam(source: String) {
+        val normalized = ShowdownTeamUrlImporter.normalize(source)
+        if (normalized != null) {
+            session.setConnectionStatus("Fetching shared team…")
+            teamUrlFetcher.fetch(source) { result ->
+                result.onSuccess { payload ->
+                    val imported = importTeamBackup(payload.text, payload.name, payload.format)
+                    refreshTeamLibraryAfterImport(imported, returnToTeamLibrary = true)
+                }.onFailure {
+                    session.setConnectionStatus("Could not fetch that team URL. Paste the team export instead.")
+                }
+            }
+        } else {
+            val imported = importTeamBackup(source, "Shared team", loadMatchFormat().id)
+            refreshTeamLibraryAfterImport(imported, returnToTeamLibrary = true)
+        }
     }
 
     private fun loadReplay(normalized: String) {
