@@ -29,7 +29,7 @@ if [[ "$ccache_mode" == "auto" ]]; then
     fi
 fi
 
-if [[ ! -d "$qemu_root/.git" ]]; then
+if ! git -C "$qemu_root" rev-parse --git-dir >/dev/null 2>&1; then
     printf '%s\n' "The Android Emulator source checkout was not found at $qemu_root"
     exit 1
 fi
