@@ -26,7 +26,7 @@ object ShowdownChangelog {
                 "Thor party indicators now use smooth high-definition ready, statused, and fainted Poké Ball artwork instead of enlarged pixel glyphs.",
                 "Singles battle sprites now use Showdown's near-side and far-side field anchors, including the correct player-side baseline and scale.",
                 "The sprite preference now clearly distinguishes HD animated sprites from the Gen 5 classic family.",
-                "Battle and team-preview sprites now try runtime HD animated, credit-permitted community, and high-resolution artwork before falling back cleanly when a species or form is unavailable.",
+                "Battle and team-preview sprites now try runtime HD animated, high-resolution, and credit-permitted community artwork before falling back cleanly when a species or form is unavailable.",
                 "Singles HP cards now share one Pokémon-style frame, keep their full names readable, and stay clear of the sprites.",
                 "The switch screen now uses two wide columns with separated sprite, name, level, HP, type, and status regions.",
                 "Battle history snapshots no longer replay as a burst when the live Showdown feed takes over; only new events enter the readable message queue.",

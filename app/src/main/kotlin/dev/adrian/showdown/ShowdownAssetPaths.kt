@@ -4,11 +4,12 @@ import java.util.Locale
 
 data class ShowdownSpriteResolutionPlan(
     val preferredRemoteCandidates: List<String>,
+    val communityRemoteCandidates: List<String>,
     val fallbackCandidates: List<String>,
     val usesModernAnimatedFallback: Boolean
 ) {
     val allCandidates: List<String>
-        get() = preferredRemoteCandidates + fallbackCandidates
+        get() = preferredRemoteCandidates + communityRemoteCandidates + fallbackCandidates
 }
 
 object ShowdownAssetPaths {
@@ -109,11 +110,15 @@ object ShowdownAssetPaths {
             .takeIf { it >= 0 }
             ?: candidates.size
         return ShowdownSpriteResolutionPlan(
-            preferredRemoteCandidates = candidates.take(firstLocalCandidate),
+            preferredRemoteCandidates = candidates.take(firstLocalCandidate).filterNot(::isCommunityAnimatedCandidate),
+            communityRemoteCandidates = candidates.take(firstLocalCandidate).filter(::isCommunityAnimatedCandidate),
             fallbackCandidates = candidates.drop(firstLocalCandidate),
             usesModernAnimatedFallback = usesModernAnimatedFallback
         )
     }
+
+    private fun isCommunityAnimatedCandidate(path: String) =
+        path.startsWith("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/")
 
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
 

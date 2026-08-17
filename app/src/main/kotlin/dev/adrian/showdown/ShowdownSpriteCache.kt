@@ -228,7 +228,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             } else {
                 requestPokeApiModernSprite(request) { fallback ->
                     if (fallback != null) receiver(fallback)
-                    else requestSpriteCandidates(plan.fallbackCandidates, receiver)
+                    else requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                        if (communityAsset != null) receiver(communityAsset)
+                        else requestSpriteCandidates(plan.fallbackCandidates, receiver)
+                    }
                 }
             }
         }

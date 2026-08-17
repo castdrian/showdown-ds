@@ -44,14 +44,9 @@ class BattleSpriteRequestTest {
         val opponent = BattleSpriteRequest.forOpponent("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
 
         val playerCandidates = ShowdownAssetPaths.battleSpriteCandidates(player)
-        assertEquals(
-            listOf(
-                "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
-                "sprites/ani-back/substitute.gif"
-            ),
-            playerCandidates.takeLast(2)
-        )
-        assertTrue(playerCandidates.dropLast(2).all { it.startsWith("https://") })
+        assertTrue(playerCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
+        assertEquals("sprites/ani-back/substitute.gif", playerCandidates.last())
+        assertTrue(playerCandidates.none { it.contains("/FRONT/") })
         assertEquals(
             "sprites/xyani/ironvaliant.gif",
             ShowdownAssetPaths.battleSprite(opponent)
