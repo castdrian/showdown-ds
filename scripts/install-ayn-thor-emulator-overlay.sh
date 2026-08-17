@@ -66,6 +66,15 @@ if [[ -z "$build_output_root" ]]; then
     fi
 fi
 
+patch_digest="$(shasum -a 256 "$patch_file" | awk '{print $1}')"
+if [[ -n "$build_output_root" ]]; then
+    build_patch_digest_file="$build_output_root/ayn-thor-single-window.patch.sha256"
+    if [[ ! -f "$build_patch_digest_file" || "$(cat "$build_patch_digest_file")" != "$patch_digest" ]]; then
+        printf '%s\n' "The QEMU binary was not built from the checked-in Thor layout patch."
+        exit 1
+    fi
+fi
+
 if [[ -e "$overlay_root" && ! -d "$overlay_root" ]]; then
     printf '%s\n' "The overlay path is not a directory: $overlay_root"
     exit 1
@@ -103,6 +112,6 @@ chmod +x "$overlay_root/emulator"
 chmod +x "$qemu_overlay_binary"
 chmod +x "$qemu_headless_overlay_binary"
 
-shasum -a 256 "$patch_file" | awk '{print $1}' > "$overlay_root/ayn-thor-single-window.patch.sha256"
+printf '%s\n' "$patch_digest" > "$overlay_root/ayn-thor-single-window.patch.sha256"
 
 printf '%s\n' "Installed the AYN Thor emulator overlay in $overlay_root"

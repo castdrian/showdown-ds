@@ -196,4 +196,17 @@ class ThorDisplayProfileTest {
         assertFalse(createScript.contains("Vulkan", true))
         assertFalse(createScript.contains("lavapipe", true))
     }
+
+    @Test
+    fun tiesInstalledThorOverlayBinariesToTheLayoutPatchTheyWereBuiltWith() {
+        val buildScript = File("../scripts/build-ayn-thor-emulator-overlay.sh").readText()
+        val installScript = File("../scripts/install-ayn-thor-emulator-overlay.sh").readText()
+
+        assertTrue(buildScript.contains("build_patch_digest_file"))
+        assertTrue(buildScript.contains("shasum -a 256 \"\$patch_file\""))
+        assertTrue(buildScript.contains("printf '%s\\n' \"\$patch_digest\" > \"\$build_patch_digest_file\""))
+        assertTrue(installScript.contains("build_patch_digest_file"))
+        assertTrue(installScript.contains("The QEMU binary was not built from the checked-in Thor layout patch."))
+        assertTrue(installScript.contains("if [[ -n \"\$build_output_root\" ]]"))
+    }
 }

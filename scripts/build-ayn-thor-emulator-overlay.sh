@@ -97,4 +97,8 @@ if [[ -z "$qemu_headless_binary" ]]; then
     exit 1
 fi
 
+patch_digest="$(shasum -a 256 "$patch_file" | awk '{print $1}')"
+build_patch_digest_file="$build_root/ayn-thor-single-window.patch.sha256"
+printf '%s\n' "$patch_digest" > "$build_patch_digest_file"
+
 "$repo_root/scripts/install-ayn-thor-emulator-overlay.sh" "$qemu_binary" "$qemu_headless_binary" "$build_root"
