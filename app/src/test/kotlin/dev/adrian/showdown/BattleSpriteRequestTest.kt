@@ -57,4 +57,17 @@ class BattleSpriteRequestTest {
             ShowdownAssetPaths.battleSprite(opponent)
         )
     }
+
+    @Test
+    fun modernPlayerPlanKeepsAnimatedBackSpritesAheadOfGenFiveFallbacks() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forPlayer("Brambleghast", BattleSession.SpriteStyle.MODERN_3D)
+        )
+
+        assertEquals("sprites/xyani-back/brambleghast.gif", plan.fallbackCandidates.first())
+        assertTrue(
+            plan.fallbackCandidates.indexOf("sprites/xyani-back/brambleghast.gif") <
+                plan.fallbackCandidates.indexOf("sprites/gen5ani-back/brambleghast.gif")
+        )
+    }
 }
