@@ -48,7 +48,8 @@ class ShowdownAssetPathsTest {
                 "sprites/xy/furfroulareine.png",
                 "sprites/xy/furfrou.png",
                 "sprites/dex/furfrou-la-reine.png",
-                "sprites/dex/furfroulareine.png"
+                "sprites/dex/furfroulareine.png",
+                "sprites/ani/substitute.gif"
             ),
             candidates.filter { it.startsWith("sprites/") }
         )
@@ -65,7 +66,8 @@ class ShowdownAssetPathsTest {
                 "sprites/xyani/ironhands.gif",
                 "sprites/xy/ironhands.png",
                 "sprites/dex/iron-hands.png",
-                "sprites/dex/ironhands.png"
+                "sprites/dex/ironhands.png",
+                "sprites/ani/substitute.gif"
             ),
             candidates.filter { it.startsWith("sprites/") }
         )

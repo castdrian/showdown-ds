@@ -1,23 +1,18 @@
 package dev.adrian.showdown
 
-import android.annotation.TargetApi
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.ImageDecoder
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.AnimatedImageDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -33,13 +28,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
         private val bitmap: Bitmap?,
         private val movie: Movie?,
-        private val animatedDrawable: AnimatedImageDrawable?,
         private val width: Int,
         private val height: Int
     ) {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-        val isAnimated get() = movie != null || animatedDrawable != null
+        val isAnimated get() = movie != null
 
         fun trimHorizontalTransparentPadding(): SpriteAsset {
             val image = bitmap ?: return this
@@ -73,16 +67,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 canvas.restore()
                 return
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                animatedDrawable?.let {
-                    it.bounds = Rect(left.toInt(), top.toInt(), (left + drawWidth).toInt(), (top + drawHeight).toInt())
-                    if (!it.isRunning) it.start()
-                    it.draw(canvas)
-                    if (alpha < 255) canvas.restore()
-                    canvas.restore()
-                    return
-                }
-            }
             movie ?: run {
                 if (alpha < 255) canvas.restore()
                 canvas.restore()
@@ -97,24 +81,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
 
         companion object {
-            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, null, bitmap.width, bitmap.height)
+            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
 
-            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, null, movie.width(), movie.height())
-
-            @TargetApi(Build.VERSION_CODES.P)
-            fun fromAnimatedDrawable(drawable: AnimatedImageDrawable): SpriteAsset {
-                drawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
-                return SpriteAsset(null, null, drawable, drawable.intrinsicWidth, drawable.intrinsicHeight)
-            }
+            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
         }
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val downloadExecutor = Executors.newFixedThreadPool(2)
+    private val downloadExecutor = Executors.newFixedThreadPool(4)
     private val memoryCache = LruCache<String, SpriteAsset>(16)
     private val pendingSpriteReceivers = ConcurrentHashMap<String, MutableList<(SpriteAsset?) -> Unit>>()
     private val pendingFileReceivers = ConcurrentHashMap<String, MutableList<(File?) -> Unit>>()
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
+    private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
         requestResolutionPlan(
@@ -151,8 +130,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     fun requestBackdrop(name: String = "bg-aquacordetown.jpg", receiver: (Bitmap?) -> Unit) {
+        fallbackBackdrop?.let { fallback ->
+            mainHandler.post { receiver(fallback) }
+        }
         requestBytes("sprites/gen6bgs/$name") { file ->
-            receiver(file?.let { BitmapFactory.decodeFile(it.path) })
+            val bitmap = file?.let { BitmapFactory.decodeFile(it.path) }
+            receiver(bitmap ?: fallbackBackdrop)
         }
     }
 
@@ -557,12 +540,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private fun decodeSprite(file: File, path: String): SpriteAsset? {
         return if (path.endsWith(".gif")) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val source = ImageDecoder.createSource(file)
-                (ImageDecoder.decodeDrawable(source) as? AnimatedImageDrawable)?.let(SpriteAsset::fromAnimatedDrawable)
-            } else {
-                Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 }?.let(SpriteAsset::fromMovie)
-            }
+            Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 }?.let(SpriteAsset::fromMovie)
         } else {
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }

@@ -1623,7 +1623,7 @@ class CommandDeckView(
             val focused = index == session.focusedTeam
             val previewPosition = previewOrder.indexOf(index)
             val details = session.teamMemberDetails(index)
-            requestTeamSprite(pokemon, details.shiny)
+            requestTeamSprite(pokemon, details.species.ifBlank { pokemon }, details.shiny)
             paint.style = Paint.Style.FILL
             paint.shader = LinearGradient(
                 bounds.left,
@@ -1752,19 +1752,23 @@ class CommandDeckView(
 
     private fun RectF.toSwitchTeamBounds() = SwitchTeamCardBounds(left, top, right, bottom)
 
-    private fun requestTeamSprite(species: String, shiny: Boolean) {
-        val request = BattleSpriteRequest.forOpponent(species, session.spriteStyle, shiny)
-        if (requestedTeamSprites[species] == request) return
-        requestedTeamSprites[species] = request
-        teamSprites.remove(species)
-        spriteCache.requestPlaceholder(BattleSpriteSide.OPPONENT) { placeholder ->
-            if (requestedTeamSprites[species] == request && !teamSprites.containsKey(species) && placeholder != null) {
-                teamSprites[species] = placeholder
-            }
-            postInvalidateOnAnimation()
-        }
+    private fun requestTeamSprite(displayName: String, species: String, shiny: Boolean) {
+        val requestedSpecies = species.ifBlank { displayName }
+        val request = BattleSpriteRequest.forOpponent(requestedSpecies, session.spriteStyle, shiny)
+        if (requestedTeamSprites[displayName] == request) return
+        requestedTeamSprites[displayName] = request
+        teamSprites.remove(displayName)
         spriteCache.requestPokemon(request) { sprite ->
-            if (requestedTeamSprites[species] == request && sprite != null) teamSprites[species] = sprite
+            if (requestedTeamSprites[displayName] != request) return@requestPokemon
+            if (sprite != null) {
+                teamSprites[displayName] = sprite
+                postInvalidateOnAnimation()
+                return@requestPokemon
+            }
+            spriteCache.requestPlaceholder(BattleSpriteSide.OPPONENT) { placeholder ->
+                if (requestedTeamSprites[displayName] == request && placeholder != null) teamSprites[displayName] = placeholder
+                postInvalidateOnAnimation()
+            }
             postInvalidateOnAnimation()
         }
     }

@@ -128,6 +128,7 @@ object ShowdownAssetPaths {
             }
             candidates += dexSprite(request.species)
             candidates += "sprites/dex/${animationId(request.species)}.png"
+            candidates += placeholder(BattleSpriteSide.OPPONENT)
         }
         return candidates.toList()
     }

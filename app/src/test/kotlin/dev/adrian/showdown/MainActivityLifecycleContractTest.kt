@@ -115,9 +115,10 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
 
         assertTrue(source.contains("private val requestedTeamSprites = mutableMapOf<String, BattleSpriteRequest>()"))
-        assertTrue(source.contains("val request = BattleSpriteRequest.forOpponent(species, session.spriteStyle, shiny)"))
-        assertTrue(source.contains("if (requestedTeamSprites[species] == request) return"))
-        assertTrue(source.contains("teamSprites.remove(species)"))
+        assertTrue(source.contains("val requestedSpecies = species.ifBlank { displayName }"))
+        assertTrue(source.contains("val request = BattleSpriteRequest.forOpponent(requestedSpecies, session.spriteStyle, shiny)"))
+        assertTrue(source.contains("if (requestedTeamSprites[displayName] == request) return"))
+        assertTrue(source.contains("teamSprites.remove(displayName)"))
     }
 
     @Test

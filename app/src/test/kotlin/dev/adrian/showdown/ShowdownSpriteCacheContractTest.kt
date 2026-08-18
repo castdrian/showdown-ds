@@ -6,6 +6,24 @@ import org.junit.Test
 
 class ShowdownSpriteCacheContractTest {
     @Test
+    fun decodesGifSpritesWithExplicitFrameTiming() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("Movie.decodeFile(file.path)"))
+        assertTrue(source.contains("movie.setTime((elapsedMillis % maxOf(movie.duration(), 1000)).toInt())"))
+        assertTrue(source.contains("val isAnimated get() = movie != null"))
+    }
+
+    @Test
+    fun keepsBattleBackdropsVisibleWhileRemoteArtworkLoads() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("R.drawable.battle_background_fallback"))
+        assertTrue(source.contains("mainHandler.post { receiver(fallback) }"))
+        assertTrue(source.contains("?: fallbackBackdrop"))
+    }
+
+    @Test
     fun modernArtworkResolutionKeepsAnimatedSourcesAheadOfStaticFallbacks() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val modernHdIndex = source.indexOf("requestPokeApiModernHdSprite(request)")

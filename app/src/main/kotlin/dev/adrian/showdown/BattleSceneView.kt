@@ -35,8 +35,6 @@ class BattleSceneView(
     private val opponentActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
     private val requestedPlayerActiveSprites = mutableMapOf<String, BattleSpriteRequest>()
     private val requestedOpponentActiveSprites = mutableMapOf<String, BattleSpriteRequest>()
-    private var playerPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
-    private var opponentPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
     private var requestedPlayerSprite: BattleSpriteRequest? = null
     private var requestedOpponentSprite: BattleSpriteRequest? = null
     private val itemSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
@@ -67,14 +65,6 @@ class BattleSceneView(
 
     init {
         setWillNotDraw(false)
-        spriteCache.requestPlaceholder(BattleSpriteSide.PLAYER) {
-            playerPlaceholder = it
-            invalidate()
-        }
-        spriteCache.requestPlaceholder(BattleSpriteSide.OPPONENT) {
-            opponentPlaceholder = it
-            invalidate()
-        }
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -130,7 +120,7 @@ class BattleSceneView(
                     combatant.condition,
                     combatant.entryAtNanos,
                     nowNanos,
-                    opponentActiveSprites[combatant.slot] ?: opponentPlaceholder
+                    opponentActiveSprites[combatant.slot]
                 )
             }
         } else {
@@ -143,7 +133,7 @@ class BattleSceneView(
                 session.opponentCondition,
                 session.opponentEntryAtNanos,
                 nowNanos,
-                opponentSprite ?: opponentPlaceholder,
+                opponentSprite,
                 showdownPlacement = singles
             )
         }
@@ -158,7 +148,7 @@ class BattleSceneView(
                     combatant.condition,
                     combatant.entryAtNanos,
                     nowNanos,
-                    playerActiveSprites[combatant.slot] ?: playerPlaceholder
+                    playerActiveSprites[combatant.slot]
                 )
             }
         } else {
@@ -171,7 +161,7 @@ class BattleSceneView(
                 session.playerCondition,
                 session.playerEntryAtNanos,
                 nowNanos,
-                playerSprite ?: playerPlaceholder,
+                playerSprite,
                 showdownPlacement = singles
             )
         }
@@ -238,8 +228,8 @@ class BattleSceneView(
             opponentCombatants.any { isFainting(it.name, it.condition) } ||
             BattleSceneTiming.summonProgress(session.playerEntryAtNanos, nowNanos) < 1f ||
             BattleSceneTiming.summonProgress(session.opponentEntryAtNanos, nowNanos) < 1f ||
-            (playerSprite ?: playerPlaceholder)?.isAnimated == true ||
-            (opponentSprite ?: opponentPlaceholder)?.isAnimated == true ||
+            playerSprite?.isAnimated == true ||
+            opponentSprite?.isAnimated == true ||
             playerCombatants.any { playerActiveSprites[it.slot]?.isAnimated == true } ||
             opponentCombatants.any { opponentActiveSprites[it.slot]?.isAnimated == true }
         ) {
