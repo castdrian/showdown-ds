@@ -100,15 +100,15 @@ class ThorDisplayProfileTest {
     }
 
     @Test
-    fun keepsTheLargePanelAboveTheCompactPanelWithARealGap() {
-        val compositeHeight = 1080 + 48 + 945
+    fun keepsTheLargePanelAboveTheCompactPanelWithoutAGap() {
+        val compositeHeight = 1080 + 945
         val primaryTop = 0
-        val lowerTop = 1080 + 48
+        val lowerTop = 1080
 
         assertEquals(0, primaryTop)
-        assertEquals(1128, lowerTop)
-        assertEquals(48, lowerTop - (primaryTop + 1080))
-        assertEquals(2073, compositeHeight)
+        assertEquals(1080, lowerTop)
+        assertEquals(0, lowerTop - (primaryTop + 1080))
+        assertEquals(2025, compositeHeight)
     }
 
     @Test
@@ -199,7 +199,7 @@ class ThorDisplayProfileTest {
         assertEquals("thorPreviewHeight + thorPreviewGap", layoutAssignments.getValue("primary->second.pos_y"))
         assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
         assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
-        assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 48;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 0;").findAll(overlayPatch).count())
         assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
         assertEquals(3, Regex("constexpr uint32_t thorPreviewWidth = 1085;").findAll(overlayPatch).count())
         assertEquals(3, Regex("constexpr uint32_t thorPreviewHeight = 945;").findAll(overlayPatch).count())
@@ -208,7 +208,7 @@ class ThorDisplayProfileTest {
             ?.groupValues
             ?.get(1)
             ?.toInt()
-        assertTrue(previewGap != null && previewGap >= 32)
+        assertEquals(0, previewGap)
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1085;"))
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 945;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
