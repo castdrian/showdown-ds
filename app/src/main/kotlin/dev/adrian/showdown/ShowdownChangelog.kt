@@ -28,6 +28,7 @@ object ShowdownChangelog {
                 "Battle and team-preview sprites now use HD animated artwork first and fall back to modern regular artwork only when a species or form has no HD asset.",
                 "Shiny battle and team-preview Pokémon now keep their shiny appearance through HD front and rear sprite resolution.",
                 "Gen 6 shiny back sprites now use their dedicated XY and ORAS artwork indexes before pixel fallbacks.",
+                "Front sprites now prefer available HD animation and HOME artwork before using smaller Showdown fallbacks.",
                 "Singles HP cards now share one Pokémon-style frame, keep their full names readable, and stay clear of the sprites.",
                 "The switch screen now uses two wide columns with separated sprite, name, level, HP, type, and status regions.",
                 "Battle history snapshots no longer replay as a burst when the live Showdown feed takes over; only new events enter the readable message queue.",
