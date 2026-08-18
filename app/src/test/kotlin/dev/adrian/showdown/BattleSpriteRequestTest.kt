@@ -72,5 +72,10 @@ class BattleSpriteRequestTest {
         assertFalse(source.contains("legacyLocalCandidates"))
         assertFalse(source.contains("pokeApiAnimatedSprite"))
         assertTrue(source.contains("receiver(standardRemoteAsset)"))
+        val communityIndex = source.indexOf("requestSpriteCandidates(communityCandidates)")
+        val homeIndex = source.indexOf("requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite")
+        assertTrue(communityIndex >= 0)
+        assertTrue(homeIndex >= 0)
+        assertTrue(communityIndex < homeIndex)
     }
 }
