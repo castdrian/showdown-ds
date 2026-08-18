@@ -321,11 +321,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (communityAsset != null) {
                 receiver(communityAsset)
             } else {
-                requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
-                    if (highResolutionAsset != null) {
-                        receiver(highResolutionAsset)
+                requestRegularOrModernLocalSpriteResolution(request, plan) { animatedAsset ->
+                    if (animatedAsset != null) {
+                        receiver(animatedAsset)
                     } else {
-                        requestRegularOrModernLocalSpriteResolution(request, plan, receiver)
+                        requestPokeApiHighResolutionSprite(request, receiver)
                     }
                 }
             }

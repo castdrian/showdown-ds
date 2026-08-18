@@ -83,6 +83,17 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun keepsBanetteAnimationAheadOfStaticFrontFallbacks() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forOpponent("Banette", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val animatedCandidate = "https://www.pkparaiso.com/imagenes/xy/sprites/animados/banette.gif"
+
+        assertTrue(plan.regularRemoteCandidates.contains(animatedCandidate))
+        assertTrue(plan.allCandidates.indexOf(animatedCandidate) < plan.allCandidates.indexOf("sprites/xyani/banette.gif"))
+    }
+
+    @Test
     fun keepsRegularPkParaisoArtworkOutOfTheHdResolutionTier() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forOpponent("Rotom-Wash", BattleSession.SpriteStyle.MODERN_3D)
