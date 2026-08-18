@@ -1357,7 +1357,7 @@ class CommandDeckView(
             paint.textAlign = Paint.Align.CENTER
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             paint.textSize = readableTextSize(if (gimmicks.size > 2) 22f else 36f, scale, 20f)
-            paint.color = if (selected) Color.rgb(22, 22, 22) else PAPER
+            paint.color = PAPER
             val label = if (gimmicks.size > 2) compactGimmickLabel(gimmick) else session.gimmickLabel(gimmick)
             val labelInset = if (gimmicks.size > 2) 8f * scale else 24f * scale
             paint.textSize = fittedTextSize(label, card.width() - labelInset, paint.textSize, 10f * scale)
