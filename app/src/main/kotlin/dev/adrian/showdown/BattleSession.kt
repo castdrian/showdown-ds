@@ -64,7 +64,7 @@ class BattleSession {
         val animatedCollection: String,
         val staticCollections: List<String>
     ) {
-        MODERN_3D("HD animated", "xyani", listOf("xy", "gen5")),
+        MODERN_3D("HD animated", "xyani", listOf("xy")),
         CLASSIC_2D("Gen 5 classic", "gen5ani", listOf("gen5"))
     }
 
@@ -4448,6 +4448,11 @@ class BattleSession {
                     for (moveIndex in 0 until moves.length()) add(moves.optString(moveIndex))
                 }
             } ?: known?.moves.orEmpty()
+            val ability = entry.optString("baseAbility", known?.ability ?: "Unknown ability")
+                .let { abilityNameResolver?.invoke(it) ?: it }
+            val item = entry.optString("item", known?.item ?: "Unknown item")
+                .ifBlank { "Unknown item" }
+                .let { itemNameResolver?.invoke(it) ?: it }
             synced += PokemonDetails(
                 identifier,
                 resolvedTypes(species, known?.types.orEmpty()),
@@ -4455,8 +4460,8 @@ class BattleSession {
                 levelGender.second,
                 condition,
                 condition(condition),
-                entry.optString("baseAbility", known?.ability ?: "Unknown ability"),
-                entry.optString("item", known?.item ?: "Unknown item").ifBlank { "Unknown item" },
+                ability,
+                item,
                 knownMoves,
                 known?.stats.orEmpty(),
                 entry.optString("pokeball", known?.pokeball ?: "pokeball"),

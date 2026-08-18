@@ -142,12 +142,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     fun requestItem(item: String, receiver: (SpriteAsset?) -> Unit) {
-        val path = ShowdownAssetPaths.itemSprite(item)
-        if (path == null) {
+        val paths = ShowdownAssetPaths.itemSpriteCandidates(item)
+        if (paths.isEmpty()) {
             mainHandler.post { receiver(null) }
             return
         }
-        requestSprite(path, receiver)
+        requestSpriteCandidates(paths, receiver)
     }
 
     fun requestBackdrop(name: String = "bg-aquacordetown.jpg", receiver: (Bitmap?) -> Unit) {
@@ -254,15 +254,21 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             receiver(verifiedAsset)
                             return@requestSpriteCandidates
                         }
-                        val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-                        val legacyLocalCandidates = plan.fallbackCandidates.filterNot(::isModernLocalCandidate)
-                        requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
-                            if (modernLocalAsset != null) {
-                                receiver(modernLocalAsset)
+                        requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
+                            if (regularRemoteAsset != null) {
+                                receiver(regularRemoteAsset)
                             } else {
-                                requestPokeApiLegacySprite(request) { legacyRemoteAsset ->
-                                    if (legacyRemoteAsset != null) receiver(legacyRemoteAsset)
-                                    else requestSpriteCandidates(legacyLocalCandidates, receiver)
+                                val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
+                                val legacyLocalCandidates = plan.fallbackCandidates.filterNot(::isModernLocalCandidate)
+                                requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
+                                    if (modernLocalAsset != null) {
+                                        receiver(modernLocalAsset)
+                                    } else {
+                                        requestPokeApiLegacySprite(request) { legacyRemoteAsset ->
+                                            if (legacyRemoteAsset != null) receiver(legacyRemoteAsset)
+                                            else requestSpriteCandidates(legacyLocalCandidates, receiver)
+                                        }
+                                    }
                                 }
                             }
                         }

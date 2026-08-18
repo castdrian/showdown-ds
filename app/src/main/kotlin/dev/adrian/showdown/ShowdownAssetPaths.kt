@@ -7,29 +7,48 @@ data class ShowdownSpriteResolutionPlan(
     val preferredRemoteCandidates: List<String>,
     val communityRemoteCandidates: List<String>,
     val verifiedRemoteCandidates: List<String>,
+    val regularRemoteCandidates: List<String>,
     val fallbackCandidates: List<String>,
     val usesModernAnimatedFallback: Boolean
 ) {
     val allCandidates: List<String>
-        get() = preferredRemoteCandidates + communityRemoteCandidates + verifiedRemoteCandidates + fallbackCandidates
+        get() = preferredRemoteCandidates + communityRemoteCandidates + verifiedRemoteCandidates + regularRemoteCandidates + fallbackCandidates
 }
 
 object ShowdownAssetPaths {
+    private val itemSlugAliases = mapOf(
+        "assaultvest" to "assault-vest",
+        "abilityshield" to "ability-shield",
+        "boosterenergy" to "booster-energy",
+        "choicescarf" to "choice-scarf",
+        "choicespecs" to "choice-specs",
+        "choiceband" to "choice-band",
+        "clearamulet" to "clear-amulet",
+        "covertcloak" to "covert-cloak",
+        "focussash" to "focus-sash",
+        "heavydutyboots" to "heavy-duty-boots",
+        "lifeorb" to "life-orb",
+        "protectivepads" to "protective-pads",
+        "rockyhelmet" to "rocky-helmet",
+        "safetygoggles" to "safety-goggles",
+        "weaknesspolicy" to "weakness-policy"
+    )
+
     private val hdNumberedSpriteRoots = listOf(
         "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/",
         "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/"
     )
 
-    private val hdSpriteRoots = hdNumberedSpriteRoots + listOf(
+    private val regularSpriteRoots = listOf(
         "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/",
         "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados/",
         "https://www.pkparaiso.com/imagenes/xy/sprites/animados/"
     )
 
-    private val hdBackSpriteRoots = listOf(
-        "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/",
+    private val hdBackSpriteRoots = hdNumberedSpriteRoots
+
+    private val regularBackSpriteRoots = listOf(
         "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/",
-        "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/",
         "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/",
         "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/"
     )
@@ -67,17 +86,16 @@ object ShowdownAssetPaths {
             add(request.species)
             if (baseSpecies.isNotEmpty() && !baseSpecies.equals(request.species.trim(), ignoreCase = true)) add(baseSpecies)
         }
-        val collections = buildList {
-            add(request.style.animatedCollection)
-            if (request.style != BattleSession.SpriteStyle.CLASSIC_2D) add(BattleSession.SpriteStyle.CLASSIC_2D.animatedCollection)
-        }
+        val collections = listOf(request.style.animatedCollection)
         if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
             if (request.backFacing) {
                 hdBackSpriteCandidates(speciesNames).forEach { candidates += it }
                 communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.PLAYER).forEach { candidates += it }
+                regularBackSpriteCandidates(speciesNames).forEach { candidates += it }
             } else {
                 hdFrontSpriteCandidates(speciesNames).forEach { candidates += it }
                 communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT).forEach { candidates += it }
+                regularFrontSpriteCandidates(speciesNames).forEach { candidates += it }
             }
         }
         val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
@@ -122,9 +140,13 @@ object ShowdownAssetPaths {
             ?: candidates.size
         val remoteCandidates = candidates.take(firstLocalCandidate)
         return ShowdownSpriteResolutionPlan(
-            preferredRemoteCandidates = remoteCandidates.filterNot(::isCommunityAnimatedCandidate).filterNot(::isVerifiedRemoteCandidate),
+            preferredRemoteCandidates = remoteCandidates
+                .filterNot(::isCommunityAnimatedCandidate)
+                .filterNot(::isVerifiedRemoteCandidate)
+                .filterNot(::isRegularAnimatedCandidate),
             communityRemoteCandidates = remoteCandidates.filter(::isCommunityAnimatedCandidate),
             verifiedRemoteCandidates = remoteCandidates.filter(::isVerifiedRemoteCandidate),
+            regularRemoteCandidates = remoteCandidates.filter(::isRegularAnimatedCandidate),
             fallbackCandidates = candidates.drop(firstLocalCandidate),
             usesModernAnimatedFallback = usesModernAnimatedFallback
         )
@@ -135,6 +157,9 @@ object ShowdownAssetPaths {
 
     private fun isVerifiedRemoteCandidate(path: String) =
         path == "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
+
+    private fun isRegularAnimatedCandidate(path: String) =
+        path.contains("/sprites/animados/") || path.contains("/sprites/animados-espalda/")
 
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
 
@@ -159,7 +184,7 @@ object ShowdownAssetPaths {
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}$number.png"
 
     fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide): List<String> =
-        (if (side == BattleSpriteSide.PLAYER) hdBackSpriteRoots else hdSpriteRoots).map { root ->
+        (if (side == BattleSpriteSide.PLAYER) hdBackSpriteRoots else hdNumberedSpriteRoots).map { root ->
             if (side == BattleSpriteSide.PLAYER && root.endsWith("animados-espalda/")) {
                 "$root$number.gif"
             } else {
@@ -186,7 +211,14 @@ object ShowdownAssetPaths {
     private fun hdFrontSpriteCandidates(speciesNames: List<String>): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
-                hdSpriteRoots.map { root -> "$root$spriteName.gif" }
+                hdNumberedSpriteRoots.map { root -> "$root$spriteName.gif" }
+            }
+        }
+
+    private fun regularFrontSpriteCandidates(speciesNames: List<String>): List<String> =
+        speciesNames.flatMap { species ->
+            hdSpriteNames(species).flatMap { spriteName ->
+                regularSpriteRoots.map { root -> "$root$spriteName.gif" }
             }
         }
 
@@ -194,6 +226,15 @@ object ShowdownAssetPaths {
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
                 hdBackSpriteRoots.map { root ->
+                    "$root${spriteName}-back.gif"
+                }
+            }
+        }
+
+    private fun regularBackSpriteCandidates(speciesNames: List<String>): List<String> =
+        speciesNames.flatMap { species ->
+            hdSpriteNames(species).flatMap { spriteName ->
+                regularBackSpriteRoots.map { root ->
                     if (root.endsWith("animados-espalda/")) "$root$spriteName.gif"
                     else "$root${spriteName}-back.gif"
                 }
@@ -260,6 +301,23 @@ object ShowdownAssetPaths {
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
 
     fun itemSprite(item: String): String? {
+        return normalizedItemId(item)?.let { "sprites/itemicons/$it.png" }
+    }
+
+    fun itemSpriteCandidates(item: String): List<String> {
+        val id = normalizedItemId(item) ?: return emptyList()
+        return linkedSetOf(id, itemSlugAliases[id])
+            .filterNotNull()
+            .flatMap { slug ->
+                listOf(
+                    "sprites/itemicons/$slug.png",
+                    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/$slug.png"
+                )
+            }
+            .distinct()
+    }
+
+    private fun normalizedItemId(item: String): String? {
         val id = item.trim()
             .lowercase(Locale.ROOT)
             .replace("é", "e")
@@ -268,7 +326,6 @@ object ShowdownAssetPaths {
         return id.takeUnless {
             it.isBlank() || it == "noitem" || it == "no-item" || it == "unknownitem" || it == "unknown-item"
         }
-            ?.let { "sprites/itemicons/$it.png" }
     }
 
     fun animationId(value: String) = value.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")

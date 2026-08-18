@@ -33,6 +33,26 @@ class ShowdownProtocolContractTest {
     }
 
     @Test
+    fun resolvesItemsAndAbilitiesOnRequestTeamSync() {
+        val session = BattleSession()
+        session.setTeamDetailNameResolvers(
+            { it },
+            { value -> if (value == "assaultvest") "Assault Vest" else value },
+            { value -> if (value == "sapsipper") "Sap Sipper" else value }
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN|",
+                "|player|p2|OPPONENT|",
+                "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Goodra\",\"details\":\"Goodra, L82, F\",\"condition\":\"265/265\",\"active\":true,\"baseAbility\":\"sapsipper\",\"item\":\"assaultvest\"}]},\"active\":[{}]}"
+            )
+        )
+
+        assertEquals("Assault Vest", session.playerDetails().item)
+        assertEquals("Sap Sipper", session.playerDetails().ability)
+    }
+
+    @Test
     fun appliesStatusesFormChangesAndTerastallizationToTheVisibleBattleState() {
         val session = BattleSession()
 

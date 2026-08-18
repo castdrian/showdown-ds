@@ -438,7 +438,7 @@ class BattleSceneView(
             }
         }
         itemNames.forEach { item ->
-            val path = ShowdownAssetPaths.itemSprite(item) ?: return@forEach
+            val path = BattleItemPresentation.iconPath(item) ?: return@forEach
             if (!requestedItemSprites.add(path)) return@forEach
             spriteCache.requestItem(item) { asset ->
                 itemSprites[path] = asset
@@ -750,7 +750,28 @@ class BattleSceneView(
         canvas.drawText("Item", left, row, paint)
         paint.textAlign = Paint.Align.RIGHT
         paint.color = INK
-        canvas.drawText(ellipsizeToWidth(details.item, right - left - 110f * scale, paint), right, row, paint)
+        val itemName = BattleItemPresentation.visibleName(details.item)
+        val itemPath = BattleItemPresentation.iconPath(details.item)
+        val itemIconSize = itemPath?.let { minOf(42f * scale, bounds.height() * 0.12f) } ?: 0f
+        val itemTextRight = if (itemIconSize > 0f) right - itemIconSize - 12f * scale else right
+        canvas.drawText(
+            ellipsizeToWidth(itemName ?: "Unknown item", itemTextRight - left, paint),
+            itemTextRight,
+            row,
+            paint
+        )
+        itemPath?.let { path ->
+            itemSprites[path]?.draw(
+                canvas,
+                RectF(
+                    right - itemIconSize,
+                    row - itemIconSize * 0.78f,
+                    right,
+                    row + itemIconSize * 0.22f
+                ),
+                SystemClock.elapsedRealtime()
+            )
+        }
         paint.textAlign = Paint.Align.LEFT
         row += 62f * scale
         paint.textSize = readableTextSize(36f, scale, 16f)
@@ -906,7 +927,7 @@ class BattleSceneView(
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
         val levelWidth = paint.measureText(content.levelLabel)
-        val itemPath = ShowdownAssetPaths.itemSprite(content.item)
+        val itemPath = BattleItemPresentation.iconPath(content.item)
         val itemIconSize = itemPath?.let { minOf(30f * scale, height * 0.30f) } ?: 0f
         val itemGap = if (itemPath == null) 0f else 10f * scale
         paint.color = Color.rgb(232, 232, 232)
