@@ -264,8 +264,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                     if (modernLocalAsset != null) {
                                         receiver(modernLocalAsset)
                                     } else {
-                                        requestPokeApiLegacySprite(request) { legacyRemoteAsset ->
-                                            if (legacyRemoteAsset != null) receiver(legacyRemoteAsset)
+                                        requestPokeApiStandardSprite(request) { standardRemoteAsset ->
+                                            if (standardRemoteAsset != null) receiver(standardRemoteAsset)
                                             else requestSpriteCandidates(legacyLocalCandidates, receiver)
                                         }
                                     }
@@ -333,7 +333,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestLookup(0)
     }
 
-    private fun requestPokeApiLegacySprite(
+    private fun requestPokeApiStandardSprite(
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
@@ -350,14 +350,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 if (resourceNumber == null) {
                     requestLookup(index + 1)
                 } else {
-                    requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { asset ->
-                        if (asset != null) {
-                            receiver(asset)
-                        } else {
-                            requestSprite(ShowdownAssetPaths.pokeApiStandardSprite(resourceNumber, request.side)) { standardAsset ->
-                                if (standardAsset != null) receiver(standardAsset) else requestLookup(index + 1)
-                            }
-                        }
+                    requestSprite(ShowdownAssetPaths.pokeApiStandardSprite(resourceNumber, request.side)) { standardAsset ->
+                        if (standardAsset != null) receiver(standardAsset) else requestLookup(index + 1)
                     }
                 }
             }

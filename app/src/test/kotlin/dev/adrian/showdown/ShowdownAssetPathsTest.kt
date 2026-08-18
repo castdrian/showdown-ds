@@ -56,7 +56,7 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun fallsBackToGen5AnimationAndDexSpritesForNewSpecies() {
+    fun fallsBackToRegularAnimationAndDexSpritesForNewSpecies() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forOpponent("Iron Hands", BattleSession.SpriteStyle.MODERN_3D)
         )
