@@ -9,6 +9,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.MotionEvent
 import android.webkit.JavascriptInterface
+import android.os.Handler
+import android.os.Looper
 import org.json.JSONArray
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -22,6 +24,7 @@ class ShowdownMoveEffectsView(
     private val battleMarkupListener: (String, String, Long) -> Unit = { _, _, _ -> },
     private val battleLogSyncListener: (Long) -> Unit = {}
 ) : WebView(context) {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingPackets = ShowdownMoveEffectsQueue()
     private var pageLoaded = false
     private var playbackPaused = false
@@ -59,12 +62,22 @@ class ShowdownMoveEffectsView(
     }
 
     fun seed(lines: List<String>) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { seed(lines) }
+            return
+        }
+        if (released) return
         val packet = lines.filter { it.startsWith('|') }
         pendingPackets.resetWith(packet)
         if (packet.isNotEmpty()) flushPendingPackets(allowSeedWhilePaused = true)
     }
 
     fun applyProtocol(lines: List<String>, battleLogGeneration: Long = 0L) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { applyProtocol(lines, battleLogGeneration) }
+            return
+        }
+        if (released) return
         val packet = lines.filter { it.startsWith('|') }
         if (packet.isEmpty()) return
         if (packet.any { it.startsWith("|init|battle") }) {
@@ -78,6 +91,11 @@ class ShowdownMoveEffectsView(
     }
 
     fun setPlaybackPaused(paused: Boolean) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { setPlaybackPaused(paused) }
+            return
+        }
+        if (released) return
         if (playbackPaused == paused) return
         playbackPaused = paused
         if (paused) {
@@ -89,6 +107,11 @@ class ShowdownMoveEffectsView(
     }
 
     fun setPlaybackSpeed(speed: Float) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { setPlaybackSpeed(speed) }
+            return
+        }
+        if (released) return
         val nextSpeed = speed.coerceIn(0.25f, 4f)
         if (nextSpeed == playbackSpeed) return
         playbackSpeed = nextSpeed
@@ -96,22 +119,27 @@ class ShowdownMoveEffectsView(
     }
 
     fun setPerspective(side: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { setPerspective(side) }
+            return
+        }
+        if (released) return
         val next = side.takeIf { it == "p1" || it == "p2" } ?: return
         battlePerspective = next
         runJavascript("window.ShowdownNativeEffects.setPerspective('$next');")
     }
 
     fun release() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { release() }
+            return
+        }
         if (released) return
         released = true
         pendingPackets.clear()
-        val cleanup = {
-            pageLoaded = false
-            stopLoading()
-            destroy()
-        }
+        val cleanup = { cleanupOnMainThread() }
         if (pageLoaded) {
-            evaluateJavascript("window.ShowdownNativeEffects.release();") { cleanup() }
+            evaluateJavascript("window.ShowdownNativeEffects.release();") { mainHandler.post(cleanup) }
         } else {
             cleanup()
         }
@@ -137,6 +165,12 @@ class ShowdownMoveEffectsView(
 
     private fun runJavascript(script: String) {
         if (pageLoaded) evaluateJavascript(script, null)
+    }
+
+    private fun cleanupOnMainThread() {
+        pageLoaded = false
+        stopLoading()
+        destroy()
     }
 
     private companion object {

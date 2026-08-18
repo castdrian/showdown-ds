@@ -10,6 +10,12 @@ class ShowdownMoveEffectsContractTest {
     fun incrementalBattleStartsPausedAndUsesTheNativePlaybackClock() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
 
+        assertTrue(source.contains("private val mainHandler = Handler(Looper.getMainLooper())"))
+        assertTrue(source.contains("if (Looper.myLooper() != Looper.getMainLooper())"))
+        assertTrue(source.contains("mainHandler.post { applyProtocol(lines, battleLogGeneration) }"))
+        assertTrue(source.contains("mainHandler.post { release() }"))
+        assertTrue(source.contains("private fun cleanupOnMainThread()"))
+        assertTrue(source.contains("mainHandler.post(cleanup)"))
         assertTrue(source.contains("new Battle({ id: 'showdownds', paused: true,"))
         assertTrue(source.contains("if (battle.paused) battle.play();"))
         assertTrue(source.contains("var nativeBattlePerspective = 'p1';"))
