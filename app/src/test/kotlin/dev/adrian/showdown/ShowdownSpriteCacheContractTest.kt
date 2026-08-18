@@ -13,15 +13,16 @@ class ShowdownSpriteCacheContractTest {
         val modernHdIndex = source.indexOf("requestPokeApiModernHdSprite(request)")
         val homeIndex = source.indexOf("requestPokeApiHighResolutionSprite(request)")
         val animatedFallbackIndex = source.indexOf("requestPokeApiAnimatedSprite(request)")
-        val localIndex = source.indexOf("plan.fallbackCandidates.filter(::isModernLocalCandidate)")
+        val localIndex = source.lastIndexOf("requestModernLocalOrLegacy()")
 
         assertTrue(communityIndex >= 0)
         assertTrue(modernHdIndex > communityIndex)
-        assertTrue(regularIndex > modernHdIndex)
-        assertTrue(homeIndex > regularIndex)
+        assertTrue(regularIndex > homeIndex)
+        assertTrue(localIndex > homeIndex)
         assertTrue(animatedFallbackIndex > regularIndex)
         assertTrue(localIndex >= 0)
-        assertTrue(localIndex < animatedFallbackIndex)
+        assertTrue(homeIndex > modernHdIndex)
+        assertTrue(localIndex > homeIndex)
         assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
     }
 }

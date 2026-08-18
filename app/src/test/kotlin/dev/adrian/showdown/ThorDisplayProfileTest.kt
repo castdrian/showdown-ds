@@ -131,7 +131,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("-feature Vulkan"))
         assertFalse(runScript.contains("-feature -Vulkan"))
         assertTrue(runScript.contains("-multidisplay \"1,1240,1080,420,1347\""))
-        assertTrue(runScript.contains("window_scale=\"\${AYN_THOR_WINDOW_SCALE:-auto}\""))
+        assertTrue(runScript.contains("window_scale=\"\${AYN_THOR_WINDOW_SCALE:-1}\""))
         assertTrue(runScript.contains("thor_preview_width_millimetres=\"132.83\""))
         assertTrue(runScript.contains("scale_macos_preview()"))
         assertTrue(runScript.contains("CGDisplayScreenSize"))
@@ -184,19 +184,19 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "thorPreviewHeight + thorPreviewGap",
+                "primary->second.pos_y" to "0",
                 "thorDisplay->second.width" to "thorPreviewWidth",
                 "thorDisplay->second.height" to "thorPreviewHeight",
                 "thorDisplay->second.pos_x" to "(primary->second.originalWidth - thorPreviewWidth) / 2",
-                "thorDisplay->second.pos_y" to "0"
+                "thorDisplay->second.pos_y" to "primary->second.height + thorPreviewGap"
             ),
             layoutAssignments
         )
-        assertEquals("thorPreviewHeight + thorPreviewGap", layoutAssignments.getValue("primary->second.pos_y"))
-        assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
-        assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
+        assertEquals("0", layoutAssignments.getValue("primary->second.pos_y"))
+        assertEquals("primary->second.height + thorPreviewGap", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertEquals(3, Regex("primary->second\\.pos_y = 0;").findAll(overlayPatch).count())
         assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 48;").findAll(overlayPatch).count())
-        assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("thorDisplay->second\\.pos_y = primary->second.height \\+ thorPreviewGap;").findAll(overlayPatch).count())
         val previewGap = Regex("constexpr uint32_t thorPreviewGap = (\\d+);")
             .find(overlayPatch)
             ?.groupValues
@@ -208,9 +208,9 @@ class ThorDisplayProfileTest {
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
         assertTrue(overlayPatch.contains("*y * (iter.second.originalHeight - 1)"))
         assertFalse(overlayPatch.contains("if (totalH == 2208)"))
-        assertTrue(overlayPatch.contains("                pos_y = totalH - iter.second.height - iter.second.pos_y;"))
-        assertTrue(overlayPatch.contains("primary->second.pos_y = thorPreviewHeight + thorPreviewGap;"))
-        assertTrue(overlayPatch.contains("thorDisplay->second.pos_y = 0;"))
+        assertTrue(overlayPatch.contains("+                pos_y = thorLayout ? iter.second.pos_y"))
+        assertTrue(overlayPatch.contains("primary->second.pos_y = 0;"))
+        assertTrue(overlayPatch.contains("thorDisplay->second.pos_y = primary->second.height + thorPreviewGap;"))
         assertTrue(overlayPatch.contains("bool thorLayoutApplied = false;"))
         assertTrue(overlayPatch.contains("((displayId > 0 && displaySizeChanged) || thorLayoutApplied)"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 2"))
@@ -245,6 +245,6 @@ class ThorDisplayProfileTest {
         assertTrue(buildScript.contains("pos_y = totalH - iter\\.second\\.height - iter\\.second\\.pos_y;"))
         assertTrue(buildScript.contains("The checked-out AEMU source does not contain the complete AYN Thor patch."))
         assertTrue(runScript.contains("lower_input_y_origin_count"))
-        assertTrue(runScript.contains("^\\s+pos_y = totalH - iter\\.second\\.height - iter\\.second\\.pos_y;"))
+        assertTrue(runScript.contains("thorLayout \\? iter\\.second\\.pos_y"))
     }
 }
