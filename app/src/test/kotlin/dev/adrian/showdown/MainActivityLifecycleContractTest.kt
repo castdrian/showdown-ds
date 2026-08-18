@@ -294,6 +294,8 @@ class MainActivityLifecycleContractTest {
         assertTrue(loader.contains("equals(normalizedSaved, true)"))
         assertTrue(loader.contains("saved?.let"))
         assertTrue(loader.contains("canSearch = false"))
+        assertTrue(loader.contains("hdmatchup"))
+        assertTrue(loader.contains("match_format_label"))
     }
 
     @Test

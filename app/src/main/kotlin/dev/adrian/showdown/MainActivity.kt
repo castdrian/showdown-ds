@@ -5254,11 +5254,21 @@ class MainActivity : Activity() {
         val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
         val saved = preferences.getString("match_format", null)
         val normalizedSaved = saved?.trim()
+        val savedLabel = preferences.getString("match_format_label", null)?.trim()
+        val normalizedSavedLabel = savedLabel.orEmpty().lowercase(Locale.ROOT).filter(Char::isLetterOrDigit)
+        if (normalizedSaved?.lowercase(Locale.ROOT) == "hdmatchup" || normalizedSavedLabel == "hdmatchup") {
+            val defaultFormat = BattleSession.MatchFormat.GEN9_RANDOM
+            preferences.edit()
+                .putString("match_format", defaultFormat.id)
+                .putString("match_format_label", defaultFormat.label)
+                .apply()
+            return defaultFormat
+        }
         return BattleSession.MatchFormat.defaults.firstOrNull { it.id.trim().equals(normalizedSaved, true) }
             ?: saved?.let {
                 BattleSession.MatchFormat(
                     id = it.trim(),
-                    label = preferences.getString("match_format_label", it)?.trim().takeUnless { label -> label.isNullOrBlank() } ?: it.trim(),
+                    label = savedLabel.takeUnless { label -> label.isNullOrBlank() } ?: it.trim(),
                     canSearch = false
                 )
             }
