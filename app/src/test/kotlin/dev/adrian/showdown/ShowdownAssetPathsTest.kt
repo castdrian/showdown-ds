@@ -262,5 +262,21 @@ class ShowdownAssetPathsTest {
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/1006.png",
             ShowdownAssetPaths.pokeApiHighResolutionSprite(1006)
         )
+        assertEquals(
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1008.png",
+            ShowdownAssetPaths.pokeApiStandardSprite(1008, BattleSpriteSide.PLAYER)
+        )
+        assertEquals(
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1008.png",
+            ShowdownAssetPaths.pokeApiStandardSprite(1008, BattleSpriteSide.OPPONENT)
+        )
+    }
+
+    @Test
+    fun resolvesHeldItemSpritesAndSkipsUnknownItems() {
+        assertEquals("sprites/itemicons/leftovers.png", ShowdownAssetPaths.itemSprite("Leftovers"))
+        assertEquals("sprites/itemicons/heavy-duty-boots.png", ShowdownAssetPaths.itemSprite("Heavy-Duty Boots"))
+        assertEquals(null, ShowdownAssetPaths.itemSprite("Unknown item"))
+        assertEquals(null, ShowdownAssetPaths.itemSprite("No item"))
     }
 }

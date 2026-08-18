@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ImageDecoder
 import android.graphics.Movie
+import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.drawable.AnimatedImageDrawable
@@ -36,6 +37,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val width: Int,
         private val height: Int
     ) {
+        private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
         val isAnimated get() = movie != null || animatedDrawable != null
 
         fun trimHorizontalTransparentPadding(): SpriteAsset {
@@ -65,7 +68,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
             if (bitmap != null) {
-                canvas.drawBitmap(bitmap, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), null)
+                canvas.drawBitmap(bitmap, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
                 if (alpha < 255) canvas.restore()
                 canvas.restore()
                 return
@@ -136,6 +139,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {
         requestSprite(ShowdownAssetPaths.trainer(trainer)) { receiver(it?.trimHorizontalTransparentPadding()) }
+    }
+
+    fun requestItem(item: String, receiver: (SpriteAsset?) -> Unit) {
+        val path = ShowdownAssetPaths.itemSprite(item)
+        if (path == null) {
+            mainHandler.post { receiver(null) }
+            return
+        }
+        requestSprite(path, receiver)
     }
 
     fun requestBackdrop(name: String = "bg-aquacordetown.jpg", receiver: (Bitmap?) -> Unit) {
@@ -225,20 +237,43 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestSpriteCandidates(plan.preferredRemoteCandidates) { asset ->
             if (asset != null) {
                 receiver(asset)
-            } else {
-                requestPokeApiModernSprite(request, plan.communityRemoteCandidates) { fallback ->
-                    if (fallback != null) receiver(fallback)
-                    else requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                        if (communityAsset != null) receiver(communityAsset)
-                        else requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
-                            if (verifiedAsset != null) receiver(verifiedAsset)
-                            else requestSpriteCandidates(plan.fallbackCandidates, receiver)
+                return@requestSpriteCandidates
+            }
+            requestPokeApiModernSprite(request, plan.communityRemoteCandidates) { modernRemoteAsset ->
+                if (modernRemoteAsset != null) {
+                    receiver(modernRemoteAsset)
+                    return@requestPokeApiModernSprite
+                }
+                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                    if (communityAsset != null) {
+                        receiver(communityAsset)
+                        return@requestSpriteCandidates
+                    }
+                    requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
+                        if (verifiedAsset != null) {
+                            receiver(verifiedAsset)
+                            return@requestSpriteCandidates
+                        }
+                        val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
+                        val legacyLocalCandidates = plan.fallbackCandidates.filterNot(::isModernLocalCandidate)
+                        requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
+                            if (modernLocalAsset != null) {
+                                receiver(modernLocalAsset)
+                            } else {
+                                requestPokeApiLegacySprite(request) { legacyRemoteAsset ->
+                                    if (legacyRemoteAsset != null) receiver(legacyRemoteAsset)
+                                    else requestSpriteCandidates(legacyLocalCandidates, receiver)
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    private fun isModernLocalCandidate(path: String) =
+        path.startsWith("sprites/xyani") || path.startsWith("sprites/xy/")
 
     private fun requestPokeApiModernSprite(
         request: BattleSpriteRequest,
@@ -276,15 +311,43 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                     if (highResolutionAsset != null) {
                                         receiver(highResolutionAsset)
                                     } else {
-                                        requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { animatedAsset ->
-                                            if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
-                                        }
+                                        requestLookup(index + 1)
                                     }
                                 }
                             } else {
-                                requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { animatedAsset ->
-                                    if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
-                                }
+                                requestLookup(index + 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        requestLookup(0)
+    }
+
+    private fun requestPokeApiLegacySprite(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        fun requestLookup(index: Int) {
+            val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
+            if (index >= names.size) {
+                receiver(null)
+                return
+            }
+            requestBytes("https://pokeapi.co/api/v2/pokemon/${names[index]}") { file ->
+                val resourceNumber = file?.let { cachedFile ->
+                    runCatching { JSONObject(cachedFile.readText()).optInt("id", 0) }.getOrNull()
+                }?.takeIf { it > 0 }
+                if (resourceNumber == null) {
+                    requestLookup(index + 1)
+                } else {
+                    requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { asset ->
+                        if (asset != null) {
+                            receiver(asset)
+                        } else {
+                            requestSprite(ShowdownAssetPaths.pokeApiStandardSprite(resourceNumber, request.side)) { standardAsset ->
+                                if (standardAsset != null) receiver(standardAsset) else requestLookup(index + 1)
                             }
                         }
                     }

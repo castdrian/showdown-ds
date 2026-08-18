@@ -155,6 +155,9 @@ object ShowdownAssetPaths {
     fun pokeApiHighResolutionSprite(number: Int): String =
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/$number.png"
 
+    fun pokeApiStandardSprite(number: Int, side: BattleSpriteSide): String =
+        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}$number.png"
+
     fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide): List<String> =
         hdNumberedSpriteRoots.map { root ->
             "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}.gif"
@@ -251,6 +254,18 @@ object ShowdownAssetPaths {
     fun placeholder(side: BattleSpriteSide) = "sprites/${if (side == BattleSpriteSide.PLAYER) "ani-back" else "ani"}/substitute.gif"
 
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
+
+    fun itemSprite(item: String): String? {
+        val id = item.trim()
+            .lowercase(Locale.ROOT)
+            .replace("é", "e")
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+        return id.takeUnless {
+            it.isBlank() || it == "noitem" || it == "no-item" || it == "unknownitem" || it == "unknown-item"
+        }
+            ?.let { "sprites/itemicons/$it.png" }
+    }
 
     fun animationId(value: String) = value.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
 

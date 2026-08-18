@@ -4,7 +4,8 @@ data class BattleCardContent(
     val title: String,
     val levelLabel: String,
     val hpLabel: String,
-    val fraction: Float
+    val fraction: Float,
+    val item: String = ""
 ) {
     companion object {
         fun from(details: BattleSession.PokemonDetails) = from(
@@ -12,7 +13,8 @@ data class BattleCardContent(
             species = details.species,
             level = details.level,
             gender = details.gender,
-            hp = details.hp
+            hp = details.hp,
+            item = details.item
         )
 
         fun from(details: BattleSession.PokemonDetails, hp: String) = from(
@@ -20,22 +22,25 @@ data class BattleCardContent(
             species = details.species,
             level = details.level,
             gender = details.gender,
-            hp = hp
+            hp = hp,
+            item = details.item
         )
 
-        fun from(combatant: BattleSession.ActiveCombatant) = from(
+        fun from(combatant: BattleSession.ActiveCombatant, item: String = "") = from(
             name = combatant.name,
             species = combatant.species,
             level = combatant.level,
             gender = combatant.gender,
-            hp = combatant.hp
+            hp = combatant.hp,
+            item = item
         )
 
-        fun from(name: String, species: String, level: String, gender: String, hp: String) = BattleCardContent(
+        fun from(name: String, species: String, level: String, gender: String, hp: String, item: String = "") = BattleCardContent(
             title = BattleSession.displayPokemonName(name, species),
             levelLabel = "Lv.$level$gender",
             hpLabel = hp.substringBefore(' '),
-            fraction = fraction(hp)
+            fraction = fraction(hp),
+            item = item
         )
 
         private fun fraction(hp: String): Float {
