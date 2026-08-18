@@ -1,23 +1,10 @@
 diff --git a/android/android-emu/android/emulation/MultiDisplay.cpp b/android/android-emu/android/emulation/MultiDisplay.cpp
-index 8cacba4027a..fe271140ddc 100644
+index 8cacba4027a..1fe07d814020 100644
 --- a/android/android-emu/android/emulation/MultiDisplay.cpp
 +++ b/android/android-emu/android/emulation/MultiDisplay.cpp
-@@ -393,8 +393,7 @@
-         if (isNormalOrder) {
-             // this is rotation 0
-             AutoLock lock(mLock);
--            uint32_t totalH, pos_x, pos_y, w, h;
--            getCombinedDisplaySizeLocked(nullptr, &totalH);
-+            uint32_t pos_x, pos_y, w, h;
-             for (const auto iter : mMultiDisplay) {
-                 if (iter.first != 0 && iter.second.cb == 0) {
-                     continue;
-@@ -403,12 +402,21 @@
-                 // So we need to transform the (x, y) coordinates from
-                 // bottom left corner to top left corner.
+@@ -405,10 +405,18 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
                  pos_x = iter.second.pos_x;
--                pos_y = totalH - iter.second.height - iter.second.pos_y;
-+                pos_y = iter.second.pos_y;
+                 pos_y = totalH - iter.second.height - iter.second.pos_y;
                  w = iter.second.width;
                  h = iter.second.height;
                  if ((*x - pos_x) < w && (*y - pos_y) < h) {
@@ -35,8 +22,7 @@ index 8cacba4027a..fe271140ddc 100644
                      *displayId = iter.first;
                      return true;
                  }
-@@ -658,6 +666,39 @@
-         mMultiDisplay[displayId].pos_x = x;
+@@ -640,3 +640,36 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
          mMultiDisplay[displayId].pos_y = y;
          mMultiDisplay[displayId].rotation = current_rotation;
 +        bool thorLayoutApplied = false;
@@ -61,23 +47,19 @@ index 8cacba4027a..fe271140ddc 100644
 +                primary->second.width = primary->second.originalWidth;
 +                primary->second.height = primary->second.originalHeight;
 +                primary->second.pos_x = 0;
-+                primary->second.pos_y = 0;
++                primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
 +                primary->second.rotation = current_rotation;
 +                thorDisplay->second.width = thorPreviewWidth;
 +                thorDisplay->second.height = thorPreviewHeight;
 +                thorDisplay->second.pos_x =
 +                        (primary->second.originalWidth - thorPreviewWidth) / 2;
-+                thorDisplay->second.pos_y = primary->second.originalHeight + thorPreviewGap;
++                thorDisplay->second.pos_y = 0;
 +                thorDisplay->second.rotation = current_rotation;
 +                thorLayoutApplied = true;
 +            }
 +        }
          if (mMultiDisplay[displayId].cb != 0) {
-             if (!isMultiDisplayWindow()) {
-                 if (x == -1 && y == -1) {
-@@ -665,8 +706,8 @@
-                 }
-                 getCombinedDisplaySizeLocked(&width, &height);
+@@ -704,7 +737,7 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
              }
 -            if (!android_foldable_is_pixel_fold() && displayId > 0 &&
 -                displaySizeChanged) {
@@ -86,9 +68,8 @@ index 8cacba4027a..fe271140ddc 100644
                  UIUpdate = true;
              }
          }
-@@ -730,6 +771,38 @@
- }
-
+     }
+@@ -732,4 +761,36 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
  void MultiDisplay::performRotationLocked(int mOrientation) {
 +    if (mOrientation == SKIN_ROTATION_0) {
 +        auto primary = mMultiDisplay.find(0);
@@ -111,13 +92,13 @@ index 8cacba4027a..fe271140ddc 100644
 +            primary->second.width = primary->second.originalWidth;
 +            primary->second.height = primary->second.originalHeight;
 +            primary->second.pos_x = 0;
-+            primary->second.pos_y = 0;
++            primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
 +            primary->second.rotation = mOrientation;
 +            thorDisplay->second.width = thorPreviewWidth;
 +            thorDisplay->second.height = thorPreviewHeight;
 +            thorDisplay->second.pos_x =
 +                    (primary->second.originalWidth - thorPreviewWidth) / 2;
-+            thorDisplay->second.pos_y = primary->second.originalHeight + thorPreviewGap;
++            thorDisplay->second.pos_y = 0;
 +            thorDisplay->second.rotation = mOrientation;
 +            return;
 +        }
@@ -125,11 +106,10 @@ index 8cacba4027a..fe271140ddc 100644
      if (android_foldable_is_pixel_fold()) {
          constexpr int primary_display_id = 0;
          const int secondary_display_id =
-@@ -1041,5 +1114,35 @@
-     SkinLayout* layout = (SkinLayout*)getConsoleAgents()->emu->getLayout();
+@@ -1042,4 +1042,34 @@ void MultiDisplay::recomputeLayoutLocked() {
      if (layout) {
          rotation = layout->orientation;
-+    }
+     }
 +    auto primary = mMultiDisplay.find(0);
 +    auto thorDisplay = mMultiDisplay.end();
 +    for (auto it = mMultiDisplay.begin(); it != mMultiDisplay.end(); ++it) {
@@ -139,7 +119,7 @@ index 8cacba4027a..fe271140ddc 100644
 +            thorDisplay = it;
 +            break;
 +        }
-     }
++    }
 +    if (rotation == SKIN_ROTATION_0 && primary != mMultiDisplay.end() &&
 +        primary->second.originalWidth == 1920 &&
 +        primary->second.originalHeight == 1080 &&
@@ -150,13 +130,13 @@ index 8cacba4027a..fe271140ddc 100644
 +        primary->second.width = primary->second.originalWidth;
 +        primary->second.height = primary->second.originalHeight;
 +        primary->second.pos_x = 0;
-+        primary->second.pos_y = 0;
++        primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
 +        primary->second.rotation = rotation;
 +        thorDisplay->second.width = thorPreviewWidth;
 +        thorDisplay->second.height = thorPreviewHeight;
 +        thorDisplay->second.pos_x =
 +                (primary->second.originalWidth - thorPreviewWidth) / 2;
-+        thorDisplay->second.pos_y = primary->second.originalHeight + thorPreviewGap;
++        thorDisplay->second.pos_y = 0;
 +        thorDisplay->second.rotation = rotation;
 +        return;
 +    }

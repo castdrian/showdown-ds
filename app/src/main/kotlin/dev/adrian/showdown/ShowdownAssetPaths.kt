@@ -20,7 +20,7 @@ data class ShowdownSpriteResolutionPlan(
                 it.startsWith("sprites/xyani") || it.startsWith("sprites/xy/")
             }
             val remainingFallbackCandidates = fallbackCandidates - modernLocalCandidates.toSet()
-            return preferredRemoteCandidates + communityRemoteCandidates + regularRemoteCandidates + modernLocalCandidates + verifiedRemoteCandidates + remainingFallbackCandidates
+            return preferredRemoteCandidates + communityRemoteCandidates + modernLocalCandidates + regularRemoteCandidates + verifiedRemoteCandidates + remainingFallbackCandidates
         }
 }
 

@@ -250,35 +250,22 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                         return@requestSpriteCandidates
                     }
                     val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-                    fun requestModernLocalOrSmall() {
+                    fun requestModernLocalOrRegular() {
                         requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
                             if (modernLocalAsset != null) {
                                 receiver(modernLocalAsset)
                             } else {
-                                requestSmallSpriteResolution(request, plan, receiver)
+                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                    if (regularRemoteAsset != null) {
+                                        receiver(regularRemoteAsset)
+                                    } else {
+                                        requestSmallSpriteResolution(request, plan, receiver)
+                                    }
+                                }
                             }
                         }
                     }
-                    fun requestRegularOrModernFallback() {
-                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                            if (regularRemoteAsset != null) {
-                                receiver(regularRemoteAsset)
-                            } else {
-                                requestModernLocalOrSmall()
-                            }
-                        }
-                    }
-                    if (request.side == BattleSpriteSide.OPPONENT) {
-                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
-                            if (highResolutionAsset != null) {
-                                receiver(highResolutionAsset)
-                            } else {
-                                requestRegularOrModernFallback()
-                            }
-                        }
-                    } else {
-                        requestRegularOrModernFallback()
-                    }
+                    requestModernLocalOrRegular()
                 }
             }
         }
@@ -303,6 +290,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
                     if (verifiedAsset != null) {
                         receiver(verifiedAsset)
+                    } else if (request.side == BattleSpriteSide.OPPONENT) {
+                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                            if (highResolutionAsset != null) {
+                                receiver(highResolutionAsset)
+                            } else {
+                                requestPokeApiStandardSprite(request, receiver)
+                            }
+                        }
                     } else {
                         requestPokeApiStandardSprite(request, receiver)
                     }
