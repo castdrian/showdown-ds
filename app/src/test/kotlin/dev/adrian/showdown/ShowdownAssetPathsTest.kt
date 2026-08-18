@@ -239,14 +239,20 @@ class ShowdownAssetPathsTest {
         assertEquals(
             listOf(
                 "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901.gif",
-                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901.gif"
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901.gif",
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/901.gif",
+                "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados/901.gif",
+                "https://www.pkparaiso.com/imagenes/xy/sprites/animados/901.gif"
             ),
             ShowdownAssetPaths.hdAnimatedSpriteCandidates(901, BattleSpriteSide.OPPONENT)
         )
         assertEquals(
             listOf(
                 "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901-back.gif",
-                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901-back.gif"
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/901-back.gif",
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901-back.gif",
+                "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/901.gif",
+                "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/901.gif"
             ),
             ShowdownAssetPaths.hdAnimatedSpriteCandidates(901, BattleSpriteSide.PLAYER)
         )

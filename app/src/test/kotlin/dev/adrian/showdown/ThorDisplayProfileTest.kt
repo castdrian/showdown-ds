@@ -210,6 +210,8 @@ class ThorDisplayProfileTest {
         assertTrue(overlayPatch.contains("                pos_y = totalH - iter.second.height - iter.second.pos_y;"))
         assertTrue(overlayPatch.contains("primary->second.pos_y = thorPreviewHeight + thorPreviewGap;"))
         assertTrue(overlayPatch.contains("thorDisplay->second.pos_y = 0;"))
+        assertTrue(overlayPatch.contains("bool thorLayoutApplied = false;"))
+        assertTrue(overlayPatch.contains("((displayId > 0 && displaySizeChanged) || thorLayoutApplied)"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 2"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 1"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))

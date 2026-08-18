@@ -22,9 +22,10 @@ index 8cacba4027a..1fe07d814020 100644
                      *displayId = iter.first;
                      return true;
                  }
-@@ -640,3 +640,34 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
+@@ -640,3 +640,36 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
          mMultiDisplay[displayId].pos_y = y;
          mMultiDisplay[displayId].rotation = current_rotation;
++        bool thorLayoutApplied = false;
 +        if (current_rotation == SKIN_ROTATION_0) {
 +            auto primary = mMultiDisplay.find(0);
 +            auto thorDisplay = mMultiDisplay.end();
@@ -54,9 +55,20 @@ index 8cacba4027a..1fe07d814020 100644
 +                        (primary->second.originalWidth - thorPreviewWidth) / 2;
 +                thorDisplay->second.pos_y = 0;
 +                thorDisplay->second.rotation = current_rotation;
++                thorLayoutApplied = true;
 +            }
 +        }
          if (mMultiDisplay[displayId].cb != 0) {
+@@ -704,7 +737,7 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
+             }
+-            if (!android_foldable_is_pixel_fold() && displayId > 0 &&
+-                displaySizeChanged) {
++            if (!android_foldable_is_pixel_fold() &&
++                ((displayId > 0 && displaySizeChanged) || thorLayoutApplied)) {
+                 UIUpdate = true;
+             }
+         }
+     }
 @@ -732,4 +761,36 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
  void MultiDisplay::performRotationLocked(int mOrientation) {
 +    if (mOrientation == SKIN_ROTATION_0) {

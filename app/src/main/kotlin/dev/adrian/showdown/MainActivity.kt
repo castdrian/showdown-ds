@@ -360,8 +360,13 @@ class MainActivity : Activity() {
         displayManager?.registerDisplayListener(displayListener, null)
         showSecondaryDisplay()
         restoreLobbyConnection(savedInstanceState)
-        if (!handleIncomingIntent(intent)) {
-            savedInstanceState?.getString("active_replay_source")?.let(::loadReplay)
+        val incomingIntentHandled = handleIncomingIntent(intent)
+        val restoredReplaySource = savedInstanceState?.getString("active_replay_source")
+        if (!incomingIntentHandled) {
+            restoredReplaySource?.let(::loadReplay)
+        }
+        if (ShowdownStartupPolicy.shouldConnectToLobby(shouldMaintainConnection, incomingIntentHandled, restoredReplaySource)) {
+            startLobbyConnection(emptyList(), "Connecting to ${serverEndpoint.displayName}…")
         }
     }
 

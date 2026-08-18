@@ -159,8 +159,12 @@ object ShowdownAssetPaths {
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}$number.png"
 
     fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide): List<String> =
-        hdNumberedSpriteRoots.map { root ->
-            "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}.gif"
+        (if (side == BattleSpriteSide.PLAYER) hdBackSpriteRoots else hdSpriteRoots).map { root ->
+            if (side == BattleSpriteSide.PLAYER && root.endsWith("animados-espalda/")) {
+                "$root$number.gif"
+            } else {
+                "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}.gif"
+            }
         }
 
     private fun trueBackSpritePaths(species: String): List<String> = when (animationId(species)) {
