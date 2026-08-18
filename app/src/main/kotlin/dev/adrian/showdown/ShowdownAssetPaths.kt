@@ -21,8 +21,8 @@ object ShowdownAssetPaths {
     )
 
     private val communityAnimatedSpriteRoots = mapOf(
-        BattleSpriteSide.OPPONENT to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/FRONT/",
-        BattleSpriteSide.PLAYER to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/BACK/"
+        BattleSpriteSide.OPPONENT to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/",
+        BattleSpriteSide.PLAYER to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/"
     )
 
     fun battleSprite(request: BattleSpriteRequest): String {
@@ -217,8 +217,12 @@ object ShowdownAssetPaths {
     }
 
     private fun communityAnimatedSpriteNames(species: String): List<String> {
+        val original = species.trim()
         val normalized = normalizeSpriteName(species)
         return linkedSetOf(
+            original,
+            original.replace(' ', '_'),
+            original.replace(Regex("[\\s-]+"), ""),
             normalized.uppercase(Locale.ROOT),
             normalized.replace('-', '_').uppercase(Locale.ROOT),
             animationId(species).uppercase(Locale.ROOT)

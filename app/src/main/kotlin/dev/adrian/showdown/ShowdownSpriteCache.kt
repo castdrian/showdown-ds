@@ -226,7 +226,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (asset != null) {
                 receiver(asset)
             } else {
-                requestPokeApiModernSprite(request) { fallback ->
+                requestPokeApiModernSprite(request, plan.communityRemoteCandidates) { fallback ->
                     if (fallback != null) receiver(fallback)
                     else requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
                         if (communityAsset != null) receiver(communityAsset)
@@ -240,7 +240,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
     }
 
-    private fun requestPokeApiModernSprite(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+    private fun requestPokeApiModernSprite(
+        request: BattleSpriteRequest,
+        communityCandidates: List<String>,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
         fun requestLookup(index: Int) {
             val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
             if (index >= names.size) {
@@ -263,19 +267,25 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 requestSpriteCandidates(ShowdownAssetPaths.hdAnimatedSpriteCandidates(nationalDexNumber, request.side)) { hdAsset ->
                     if (hdAsset != null) {
                         receiver(hdAsset)
-                    } else if (request.side == BattleSpriteSide.OPPONENT) {
-                        requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber)) { highResolutionAsset ->
-                            if (highResolutionAsset != null) {
-                                receiver(highResolutionAsset)
+                    } else {
+                        requestSpriteCandidates(communityCandidates) { communityAsset ->
+                            if (communityAsset != null) {
+                                receiver(communityAsset)
+                            } else if (request.side == BattleSpriteSide.OPPONENT) {
+                                requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber)) { highResolutionAsset ->
+                                    if (highResolutionAsset != null) {
+                                        receiver(highResolutionAsset)
+                                    } else {
+                                        requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { animatedAsset ->
+                                            if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
+                                        }
+                                    }
+                                }
                             } else {
                                 requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { animatedAsset ->
                                     if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
                                 }
                             }
-                        }
-                    } else {
-                        requestSprite(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side)) { animatedAsset ->
-                            if (animatedAsset != null) receiver(animatedAsset) else requestLookup(index + 1)
                         }
                     }
                 }

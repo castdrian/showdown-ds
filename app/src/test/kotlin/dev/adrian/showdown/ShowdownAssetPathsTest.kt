@@ -88,8 +88,8 @@ class ShowdownAssetPathsTest {
         val backCandidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forPlayer("Sneasler", BattleSession.SpriteStyle.MODERN_3D)
         )
-        val frontCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/FRONT/SKELEDIRGE.gif"
-        val backCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/BACK/SNEASLER.gif"
+        val frontCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/SKELEDIRGE.gif"
+        val backCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/SNEASLER.gif"
         assertTrue(frontCandidates.contains(frontCandidate))
         assertTrue(backCandidates.contains(backCandidate))
         assertTrue(frontCandidates.indexOf(frontCandidate) < frontCandidates.indexOf("sprites/xyani/skeledirge.gif"))
@@ -97,15 +97,24 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun keepsCommunityPixelAnimationBehindHighResolutionModernFallbacks() {
+    fun keepsCommunityAnimationInModernRemoteTier() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forOpponent("Skeledirge", BattleSession.SpriteStyle.MODERN_3D)
         )
-        val communityCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/master/FRONT/SKELEDIRGE.gif"
+        val communityCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/SKELEDIRGE.gif"
 
         assertFalse(plan.preferredRemoteCandidates.contains(communityCandidate))
         assertTrue(plan.communityRemoteCandidates.contains(communityCandidate))
         assertTrue(plan.fallbackCandidates.first().contains("sprites/xyani/skeledirge.gif"))
+    }
+
+    @Test
+    fun preservesCommunitySpriteCapitalizationVariants() {
+        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forOpponent("Gossifleur", BattleSession.SpriteStyle.MODERN_3D)
+        )
+
+        assertTrue(candidates.contains("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/Gossifleur.gif"))
     }
 
     @Test
