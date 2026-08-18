@@ -101,14 +101,14 @@ class ThorDisplayProfileTest {
 
     @Test
     fun keepsTheLargePanelAboveTheCompactPanelWithARealGap() {
-        val compositeHeight = 1080 + 48 + 1080
+        val compositeHeight = 1080 + 48 + 945
         val primaryTop = 0
         val lowerTop = 1080 + 48
 
         assertEquals(0, primaryTop)
         assertEquals(1128, lowerTop)
         assertEquals(48, lowerTop - (primaryTop + 1080))
-        assertEquals(2208, compositeHeight)
+        assertEquals(2073, compositeHeight)
     }
 
     @Test
@@ -131,7 +131,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("-feature Vulkan"))
         assertFalse(runScript.contains("-feature -Vulkan"))
         assertTrue(runScript.contains("-multidisplay \"1,1240,1080,420,1347\""))
-        assertTrue(runScript.contains("window_scale=\"\${AYN_THOR_WINDOW_SCALE:-1}\""))
+        assertTrue(runScript.contains("window_scale=\"\${AYN_THOR_WINDOW_SCALE:-auto}\""))
         assertTrue(runScript.contains("thor_preview_width_millimetres=\"132.83\""))
         assertTrue(runScript.contains("scale_macos_preview()"))
         assertTrue(runScript.contains("CGDisplayScreenSize"))
@@ -197,14 +197,16 @@ class ThorDisplayProfileTest {
         assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
         assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 48;").findAll(overlayPatch).count())
         assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("constexpr uint32_t thorPreviewWidth = 1085;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("constexpr uint32_t thorPreviewHeight = 945;").findAll(overlayPatch).count())
         val previewGap = Regex("constexpr uint32_t thorPreviewGap = (\\d+);")
             .find(overlayPatch)
             ?.groupValues
             ?.get(1)
             ?.toInt()
         assertTrue(previewGap != null && previewGap >= 32)
-        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1240;"))
-        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 1080;"))
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1085;"))
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 945;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
         assertTrue(overlayPatch.contains("*y * (iter.second.originalHeight - 1)"))
         assertFalse(overlayPatch.contains("if (totalH == 2208)"))

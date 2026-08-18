@@ -33,7 +33,7 @@ class ShowdownAssetPathsTest {
     fun keepsHyphenatedDexFormsAndNormalizesAnimatedSprites() {
         assertEquals("sprites/dex/ho-oh.png", ShowdownAssetPaths.dexSprite("Ho-Oh"))
         assertEquals("sprites/dex/nidoran-m.png", ShowdownAssetPaths.dexSprite("Nidoran♂"))
-        assertEquals("sprites/gen5ani/hooh.gif", ShowdownAssetPaths.battleSprite(BattleSpriteRequest.forOpponent("Ho-Oh", BattleSession.SpriteStyle.CLASSIC_2D)))
+        assertEquals("sprites/xyani/hooh.gif", ShowdownAssetPaths.battleSprite(BattleSpriteRequest.forOpponent("Ho-Oh", BattleSession.SpriteStyle.MODERN_3D)))
     }
 
     @Test
@@ -178,13 +178,17 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun classicResolutionPlanDoesNotSilentlyPreferHdAssets() {
-        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
-            BattleSpriteRequest.forOpponent("Alcremie", BattleSession.SpriteStyle.CLASSIC_2D)
+    fun everyBattleResolutionPlanRejectsLegacyGen5Artwork() {
+        val requests = listOf(
+            BattleSpriteRequest.forOpponent("Alcremie", BattleSession.SpriteStyle.MODERN_3D),
+            BattleSpriteRequest.forPlayer("Alcremie", BattleSession.SpriteStyle.MODERN_3D)
         )
-        assertFalse(plan.usesModernAnimatedFallback)
-        assertTrue(plan.preferredRemoteCandidates.isEmpty())
-        assertTrue(plan.fallbackCandidates.first().contains("sprites/gen5ani/alcremie.gif"))
+
+        requests.forEach { request ->
+            val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request)
+            assertTrue(plan.usesModernAnimatedFallback)
+            assertTrue(plan.allCandidates.none { it.contains("gen5", ignoreCase = true) })
+        }
     }
 
     @Test

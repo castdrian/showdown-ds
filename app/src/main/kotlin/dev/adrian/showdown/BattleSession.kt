@@ -64,8 +64,7 @@ class BattleSession {
         val animatedCollection: String,
         val staticCollections: List<String>
     ) {
-        MODERN_3D("HD animated", "xyani", listOf("xy")),
-        CLASSIC_2D("Gen 5 classic", "gen5ani", listOf("gen5"))
+        MODERN_3D("HD animated", "xyani", listOf("xy"))
     }
 
     enum class FeedbackType {
