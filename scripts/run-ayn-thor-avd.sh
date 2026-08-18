@@ -34,6 +34,8 @@ verify_thor_layout_patch() {
     local lower_preview_height_count
     local renderer_preview_width_count
     local renderer_preview_height_count
+    local gl_renderer_preview_width_count
+    local gl_renderer_preview_height_count
     upper_y_count="$(rg -c 'primary->second\.pos_y = thorPreviewHeight \+ thorPreviewGap;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_x_count="$(rg -c '\(primary->second\.originalWidth - thorPreviewWidth\) / 2;' "$overlay_patch_file" 2>/dev/null || true)"
@@ -46,7 +48,9 @@ verify_thor_layout_patch() {
     lower_preview_height_count="$(rg -c 'constexpr uint32_t thorPreviewHeight = 945;' "$overlay_patch_file" 2>/dev/null || true)"
     renderer_preview_width_count="$(rg -c 'currentDisplayW = 1085;' "$overlay_patch_file" 2>/dev/null || true)"
     renderer_preview_height_count="$(rg -c 'currentDisplayH = 945;' "$overlay_patch_file" 2>/dev/null || true)"
-    if [[ "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$lower_x_count" != "3" || "$lower_width_count" != "3" || "$lower_height_count" != "3" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" || "$lower_input_y_origin_count" != "1" || "$lower_preview_width_count" != "3" || "$lower_preview_height_count" != "3" || "$renderer_preview_width_count" != "1" || "$renderer_preview_height_count" != "1" ]]; then
+    gl_renderer_preview_width_count="$(rg -c 'currentDisplayW = 1085;' "$overlay_patch_file" 2>/dev/null || true)"
+    gl_renderer_preview_height_count="$(rg -c 'currentDisplayH = 945;' "$overlay_patch_file" 2>/dev/null || true)"
+    if [[ "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$lower_x_count" != "3" || "$lower_width_count" != "3" || "$lower_height_count" != "3" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" || "$lower_input_y_origin_count" != "1" || "$lower_preview_width_count" != "3" || "$lower_preview_height_count" != "3" || "$renderer_preview_width_count" != "2" || "$renderer_preview_height_count" != "2" || "$gl_renderer_preview_width_count" != "2" || "$gl_renderer_preview_height_count" != "2" ]]; then
         printf '%s\n' "The AYN Thor compositor patch does not describe an upright upper-over-lower centered display layout."
         exit 1
     fi

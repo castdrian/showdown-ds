@@ -8,6 +8,7 @@ qemu_root="$source_root/external/qemu"
 patch_file="$repo_root/tools/android-emulator/ayn-thor-single-window.patch"
 multidisplay_source="$qemu_root/android/android-emu/android/emulation/MultiDisplay.cpp"
 post_worker_source="$source_root/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp"
+post_worker_gl_source="$source_root/hardware/google/gfxstream/host/post_worker_gl.cpp"
 build_root="$source_root/objs-showdown-ds"
 ccache_mode="${AEMU_THOR_CCACHE:-auto}"
 
@@ -47,6 +48,8 @@ verify_patched_source() {
     local lower_input_y_origin_count
     local renderer_preview_width_count
     local renderer_preview_height_count
+    local gl_renderer_preview_width_count
+    local gl_renderer_preview_height_count
     local upper_y_count
     local lower_y_count
     lower_input_y_origin_count="$(rg -c 'pos_y = totalH - iter\.second\.height - iter\.second\.pos_y;' "$multidisplay_source" 2>/dev/null || true)"
@@ -54,7 +57,9 @@ verify_patched_source() {
     lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = 0;' "$multidisplay_source" 2>/dev/null || true)"
     renderer_preview_width_count="$(rg -c 'currentDisplayW = 1085;' "$post_worker_source" 2>/dev/null || true)"
     renderer_preview_height_count="$(rg -c 'currentDisplayH = 945;' "$post_worker_source" 2>/dev/null || true)"
-    if [[ ! -f "$multidisplay_source" || ! -f "$post_worker_source" || "$lower_input_y_origin_count" -lt "1" || "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$renderer_preview_width_count" != "1" || "$renderer_preview_height_count" != "1" ]]; then
+    gl_renderer_preview_width_count="$(rg -c 'currentDisplayW = 1085;' "$post_worker_gl_source" 2>/dev/null || true)"
+    gl_renderer_preview_height_count="$(rg -c 'currentDisplayH = 945;' "$post_worker_gl_source" 2>/dev/null || true)"
+    if [[ ! -f "$multidisplay_source" || ! -f "$post_worker_source" || ! -f "$post_worker_gl_source" || "$lower_input_y_origin_count" -lt "1" || "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$renderer_preview_width_count" != "1" || "$renderer_preview_height_count" != "1" || "$gl_renderer_preview_width_count" != "1" || "$gl_renderer_preview_height_count" != "1" ]]; then
         printf '%s\n' "The checked-out AEMU source does not contain the complete AYN Thor patch."
         exit 1
     fi
