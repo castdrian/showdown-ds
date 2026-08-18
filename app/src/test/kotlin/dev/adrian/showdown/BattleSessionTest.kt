@@ -2678,8 +2678,7 @@ class BattleSessionTest {
         session.applyUserPreferences(
             soundEffects = false,
             music = true,
-            haptics = false,
-            spriteStyle = BattleSession.SpriteStyle.CLASSIC_2D
+            haptics = false
         )
 
         assertFalse(session.soundEffectsEnabled)

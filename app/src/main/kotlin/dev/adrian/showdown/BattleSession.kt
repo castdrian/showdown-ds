@@ -1099,8 +1099,7 @@ class BattleSession {
     fun applyUserPreferences(
         soundEffects: Boolean,
         music: Boolean,
-        haptics: Boolean,
-        spriteStyle: SpriteStyle
+        haptics: Boolean
     ) {
         soundEffectsEnabled = soundEffects
         musicEnabled = music

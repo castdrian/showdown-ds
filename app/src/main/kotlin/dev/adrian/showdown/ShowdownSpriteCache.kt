@@ -249,19 +249,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                         receiver(communityAsset)
                         return@requestSpriteCandidates
                     }
-                    requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
-                        if (verifiedAsset != null) {
-                            receiver(verifiedAsset)
+                    requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
+                        if (regularRemoteAsset != null) {
+                            receiver(regularRemoteAsset)
                             return@requestSpriteCandidates
                         }
-                        requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
-                            if (regularRemoteAsset != null) {
-                                receiver(regularRemoteAsset)
+                        val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
+                        requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
+                            if (modernLocalAsset != null) {
+                                receiver(modernLocalAsset)
                             } else {
-                                val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-                                requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
-                                    if (modernLocalAsset != null) {
-                                        receiver(modernLocalAsset)
+                                requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
+                                    if (verifiedAsset != null) {
+                                        receiver(verifiedAsset)
                                     } else if (request.side == BattleSpriteSide.OPPONENT) {
                                         requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
                                             if (highResolutionAsset != null) receiver(highResolutionAsset)

@@ -74,11 +74,13 @@ class BattleSpriteRequestTest {
         assertTrue(source.contains("receiver(standardAsset)"))
         val communityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)")
         val regularIndex = source.indexOf("requestSpriteCandidates(plan.regularRemoteCandidates)")
+        val verifiedIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)")
         val localIndex = source.indexOf("plan.fallbackCandidates.filter(::isModernLocalCandidate)")
         val homeIndex = source.indexOf("requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite")
         assertTrue(communityIndex >= 0)
         assertTrue(regularIndex > communityIndex)
         assertTrue(localIndex > regularIndex)
+        assertTrue(verifiedIndex > localIndex)
         assertTrue(homeIndex >= 0)
         assertTrue(localIndex < homeIndex)
     }

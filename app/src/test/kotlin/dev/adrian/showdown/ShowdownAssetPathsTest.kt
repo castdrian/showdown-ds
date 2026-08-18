@@ -159,6 +159,10 @@ class ShowdownAssetPathsTest {
         assertTrue(plan.preferredRemoteCandidates.none { it == verifiedBack })
         assertEquals(listOf(verifiedBack), plan.verifiedRemoteCandidates)
         assertTrue(plan.fallbackCandidates.first().contains("sprites/xyani-back/ironvaliant.gif"))
+        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        assertTrue(candidates.indexOf(verifiedBack) > candidates.indexOf("sprites/xyani-back/ironvaliant.gif"))
     }
 
     @Test

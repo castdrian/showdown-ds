@@ -12,7 +12,16 @@ data class ShowdownSpriteResolutionPlan(
     val usesModernAnimatedFallback: Boolean
 ) {
     val allCandidates: List<String>
-        get() = preferredRemoteCandidates + communityRemoteCandidates + verifiedRemoteCandidates + regularRemoteCandidates + fallbackCandidates
+        get() {
+            if (!usesModernAnimatedFallback) {
+                return preferredRemoteCandidates + communityRemoteCandidates + verifiedRemoteCandidates + regularRemoteCandidates + fallbackCandidates
+            }
+            val modernLocalCandidates = fallbackCandidates.filter {
+                it.startsWith("sprites/xyani") || it.startsWith("sprites/xy/")
+            }
+            val remainingFallbackCandidates = fallbackCandidates - modernLocalCandidates.toSet()
+            return preferredRemoteCandidates + communityRemoteCandidates + regularRemoteCandidates + modernLocalCandidates + verifiedRemoteCandidates + remainingFallbackCandidates
+        }
 }
 
 object ShowdownAssetPaths {
