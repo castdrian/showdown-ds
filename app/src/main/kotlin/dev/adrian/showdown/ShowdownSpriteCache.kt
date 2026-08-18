@@ -244,34 +244,48 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     receiver(communityAsset)
                     return@requestSpriteCandidates
                 }
-                requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
-                    if (regularRemoteAsset != null) {
-                        receiver(regularRemoteAsset)
-                        return@requestSpriteCandidates
+                requestPokeApiModernHdSprite(request) { modernHdAsset ->
+                    if (modernHdAsset != null) {
+                        receiver(modernHdAsset)
+                        return@requestPokeApiModernHdSprite
                     }
-                    requestPokeApiModernSprite(request) { modernRemoteAsset ->
-                        if (modernRemoteAsset != null) {
-                            receiver(modernRemoteAsset)
-                            return@requestPokeApiModernSprite
+                    requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
+                        if (regularRemoteAsset != null) {
+                            receiver(regularRemoteAsset)
+                            return@requestSpriteCandidates
                         }
-                        val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-                        requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
-                            if (modernLocalAsset != null) {
-                                receiver(modernLocalAsset)
-                            } else {
-                                requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
-                                    if (verifiedAsset != null) {
-                                        receiver(verifiedAsset)
-                                    } else if (request.side == BattleSpriteSide.OPPONENT) {
-                                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
-                                            if (highResolutionAsset != null) receiver(highResolutionAsset)
-                                            else requestPokeApiStandardSprite(request, receiver)
+                        val continueModernResolution = {
+                            val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
+                            requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
+                                if (modernLocalAsset != null) {
+                                    receiver(modernLocalAsset)
+                                } else {
+                                    requestPokeApiAnimatedSprite(request) { animatedRemoteAsset ->
+                                        if (animatedRemoteAsset != null) {
+                                            receiver(animatedRemoteAsset)
+                                        } else {
+                                            requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
+                                                if (verifiedAsset != null) {
+                                                    receiver(verifiedAsset)
+                                                } else {
+                                                    requestPokeApiStandardSprite(request, receiver)
+                                                }
+                                            }
                                         }
-                                    } else {
-                                        requestPokeApiStandardSprite(request, receiver)
                                     }
                                 }
                             }
+                        }
+                        if (request.side == BattleSpriteSide.OPPONENT) {
+                            requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                                if (highResolutionAsset != null) {
+                                    receiver(highResolutionAsset)
+                                } else {
+                                    continueModernResolution()
+                                }
+                            }
+                        } else {
+                            continueModernResolution()
                         }
                     }
                 }
@@ -282,8 +296,27 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private fun isModernLocalCandidate(path: String) =
         path.startsWith("sprites/xyani") || path.startsWith("sprites/xy/")
 
-    private fun requestPokeApiModernSprite(
+    private fun requestPokeApiModernHdSprite(
         request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestPokeApiSpriteCandidates(request, { number ->
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(number, request.side)
+        }, receiver)
+    }
+
+    private fun requestPokeApiAnimatedSprite(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestPokeApiSpriteCandidates(request, { number ->
+            listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side))
+        }, receiver)
+    }
+
+    private fun requestPokeApiSpriteCandidates(
+        request: BattleSpriteRequest,
+        candidates: (Int) -> List<String>,
         receiver: (SpriteAsset?) -> Unit
     ) {
         fun requestLookup(index: Int) {
@@ -305,12 +338,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     requestLookup(index + 1)
                     return@requestBytes
                 }
-                requestSpriteCandidates(ShowdownAssetPaths.hdAnimatedSpriteCandidates(nationalDexNumber, request.side)) { hdAsset ->
-                    if (hdAsset != null) {
-                        receiver(hdAsset)
-                    } else {
-                        requestLookup(index + 1)
-                    }
+                requestSpriteCandidates(candidates(nationalDexNumber)) { asset ->
+                    if (asset != null) receiver(asset) else requestLookup(index + 1)
                 }
             }
         }

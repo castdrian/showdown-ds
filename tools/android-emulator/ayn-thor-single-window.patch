@@ -47,13 +47,13 @@ index 8cacba4027a..1fe07d814020 100644
 +                primary->second.width = primary->second.originalWidth;
 +                primary->second.height = primary->second.originalHeight;
 +                primary->second.pos_x = 0;
-+                primary->second.pos_y = 0;
++                primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
 +                primary->second.rotation = current_rotation;
 +                thorDisplay->second.width = thorPreviewWidth;
 +                thorDisplay->second.height = thorPreviewHeight;
 +                thorDisplay->second.pos_x =
 +                        (primary->second.originalWidth - thorPreviewWidth) / 2;
-+                thorDisplay->second.pos_y = thorPreviewHeight + thorPreviewGap;
++                thorDisplay->second.pos_y = 0;
 +                thorDisplay->second.rotation = current_rotation;
 +                thorLayoutApplied = true;
 +            }
@@ -92,13 +92,13 @@ index 8cacba4027a..1fe07d814020 100644
 +            primary->second.width = primary->second.originalWidth;
 +            primary->second.height = primary->second.originalHeight;
 +            primary->second.pos_x = 0;
-+            primary->second.pos_y = 0;
++            primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
 +            primary->second.rotation = mOrientation;
 +            thorDisplay->second.width = thorPreviewWidth;
 +            thorDisplay->second.height = thorPreviewHeight;
 +            thorDisplay->second.pos_x =
 +                    (primary->second.originalWidth - thorPreviewWidth) / 2;
-+            thorDisplay->second.pos_y = thorPreviewHeight + thorPreviewGap;
++            thorDisplay->second.pos_y = 0;
 +            thorDisplay->second.rotation = mOrientation;
 +            return;
 +        }
@@ -130,13 +130,13 @@ index 8cacba4027a..1fe07d814020 100644
 +        primary->second.width = primary->second.originalWidth;
 +        primary->second.height = primary->second.originalHeight;
 +        primary->second.pos_x = 0;
-+        primary->second.pos_y = 0;
++        primary->second.pos_y = thorPreviewHeight + thorPreviewGap;
 +        primary->second.rotation = rotation;
 +        thorDisplay->second.width = thorPreviewWidth;
 +        thorDisplay->second.height = thorPreviewHeight;
 +        thorDisplay->second.pos_x =
 +                (primary->second.originalWidth - thorPreviewWidth) / 2;
-+        thorDisplay->second.pos_y = thorPreviewHeight + thorPreviewGap;
++        thorDisplay->second.pos_y = 0;
 +        thorDisplay->second.rotation = rotation;
 +        return;
 +    }
