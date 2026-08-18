@@ -15,9 +15,23 @@ data class ShowdownSpriteResolutionPlan(
 }
 
 object ShowdownAssetPaths {
-    private val hdSpriteRoots = listOf(
+    private val hdNumberedSpriteRoots = listOf(
         "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/",
         "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/"
+    )
+
+    private val hdSpriteRoots = hdNumberedSpriteRoots + listOf(
+        "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/",
+        "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados/",
+        "https://www.pkparaiso.com/imagenes/xy/sprites/animados/"
+    )
+
+    private val hdBackSpriteRoots = listOf(
+        "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/",
+        "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/",
+        "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/",
+        "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/",
+        "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/"
     )
 
     private val communityAnimatedSpriteRoots = mapOf(
@@ -142,7 +156,7 @@ object ShowdownAssetPaths {
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/$number.png"
 
     fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide): List<String> =
-        hdSpriteRoots.map { root ->
+        hdNumberedSpriteRoots.map { root ->
             "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}.gif"
         }
 
@@ -172,7 +186,10 @@ object ShowdownAssetPaths {
     private fun hdBackSpriteCandidates(speciesNames: List<String>): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
-                hdSpriteRoots.map { root -> "$root${spriteName}-back.gif" }
+                hdBackSpriteRoots.map { root ->
+                    if (root.endsWith("animados-espalda/")) "$root$spriteName.gif"
+                    else "$root${spriteName}-back.gif"
+                }
             }
         }
 

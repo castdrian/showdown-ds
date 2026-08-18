@@ -204,12 +204,33 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun doesNotTreatLegacyBackRootsAsHdArtwork() {
+    fun probesGenerationSixAndSevenBackAnimationsBeforePixelFallbacks() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
-            BattleSpriteRequest.forPlayer("Uxie", BattleSession.SpriteStyle.MODERN_3D)
+            BattleSpriteRequest.forPlayer("Deoxys", BattleSession.SpriteStyle.MODERN_3D)
         )
-        assertTrue(candidates.none { it.contains("animados-espalda") })
-        assertTrue(candidates.indexOf("sprites/xyani-back/uxie.gif") < candidates.indexOf("sprites/gen5ani-back/uxie.gif"))
+        assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/deoxys.gif"))
+        assertTrue(candidates.indexOf("https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/deoxys.gif") < candidates.indexOf("sprites/xyani-back/deoxys.gif"))
+    }
+
+    @Test
+    fun probesSunMoonBackAnimationsForAlolanSpecies() {
+        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forPlayer("Incineroar", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val hdCandidate = "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/incineroar.gif"
+        assertTrue(candidates.contains(hdCandidate))
+        assertTrue(candidates.indexOf(hdCandidate) < candidates.indexOf("sprites/xyani-back/incineroar.gif"))
+    }
+
+    @Test
+    fun keepsStandardSwordShieldAnimationsBehindGiantArtwork() {
+        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forPlayer("Corviknight", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val giantCandidate = "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/corviknight-back.gif"
+        val standardCandidate = "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/corviknight-back.gif"
+        assertTrue(candidates.indexOf(giantCandidate) < candidates.indexOf(standardCandidate))
+        assertTrue(candidates.indexOf(standardCandidate) < candidates.indexOf("sprites/xyani-back/corviknight.gif"))
     }
 
     @Test
