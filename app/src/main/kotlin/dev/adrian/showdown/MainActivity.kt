@@ -2309,6 +2309,11 @@ class MainActivity : Activity() {
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
                         serverUserNamed = update.named
+                        val hasPendingLobbyWork = pendingSearch ||
+                            activeSearchFormat != null ||
+                            activeBattleRoomId != null ||
+                            pendingLobbyCommands?.isNotEmpty() == true ||
+                            reconnectLobbyCommands?.isNotEmpty() == true
                         if (sessionRestorePending && update.named && credentialsStore.load() == null) {
                             sessionRestorePending = false
                             authenticated = true
@@ -2316,6 +2321,11 @@ class MainActivity : Activity() {
                         } else if (!sessionRestorePending && (credentialsStore.load() == null || update.named)) {
                             authenticated = true
                             sendPendingLobbyCommands(connection)
+                            if (!hasPendingLobbyWork) {
+                                session.setConnectionStatus(
+                                    if (update.named) "Signed in as ${update.username}." else "Ready for a battle."
+                                )
+                            }
                         }
                     }
                     lines.mapNotNull(ShowdownAuthentication::challenge).firstOrNull()?.let { challenge ->

@@ -209,6 +209,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("loginClient.upkeep(serverEndpoint, challenge)"))
         assertTrue(source.contains("sessionRestorePending = loginClient.hasSession()"))
         assertTrue(source.contains("!sessionRestorePending && (credentialsStore.load() == null || update.named)"))
+        assertTrue(source.contains("if (update.named) \"Signed in as \${update.username}.\" else \"Ready for a battle.\""))
         assertTrue(source.contains("sessionStore.clear()"))
     }
 

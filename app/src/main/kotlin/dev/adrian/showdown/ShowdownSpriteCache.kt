@@ -239,20 +239,20 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(asset)
                 return@requestSpriteCandidates
             }
-            requestPokeApiModernSprite(request) { modernRemoteAsset ->
-                if (modernRemoteAsset != null) {
-                    receiver(modernRemoteAsset)
-                    return@requestPokeApiModernSprite
+            requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                if (communityAsset != null) {
+                    receiver(communityAsset)
+                    return@requestSpriteCandidates
                 }
-                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                    if (communityAsset != null) {
-                        receiver(communityAsset)
+                requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
+                    if (regularRemoteAsset != null) {
+                        receiver(regularRemoteAsset)
                         return@requestSpriteCandidates
                     }
-                    requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
-                        if (regularRemoteAsset != null) {
-                            receiver(regularRemoteAsset)
-                            return@requestSpriteCandidates
+                    requestPokeApiModernSprite(request) { modernRemoteAsset ->
+                        if (modernRemoteAsset != null) {
+                            receiver(modernRemoteAsset)
+                            return@requestPokeApiModernSprite
                         }
                         val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
                         requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
