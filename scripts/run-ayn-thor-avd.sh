@@ -140,6 +140,39 @@ export ANDROID_SDK_ROOT="$sdk_root"
 adb_binary="$sdk_root/platform-tools/adb"
 device_serial="${ANDROID_SERIAL:-emulator-5554}"
 
+thor_qemu_pids() {
+    ps -axo pid=,command= | awk -v avd="$avd_name" '$0 ~ /qemu-system-(aarch64|x86_64)/ {for (i = 1; i < NF; i += 1) if ($i == "-avd" && $(i + 1) == avd) print $1}'
+}
+
+stop_existing_thor_emulator() {
+    local existing_pids
+    local attempt=0
+    existing_pids="$(thor_qemu_pids)"
+    if [[ -z "$existing_pids" ]]; then
+        return 0
+    fi
+    printf '%s\n' "Stopping the existing AYN Thor emulator before applying the current display compositor."
+    kill $existing_pids 2>/dev/null || true
+    while (( attempt < 20 )); do
+        existing_pids="$(thor_qemu_pids)"
+        [[ -z "$existing_pids" ]] && return 0
+        (( attempt += 1 ))
+        sleep 0.25
+    done
+    kill -KILL $existing_pids 2>/dev/null || true
+    attempt=0
+    while (( attempt < 20 )); do
+        existing_pids="$(thor_qemu_pids)"
+        [[ -z "$existing_pids" ]] && return 0
+        (( attempt += 1 ))
+        sleep 0.25
+    done
+    printf '%s\n' "Unable to stop the existing AYN Thor emulator before starting a new compositor."
+    exit 1
+}
+
+stop_existing_thor_emulator
+
 wait_for_android_boot() {
     local attempt=0
     local boot_completed
@@ -222,21 +255,24 @@ on run argv
         set previewScale to requestedScale as real
     end if
     tell application "System Events"
-        tell process "qemu-system-aarch64"
-            set windowItems to windows
-            set windowCount to count of windowItems
-            repeat with windowIndex from 1 to windowCount
-                set windowItem to item windowIndex of windowItems
-                if (name of windowItem as text) contains "Android Emulator" then
-                    set currentSize to size of windowItem
-                    if requestedScale is "auto" then
-                        set previewScale to targetWidth / (item 1 of currentSize)
+        set emulatorProcesses to every process whose name begins with "qemu-system-"
+        repeat with emulatorProcess in emulatorProcesses
+            tell emulatorProcess
+                set windowItems to windows
+                set windowCount to count of windowItems
+                repeat with windowIndex from 1 to windowCount
+                    set windowItem to item windowIndex of windowItems
+                    if (name of windowItem as text) contains "Android Emulator" then
+                        set currentSize to size of windowItem
+                        if requestedScale is "auto" then
+                            set previewScale to targetWidth / (item 1 of currentSize)
+                        end if
+                        set size of windowItem to {((item 1 of currentSize) * previewScale) as integer, ((item 2 of currentSize) * previewScale) as integer}
+                        return
                     end if
-                    set size of windowItem to {((item 1 of currentSize) * previewScale) as integer, ((item 2 of currentSize) * previewScale) as integer}
-                    return
-                end if
-            end repeat
-        end tell
+                end repeat
+            end tell
+        end repeat
     end tell
 end run
 APPLESCRIPT

@@ -239,54 +239,51 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(asset)
                 return@requestSpriteCandidates
             }
-            requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                if (communityAsset != null) {
-                    receiver(communityAsset)
-                    return@requestSpriteCandidates
+            requestPokeApiModernHdSprite(request) { modernHdAsset ->
+                if (modernHdAsset != null) {
+                    receiver(modernHdAsset)
+                    return@requestPokeApiModernHdSprite
                 }
-                requestPokeApiModernHdSprite(request) { modernHdAsset ->
-                    if (modernHdAsset != null) {
-                        receiver(modernHdAsset)
-                        return@requestPokeApiModernHdSprite
+                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                    if (communityAsset != null) {
+                        receiver(communityAsset)
+                        return@requestSpriteCandidates
                     }
                     val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-                    fun requestModernLocalOrLegacy() {
+                    fun requestModernLocalOrSmall() {
                         requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
                             if (modernLocalAsset != null) {
                                 receiver(modernLocalAsset)
                             } else {
-                                requestLegacySpriteResolution(request, plan, receiver)
+                                requestSmallSpriteResolution(request, plan, receiver)
                             }
                         }
                     }
-                    if (request.side == BattleSpriteSide.OPPONENT) {
-                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
-                            if (highResolutionAsset != null) {
-                                receiver(highResolutionAsset)
-                            } else {
-                                requestModernLocalOrLegacy()
+                    requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                        if (regularRemoteAsset != null) {
+                            receiver(regularRemoteAsset)
+                        } else if (request.side == BattleSpriteSide.OPPONENT) {
+                            requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                                if (highResolutionAsset != null) {
+                                    receiver(highResolutionAsset)
+                                } else {
+                                    requestModernLocalOrSmall()
+                                }
                             }
+                        } else {
+                            requestModernLocalOrSmall()
                         }
-                    } else {
-                        requestModernLocalOrLegacy()
                     }
                 }
             }
         }
     }
 
-    private fun requestLegacySpriteResolution(
-        request: BattleSpriteRequest,
+    private fun requestRegularRemoteSpriteResolution(
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestSpriteCandidates(plan.regularRemoteCandidates) { regularRemoteAsset ->
-            if (regularRemoteAsset != null) {
-                receiver(regularRemoteAsset)
-            } else {
-                requestSmallSpriteResolution(request, plan, receiver)
-            }
-        }
+        requestSpriteCandidates(plan.regularRemoteCandidates, receiver)
     }
 
     private fun requestSmallSpriteResolution(
