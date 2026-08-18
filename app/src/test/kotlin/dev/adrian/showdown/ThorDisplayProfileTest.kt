@@ -101,13 +101,14 @@ class ThorDisplayProfileTest {
 
     @Test
     fun keepsTheLargePanelAboveTheCompactPanelWithARealGap() {
-        val compositeHeight = 946 + 32 + 1080
+        val compositeHeight = 1080 + 48 + 1080
         val primaryTop = 0
-        val lowerTop = 1080 + 32
+        val lowerTop = 1080 + 48
 
         assertEquals(0, primaryTop)
-        assertEquals(1112, lowerTop)
-        assertEquals(32, lowerTop - (primaryTop + 1080))
+        assertEquals(1128, lowerTop)
+        assertEquals(48, lowerTop - (primaryTop + 1080))
+        assertEquals(2208, compositeHeight)
     }
 
     @Test
@@ -153,6 +154,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("The patched AYN Thor emulator overlay is missing"))
         assertTrue(runScript.contains("overlay_patch_digest_file"))
         assertTrue(runScript.contains("The AYN Thor emulator overlay is stale"))
+        assertTrue(runScript.contains("DYLD_LIBRARY_PATH"))
         assertTrue(runScript.contains("snapshot_args=(-no-snapshot)"))
         assertTrue(runScript.indexOf("\"\${snapshot_args[@]}\"") > runScript.indexOf("\"\$@\""))
         assertTrue(runScript.indexOf("if ! verify_thor_displays; then") > runScript.indexOf("if ! activate_secondary_display; then"))
@@ -193,7 +195,7 @@ class ThorDisplayProfileTest {
         assertEquals("thorPreviewHeight + thorPreviewGap", layoutAssignments.getValue("primary->second.pos_y"))
         assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
         assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
-        assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 32;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 48;").findAll(overlayPatch).count())
         assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
         val previewGap = Regex("constexpr uint32_t thorPreviewGap = (\\d+);")
             .find(overlayPatch)
@@ -201,8 +203,8 @@ class ThorDisplayProfileTest {
             ?.get(1)
             ?.toInt()
         assertTrue(previewGap != null && previewGap >= 32)
-        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1086;"))
-        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1240;"))
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 1080;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
         assertTrue(overlayPatch.contains("*y * (iter.second.originalHeight - 1)"))
         assertTrue(overlayPatch.contains("                pos_y = totalH - iter.second.height - iter.second.pos_y;"))

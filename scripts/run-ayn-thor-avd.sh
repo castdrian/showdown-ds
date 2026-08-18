@@ -22,7 +22,7 @@ renderer_feature_args=(-feature Vulkan)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 
 verify_thor_layout_patch() {
-    local primary_y_count
+    local upper_y_count
     local lower_y_count
     local lower_x_count
     local lower_width_count
@@ -30,7 +30,7 @@ verify_thor_layout_patch() {
     local lower_input_x_scale_count
     local lower_input_y_scale_count
     local lower_input_y_origin_count
-    primary_y_count="$(rg -c 'primary->second\.pos_y = thorPreviewHeight \+ thorPreviewGap;' "$overlay_patch_file" 2>/dev/null || true)"
+    upper_y_count="$(rg -c 'primary->second\.pos_y = thorPreviewHeight \+ thorPreviewGap;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_x_count="$(rg -c '\(primary->second\.originalWidth - thorPreviewWidth\) / 2;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_width_count="$(rg -c 'thorDisplay->second\.width = thorPreviewWidth;' "$overlay_patch_file" 2>/dev/null || true)"
@@ -38,7 +38,7 @@ verify_thor_layout_patch() {
     lower_input_x_scale_count="$(rg -c '\*x \* \(iter\.second\.originalWidth - 1\)' "$overlay_patch_file" 2>/dev/null || true)"
     lower_input_y_scale_count="$(rg -c '\*y \* \(iter\.second\.originalHeight - 1\)' "$overlay_patch_file" 2>/dev/null || true)"
     lower_input_y_origin_count="$(rg -c '^\s+pos_y = totalH - iter\.second\.height - iter\.second\.pos_y;' "$overlay_patch_file" 2>/dev/null || true)"
-    if [[ "$primary_y_count" != "3" || "$lower_y_count" != "3" || "$lower_x_count" != "3" || "$lower_width_count" != "3" || "$lower_height_count" != "3" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" || "$lower_input_y_origin_count" != "1" ]]; then
+    if [[ "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$lower_x_count" != "3" || "$lower_width_count" != "3" || "$lower_height_count" != "3" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" || "$lower_input_y_origin_count" != "1" ]]; then
         printf '%s\n' "The AYN Thor compositor patch does not describe an upright upper-over-lower centered display layout."
         exit 1
     fi
@@ -101,6 +101,13 @@ else
     printf '%s\n' "Build it with AEMU_SOURCE_ROOT=/path/to/aemu ./scripts/build-ayn-thor-emulator-overlay.sh"
     printf '%s\n' "Set AYN_THOR_ALLOW_STOCK_EMULATOR=1 only for diagnostics."
     exit 1
+fi
+
+if [[ "$(uname -s)" == "Darwin" && "$emulator" == "$overlay_emulator" ]]; then
+    overlay_library_path="$repo_root/.emulator-overlay/lib64"
+    if [[ -d "$overlay_library_path" ]]; then
+        export DYLD_LIBRARY_PATH="$overlay_library_path:$overlay_library_path/qt/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+    fi
 fi
 
 if [[ ! -f "$avd_home/$avd_name.ini" ]]; then
