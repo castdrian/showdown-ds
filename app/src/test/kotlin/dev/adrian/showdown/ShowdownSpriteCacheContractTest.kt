@@ -17,13 +17,13 @@ class ShowdownSpriteCacheContractTest {
 
         assertTrue(communityIndex >= 0)
         assertTrue(modernHdIndex < communityIndex)
-        assertTrue(localIndex > modernHdIndex)
+        assertTrue(homeIndex > communityIndex)
+        assertTrue(regularIndex > communityIndex)
         assertTrue(regularIndex < localIndex)
         assertTrue(animatedFallbackIndex > regularIndex)
         assertTrue(localIndex >= 0)
-        assertTrue(homeIndex > animatedFallbackIndex)
         assertTrue(homeIndex > modernHdIndex)
-        assertTrue(localIndex < homeIndex)
+        assertTrue(localIndex < animatedFallbackIndex)
         assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
     }
 }

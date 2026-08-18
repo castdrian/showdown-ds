@@ -366,26 +366,50 @@ class BattleAudio(
     private fun startMusicIfReady() {
         if (!musicEnabled || bgmPlayer != null) return
         val file = bgmFile ?: return
-        bgmPlayer = MediaPlayer().apply {
-            setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-            setDataSource(file.path)
-            setVolume(0.32f, 0.32f)
-            setOnPreparedListener {
+        val player = MediaPlayer()
+        bgmPlayer = player
+        runCatching {
+            player.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            player.setDataSource(file.path)
+            player.setVolume(0.32f, 0.32f)
+            player.setOnErrorListener { _, _, _ ->
+                releaseMusicPlayer(player)
+                true
+            }
+            player.setOnPreparedListener {
+                if (bgmPlayer !== player || released.get()) {
+                    releaseMusicPlayer(player)
+                    return@setOnPreparedListener
+                }
                 bgmPrepared = true
                 if (!musicEnabled) return@setOnPreparedListener
-                seekTo(selectedMusic.loopStart)
-                start()
-                audioCueHandler.post(loopCheck)
-            }
-            setOnCompletionListener {
-                if (musicEnabled) {
-                    seekTo(selectedMusic.loopStart)
-                    start()
+                runCatching {
+                    player.seekTo(selectedMusic.loopStart)
+                    player.start()
                     audioCueHandler.post(loopCheck)
-                }
+                }.onFailure { releaseMusicPlayer(player) }
             }
-            prepareAsync()
+            player.setOnCompletionListener {
+                if (bgmPlayer !== player || released.get() || !musicEnabled) return@setOnCompletionListener
+                runCatching {
+                    player.seekTo(selectedMusic.loopStart)
+                    player.start()
+                    audioCueHandler.post(loopCheck)
+                }.onFailure { releaseMusicPlayer(player) }
+            }
+            player.prepareAsync()
+        }.onFailure {
+            releaseMusicPlayer(player)
         }
+    }
+
+    private fun releaseMusicPlayer(player: MediaPlayer) {
+        if (bgmPlayer === player) {
+            bgmPlayer = null
+            bgmPrepared = false
+            bgmFile = null
+        }
+        runCatching { player.release() }
     }
 
     private fun selectMusic(music: Music) {

@@ -265,7 +265,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             }
                         }
                     }
-                    requestRegularOrModernLocal()
+                    if (request.backFacing) {
+                        requestRegularOrModernLocal()
+                    } else {
+                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                            if (highResolutionAsset != null) {
+                                receiver(highResolutionAsset)
+                            } else {
+                                requestRegularOrModernLocal()
+                            }
+                        }
+                    }
                 }
             }
         }

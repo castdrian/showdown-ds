@@ -643,36 +643,37 @@ class BattleSceneView(
 
     private fun drawHeader(canvas: Canvas, width: Float, scale: Float) {
         val padding = 30f * scale
-        val innerInset = 10f * scale
-        val iconSize = 42f * scale
-        val iconGap = 12f * scale
+        val innerInset = 14f * scale
+        val iconSize = 60f * scale
+        val iconGap = 16f * scale
+        val headerHeight = 82f * scale
         val title = "SHOWDOWN!"
         val format = session.format.uppercase(Locale.ROOT)
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        paint.textSize = 25f * scale
+        paint.textSize = 34f * scale
         val titleLeft = padding + innerInset + iconSize + iconGap
         val titleWidth = paint.measureText(title)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = 14f * scale
+        paint.textSize = 18f * scale
         val formatWidth = paint.measureText(format)
         val headerRight = (titleLeft + maxOf(titleWidth, formatWidth) + innerInset).coerceAtMost(width - padding)
         val formatAvailableWidth = (headerRight - titleLeft - innerInset).coerceAtLeast(0f)
         val displayedFormat = ellipsizeToWidth(format, formatAvailableWidth, paint)
         paint.color = Color.argb(200, 5, 12, 29)
-        canvas.drawRoundRect(RectF(padding, padding, headerRight, padding + 58f * scale), 16f * scale, 16f * scale, paint)
+        canvas.drawRoundRect(RectF(padding, padding, headerRight, padding + headerHeight), 22f * scale, 22f * scale, paint)
         logo?.let {
             source.set(0, 0, it.width, it.height)
-            destination.set(padding + innerInset, padding + 8f * scale, padding + innerInset + iconSize, padding + 50f * scale)
+            destination.set(padding + innerInset, padding + 11f * scale, padding + innerInset + iconSize, padding + 71f * scale)
             canvas.drawBitmap(it, source, destination, paint)
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
-        paint.textSize = 25f * scale
+        paint.textSize = 34f * scale
         paint.color = INK
-        canvas.drawText(title, titleLeft, padding + 31f * scale, paint)
+        canvas.drawText(title, titleLeft, padding + 43f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
-        paint.textSize = 14f * scale
+        paint.textSize = 18f * scale
         paint.color = CYAN
-        canvas.drawText(displayedFormat, titleLeft + scale, padding + 48f * scale, paint)
+        canvas.drawText(displayedFormat, titleLeft + scale, padding + 68f * scale, paint)
     }
 
     private fun drawInspectSheet(canvas: Canvas, width: Float, height: Float, scale: Float) {

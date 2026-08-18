@@ -1700,7 +1700,7 @@ class CommandDeckView(
             canvas.clipRect(levelArea)
             canvas.drawText(level, levelArea.left, centeredTextBaseline(levelArea.centerY()), paint)
             canvas.restore()
-            drawTeamHp(canvas, RectF(content.hp.left, content.hp.top, content.hp.right, content.hp.bottom), details.hp, scale)
+            drawTeamHp(canvas, RectF(content.hp.left, content.hp.top, content.hp.right, content.hp.bottom), details.hp, details.condition, scale)
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val bottomRow = RectF(content.bottomRow.left, content.bottomRow.top, content.bottomRow.right, content.bottomRow.bottom)
             val visibleTypes = details.types.take(2)
@@ -1769,10 +1769,9 @@ class CommandDeckView(
         }
     }
 
-    private fun drawTeamHp(canvas: Canvas, bounds: RectF, hp: String, scale: Float) {
-        val ratio = hp.substringBefore(' ').split('/').let { values ->
-            values.getOrNull(0)?.toFloatOrNull()?.div(values.getOrNull(1)?.toFloatOrNull() ?: 1f)?.coerceIn(0f, 1f) ?: 0f
-        }
+    private fun drawTeamHp(canvas: Canvas, bounds: RectF, hp: String, condition: String, scale: Float) {
+        val health = TeamHealthBarPresentation.from(hp, condition)
+        val ratio = health.fraction
         canvas.save()
         canvas.clipRect(bounds)
         paint.color = Color.rgb(8, 19, 28)
@@ -1782,20 +1781,22 @@ class CommandDeckView(
             ratio > 0.2f -> Color.rgb(237, 183, 53)
             else -> Color.rgb(224, 76, 78)
         }
-        paint.color = color
-        canvas.drawRoundRect(RectF(bounds.left + 3f * scale, bounds.top + 3f * scale, bounds.left + maxOf(7f * scale, (bounds.width() - 6f * scale) * ratio), bounds.bottom - 3f * scale), 9f * scale, 9f * scale, paint)
+        if (ratio > 0f) {
+            paint.color = color
+            canvas.drawRoundRect(RectF(bounds.left + 3f * scale, bounds.top + 3f * scale, bounds.left + maxOf(7f * scale, (bounds.width() - 6f * scale) * ratio), bounds.bottom - 3f * scale), 9f * scale, 9f * scale, paint)
+        }
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         val preferredSize = readableTextSize(24f, scale, 18f, 12f).coerceAtMost(bounds.height() * 0.72f)
         val minimumSize = readableTextSize(12f, scale, 10f, 10f).coerceAtMost(preferredSize)
         paint.textSize = fittedTextSizeInRegion(
-            "HP ${hp.substringBefore(' ')}",
+            "HP ${health.label}",
             bounds.width() - 18f * scale,
             bounds.height() - 4f * scale,
             preferredSize,
             minimumSize
         )
-        drawOutlinedText(canvas, "HP ${hp.substringBefore(' ')}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.8f * scale)
+        drawOutlinedText(canvas, "HP ${health.label}", bounds.centerX(), centeredTextBaseline(bounds.centerY()), Color.rgb(5, 14, 22), PAPER, 1.8f * scale)
         paint.textAlign = Paint.Align.LEFT
         canvas.restore()
     }
