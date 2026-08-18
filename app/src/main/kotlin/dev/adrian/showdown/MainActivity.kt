@@ -5258,13 +5258,26 @@ class MainActivity : Activity() {
     private fun loadUserPreferences() {
         val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
         replaySpeed = preferences.getFloat("battle_speed", DEFAULT_BATTLE_SPEED).coerceIn(0.25f, 4f)
+        val savedSpriteStyle = preferences.getString("sprite_style", null)
+            ?.let { runCatching { BattleSession.SpriteStyle.valueOf(it) }.getOrDefault(BattleSession.SpriteStyle.MODERN_3D) }
+            ?: BattleSession.SpriteStyle.MODERN_3D
+        val spriteStyle = if (
+            savedSpriteStyle == BattleSession.SpriteStyle.CLASSIC_2D &&
+            !preferences.getBoolean("sprite_style_migrated", false)
+        ) {
+            BattleSession.SpriteStyle.MODERN_3D
+        } else {
+            savedSpriteStyle
+        }
+        preferences.edit()
+            .putString("sprite_style", spriteStyle.name)
+            .putBoolean("sprite_style_migrated", true)
+            .apply()
         session.applyUserPreferences(
             soundEffects = preferences.getBoolean("sound_effects", true),
             music = preferences.getBoolean("music", true),
             haptics = preferences.getBoolean("haptics", true),
-            spriteStyle = preferences.getString("sprite_style", BattleSession.SpriteStyle.MODERN_3D.name)
-                ?.let { runCatching { BattleSession.SpriteStyle.valueOf(it) }.getOrDefault(BattleSession.SpriteStyle.MODERN_3D) }
-                ?: BattleSession.SpriteStyle.MODERN_3D
+            spriteStyle = spriteStyle
         )
     }
 
@@ -5274,6 +5287,7 @@ class MainActivity : Activity() {
             .putBoolean("music", session.musicEnabled)
             .putBoolean("haptics", session.hapticsEnabled)
             .putString("sprite_style", session.spriteStyle.name)
+            .putBoolean("sprite_style_migrated", true)
             .apply()
     }
 

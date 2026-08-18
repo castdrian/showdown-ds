@@ -1,6 +1,8 @@
 package dev.adrian.showdown
 
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,5 +63,14 @@ class BattleSpriteRequestTest {
 
         assertEquals("sprites/xyani-back/brambleghast.gif", plan.fallbackCandidates.first())
         assertTrue(plan.fallbackCandidates.none { it.contains("gen5") })
+    }
+
+    @Test
+    fun modernSpriteCacheNeverFallsBackToLegacyLocalSprites() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertFalse(source.contains("legacyLocalCandidates"))
+        assertFalse(source.contains("pokeApiAnimatedSprite"))
+        assertTrue(source.contains("receiver(standardRemoteAsset)"))
     }
 }

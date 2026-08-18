@@ -259,14 +259,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                 receiver(regularRemoteAsset)
                             } else {
                                 val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-                                val legacyLocalCandidates = plan.fallbackCandidates.filterNot(::isModernLocalCandidate)
                                 requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
                                     if (modernLocalAsset != null) {
                                         receiver(modernLocalAsset)
                                     } else {
                                         requestPokeApiStandardSprite(request) { standardRemoteAsset ->
-                                            if (standardRemoteAsset != null) receiver(standardRemoteAsset)
-                                            else requestSpriteCandidates(legacyLocalCandidates, receiver)
+                                            receiver(standardRemoteAsset)
                                         }
                                     }
                                 }
