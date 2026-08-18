@@ -239,7 +239,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(asset)
                 return@requestSpriteCandidates
             }
-            requestPokeApiModernSprite(request, plan.communityRemoteCandidates) { modernRemoteAsset ->
+            requestPokeApiModernSprite(request) { modernRemoteAsset ->
                 if (modernRemoteAsset != null) {
                     receiver(modernRemoteAsset)
                     return@requestPokeApiModernSprite
@@ -262,10 +262,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                 requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
                                     if (modernLocalAsset != null) {
                                         receiver(modernLocalAsset)
-                                    } else {
-                                        requestPokeApiStandardSprite(request) { standardRemoteAsset ->
-                                            receiver(standardRemoteAsset)
+                                    } else if (request.side == BattleSpriteSide.OPPONENT) {
+                                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                                            if (highResolutionAsset != null) receiver(highResolutionAsset)
+                                            else requestPokeApiStandardSprite(request, receiver)
                                         }
+                                    } else {
+                                        requestPokeApiStandardSprite(request, receiver)
                                     }
                                 }
                             }
@@ -281,7 +284,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private fun requestPokeApiModernSprite(
         request: BattleSpriteRequest,
-        communityCandidates: List<String>,
         receiver: (SpriteAsset?) -> Unit
     ) {
         fun requestLookup(index: Int) {
@@ -306,24 +308,34 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 requestSpriteCandidates(ShowdownAssetPaths.hdAnimatedSpriteCandidates(nationalDexNumber, request.side)) { hdAsset ->
                     if (hdAsset != null) {
                         receiver(hdAsset)
-                    } else if (request.side == BattleSpriteSide.OPPONENT) {
-                        requestSpriteCandidates(communityCandidates) { communityAsset ->
-                            if (communityAsset != null) {
-                                receiver(communityAsset)
-                            } else {
-                                requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber)) { highResolutionAsset ->
-                                    if (highResolutionAsset != null) receiver(highResolutionAsset) else requestLookup(index + 1)
-                                }
-                            }
-                        }
                     } else {
-                        requestSpriteCandidates(communityCandidates) { communityAsset ->
-                            if (communityAsset != null) {
-                                receiver(communityAsset)
-                            } else {
-                                requestLookup(index + 1)
-                            }
-                        }
+                        requestLookup(index + 1)
+                    }
+                }
+            }
+        }
+        requestLookup(0)
+    }
+
+    private fun requestPokeApiHighResolutionSprite(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        fun requestLookup(index: Int) {
+            val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
+            if (index >= names.size) {
+                receiver(null)
+                return
+            }
+            requestBytes("https://pokeapi.co/api/v2/pokemon/${names[index]}") { file ->
+                val resourceNumber = file?.let { cachedFile ->
+                    runCatching { JSONObject(cachedFile.readText()).optInt("id", 0) }.getOrNull()
+                }?.takeIf { it > 0 }
+                if (resourceNumber == null) {
+                    requestLookup(index + 1)
+                } else {
+                    requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber)) { highResolutionAsset ->
+                        if (highResolutionAsset != null) receiver(highResolutionAsset) else requestLookup(index + 1)
                     }
                 }
             }

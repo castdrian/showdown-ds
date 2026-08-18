@@ -41,7 +41,7 @@ class CommandDeckView(
     private val gimmickBounds = arrayOfNulls<RectF>(7)
     private val targetBounds = arrayOfNulls<RectF>(BattleTargetLayout.MAX_OPTIONS)
     private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
-    private val requestedTeamSprites = mutableSetOf<String>()
+    private val requestedTeamSprites = mutableMapOf<String, BattleSpriteRequest>()
     private val typeIcons = mutableMapOf<String, Bitmap?>()
     private var activityChatBounds: RectF? = null
     private var cancelChoiceBounds: RectF? = null
@@ -1753,13 +1753,18 @@ class CommandDeckView(
     private fun RectF.toSwitchTeamBounds() = SwitchTeamCardBounds(left, top, right, bottom)
 
     private fun requestTeamSprite(species: String) {
-        if (teamSprites.containsKey(species) || !requestedTeamSprites.add(species)) return
+        val request = BattleSpriteRequest.forOpponent(species, session.spriteStyle)
+        if (requestedTeamSprites[species] == request) return
+        requestedTeamSprites[species] = request
+        teamSprites.remove(species)
         spriteCache.requestPlaceholder(BattleSpriteSide.OPPONENT) { placeholder ->
-            if (!teamSprites.containsKey(species) && placeholder != null) teamSprites[species] = placeholder
+            if (requestedTeamSprites[species] == request && !teamSprites.containsKey(species) && placeholder != null) {
+                teamSprites[species] = placeholder
+            }
             postInvalidateOnAnimation()
         }
-        spriteCache.requestPokemon(BattleSpriteRequest.forOpponent(species, session.spriteStyle)) { sprite ->
-            if (sprite != null) teamSprites[species] = sprite
+        spriteCache.requestPokemon(request) { sprite ->
+            if (requestedTeamSprites[species] == request && sprite != null) teamSprites[species] = sprite
             postInvalidateOnAnimation()
         }
     }

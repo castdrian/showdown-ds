@@ -5261,10 +5261,7 @@ class MainActivity : Activity() {
         val savedSpriteStyle = preferences.getString("sprite_style", null)
             ?.let { runCatching { BattleSession.SpriteStyle.valueOf(it) }.getOrDefault(BattleSession.SpriteStyle.MODERN_3D) }
             ?: BattleSession.SpriteStyle.MODERN_3D
-        val spriteStyle = if (
-            savedSpriteStyle == BattleSession.SpriteStyle.CLASSIC_2D &&
-            !preferences.getBoolean("sprite_style_migrated", false)
-        ) {
+        val spriteStyle = if (savedSpriteStyle == BattleSession.SpriteStyle.CLASSIC_2D) {
             BattleSession.SpriteStyle.MODERN_3D
         } else {
             savedSpriteStyle
