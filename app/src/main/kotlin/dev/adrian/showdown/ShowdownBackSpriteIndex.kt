@@ -6,19 +6,19 @@ object ShowdownBackSpriteIndex {
         RegexOption.IGNORE_CASE
     )
 
-    fun candidates(html: String, speciesNames: List<String>): List<String> {
+    fun candidates(html: String, speciesNames: List<String>, shiny: Boolean = false): List<String> {
         val requestedNames = speciesNames.flatMap(::normalizedNames).toSet()
         return imagePathPattern.findAll(html).mapNotNull { match ->
             val path = match.groupValues[1].substringBefore('?')
             val spriteRoot = path.substringAfter("/sprites/").substringBefore('/')
             val fileName = path.substringAfterLast('/')
-            val isShiny = fileName.endsWith("-s.gif", ignoreCase = true)
-            val isBack = spriteRoot == "animados-espalda" || fileName.endsWith("-back.gif", ignoreCase = true)
-            if (isShiny || !isBack) return@mapNotNull null
-            val spriteName = when {
-                fileName.endsWith("-back.gif", ignoreCase = true) -> fileName.dropLast("-back.gif".length)
-                else -> fileName.dropLast(".gif".length)
-            }
+            val fileStem = fileName.dropLast(".gif".length)
+            val isShiny = fileStem.endsWith("-s", ignoreCase = true)
+            if (isShiny != shiny) return@mapNotNull null
+            val nonShinyStem = if (isShiny) fileStem.dropLast(2) else fileStem
+            val isBack = spriteRoot == "animados-espalda" || nonShinyStem.endsWith("-back", ignoreCase = true)
+            if (!isBack) return@mapNotNull null
+            val spriteName = nonShinyStem.removeSuffix("-back")
             if (requestedNames.contains(normalize(spriteName))) absoluteUrl(path) else null
         }.distinct().sortedWith(compareBy { path -> if (path.contains("/animados-gigante/")) 0 else 1 }).toList()
     }

@@ -35,4 +35,21 @@ class ShowdownBackSpriteIndexTest {
             ShowdownBackSpriteIndex.candidates(html, listOf("Tornadus"))
         )
     }
+
+    @Test
+    fun selectsTheMatchingShinyBackAssetWhenRequested() {
+        val html = """
+            <img src="/imagenes/espada_escudo/sprites/animados-gigante/corviknight-back.gif">
+            <img src="/imagenes/espada_escudo/sprites/animados-gigante/corviknight-back-s.gif">
+            <img src="/imagenes/espada_escudo/sprites/animados/corviknight-back-s.gif">
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/corviknight-back-s.gif",
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/corviknight-back-s.gif"
+            ),
+            ShowdownBackSpriteIndex.candidates(html, listOf("Corviknight"), shiny = true)
+        )
+    }
 }

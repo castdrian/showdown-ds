@@ -195,7 +195,8 @@ class BattleSession {
         val moves: List<String>,
         val stats: String,
         val pokeball: String = "pokeball",
-        val species: String = name
+        val species: String = name,
+        val shiny: Boolean = false
     )
 
     data class ActiveCombatant(
@@ -212,7 +213,8 @@ class BattleSession {
         val volatileEffects: List<String> = emptyList(),
         val turnEffects: List<String> = emptyList(),
         val moveEffects: List<String> = emptyList(),
-        val species: String = name
+        val species: String = name,
+        val shiny: Boolean = false
     )
 
     data class BattleInfo(
@@ -1781,6 +1783,7 @@ class BattleSession {
         val playerSide = isPlayerSide(fields[2])
         val slot = fields[2].substringBefore(":").trim()
         val side = sideForSlot(slot)
+        val shiny = detailsAreShiny(fields[3])
         if (fields.drop(5).any { it.contains("Baton Pass", true) }) pendingBatonPassBySide[side] = slot
         val passedBoosts = pendingBatonPassBySide.remove(side)?.let { sourceSlot ->
             val slots = if (playerSide) playerBoostsBySlot else opponentBoostsBySlot
@@ -1828,7 +1831,8 @@ class BattleSession {
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
                     hp = hp,
-                    condition = currentCondition
+                    condition = currentCondition,
+                    shiny = shiny
                 )
                 if (index != null && index >= 0) teamDetails[index] = updatedDetails
                 playerActiveCombatants[slot] = ActiveCombatant(
@@ -1840,7 +1844,8 @@ class BattleSession {
                     hp,
                     currentCondition,
                     playerEntryAtNanos,
-                    species = updatedDetails.species
+                    species = updatedDetails.species,
+                    shiny = updatedDetails.shiny
                 )
                 activeSlotNames[slot] = activeName
                 activeTeamNames += activeSlotNames.values
@@ -1863,9 +1868,9 @@ class BattleSession {
                 }
                 val existing = opponentTeamDetails.getOrNull(index)
                 val activeDetails = if (replacingIllusion && existing != null && !existing.species.equals(pokemon, true)) {
-                    unknownOpponentDetails(pokemon, parsedDetails, hp, currentCondition).copy(name = identifier.ifBlank { pokemon })
+                    unknownOpponentDetails(pokemon, parsedDetails, hp, currentCondition, shiny).copy(name = identifier.ifBlank { pokemon })
                 } else {
-                    existing ?: unknownOpponentDetails(pokemon, parsedDetails, hp, currentCondition)
+                    existing ?: unknownOpponentDetails(pokemon, parsedDetails, hp, currentCondition, shiny)
                 }
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
                 baseTypesBySlot[slot] = baseTypes
@@ -1883,7 +1888,8 @@ class BattleSession {
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
                     hp = hp,
-                    condition = currentCondition
+                    condition = currentCondition,
+                    shiny = shiny
                 )
                 val resolvedIndex = if (index >= 0) {
                     opponentTeamDetails[index] = updatedDetails
@@ -1903,7 +1909,8 @@ class BattleSession {
                     hp,
                     currentCondition,
                     opponentEntryAtNanos,
-                    species = updatedDetails.species
+                    species = updatedDetails.species,
+                    shiny = updatedDetails.shiny
                 )
                 if (primary) {
                     opponentPokemon = activeName
@@ -2007,9 +2014,10 @@ class BattleSession {
         val details = fields[3]
         val pokemon = details.substringBefore(',')
         val levelGender = parseDetails(details)
+        val shiny = detailsAreShiny(details)
         val existing = opponentTeamDetails.firstOrNull { it.name.equals(pokemon, true) }
         updateOpponentParty(
-            existing?.copy(level = levelGender.first, gender = levelGender.second, types = resolvedTypes(existing.species, existing.types)) ?: PokemonDetails(
+            existing?.copy(level = levelGender.first, gender = levelGender.second, types = resolvedTypes(existing.species, existing.types), shiny = shiny) ?: PokemonDetails(
                 name = pokemon,
                 types = resolvedTypes(pokemon),
                 level = levelGender.first,
@@ -2020,7 +2028,8 @@ class BattleSession {
                 item = "Unknown item",
                 moves = emptyList(),
                 stats = "",
-                species = pokemon
+                species = pokemon,
+                shiny = shiny
             )
         )
     }
@@ -2063,7 +2072,8 @@ class BattleSession {
             species = species,
             types = updatedTypes,
             level = parsed.first,
-            gender = parsed.second
+            gender = parsed.second,
+            shiny = detailsAreShiny(details) || previous.shiny
         )
         party[index] = updated
         updateActivePartyMember(playerSide, index, updated, updatedBaseTypes)
@@ -2172,7 +2182,8 @@ class BattleSession {
             moves = set.moves.map { moveNameResolver?.invoke(it) ?: it }.ifEmpty { existing?.moves.orEmpty() },
             stats = existing?.stats.orEmpty(),
             pokeball = set.pokeBall.ifBlank { existing?.pokeball ?: "pokeball" },
-            species = set.species.ifBlank { existing?.species ?: name }
+            species = set.species.ifBlank { existing?.species ?: name },
+            shiny = set.shiny
         )
     }
 
@@ -4463,7 +4474,8 @@ class BattleSession {
                 knownMoves,
                 known?.stats.orEmpty(),
                 entry.optString("pokeball", known?.pokeball ?: "pokeball"),
-                species
+                species,
+                entry.optBoolean("shiny", known?.shiny ?: false)
             )
         }
         if (synced.isEmpty()) return
@@ -4496,7 +4508,8 @@ class BattleSession {
                         gMaxed = previous?.gMaxed ?: false,
                         volatileEffects = previous?.volatileEffects.orEmpty(),
                         turnEffects = previous?.turnEffects.orEmpty(),
-                        moveEffects = previous?.moveEffects.orEmpty()
+                        moveEffects = previous?.moveEffects.orEmpty(),
+                        shiny = details.shiny
                     )
                 }
             }
@@ -4587,7 +4600,8 @@ class BattleSession {
         species: String,
         levelGender: Pair<String, String>,
         hp: String,
-        currentCondition: String
+        currentCondition: String,
+        shiny: Boolean = false
     ) = PokemonDetails(
         name = species,
         types = resolvedTypes(species),
@@ -4599,7 +4613,8 @@ class BattleSession {
         item = "Unknown item",
         moves = emptyList(),
         stats = "",
-        species = species
+        species = species,
+        shiny = shiny
     )
 
     private fun updateOpponentParty(details: PokemonDetails) {
@@ -4665,6 +4680,11 @@ class BattleSession {
         }
         return level to gender
     }
+
+    private fun detailsAreShiny(details: String) = details.split(',')
+        .asSequence()
+        .map(String::trim)
+        .any { it.equals("shiny", true) }
 
     private fun condition(hp: String) = hp.substringAfter(' ', "READY").uppercase()
 

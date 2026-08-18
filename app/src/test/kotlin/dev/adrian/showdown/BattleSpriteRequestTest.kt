@@ -21,6 +21,28 @@ class BattleSpriteRequestTest {
     }
 
     @Test
+    fun carriesShinyStateIntoEveryActiveSpriteRequest() {
+        val active = BattleSession.ActiveCombatant(
+            "p1a",
+            "Corviknight",
+            emptyList(),
+            "50",
+            "",
+            "100/100",
+            "READY",
+            0L,
+            species = "Corviknight",
+            shiny = true
+        )
+
+        val request = BattleSpriteRequests.active(listOf(active), BattleSpriteSide.PLAYER, BattleSession.SpriteStyle.MODERN_3D).single().request
+
+        assertTrue(request.backFacing)
+        assertTrue(request.shiny)
+        assertTrue(ShowdownAssetPaths.battleSpriteCandidates(request).any { it.endsWith("corviknight-back-s.gif") })
+    }
+
+    @Test
     fun plansSinglesAndDoublesWithTheSameSideAwareRequests() {
         val playerCombatants = listOf(
             BattleSession.ActiveCombatant("p2a", "Iron Valiant", emptyList(), "50", "", "100/100", "READY", 0L, species = "Iron Valiant"),

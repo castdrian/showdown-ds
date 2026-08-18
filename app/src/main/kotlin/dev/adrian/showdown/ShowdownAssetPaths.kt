@@ -72,7 +72,7 @@ object ShowdownAssetPaths {
     )
 
     fun battleSprite(request: BattleSpriteRequest): String {
-        return animatedBattleSprite(request.species, request.side, request.style.animatedCollection)
+        return animatedBattleSprite(request.species, request.side, request.style.animatedCollection, request.shiny)
     }
 
     fun battleSpriteResolutionPlan(request: BattleSpriteRequest): ShowdownSpriteResolutionPlan {
@@ -102,29 +102,29 @@ object ShowdownAssetPaths {
         val collections = listOf(request.style.animatedCollection)
         if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
             if (request.backFacing) {
-                hdBackSpriteCandidates(speciesNames).forEach { candidates += it }
-                communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.PLAYER).forEach { candidates += it }
-                regularBackSpriteCandidates(speciesNames).forEach { candidates += it }
+                hdBackSpriteCandidates(speciesNames, request.shiny).forEach { candidates += it }
+                communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.PLAYER, request.shiny).forEach { candidates += it }
+                regularBackSpriteCandidates(speciesNames, request.shiny).forEach { candidates += it }
             } else {
-                hdFrontSpriteCandidates(speciesNames).forEach { candidates += it }
-                communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT).forEach { candidates += it }
-                regularFrontSpriteCandidates(speciesNames).forEach { candidates += it }
+                hdFrontSpriteCandidates(speciesNames, request.shiny).forEach { candidates += it }
+                communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT, request.shiny).forEach { candidates += it }
+                regularFrontSpriteCandidates(speciesNames, request.shiny).forEach { candidates += it }
             }
         }
         val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
         verifiedBackPaths.forEach { candidates += it }
         val staticCollections = request.style.staticCollections
         collections.forEach { collection ->
-            speciesNames.forEach { name -> candidates += battleSprite(name, request.side, collection) }
+            speciesNames.forEach { name -> candidates += animatedBattleSprite(name, request.side, collection, request.shiny) }
         }
         if (request.backFacing) {
             staticCollections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection) }
+                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection, request.shiny) }
             }
             candidates += placeholder(BattleSpriteSide.PLAYER)
         } else {
             staticCollections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.OPPONENT, collection) }
+                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.OPPONENT, collection, request.shiny) }
             }
             candidates += dexSprite(request.species)
             candidates += "sprites/dex/${animationId(request.species)}.png"
@@ -137,8 +137,8 @@ object ShowdownAssetPaths {
     private fun buildDexSpriteCandidates(species: String): List<String> {
         val speciesNames = spriteSpeciesNames(species)
         return linkedSetOf<String>().apply {
-            hdFrontSpriteCandidates(speciesNames).forEach { add(it) }
-            communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT).forEach { add(it) }
+            hdFrontSpriteCandidates(speciesNames, false).forEach { add(it) }
+            communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT, false).forEach { add(it) }
             add(dexSprite(species))
             add("sprites/dex/${animationId(species)}.png")
         }.toList()
@@ -194,21 +194,24 @@ object ShowdownAssetPaths {
         }.getOrNull()?.takeIf { it > 0 }
     }
 
-    fun pokeApiAnimatedSprite(number: Int, side: BattleSpriteSide): String =
-        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}$number.gif"
+    fun pokeApiAnimatedSprite(number: Int, side: BattleSpriteSide, shiny: Boolean = false): String {
+        val facingPath = if (side == BattleSpriteSide.PLAYER) "back/" else ""
+        val shinyPath = if (shiny) "shiny/" else ""
+        return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${facingPath}${shinyPath}$number.gif"
+    }
 
-    fun pokeApiHighResolutionSprite(number: Int): String =
-        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/$number.png"
+    fun pokeApiHighResolutionSprite(number: Int, shiny: Boolean = false): String =
+        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/${if (shiny) "shiny/" else ""}$number.png"
 
-    fun pokeApiStandardSprite(number: Int, side: BattleSpriteSide): String =
-        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}$number.png"
+    fun pokeApiStandardSprite(number: Int, side: BattleSpriteSide, shiny: Boolean = false): String =
+        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}${if (shiny) "shiny/" else ""}$number.png"
 
-    fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide): List<String> =
+    fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide, shiny: Boolean = false): List<String> =
         (if (side == BattleSpriteSide.PLAYER) hdBackSpriteRoots else hdNumberedSpriteRoots).map { root ->
             if (side == BattleSpriteSide.PLAYER && root.endsWith("animados-espalda/")) {
-                "$root$number.gif"
+                "$root$number${if (shiny) "-s" else ""}.gif"
             } else {
-                "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}.gif"
+                "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}${if (shiny) "-s" else ""}.gif"
             }
         }
 
@@ -219,52 +222,58 @@ object ShowdownAssetPaths {
         else -> emptyList()
     }
 
-    private fun battleSprite(species: String, side: BattleSpriteSide, collection: String) =
-        animatedBattleSprite(species, side, collection)
+    private fun battleSprite(species: String, side: BattleSpriteSide, collection: String, shiny: Boolean = false) =
+        animatedBattleSprite(species, side, collection, shiny)
 
-    private fun animatedBattleSprite(species: String, side: BattleSpriteSide, collection: String) =
-        "sprites/${if (side == BattleSpriteSide.PLAYER) "$collection-back" else collection}/${animationId(species)}.gif"
+    private fun animatedBattleSprite(species: String, side: BattleSpriteSide, collection: String, shiny: Boolean = false) =
+        "sprites/${spriteCollection(collection, side, shiny)}/${animationId(species)}.gif"
 
-    private fun staticBattleSprite(species: String, side: BattleSpriteSide, collection: String) =
-        "sprites/${if (side == BattleSpriteSide.PLAYER) "$collection-back" else collection}/${animationId(species)}.png"
+    private fun staticBattleSprite(species: String, side: BattleSpriteSide, collection: String, shiny: Boolean = false) =
+        "sprites/${spriteCollection(collection, side, shiny)}/${animationId(species)}.png"
 
-    private fun hdFrontSpriteCandidates(speciesNames: List<String>): List<String> =
+    private fun spriteCollection(collection: String, side: BattleSpriteSide, shiny: Boolean): String {
+        val facingCollection = if (side == BattleSpriteSide.PLAYER) "$collection-back" else collection
+        return if (shiny) "$facingCollection-shiny" else facingCollection
+    }
+
+    private fun hdFrontSpriteCandidates(speciesNames: List<String>, shiny: Boolean): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
-                hdNumberedSpriteRoots.map { root -> "$root$spriteName.gif" }
+                hdNumberedSpriteRoots.map { root -> "$root${spriteFileName(spriteName, backFacing = false, shiny)}" }
             }
         }
 
-    private fun regularFrontSpriteCandidates(speciesNames: List<String>): List<String> =
+    private fun regularFrontSpriteCandidates(speciesNames: List<String>, shiny: Boolean): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
-                regularSpriteRoots.map { root -> "$root$spriteName.gif" }
+                regularSpriteRoots.map { root -> "$root${spriteFileName(spriteName, backFacing = false, shiny)}" }
             }
         }
 
-    private fun hdBackSpriteCandidates(speciesNames: List<String>): List<String> =
+    private fun hdBackSpriteCandidates(speciesNames: List<String>, shiny: Boolean): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
                 hdBackSpriteRoots.map { root ->
-                    "$root${spriteName}-back.gif"
+                    "$root${spriteFileName(spriteName, backFacing = true, shiny)}"
                 }
             }
         }
 
-    private fun regularBackSpriteCandidates(speciesNames: List<String>): List<String> =
+    private fun regularBackSpriteCandidates(speciesNames: List<String>, shiny: Boolean): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
                 regularBackSpriteRoots.map { root ->
-                    if (root.endsWith("animados-espalda/")) "$root$spriteName.gif"
-                    else "$root${spriteName}-back.gif"
+                    if (root.endsWith("animados-espalda/")) "$root${spriteFileName(spriteName, backFacing = false, shiny)}"
+                    else "$root${spriteFileName(spriteName, backFacing = true, shiny)}"
                 }
             }
         }
 
     private fun communityAnimatedSpriteCandidates(
         speciesNames: List<String>,
-        side: BattleSpriteSide
-    ): List<String> = speciesNames.flatMap { species ->
+        side: BattleSpriteSide,
+        shiny: Boolean
+    ): List<String> = if (shiny) emptyList() else speciesNames.flatMap { species ->
         communityAnimatedSpriteNames(species).flatMap { spriteName ->
             buildList {
                 communityAnimatedSpriteRoots[side]?.let { root ->
@@ -277,6 +286,14 @@ object ShowdownAssetPaths {
             }
         }
     }
+
+    private fun spriteFileName(spriteName: String, backFacing: Boolean, shiny: Boolean): String =
+        buildString {
+            append(spriteName)
+            if (backFacing) append("-back")
+            if (shiny) append("-s")
+            append(".gif")
+        }
 
     private fun spriteSpeciesNames(species: String): List<String> {
         val baseSpecies = species.substringBefore('-').trim()

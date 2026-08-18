@@ -1623,7 +1623,7 @@ class CommandDeckView(
             val focused = index == session.focusedTeam
             val previewPosition = previewOrder.indexOf(index)
             val details = session.teamMemberDetails(index)
-            requestTeamSprite(pokemon)
+            requestTeamSprite(pokemon, details.shiny)
             paint.style = Paint.Style.FILL
             paint.shader = LinearGradient(
                 bounds.left,
@@ -1752,8 +1752,8 @@ class CommandDeckView(
 
     private fun RectF.toSwitchTeamBounds() = SwitchTeamCardBounds(left, top, right, bottom)
 
-    private fun requestTeamSprite(species: String) {
-        val request = BattleSpriteRequest.forOpponent(species, session.spriteStyle)
+    private fun requestTeamSprite(species: String, shiny: Boolean) {
+        val request = BattleSpriteRequest.forOpponent(species, session.spriteStyle, shiny)
         if (requestedTeamSprites[species] == request) return
         requestedTeamSprites[species] = request
         teamSprites.remove(species)

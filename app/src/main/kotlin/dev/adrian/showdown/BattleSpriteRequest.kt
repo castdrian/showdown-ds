@@ -8,19 +8,20 @@ enum class BattleSpriteSide {
 data class BattleSpriteRequest(
     val species: String,
     val side: BattleSpriteSide,
-    val style: BattleSession.SpriteStyle
+    val style: BattleSession.SpriteStyle,
+    val shiny: Boolean = false
 ) {
     val backFacing get() = side == BattleSpriteSide.PLAYER
 
     companion object {
-        fun forPlayer(species: String, style: BattleSession.SpriteStyle) =
-            BattleSpriteRequest(species, BattleSpriteSide.PLAYER, style)
+        fun forPlayer(species: String, style: BattleSession.SpriteStyle, shiny: Boolean = false) =
+            BattleSpriteRequest(species, BattleSpriteSide.PLAYER, style, shiny)
 
-        fun forOpponent(species: String, style: BattleSession.SpriteStyle) =
-            BattleSpriteRequest(species, BattleSpriteSide.OPPONENT, style)
+        fun forOpponent(species: String, style: BattleSession.SpriteStyle, shiny: Boolean = false) =
+            BattleSpriteRequest(species, BattleSpriteSide.OPPONENT, style, shiny)
 
-        fun forSide(species: String, side: BattleSpriteSide, style: BattleSession.SpriteStyle) =
-            BattleSpriteRequest(species, side, style)
+        fun forSide(species: String, side: BattleSpriteSide, style: BattleSession.SpriteStyle, shiny: Boolean = false) =
+            BattleSpriteRequest(species, side, style, shiny)
     }
 }
 
@@ -30,8 +31,8 @@ data class BattleSpriteSlotRequest(
 )
 
 object BattleSpriteRequests {
-    fun single(species: String, side: BattleSpriteSide, style: BattleSession.SpriteStyle) =
-        BattleSpriteRequest.forSide(species, side, style)
+    fun single(species: String, side: BattleSpriteSide, style: BattleSession.SpriteStyle, shiny: Boolean = false) =
+        BattleSpriteRequest.forSide(species, side, style, shiny)
 
     fun active(
         combatants: List<BattleSession.ActiveCombatant>,
@@ -40,7 +41,7 @@ object BattleSpriteRequests {
     ) = combatants.map { combatant ->
         BattleSpriteSlotRequest(
             combatant.slot,
-            BattleSpriteRequest.forSide(combatant.species.ifBlank { combatant.name }, side, style)
+            BattleSpriteRequest.forSide(combatant.species.ifBlank { combatant.name }, side, style, combatant.shiny)
         )
     }
 }

@@ -76,6 +76,24 @@ class ShowdownProtocolContractTest {
     }
 
     @Test
+    fun carriesShinyDetailsIntoTheBattleAndTeamSpriteState() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN|",
+                "|player|p2|OPPONENT|",
+                "|switch|p1a: Corviknight|Corviknight, L50, shiny|100/100",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100",
+                "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Corviknight\",\"details\":\"Corviknight, L50, shiny\",\"condition\":\"100/100\",\"active\":true,\"shiny\":true}]}}"
+            )
+        )
+
+        assertTrue(session.playerDetails().shiny)
+        assertTrue(session.playerActiveCombatants().single().shiny)
+        assertTrue(session.playerPartyDetails().single().shiny)
+    }
+
+    @Test
     fun appliesHpAndStatusCarriedByOfficialFormChangePackets() {
         val session = BattleSession()
         session.applyProtocolPacket(

@@ -327,6 +327,48 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun keepsShinyFrontAndBackArtworkShinyThroughEveryFallbackTier() {
+        val front = BattleSpriteRequest.forOpponent("Corviknight", BattleSession.SpriteStyle.MODERN_3D, shiny = true)
+        val back = BattleSpriteRequest.forPlayer("Corviknight", BattleSession.SpriteStyle.MODERN_3D, shiny = true)
+        val frontCandidates = ShowdownAssetPaths.battleSpriteCandidates(front)
+        val backCandidates = ShowdownAssetPaths.battleSpriteCandidates(back)
+
+        assertTrue(frontCandidates.contains("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/corviknight-s.gif"))
+        assertTrue(backCandidates.contains("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/corviknight-back-s.gif"))
+        assertTrue(frontCandidates.contains("sprites/xyani-shiny/corviknight.gif"))
+        assertTrue(backCandidates.contains("sprites/xyani-back-shiny/corviknight.gif"))
+        assertTrue(backCandidates.none { it.endsWith("/corviknight-back.gif") })
+        assertTrue(backCandidates.none { it == "sprites/xyani-back/corviknight.gif" })
+    }
+
+    @Test
+    fun buildsShinyPokeApiFacingAndHdCandidates() {
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901-s.gif",
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901-s.gif"
+            ),
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(901, BattleSpriteSide.OPPONENT, shiny = true)
+        )
+        assertEquals(
+            listOf("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901-back-s.gif"),
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(901, BattleSpriteSide.PLAYER, shiny = true)
+        )
+        assertEquals(
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/back/shiny/901.gif",
+            ShowdownAssetPaths.pokeApiAnimatedSprite(901, BattleSpriteSide.PLAYER, shiny = true)
+        )
+        assertEquals(
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/shiny/901.png",
+            ShowdownAssetPaths.pokeApiHighResolutionSprite(901, shiny = true)
+        )
+        assertEquals(
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/shiny/901.png",
+            ShowdownAssetPaths.pokeApiStandardSprite(901, BattleSpriteSide.PLAYER, shiny = true)
+        )
+    }
+
+    @Test
     fun resolvesHeldItemSpritesAndSkipsUnknownItems() {
         assertEquals("sprites/itemicons/leftovers.png", ShowdownAssetPaths.itemSprite("Leftovers"))
         assertEquals("sprites/itemicons/heavy-duty-boots.png", ShowdownAssetPaths.itemSprite("Heavy-Duty Boots"))

@@ -287,7 +287,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             }
             requestBytes(indexUrls[index]) { file ->
                 val candidates = file?.let { cachedFile ->
-                    runCatching { ShowdownBackSpriteIndex.candidates(cachedFile.readText(), speciesNames) }.getOrDefault(emptyList())
+                    runCatching { ShowdownBackSpriteIndex.candidates(cachedFile.readText(), speciesNames, request.shiny) }.getOrDefault(emptyList())
                 }.orEmpty()
                 requestSpriteCandidates(candidates) { asset ->
                     if (asset != null) receiver(asset) else requestIndex(index + 1)
@@ -424,7 +424,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         receiver: (SpriteAsset?) -> Unit
     ) {
         requestPokeApiSpriteCandidates(request, { number ->
-            ShowdownAssetPaths.hdAnimatedSpriteCandidates(number, request.side)
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(number, request.side, request.shiny)
         }, receiver)
     }
 
@@ -433,7 +433,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         receiver: (SpriteAsset?) -> Unit
     ) {
         requestPokeApiSpriteCandidates(request, { number ->
-            listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side))
+            listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side, request.shiny))
         }, receiver)
     }
 
@@ -486,7 +486,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 if (resourceNumber == null) {
                     requestLookup(index + 1)
                 } else {
-                    requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber)) { highResolutionAsset ->
+                        requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber, request.shiny)) { highResolutionAsset ->
                         if (highResolutionAsset != null) receiver(highResolutionAsset) else requestLookup(index + 1)
                     }
                 }
@@ -512,7 +512,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 if (resourceNumber == null) {
                     requestLookup(index + 1)
                 } else {
-                    requestSprite(ShowdownAssetPaths.pokeApiStandardSprite(resourceNumber, request.side)) { standardAsset ->
+                    requestSprite(ShowdownAssetPaths.pokeApiStandardSprite(resourceNumber, request.side, request.shiny)) { standardAsset ->
                         if (standardAsset != null) receiver(standardAsset) else requestLookup(index + 1)
                     }
                 }

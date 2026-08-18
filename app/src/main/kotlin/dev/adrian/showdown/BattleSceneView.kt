@@ -377,10 +377,11 @@ class BattleSceneView(
                 }
             }
         }
-        val playerSpecies = session.playerActiveCombatants().firstOrNull()?.species
+        val playerCombatant = session.playerActiveCombatants().firstOrNull()
+        val playerSpecies = playerCombatant?.species
             ?.ifBlank { session.playerPokemon }
             ?: session.playerPokemon
-        val playerRequest = BattleSpriteRequests.single(playerSpecies, BattleSpriteSide.PLAYER, session.spriteStyle)
+        val playerRequest = BattleSpriteRequests.single(playerSpecies, BattleSpriteSide.PLAYER, session.spriteStyle, playerCombatant?.shiny == true)
         if (playerRequest != requestedPlayerSprite) {
             requestedPlayerSprite = playerRequest
             playerSprite = null
@@ -391,10 +392,11 @@ class BattleSceneView(
                 }
             }
         }
-        val opponentSpecies = session.opponentActiveCombatants().firstOrNull()?.species
+        val opponentCombatant = session.opponentActiveCombatants().firstOrNull()
+        val opponentSpecies = opponentCombatant?.species
             ?.ifBlank { session.opponentPokemon }
             ?: session.opponentPokemon
-        val opponentRequest = BattleSpriteRequests.single(opponentSpecies, BattleSpriteSide.OPPONENT, session.spriteStyle)
+        val opponentRequest = BattleSpriteRequests.single(opponentSpecies, BattleSpriteSide.OPPONENT, session.spriteStyle, opponentCombatant?.shiny == true)
         if (opponentRequest != requestedOpponentSprite) {
             requestedOpponentSprite = opponentRequest
             opponentSprite = null
