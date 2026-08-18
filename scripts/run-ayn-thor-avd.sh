@@ -20,6 +20,7 @@ boot_animation_args=()
 snapshot_args=(-no-snapshot)
 renderer_feature_args=(-feature Vulkan)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
+secondary_display_attempts=60
 
 verify_thor_layout_patch() {
     local upper_y_count
@@ -161,7 +162,7 @@ stop_existing_thor_emulator() {
     fi
     printf '%s\n' "Stopping the existing AYN Thor emulator before applying the current display compositor."
     kill $existing_pids 2>/dev/null || true
-    while (( attempt < 20 )); do
+    while (( attempt < secondary_display_attempts )); do
         existing_pids="$(thor_qemu_pids)"
         [[ -z "$existing_pids" ]] && return 0
         (( attempt += 1 ))
@@ -169,7 +170,7 @@ stop_existing_thor_emulator() {
     done
     kill -KILL $existing_pids 2>/dev/null || true
     attempt=0
-    while (( attempt < 20 )); do
+    while (( attempt < secondary_display_attempts )); do
         existing_pids="$(thor_qemu_pids)"
         [[ -z "$existing_pids" ]] && return 0
         (( attempt += 1 ))
