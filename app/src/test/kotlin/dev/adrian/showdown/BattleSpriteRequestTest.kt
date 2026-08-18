@@ -108,7 +108,7 @@ class BattleSpriteRequestTest {
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
         val communityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)", frontIndex)
         val homeIndex = source.indexOf("requestPokeApiHighResolutionSprite(request)", frontIndex)
-        val regularIndex = source.indexOf("requestRegularOrModernLocalSpriteResolution(request, plan) { animatedAsset ->", frontIndex)
+        val regularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", frontIndex)
         val localFallbackIndex = source.indexOf("requestSpriteCandidates(modernLocalCandidates)")
         assertTrue(backRegularIndex >= 0)
         assertTrue(scrapedBackIndex >= 0)
@@ -128,6 +128,7 @@ class BattleSpriteRequestTest {
         assertTrue(verifiedIndex >= 0)
         assertTrue(homeIndex > communityIndex)
         assertTrue(homeIndex > regularIndex)
+        assertTrue(homeIndex < localFallbackIndex)
         assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
     }
 }

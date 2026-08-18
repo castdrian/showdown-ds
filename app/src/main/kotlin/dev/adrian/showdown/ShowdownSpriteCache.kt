@@ -335,11 +335,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (communityAsset != null) {
                 receiver(communityAsset)
             } else {
-                requestRegularOrModernLocalSpriteResolution(request, plan) { animatedAsset ->
-                    if (animatedAsset != null) {
-                        receiver(animatedAsset)
+                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                    if (regularRemoteAsset != null) {
+                        receiver(regularRemoteAsset)
                     } else {
-                        requestPokeApiHighResolutionSprite(request, receiver)
+                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                            if (highResolutionAsset != null) {
+                                receiver(highResolutionAsset)
+                            } else {
+                                requestModernLocalSpriteResolution(request, plan, receiver)
+                            }
+                        }
                     }
                 }
             }
@@ -354,20 +360,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
             if (communityAsset != null) {
                 receiver(communityAsset)
-            } else {
-                requestModernLocalSpriteResolution(request, plan, receiver)
-            }
-        }
-    }
-
-    private fun requestRegularOrModernLocalSpriteResolution(
-        request: BattleSpriteRequest,
-        plan: ShowdownSpriteResolutionPlan,
-        receiver: (SpriteAsset?) -> Unit
-    ) {
-        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-            if (regularRemoteAsset != null) {
-                receiver(regularRemoteAsset)
             } else {
                 requestModernLocalSpriteResolution(request, plan, receiver)
             }

@@ -376,6 +376,17 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun includesDocumentedGenSixAndSevenShinyFrontRoots() {
+        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forOpponent("Altaria", BattleSession.SpriteStyle.MODERN_3D, shiny = true)
+        )
+
+        assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-shiny/altaria.gif"))
+        assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/xy/sprites/animados-shiny/altaria.gif"))
+        assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-shiny/altaria.gif"))
+    }
+
+    @Test
     fun buildsShinyPokeApiFacingAndHdCandidates() {
         assertEquals(
             listOf(

@@ -55,6 +55,12 @@ object ShowdownAssetPaths {
         "https://www.pkparaiso.com/imagenes/xy/sprites/animados/"
     )
 
+    private val shinyFrontSpriteRoots = listOf(
+        "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-shiny/",
+        "https://www.pkparaiso.com/imagenes/xy/sprites/animados-shiny/",
+        "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-shiny/"
+    )
+
     private val hdBackSpriteRoots = listOf(
         "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/"
     )
@@ -176,7 +182,10 @@ object ShowdownAssetPaths {
         path == "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
 
     private fun isRegularAnimatedCandidate(path: String) =
-        path.contains("/sprites/animados/") || path.contains("/sprites/animados-espalda/")
+        path.contains("/sprites/animados/") ||
+            path.contains("/sprites/animados-espalda/") ||
+            path.contains("/sprites/animados-shiny/") ||
+            path.contains("/sprites/animados-espalda-shiny/")
 
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
 
@@ -261,7 +270,10 @@ object ShowdownAssetPaths {
     private fun regularFrontSpriteCandidates(speciesNames: List<String>, shiny: Boolean): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
-                regularSpriteRoots.map { root -> "$root${spriteFileName(spriteName, backFacing = false, shiny)}" }
+                buildList {
+                    if (shiny) shinyFrontSpriteRoots.forEach { root -> add("$root${spriteFileName(spriteName, backFacing = false, shiny = false)}") }
+                    regularSpriteRoots.forEach { root -> add("$root${spriteFileName(spriteName, backFacing = false, shiny)}") }
+                }
             }
         }
 
