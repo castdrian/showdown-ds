@@ -59,6 +59,9 @@ class MainActivity : Activity() {
     private var secondaryPresentation: ThorPresentation? = null
     private var secondaryPresentationRequested = false
     private var activityResumed = false
+    private val secondaryDisplayRetry = Runnable {
+        if (secondaryPresentationRequested && activityResumed && !isFinishing) showSecondaryDisplay()
+    }
     private var battleScene: BattleSceneView? = null
     private var primaryFrame: FrameLayout? = null
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
@@ -468,6 +471,7 @@ class MainActivity : Activity() {
         pokedexSprite = null
         selectedPokedexEntry = null
         displayManager?.unregisterDisplayListener(displayListener)
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
         if (::session.isInitialized) session.removeListener(sessionListener)
         if (::session.isInitialized) session.removeProtocolListener(protocolListener)
         if (::session.isInitialized) session.removeDecisionListener(decisionListener)
@@ -531,6 +535,7 @@ class MainActivity : Activity() {
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
         if (::session.isInitialized && shouldMaintainConnection) persistLobbyState(flushToDisk = true)
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
         dismissSecondaryDisplay()
         super.onStop()
     }
@@ -621,34 +626,49 @@ class MainActivity : Activity() {
     }
 
     private fun showSecondaryDisplay() {
-        if (isFinishing || !activityResumed || displayManager == null) return
+        if (isFinishing || displayManager == null) return
         secondaryPresentationRequested = true
+        if (!activityResumed) return
         secondaryPresentation?.let { presentation ->
             presentation.requestControllerFocus()
             return
         }
-        findThorDisplay()?.let { display ->
-            val presentation = ThorPresentation(this, display)
-            secondaryPresentation = presentation
-            presentation.setOnDismissListener {
-                if (secondaryPresentation !== presentation) return@setOnDismissListener
-                secondaryPresentation = null
-                if (secondaryPresentationRequested && !isFinishing) {
-                    window.decorView.post { showSecondaryDisplay() }
-                }
-            }
-            try {
-                presentation.show()
-            } catch (_: WindowManager.BadTokenException) {
-                if (secondaryPresentation === presentation) secondaryPresentation = null
-                return@let
-            } catch (_: WindowManager.InvalidDisplayException) {
-                if (secondaryPresentation === presentation) secondaryPresentation = null
-                return@let
-            }
-            configurePresentationWindow(presentation.window)
-            presentation.requestControllerFocus()
+        val display = findThorDisplay()
+        if (display == null) {
+            scheduleSecondaryDisplayRetry()
+            return
         }
+        val presentation = ThorPresentation(this, display)
+        secondaryPresentation = presentation
+        presentation.setOnDismissListener {
+            if (secondaryPresentation !== presentation) return@setOnDismissListener
+            secondaryPresentation = null
+            if (secondaryPresentationRequested && !isFinishing) scheduleSecondaryDisplayRetry()
+        }
+        try {
+            presentation.show()
+        } catch (_: WindowManager.BadTokenException) {
+            if (secondaryPresentation === presentation) secondaryPresentation = null
+            scheduleSecondaryDisplayRetry()
+            return
+        } catch (_: WindowManager.InvalidDisplayException) {
+            if (secondaryPresentation === presentation) secondaryPresentation = null
+            scheduleSecondaryDisplayRetry()
+            return
+        }
+        configurePresentationWindow(presentation.window)
+        presentation.requestControllerFocus()
+        window.decorView.postDelayed({
+            if (secondaryPresentation === presentation && presentation.isShowing) {
+                presentation.requestControllerFocus()
+            }
+        }, 250)
+    }
+
+    private fun scheduleSecondaryDisplayRetry() {
+        if (!secondaryPresentationRequested || !activityResumed || isFinishing) return
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
+        window.decorView.postDelayed(secondaryDisplayRetry, 500)
     }
 
     private fun findThorDisplay(): Display? {
@@ -662,6 +682,7 @@ class MainActivity : Activity() {
     }
 
     private fun dismissSecondaryDisplay() {
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
         secondaryPresentationRequested = false
         secondaryPresentation?.dismiss()
     }

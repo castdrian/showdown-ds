@@ -182,19 +182,19 @@ class ThorDisplayProfileTest {
                 "primary->second.width" to "primary->second.originalWidth",
                 "primary->second.height" to "primary->second.originalHeight",
                 "primary->second.pos_x" to "0",
-                "primary->second.pos_y" to "0",
+                "primary->second.pos_y" to "thorPreviewHeight + thorPreviewGap",
                 "thorDisplay->second.width" to "thorPreviewWidth",
                 "thorDisplay->second.height" to "thorPreviewHeight",
                 "thorDisplay->second.pos_x" to "(primary->second.originalWidth - thorPreviewWidth) / 2",
-                "thorDisplay->second.pos_y" to "primary->second.originalHeight + thorPreviewGap"
+                "thorDisplay->second.pos_y" to "0"
             ),
             layoutAssignments
         )
-        assertEquals("0", layoutAssignments.getValue("primary->second.pos_y"))
-        assertEquals("primary->second.originalHeight + thorPreviewGap", layoutAssignments.getValue("thorDisplay->second.pos_y"))
-        assertEquals(3, Regex("primary->second\\.pos_y = 0;").findAll(overlayPatch).count())
+        assertEquals("thorPreviewHeight + thorPreviewGap", layoutAssignments.getValue("primary->second.pos_y"))
+        assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
+        assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
         assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 32;").findAll(overlayPatch).count())
-        assertEquals(3, Regex("thorDisplay->second\\.pos_y = primary->second\\.originalHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
         val previewGap = Regex("constexpr uint32_t thorPreviewGap = (\\d+);")
             .find(overlayPatch)
             ?.groupValues
@@ -205,9 +205,9 @@ class ThorDisplayProfileTest {
         assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
         assertTrue(overlayPatch.contains("*y * (iter.second.originalHeight - 1)"))
-        assertTrue(overlayPatch.contains("                pos_y = iter.second.pos_y;"))
-        assertTrue(overlayPatch.contains("primary->second.pos_y = 0;"))
-        assertTrue(overlayPatch.contains("thorDisplay->second.pos_y = primary->second.originalHeight + thorPreviewGap;"))
+        assertTrue(overlayPatch.contains("                pos_y = totalH - iter.second.height - iter.second.pos_y;"))
+        assertTrue(overlayPatch.contains("primary->second.pos_y = thorPreviewHeight + thorPreviewGap;"))
+        assertTrue(overlayPatch.contains("thorDisplay->second.pos_y = 0;"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 2"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 1"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
@@ -237,9 +237,9 @@ class ThorDisplayProfileTest {
         val runScript = File("../scripts/run-ayn-thor-avd.sh").readText()
 
         assertTrue(buildScript.contains("verify_patched_source()"))
-        assertTrue(buildScript.contains("pos_y = iter\\.second\\.pos_y;"))
+        assertTrue(buildScript.contains("pos_y = totalH - iter\\.second\\.height - iter\\.second\\.pos_y;"))
         assertTrue(buildScript.contains("The checked-out AEMU source does not contain the complete AYN Thor patch."))
         assertTrue(runScript.contains("lower_input_y_origin_count"))
-        assertTrue(runScript.contains("pos_y = iter\\.second\\.pos_y;"))
+        assertTrue(runScript.contains("pos_y = totalH - iter\\.second\\.height - iter\\.second\\.pos_y;"))
     }
 }
