@@ -44,6 +44,11 @@ object ShowdownTeamUrlImporter {
                 if (user.isNullOrBlank() || gistId.isNullOrBlank()) null
                 else "https://gist.githubusercontent.com/$user/$gistId/raw"
             }
+            host == "psim.us" && segments.firstOrNull()?.equals("t", true) == true -> {
+                val shareId = segments.getOrNull(1)
+                shareId?.takeIf { it.matches(Regex("[0-9]+(?:-[a-z0-9]+)?", RegexOption.IGNORE_CASE)) }
+                    ?.let { "https://psim.us/t/$it" }
+            }
             else -> null
         }
     }
@@ -65,11 +70,13 @@ object ShowdownTeamUrlImporter {
 
     fun payload(body: String, fallbackName: String = "Imported team", fallbackFormat: String = "gen9"): ShowdownTeamUrlPayload {
         val json = runCatching { JSONObject(body.trim()) }.getOrNull()
-        val text = json?.optString("paste")?.takeIf(String::isNotBlank) ?: body
+        val html = ShowdownTeamRemotePage.payload(body)
+        val text = json?.optString("paste")?.takeIf(String::isNotBlank) ?: html?.text ?: body
         val notes = json?.optString("notes").orEmpty()
         val name = json?.optString("title")?.trim()
             ?.takeUnless { it.isNullOrBlank() || it.startsWith("Untitled", true) }
             ?.replace(Regex("[|\\\\/]"), "")
+            ?: html?.name?.takeUnless(String::isBlank)
             ?: fallbackName
         val format = notes.lineSequence()
             .firstOrNull { it.trim().startsWith("Format:", true) }
@@ -78,6 +85,7 @@ object ShowdownTeamUrlImporter {
             ?.lowercase(Locale.ROOT)
             ?.filter(Char::isLetterOrDigit)
             ?.takeIf(String::isNotBlank)
+            ?: html?.formatLabel?.let(ShowdownTeamRemoteState::formatIdFromLabel)
             ?: fallbackFormat
         return ShowdownTeamUrlPayload(text.replace("\r\n", "\n"), name, format)
     }

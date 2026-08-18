@@ -59,6 +59,9 @@ class MainActivity : Activity() {
     private var secondaryPresentation: ThorPresentation? = null
     private var secondaryPresentationRequested = false
     private var activityResumed = false
+    private val secondaryDisplayRetry = Runnable {
+        if (secondaryPresentationRequested && activityResumed && !isFinishing) showSecondaryDisplay()
+    }
     private var battleScene: BattleSceneView? = null
     private var primaryFrame: FrameLayout? = null
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
@@ -357,8 +360,13 @@ class MainActivity : Activity() {
         displayManager?.registerDisplayListener(displayListener, null)
         showSecondaryDisplay()
         restoreLobbyConnection(savedInstanceState)
-        if (!handleIncomingIntent(intent)) {
-            savedInstanceState?.getString("active_replay_source")?.let(::loadReplay)
+        val incomingIntentHandled = handleIncomingIntent(intent)
+        val restoredReplaySource = savedInstanceState?.getString("active_replay_source")
+        if (!incomingIntentHandled) {
+            restoredReplaySource?.let(::loadReplay)
+        }
+        if (ShowdownStartupPolicy.shouldConnectToLobby(shouldMaintainConnection, incomingIntentHandled, restoredReplaySource)) {
+            startLobbyConnection(emptyList(), "Connecting to ${serverEndpoint.displayName}…")
         }
     }
 
@@ -468,6 +476,7 @@ class MainActivity : Activity() {
         pokedexSprite = null
         selectedPokedexEntry = null
         displayManager?.unregisterDisplayListener(displayListener)
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
         if (::session.isInitialized) session.removeListener(sessionListener)
         if (::session.isInitialized) session.removeProtocolListener(protocolListener)
         if (::session.isInitialized) session.removeDecisionListener(decisionListener)
@@ -531,6 +540,7 @@ class MainActivity : Activity() {
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
         if (::session.isInitialized && shouldMaintainConnection) persistLobbyState(flushToDisk = true)
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
         dismissSecondaryDisplay()
         super.onStop()
     }
@@ -621,34 +631,49 @@ class MainActivity : Activity() {
     }
 
     private fun showSecondaryDisplay() {
-        if (isFinishing || !activityResumed || displayManager == null) return
+        if (isFinishing || displayManager == null) return
         secondaryPresentationRequested = true
+        if (!activityResumed) return
         secondaryPresentation?.let { presentation ->
             presentation.requestControllerFocus()
             return
         }
-        findThorDisplay()?.let { display ->
-            val presentation = ThorPresentation(this, display)
-            secondaryPresentation = presentation
-            presentation.setOnDismissListener {
-                if (secondaryPresentation !== presentation) return@setOnDismissListener
-                secondaryPresentation = null
-                if (secondaryPresentationRequested && !isFinishing) {
-                    window.decorView.post { showSecondaryDisplay() }
-                }
-            }
-            try {
-                presentation.show()
-            } catch (_: WindowManager.BadTokenException) {
-                if (secondaryPresentation === presentation) secondaryPresentation = null
-                return@let
-            } catch (_: WindowManager.InvalidDisplayException) {
-                if (secondaryPresentation === presentation) secondaryPresentation = null
-                return@let
-            }
-            configurePresentationWindow(presentation.window)
-            presentation.requestControllerFocus()
+        val display = findThorDisplay()
+        if (display == null) {
+            scheduleSecondaryDisplayRetry()
+            return
         }
+        val presentation = ThorPresentation(this, display)
+        secondaryPresentation = presentation
+        presentation.setOnDismissListener {
+            if (secondaryPresentation !== presentation) return@setOnDismissListener
+            secondaryPresentation = null
+            if (secondaryPresentationRequested && !isFinishing) scheduleSecondaryDisplayRetry()
+        }
+        try {
+            presentation.show()
+        } catch (_: WindowManager.BadTokenException) {
+            if (secondaryPresentation === presentation) secondaryPresentation = null
+            scheduleSecondaryDisplayRetry()
+            return
+        } catch (_: WindowManager.InvalidDisplayException) {
+            if (secondaryPresentation === presentation) secondaryPresentation = null
+            scheduleSecondaryDisplayRetry()
+            return
+        }
+        configurePresentationWindow(presentation.window)
+        presentation.requestControllerFocus()
+        window.decorView.postDelayed({
+            if (secondaryPresentation === presentation && presentation.isShowing) {
+                presentation.requestControllerFocus()
+            }
+        }, 250)
+    }
+
+    private fun scheduleSecondaryDisplayRetry() {
+        if (!secondaryPresentationRequested || !activityResumed || isFinishing) return
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
+        window.decorView.postDelayed(secondaryDisplayRetry, 500)
     }
 
     private fun findThorDisplay(): Display? {
@@ -662,6 +687,7 @@ class MainActivity : Activity() {
     }
 
     private fun dismissSecondaryDisplay() {
+        window.decorView.removeCallbacks(secondaryDisplayRetry)
         secondaryPresentationRequested = false
         secondaryPresentation?.dismiss()
     }
@@ -2283,6 +2309,11 @@ class MainActivity : Activity() {
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
                         serverUserNamed = update.named
+                        val hasPendingLobbyWork = pendingSearch ||
+                            activeSearchFormat != null ||
+                            activeBattleRoomId != null ||
+                            pendingLobbyCommands?.isNotEmpty() == true ||
+                            reconnectLobbyCommands?.isNotEmpty() == true
                         if (sessionRestorePending && update.named && credentialsStore.load() == null) {
                             sessionRestorePending = false
                             authenticated = true
@@ -2290,6 +2321,11 @@ class MainActivity : Activity() {
                         } else if (!sessionRestorePending && (credentialsStore.load() == null || update.named)) {
                             authenticated = true
                             sendPendingLobbyCommands(connection)
+                            if (!hasPendingLobbyWork) {
+                                session.setConnectionStatus(
+                                    if (update.named) "Signed in as ${update.username}." else "Ready for a battle."
+                                )
+                            }
                         }
                     }
                     lines.mapNotNull(ShowdownAuthentication::challenge).firstOrNull()?.let { challenge ->
@@ -5232,13 +5268,15 @@ class MainActivity : Activity() {
     private fun loadUserPreferences() {
         val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
         replaySpeed = preferences.getFloat("battle_speed", DEFAULT_BATTLE_SPEED).coerceIn(0.25f, 4f)
+        val runtimeSpriteStyle = BattleSession.SpriteStyle.MODERN_3D
+        preferences.edit()
+            .putString("sprite_style", runtimeSpriteStyle.name)
+            .putBoolean("sprite_style_migrated", true)
+            .apply()
         session.applyUserPreferences(
             soundEffects = preferences.getBoolean("sound_effects", true),
             music = preferences.getBoolean("music", true),
-            haptics = preferences.getBoolean("haptics", true),
-            spriteStyle = preferences.getString("sprite_style", BattleSession.SpriteStyle.MODERN_3D.name)
-                ?.let { runCatching { BattleSession.SpriteStyle.valueOf(it) }.getOrDefault(BattleSession.SpriteStyle.MODERN_3D) }
-                ?: BattleSession.SpriteStyle.MODERN_3D
+            haptics = preferences.getBoolean("haptics", true)
         )
     }
 
@@ -5248,6 +5286,7 @@ class MainActivity : Activity() {
             .putBoolean("music", session.musicEnabled)
             .putBoolean("haptics", session.hapticsEnabled)
             .putString("sprite_style", session.spriteStyle.name)
+            .putBoolean("sprite_style_migrated", true)
             .apply()
     }
 

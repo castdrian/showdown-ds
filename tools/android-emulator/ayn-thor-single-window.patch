@@ -2,7 +2,7 @@ diff --git a/android/android-emu/android/emulation/MultiDisplay.cpp b/android/an
 index 8cacba4027a..1fe07d814020 100644
 --- a/android/android-emu/android/emulation/MultiDisplay.cpp
 +++ b/android/android-emu/android/emulation/MultiDisplay.cpp
-@@ -405,10 +405,19 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
+@@ -405,10 +405,18 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
                  pos_x = iter.second.pos_x;
                  pos_y = totalH - iter.second.height - iter.second.pos_y;
                  w = iter.second.width;
@@ -22,9 +22,10 @@ index 8cacba4027a..1fe07d814020 100644
                      *displayId = iter.first;
                      return true;
                  }
-@@ -640,3 +640,34 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
+@@ -640,3 +640,36 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
          mMultiDisplay[displayId].pos_y = y;
          mMultiDisplay[displayId].rotation = current_rotation;
++        bool thorLayoutApplied = false;
 +        if (current_rotation == SKIN_ROTATION_0) {
 +            auto primary = mMultiDisplay.find(0);
 +            auto thorDisplay = mMultiDisplay.end();
@@ -40,9 +41,9 @@ index 8cacba4027a..1fe07d814020 100644
 +                primary->second.originalWidth == 1920 &&
 +                primary->second.originalHeight == 1080 &&
 +                thorDisplay != mMultiDisplay.end()) {
-+                constexpr uint32_t thorPreviewWidth = 1086;
-+                constexpr uint32_t thorPreviewHeight = 946;
-+                constexpr uint32_t thorPreviewGap = 16;
++                constexpr uint32_t thorPreviewWidth = 1085;
++                constexpr uint32_t thorPreviewHeight = 945;
++                constexpr uint32_t thorPreviewGap = 0;
 +                primary->second.width = primary->second.originalWidth;
 +                primary->second.height = primary->second.originalHeight;
 +                primary->second.pos_x = 0;
@@ -54,17 +55,28 @@ index 8cacba4027a..1fe07d814020 100644
 +                        (primary->second.originalWidth - thorPreviewWidth) / 2;
 +                thorDisplay->second.pos_y = 0;
 +                thorDisplay->second.rotation = current_rotation;
++                thorLayoutApplied = true;
 +            }
 +        }
          if (mMultiDisplay[displayId].cb != 0) {
+@@ -704,7 +737,7 @@ int MultiDisplay::setDisplayPose(uint32_t displayId,
+             }
+-            if (!android_foldable_is_pixel_fold() && displayId > 0 &&
+-                displaySizeChanged) {
++            if (!android_foldable_is_pixel_fold() &&
++                ((displayId > 0 && displaySizeChanged) || thorLayoutApplied)) {
+                 UIUpdate = true;
+             }
+         }
+     }
 @@ -732,4 +761,36 @@ void MultiDisplay::performRotationLocked(int mOrientation) {
  void MultiDisplay::performRotationLocked(int mOrientation) {
 +    if (mOrientation == SKIN_ROTATION_0) {
 +        auto primary = mMultiDisplay.find(0);
 +        auto thorDisplay = mMultiDisplay.end();
-+        constexpr uint32_t thorPreviewWidth = 1086;
-+        constexpr uint32_t thorPreviewHeight = 946;
-+        constexpr uint32_t thorPreviewGap = 16;
++        constexpr uint32_t thorPreviewWidth = 1085;
++        constexpr uint32_t thorPreviewHeight = 945;
++        constexpr uint32_t thorPreviewGap = 0;
 +        for (auto it = mMultiDisplay.begin(); it != mMultiDisplay.end(); ++it) {
 +            if (it->first != 0 &&
 +                it->second.originalWidth == 1240 &&
@@ -112,9 +124,9 @@ index 8cacba4027a..1fe07d814020 100644
 +        primary->second.originalWidth == 1920 &&
 +        primary->second.originalHeight == 1080 &&
 +        thorDisplay != mMultiDisplay.end()) {
-+        constexpr uint32_t thorPreviewWidth = 1086;
-+        constexpr uint32_t thorPreviewHeight = 946;
-+        constexpr uint32_t thorPreviewGap = 16;
++        constexpr uint32_t thorPreviewWidth = 1085;
++        constexpr uint32_t thorPreviewHeight = 945;
++        constexpr uint32_t thorPreviewGap = 0;
 +        primary->second.width = primary->second.originalWidth;
 +        primary->second.height = primary->second.originalHeight;
 +        primary->second.pos_x = 0;
@@ -129,3 +141,37 @@ index 8cacba4027a..1fe07d814020 100644
 +        return;
 +    }
      performRotationLocked(rotation);
+
+diff --git a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
+--- a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
++++ b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
+@@ -162,6 +162,9 @@
+                     continue;
+                 }
+
++                multiDisplay.get_display_pose(currentDisplayId, &currentDisplayOffsetX,
++                                              &currentDisplayOffsetY, &currentDisplayW,
++                                              &currentDisplayH);
++                if (currentDisplayId != 0 && currentDisplayW == 1240 &&
++                    currentDisplayH == 1080) {
++                    currentDisplayW = 1085;
++                    currentDisplayH = 945;
++                }
+                 float rotation = static_cast<float>(mFb->getZrot());
+diff --git a/hardware/google/gfxstream/host/post_worker_gl.cpp b/hardware/google/gfxstream/host/post_worker_gl.cpp
+--- a/hardware/google/gfxstream/host/post_worker_gl.cpp
++++ b/hardware/google/gfxstream/host/post_worker_gl.cpp
+@@ -132,6 +132,11 @@ std::shared_future<void> PostWorkerGl::postImpl(
+                     continue;
+                 }
+
++                if (currentDisplayId != 0 && currentDisplayW == 1240 &&
++                    currentDisplayH == 1080) {
++                    currentDisplayW = 1085;
++                    currentDisplayH = 945;
++                }
+
+                 const auto transform = getTransformFromRotation(mFb->getZrot());
+                 postLayerOptions.transform = transform;
+                 if ( transform == HWC_TRANSFORM_ROT_90 || transform == HWC_TRANSFORM_ROT_270) {
+                     std::swap(currentDisplayW, currentDisplayH);

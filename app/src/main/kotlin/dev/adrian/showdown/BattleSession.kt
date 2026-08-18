@@ -64,8 +64,7 @@ class BattleSession {
         val animatedCollection: String,
         val staticCollections: List<String>
     ) {
-        MODERN_3D("X/Y (Anim)", "xyani", listOf("xy", "gen5")),
-        CLASSIC_2D("Black/White (Anim)", "gen5ani", listOf("gen5"))
+        MODERN_3D("HD animated", "xyani", listOf("xy"))
     }
 
     enum class FeedbackType {
@@ -1099,13 +1098,12 @@ class BattleSession {
     fun applyUserPreferences(
         soundEffects: Boolean,
         music: Boolean,
-        haptics: Boolean,
-        spriteStyle: SpriteStyle
+        haptics: Boolean
     ) {
         soundEffectsEnabled = soundEffects
         musicEnabled = music
         hapticsEnabled = haptics
-        this.spriteStyle = spriteStyle
+        this.spriteStyle = SpriteStyle.MODERN_3D
         notifyListeners()
     }
 
@@ -4150,8 +4148,8 @@ class BattleSession {
                     "Haptics ${if (hapticsEnabled) "enabled." else "disabled."}"
                 }
                 7 -> {
-                    spriteStyle = if (spriteStyle == SpriteStyle.MODERN_3D) SpriteStyle.CLASSIC_2D else SpriteStyle.MODERN_3D
-                    "${spriteStyle.displayName} sprite style enabled."
+                    spriteStyle = SpriteStyle.MODERN_3D
+                    "HD animated sprite style enabled."
                 }
                 8 -> {
                     publishClientAction(ClientAction.CONFIGURE_TEAM)
@@ -4448,6 +4446,11 @@ class BattleSession {
                     for (moveIndex in 0 until moves.length()) add(moves.optString(moveIndex))
                 }
             } ?: known?.moves.orEmpty()
+            val ability = entry.optString("baseAbility", known?.ability ?: "Unknown ability")
+                .let { abilityNameResolver?.invoke(it) ?: it }
+            val item = entry.optString("item", known?.item ?: "Unknown item")
+                .ifBlank { "Unknown item" }
+                .let { itemNameResolver?.invoke(it) ?: it }
             synced += PokemonDetails(
                 identifier,
                 resolvedTypes(species, known?.types.orEmpty()),
@@ -4455,8 +4458,8 @@ class BattleSession {
                 levelGender.second,
                 condition,
                 condition(condition),
-                entry.optString("baseAbility", known?.ability ?: "Unknown ability"),
-                entry.optString("item", known?.item ?: "Unknown item").ifBlank { "Unknown item" },
+                ability,
+                item,
                 knownMoves,
                 known?.stats.orEmpty(),
                 entry.optString("pokeball", known?.pokeball ?: "pokeball"),

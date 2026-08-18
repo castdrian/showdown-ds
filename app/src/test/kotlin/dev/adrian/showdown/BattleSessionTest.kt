@@ -1136,7 +1136,7 @@ class BattleSessionTest {
     }
 
     @Test
-    fun modernXySpritesAreTheDefaultAndCanBeChanged() {
+    fun modernXySpritesAreTheDefaultAndRemainEnabled() {
         val session = BattleSession()
 
         assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
@@ -1144,7 +1144,7 @@ class BattleSessionTest {
         session.selectMenuItem(7)
         session.confirmSelection()
 
-        assertEquals(BattleSession.SpriteStyle.CLASSIC_2D, session.spriteStyle)
+        assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
     }
 
     @Test
@@ -2678,14 +2678,13 @@ class BattleSessionTest {
         session.applyUserPreferences(
             soundEffects = false,
             music = true,
-            haptics = false,
-            spriteStyle = BattleSession.SpriteStyle.CLASSIC_2D
+            haptics = false
         )
 
         assertFalse(session.soundEffectsEnabled)
         assertTrue(session.musicEnabled)
         assertFalse(session.hapticsEnabled)
-        assertEquals(BattleSession.SpriteStyle.CLASSIC_2D, session.spriteStyle)
+        assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
     }
 
     @Test
@@ -2693,14 +2692,14 @@ class BattleSessionTest {
         val session = BattleSession()
 
         session.selectPanel(BattleSession.Panel.MENU)
-        assertEquals("Sprite style X/Y (Anim)", session.menuItems()[7])
+        assertEquals("Sprite style HD animated", session.menuItems()[7])
 
         session.selectMenuItem(7)
         session.confirmSelection()
 
-        assertEquals(BattleSession.SpriteStyle.CLASSIC_2D, session.spriteStyle)
-        assertEquals("Sprite style Black/White (Anim)", session.menuItems()[7])
-        assertEquals("Black/White (Anim) sprite style enabled.", session.status)
+        assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
+        assertEquals("Sprite style HD animated", session.menuItems()[7])
+        assertEquals("HD animated sprite style enabled.", session.status)
     }
 
     @Test

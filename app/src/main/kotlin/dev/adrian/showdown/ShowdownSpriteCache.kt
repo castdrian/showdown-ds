@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ImageDecoder
 import android.graphics.Movie
+import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.drawable.AnimatedImageDrawable
@@ -26,6 +27,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.min
+import org.json.JSONObject
 
 class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
@@ -35,6 +37,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val width: Int,
         private val height: Int
     ) {
+        private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
         val isAnimated get() = movie != null || animatedDrawable != null
 
         fun trimHorizontalTransparentPadding(): SpriteAsset {
@@ -64,7 +68,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
             if (bitmap != null) {
-                canvas.drawBitmap(bitmap, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), null)
+                canvas.drawBitmap(bitmap, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
                 if (alpha < 255) canvas.restore()
                 canvas.restore()
                 return
@@ -113,11 +117,20 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(ShowdownAssetPaths.battleSpriteCandidates(request), receiver)
+        requestResolutionPlan(
+            request = request,
+            plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request),
+            receiver = receiver
+        )
     }
 
     fun requestDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
-        requestSprite(ShowdownAssetPaths.dexSprite(species), receiver)
+        val request = BattleSpriteRequest.forOpponent(species, BattleSession.SpriteStyle.MODERN_3D)
+        requestResolutionPlan(
+            request = request,
+            plan = ShowdownAssetPaths.dexSpriteResolutionPlan(species),
+            receiver = receiver
+        )
     }
 
     fun requestPlaceholder(side: BattleSpriteSide, receiver: (SpriteAsset?) -> Unit) {
@@ -126,6 +139,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {
         requestSprite(ShowdownAssetPaths.trainer(trainer)) { receiver(it?.trimHorizontalTransparentPadding()) }
+    }
+
+    fun requestItem(item: String, receiver: (SpriteAsset?) -> Unit) {
+        val paths = ShowdownAssetPaths.itemSpriteCandidates(item)
+        if (paths.isEmpty()) {
+            mainHandler.post { receiver(null) }
+            return
+        }
+        requestSpriteCandidates(paths, receiver)
     }
 
     fun requestBackdrop(name: String = "bg-aquacordetown.jpg", receiver: (Bitmap?) -> Unit) {
@@ -203,6 +225,192 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request(0)
     }
 
+    private fun requestResolutionPlan(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        if (!plan.usesModernAnimatedFallback) {
+            requestSpriteCandidates(plan.allCandidates, receiver)
+            return
+        }
+        requestSpriteCandidates(plan.preferredRemoteCandidates) { asset ->
+            if (asset != null) {
+                receiver(asset)
+                return@requestSpriteCandidates
+            }
+            requestPokeApiModernHdSprite(request) { modernHdAsset ->
+                if (modernHdAsset != null) {
+                    receiver(modernHdAsset)
+                    return@requestPokeApiModernHdSprite
+                }
+                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                    if (communityAsset != null) {
+                        receiver(communityAsset)
+                        return@requestSpriteCandidates
+                    }
+                    val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
+                    fun requestRegularOrModernLocal() {
+                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                            if (regularRemoteAsset != null) {
+                                receiver(regularRemoteAsset)
+                            } else {
+                                requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
+                                    if (modernLocalAsset != null) {
+                                        receiver(modernLocalAsset)
+                                    } else {
+                                        requestSmallSpriteResolution(request, plan, receiver)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    requestRegularOrModernLocal()
+                }
+            }
+        }
+    }
+
+    private fun requestRegularRemoteSpriteResolution(
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestSpriteCandidates(plan.regularRemoteCandidates, receiver)
+    }
+
+    private fun requestSmallSpriteResolution(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestPokeApiAnimatedSprite(request) { animatedRemoteAsset ->
+            if (animatedRemoteAsset != null) {
+                receiver(animatedRemoteAsset)
+            } else {
+                requestSpriteCandidates(plan.verifiedRemoteCandidates) { verifiedAsset ->
+                    if (verifiedAsset != null) {
+                        receiver(verifiedAsset)
+                    } else if (request.side == BattleSpriteSide.OPPONENT) {
+                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                            if (highResolutionAsset != null) {
+                                receiver(highResolutionAsset)
+                            } else {
+                                requestPokeApiStandardSprite(request, receiver)
+                            }
+                        }
+                    } else {
+                        requestPokeApiStandardSprite(request, receiver)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isModernLocalCandidate(path: String) =
+        path.startsWith("sprites/xyani") || path.startsWith("sprites/xy/")
+
+    private fun requestPokeApiModernHdSprite(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestPokeApiSpriteCandidates(request, { number ->
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(number, request.side)
+        }, receiver)
+    }
+
+    private fun requestPokeApiAnimatedSprite(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestPokeApiSpriteCandidates(request, { number ->
+            listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side))
+        }, receiver)
+    }
+
+    private fun requestPokeApiSpriteCandidates(
+        request: BattleSpriteRequest,
+        candidates: (Int) -> List<String>,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        fun requestLookup(index: Int) {
+            val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
+            if (index >= names.size) {
+                receiver(null)
+                return
+            }
+            val lookupUrl = "https://pokeapi.co/api/v2/pokemon/${names[index]}"
+            requestBytes(lookupUrl) { file ->
+                val payload = file?.let { cachedFile ->
+                    runCatching { JSONObject(cachedFile.readText()) }.getOrNull()
+                }
+                val resourceNumber = payload?.optInt("id", 0)?.takeIf { it > 0 }
+                val nationalDexNumber = file?.let { cachedFile ->
+                    ShowdownAssetPaths.pokeApiNationalDexNumber(cachedFile.readText())
+                } ?: resourceNumber
+                if (resourceNumber == null || nationalDexNumber == null) {
+                    requestLookup(index + 1)
+                    return@requestBytes
+                }
+                requestSpriteCandidates(candidates(nationalDexNumber)) { asset ->
+                    if (asset != null) receiver(asset) else requestLookup(index + 1)
+                }
+            }
+        }
+        requestLookup(0)
+    }
+
+    private fun requestPokeApiHighResolutionSprite(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        fun requestLookup(index: Int) {
+            val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
+            if (index >= names.size) {
+                receiver(null)
+                return
+            }
+            requestBytes("https://pokeapi.co/api/v2/pokemon/${names[index]}") { file ->
+                val resourceNumber = file?.let { cachedFile ->
+                    runCatching { JSONObject(cachedFile.readText()).optInt("id", 0) }.getOrNull()
+                }?.takeIf { it > 0 }
+                if (resourceNumber == null) {
+                    requestLookup(index + 1)
+                } else {
+                    requestSprite(ShowdownAssetPaths.pokeApiHighResolutionSprite(resourceNumber)) { highResolutionAsset ->
+                        if (highResolutionAsset != null) receiver(highResolutionAsset) else requestLookup(index + 1)
+                    }
+                }
+            }
+        }
+        requestLookup(0)
+    }
+
+    private fun requestPokeApiStandardSprite(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        fun requestLookup(index: Int) {
+            val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
+            if (index >= names.size) {
+                receiver(null)
+                return
+            }
+            requestBytes("https://pokeapi.co/api/v2/pokemon/${names[index]}") { file ->
+                val resourceNumber = file?.let { cachedFile ->
+                    runCatching { JSONObject(cachedFile.readText()).optInt("id", 0) }.getOrNull()
+                }?.takeIf { it > 0 }
+                if (resourceNumber == null) {
+                    requestLookup(index + 1)
+                } else {
+                    requestSprite(ShowdownAssetPaths.pokeApiStandardSprite(resourceNumber, request.side)) { standardAsset ->
+                        if (standardAsset != null) receiver(standardAsset) else requestLookup(index + 1)
+                    }
+                }
+            }
+        }
+        requestLookup(0)
+    }
+
     private fun requestBytes(path: String, receiver: (File?) -> Unit) {
         var shouldStart = false
         pendingFileReceivers.compute(path) { _, existing ->
@@ -227,7 +435,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun loadBytes(path: String): File? {
-        val extension = path.substringAfterLast('.', "bin")
+        val extension = showdownCacheExtension(path)
         val file = File(diskCache, "${digest(path)}.$extension")
         return runCatching {
             if (!file.isFile) write(file, download(path) ?: return null)
@@ -300,7 +508,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private companion object {
-        const val MAX_FILE_BYTES = 8 * 1024 * 1024
-        const val MAX_DISK_BYTES = 96L * 1024L * 1024L
+        const val MAX_FILE_BYTES = 64 * 1024 * 1024
+        const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }
 }

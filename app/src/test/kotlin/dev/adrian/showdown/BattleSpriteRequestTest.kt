@@ -1,7 +1,10 @@
 package dev.adrian.showdown
 
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BattleSpriteRequestTest {
@@ -42,16 +45,47 @@ class BattleSpriteRequestTest {
         val player = BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
         val opponent = BattleSpriteRequest.forOpponent("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
 
-        assertEquals(
-            listOf(
-                "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png",
-                "sprites/ani-back/substitute.gif"
-            ),
-            ShowdownAssetPaths.battleSpriteCandidates(player)
-        )
+        val playerCandidates = ShowdownAssetPaths.battleSpriteCandidates(player)
+        assertTrue(playerCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
+        assertEquals("sprites/ani-back/substitute.gif", playerCandidates.last())
+        assertTrue(playerCandidates.none { it.contains("/FRONT/") })
         assertEquals(
             "sprites/xyani/ironvaliant.gif",
             ShowdownAssetPaths.battleSprite(opponent)
         )
+    }
+
+    @Test
+    fun modernPlayerPlanNeverUsesGenFiveFallbacks() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forPlayer("Brambleghast", BattleSession.SpriteStyle.MODERN_3D)
+        )
+
+        assertEquals("sprites/xyani-back/brambleghast.gif", plan.fallbackCandidates.first())
+        assertTrue(plan.fallbackCandidates.none { it.contains("gen5") })
+    }
+
+    @Test
+    fun modernSpriteCacheNeverFallsBackToLegacyLocalSprites() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertFalse(source.contains("legacyLocalCandidates"))
+        assertTrue(source.contains("receiver(standardAsset)"))
+        val communityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)")
+        val regularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", source.indexOf("fun requestRegularOrModernLocal()"))
+        val modernHdIndex = source.indexOf("requestPokeApiModernHdSprite(request)")
+        val animatedFallbackIndex = source.indexOf("requestPokeApiAnimatedSprite(request)")
+        val homeIndex = source.indexOf("requestPokeApiHighResolutionSprite(request)")
+        val verifiedIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)")
+        val localFallbackIndex = source.indexOf("requestSpriteCandidates(modernLocalCandidates)", source.indexOf("fun requestRegularOrModernLocal()"))
+        assertTrue(communityIndex >= 0)
+        assertTrue(modernHdIndex < communityIndex)
+        assertTrue(localFallbackIndex > modernHdIndex)
+        assertTrue(regularIndex < localFallbackIndex)
+        assertTrue(animatedFallbackIndex > regularIndex)
+        assertTrue(localFallbackIndex >= 0)
+        assertTrue(verifiedIndex >= 0)
+        assertTrue(homeIndex > verifiedIndex)
+        assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
     }
 }

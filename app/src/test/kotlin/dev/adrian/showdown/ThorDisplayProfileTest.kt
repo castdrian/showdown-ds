@@ -100,6 +100,18 @@ class ThorDisplayProfileTest {
     }
 
     @Test
+    fun keepsTheLargePanelAboveTheCompactPanelWithoutAGap() {
+        val compositeHeight = 1080 + 945
+        val primaryTop = 0
+        val lowerTop = 1080
+
+        assertEquals(0, primaryTop)
+        assertEquals(1080, lowerTop)
+        assertEquals(0, lowerTop - (primaryTop + 1080))
+        assertEquals(2025, compositeHeight)
+    }
+
+    @Test
     fun keepsThorAvdMetadataAlignedWithTheCurrentRenderer() {
         val baseConfig = File("../config/avd/ayn-thor-base.ini").readText()
         val displayProfile = File("../config/avd/ayn-thor.ini").readText()
@@ -124,13 +136,17 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("scale_macos_preview()"))
         assertTrue(runScript.contains("CGDisplayScreenSize"))
         assertTrue(runScript.contains("targetWidthMillimetres"))
-        assertTrue(runScript.contains("tell process \"qemu-system-aarch64\""))
+        assertTrue(runScript.contains("every process whose name begins with \"qemu-system-\""))
         assertTrue(runScript.contains("previewScale"))
         assertTrue(runScript.contains("Unable to scale the macOS Thor preview window"))
         assertTrue(runScript.contains("com.android.emulator.multidisplay.START"))
         assertTrue(runScript.contains("wait_for_android_boot()"))
         assertTrue(runScript.contains("activate_secondary_display()"))
         assertTrue(runScript.contains("verify_thor_displays()"))
+        assertTrue(runScript.contains("stop_existing_thor_emulator()"))
+        assertTrue(runScript.contains("qemu-system-(aarch64|x86_64)"))
+        assertTrue(runScript.contains("Unable to stop the existing AYN Thor emulator before starting a new compositor."))
+        assertTrue(runScript.contains("Stopping the existing AYN Thor emulator before applying the current display compositor."))
         assertTrue(runScript.contains("thorPreviewWidth"))
         assertTrue(runScript.contains("thorPreviewHeight"))
         assertTrue(runScript.contains("lower_input_x_scale_count"))
@@ -142,6 +158,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("The patched AYN Thor emulator overlay is missing"))
         assertTrue(runScript.contains("overlay_patch_digest_file"))
         assertTrue(runScript.contains("The AYN Thor emulator overlay is stale"))
+        assertTrue(runScript.contains("DYLD_LIBRARY_PATH"))
         assertTrue(runScript.contains("snapshot_args=(-no-snapshot)"))
         assertTrue(runScript.indexOf("\"\${snapshot_args[@]}\"") > runScript.indexOf("\"\$@\""))
         assertTrue(runScript.indexOf("if ! verify_thor_displays; then") > runScript.indexOf("if ! activate_secondary_display; then"))
@@ -182,14 +199,26 @@ class ThorDisplayProfileTest {
         assertEquals("thorPreviewHeight + thorPreviewGap", layoutAssignments.getValue("primary->second.pos_y"))
         assertEquals("0", layoutAssignments.getValue("thorDisplay->second.pos_y"))
         assertEquals(3, Regex("primary->second\\.pos_y = thorPreviewHeight \\+ thorPreviewGap;").findAll(overlayPatch).count())
-        assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 16;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("constexpr uint32_t thorPreviewGap = 0;").findAll(overlayPatch).count())
         assertEquals(3, Regex("thorDisplay->second\\.pos_y = 0;").findAll(overlayPatch).count())
-        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1086;"))
-        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 946;"))
+        assertEquals(3, Regex("constexpr uint32_t thorPreviewWidth = 1085;").findAll(overlayPatch).count())
+        assertEquals(3, Regex("constexpr uint32_t thorPreviewHeight = 945;").findAll(overlayPatch).count())
+        val previewGap = Regex("constexpr uint32_t thorPreviewGap = (\\d+);")
+            .find(overlayPatch)
+            ?.groupValues
+            ?.get(1)
+            ?.toInt()
+        assertEquals(0, previewGap)
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewWidth = 1085;"))
+        assertTrue(overlayPatch.contains("constexpr uint32_t thorPreviewHeight = 945;"))
         assertTrue(overlayPatch.contains("*x * (iter.second.originalWidth - 1)"))
         assertTrue(overlayPatch.contains("*y * (iter.second.originalHeight - 1)"))
-        assertTrue(overlayPatch.contains("pos_y = totalH - iter.second.height - iter.second.pos_y;"))
-        assertFalse(Regex("(?m)^\\+\\s+pos_y = iter\\.second\\.pos_y;").containsMatchIn(overlayPatch))
+        assertFalse(overlayPatch.contains("if (totalH == 2208)"))
+        assertTrue(overlayPatch.contains("                pos_y = totalH - iter.second.height - iter.second.pos_y;"))
+        assertTrue(overlayPatch.contains("+                primary->second.pos_y = thorPreviewHeight + thorPreviewGap;"))
+        assertTrue(overlayPatch.contains("+                thorDisplay->second.pos_y = 0;"))
+        assertTrue(overlayPatch.contains("bool thorLayoutApplied = false;"))
+        assertTrue(overlayPatch.contains("((displayId > 0 && displaySizeChanged) || thorLayoutApplied)"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 2"))
         assertFalse(overlayPatch.contains("getNumberActiveMultiDisplaysLocked() == 1"))
         assertTrue(overlayPatch.contains("void MultiDisplay::performRotationLocked(int mOrientation) {"))
@@ -219,7 +248,7 @@ class ThorDisplayProfileTest {
         val runScript = File("../scripts/run-ayn-thor-avd.sh").readText()
 
         assertTrue(buildScript.contains("verify_patched_source()"))
-        assertTrue(buildScript.contains("pos_y = totalH - iter.second.height - iter.second.pos_y;"))
+        assertTrue(buildScript.contains("pos_y = totalH - iter\\.second\\.height - iter\\.second\\.pos_y;"))
         assertTrue(buildScript.contains("The checked-out AEMU source does not contain the complete AYN Thor patch."))
         assertTrue(runScript.contains("lower_input_y_origin_count"))
         assertTrue(runScript.contains("pos_y = totalH - iter\\.second\\.height - iter\\.second\\.pos_y;"))

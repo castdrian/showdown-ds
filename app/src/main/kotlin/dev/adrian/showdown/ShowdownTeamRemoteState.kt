@@ -2,6 +2,58 @@ package dev.adrian.showdown
 
 import java.net.URLDecoder
 
+data class ShowdownTeamHtmlPayload(
+    val text: String,
+    val name: String?,
+    val formatLabel: String?
+)
+
+object ShowdownTeamRemotePage {
+    fun payload(html: String): ShowdownTeamHtmlPayload? {
+        val text = exportText(html) ?: return null
+        val name = Regex(
+            "<strong>(.*?)</strong>\\s*<br\\s*/?>\\s*<small>Uploaded by:",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        ).find(html)?.groupValues?.getOrNull(1)?.let(::readableText)
+        val formatLabel = Regex(
+            "Format:\\s*(.*?)</small>",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        ).find(html)?.groupValues?.getOrNull(1)?.let(::readableText)
+        return ShowdownTeamHtmlPayload(text, name, formatLabel)
+    }
+
+    fun exportText(html: String): String? {
+        val source = Regex(
+            "<a\\b[^>]*>\\s*View full team\\s*</a>",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        ).find(html)?.let { html.substring(it.range.last + 1) } ?: html
+        val text = readableText(source)
+        return text.takeIf { ShowdownTeamCodec.parse(it).isNotEmpty() }
+    }
+
+    fun readableText(html: String): String = html
+        .replace(Regex("<br\\s*/?>"), "\n")
+        .replace(Regex("<hr\\s*/?>"), "\n\n")
+        .replace(Regex("</(?:p|h[1-6]|div|li|form|hr|tr)>"), "\n")
+        .replace(Regex("<[^>]+>"), "")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&quot;", "\"")
+        .replace("&rarr;", "→")
+        .replace("&larr;", "←")
+        .replace("&ndash;", "–")
+        .replace("&mdash;", "—")
+        .replace(Regex("[ \\t]+"), " ")
+        .replace(Regex("\\n[ \\t]+"), "\n")
+        .replace(Regex("\\n{3,}"), "\n\n")
+        .trim()
+        .let { value -> runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value) }
+}
+
 class ShowdownTeamRemoteState {
     data class RemoteTeam(
         val remoteId: String,
@@ -84,36 +136,12 @@ class ShowdownTeamRemoteState {
     }.distinctBy { it.remoteId }.toList()
 
     private fun parseTeamExport(html: String, readable: String): List<ShowdownTeamSet> {
-        val export = Regex("<a\\b[^>]*>\\s*View full team\\s*</a>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
-            .find(html)
-            ?.let { html.substring(it.range.last + 1) }
-            ?.let(::toReadableText)
+        val export = ShowdownTeamRemotePage.exportText(html)
             ?.let(ShowdownTeamCodec::parse)
-            ?.takeIf { it.isNotEmpty() }
         return export ?: ShowdownTeamCodec.parse(readable)
     }
 
-    private fun toReadableText(html: String): String = html
-        .replace(Regex("<br\\s*/?>"), "\n")
-        .replace(Regex("<hr\\s*/?>"), "\n\n")
-        .replace(Regex("</(?:p|h[1-6]|div|li|form|hr|tr)>"), "\n")
-        .replace(Regex("<[^>]+>"), "")
-        .replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&#39;", "'")
-        .replace("&apos;", "'")
-        .replace("&quot;", "\"")
-        .replace("&rarr;", "→")
-        .replace("&larr;", "←")
-        .replace("&ndash;", "–")
-        .replace("&mdash;", "—")
-        .replace(Regex("[ \\t]+"), " ")
-        .replace(Regex("\\n[ \\t]+"), "\n")
-        .replace(Regex("\\n{3,}"), "\n\n")
-        .trim()
-        .let { value -> runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value) }
+    private fun toReadableText(html: String): String = ShowdownTeamRemotePage.readableText(html)
 
     companion object {
         fun formatIdFromLabel(label: String): String {

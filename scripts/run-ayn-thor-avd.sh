@@ -30,6 +30,12 @@ verify_thor_layout_patch() {
     local lower_input_x_scale_count
     local lower_input_y_scale_count
     local lower_input_y_origin_count
+    local lower_preview_width_count
+    local lower_preview_height_count
+    local renderer_preview_width_count
+    local renderer_preview_height_count
+    local gl_renderer_preview_width_count
+    local gl_renderer_preview_height_count
     upper_y_count="$(rg -c 'primary->second\.pos_y = thorPreviewHeight \+ thorPreviewGap;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_y_count="$(rg -c 'thorDisplay->second\.pos_y = 0;' "$overlay_patch_file" 2>/dev/null || true)"
     lower_x_count="$(rg -c '\(primary->second\.originalWidth - thorPreviewWidth\) / 2;' "$overlay_patch_file" 2>/dev/null || true)"
@@ -38,7 +44,13 @@ verify_thor_layout_patch() {
     lower_input_x_scale_count="$(rg -c '\*x \* \(iter\.second\.originalWidth - 1\)' "$overlay_patch_file" 2>/dev/null || true)"
     lower_input_y_scale_count="$(rg -c '\*y \* \(iter\.second\.originalHeight - 1\)' "$overlay_patch_file" 2>/dev/null || true)"
     lower_input_y_origin_count="$(rg -c 'pos_y = totalH - iter\.second\.height - iter\.second\.pos_y;' "$overlay_patch_file" 2>/dev/null || true)"
-    if [[ "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$lower_x_count" != "3" || "$lower_width_count" != "3" || "$lower_height_count" != "3" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" || "$lower_input_y_origin_count" != "1" ]]; then
+    lower_preview_width_count="$(rg -c 'constexpr uint32_t thorPreviewWidth = 1085;' "$overlay_patch_file" 2>/dev/null || true)"
+    lower_preview_height_count="$(rg -c 'constexpr uint32_t thorPreviewHeight = 945;' "$overlay_patch_file" 2>/dev/null || true)"
+    renderer_preview_width_count="$(rg -c 'currentDisplayW = 1085;' "$overlay_patch_file" 2>/dev/null || true)"
+    renderer_preview_height_count="$(rg -c 'currentDisplayH = 945;' "$overlay_patch_file" 2>/dev/null || true)"
+    gl_renderer_preview_width_count="$(rg -c 'currentDisplayW = 1085;' "$overlay_patch_file" 2>/dev/null || true)"
+    gl_renderer_preview_height_count="$(rg -c 'currentDisplayH = 945;' "$overlay_patch_file" 2>/dev/null || true)"
+    if [[ "$upper_y_count" != "3" || "$lower_y_count" != "3" || "$lower_x_count" != "3" || "$lower_width_count" != "3" || "$lower_height_count" != "3" || "$lower_input_x_scale_count" != "1" || "$lower_input_y_scale_count" != "1" || "$lower_input_y_origin_count" != "1" || "$lower_preview_width_count" != "3" || "$lower_preview_height_count" != "3" || "$renderer_preview_width_count" != "2" || "$renderer_preview_height_count" != "2" || "$gl_renderer_preview_width_count" != "2" || "$gl_renderer_preview_height_count" != "2" ]]; then
         printf '%s\n' "The AYN Thor compositor patch does not describe an upright upper-over-lower centered display layout."
         exit 1
     fi
@@ -103,6 +115,13 @@ else
     exit 1
 fi
 
+if [[ "$(uname -s)" == "Darwin" && "$emulator" == "$overlay_emulator" ]]; then
+    overlay_library_path="$repo_root/.emulator-overlay/lib64"
+    if [[ -d "$overlay_library_path" ]]; then
+        export DYLD_LIBRARY_PATH="$overlay_library_path:$overlay_library_path/qt/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+    fi
+fi
+
 if [[ ! -f "$avd_home/$avd_name.ini" ]]; then
     "$repo_root/scripts/create-ayn-thor-avd.sh"
 fi
@@ -128,6 +147,39 @@ export ANDROID_AVD_HOME="$avd_home"
 export ANDROID_SDK_ROOT="$sdk_root"
 adb_binary="$sdk_root/platform-tools/adb"
 device_serial="${ANDROID_SERIAL:-emulator-5554}"
+
+thor_qemu_pids() {
+    ps -axo pid=,command= | awk -v avd="$avd_name" '$0 ~ /qemu-system-(aarch64|x86_64)/ {for (i = 1; i < NF; i += 1) if ($i == "-avd" && $(i + 1) == avd) print $1}'
+}
+
+stop_existing_thor_emulator() {
+    local existing_pids
+    local attempt=0
+    existing_pids="$(thor_qemu_pids)"
+    if [[ -z "$existing_pids" ]]; then
+        return 0
+    fi
+    printf '%s\n' "Stopping the existing AYN Thor emulator before applying the current display compositor."
+    kill $existing_pids 2>/dev/null || true
+    while (( attempt < 20 )); do
+        existing_pids="$(thor_qemu_pids)"
+        [[ -z "$existing_pids" ]] && return 0
+        (( attempt += 1 ))
+        sleep 0.25
+    done
+    kill -KILL $existing_pids 2>/dev/null || true
+    attempt=0
+    while (( attempt < 20 )); do
+        existing_pids="$(thor_qemu_pids)"
+        [[ -z "$existing_pids" ]] && return 0
+        (( attempt += 1 ))
+        sleep 0.25
+    done
+    printf '%s\n' "Unable to stop the existing AYN Thor emulator before starting a new compositor."
+    exit 1
+}
+
+stop_existing_thor_emulator
 
 wait_for_android_boot() {
     local attempt=0
@@ -211,21 +263,24 @@ on run argv
         set previewScale to requestedScale as real
     end if
     tell application "System Events"
-        tell process "qemu-system-aarch64"
-            set windowItems to windows
-            set windowCount to count of windowItems
-            repeat with windowIndex from 1 to windowCount
-                set windowItem to item windowIndex of windowItems
-                if (name of windowItem as text) contains "Android Emulator" then
-                    set currentSize to size of windowItem
-                    if requestedScale is "auto" then
-                        set previewScale to targetWidth / (item 1 of currentSize)
+        set emulatorProcesses to every process whose name begins with "qemu-system-"
+        repeat with emulatorProcess in emulatorProcesses
+            tell emulatorProcess
+                set windowItems to windows
+                set windowCount to count of windowItems
+                repeat with windowIndex from 1 to windowCount
+                    set windowItem to item windowIndex of windowItems
+                    if (name of windowItem as text) contains "Android Emulator" then
+                        set currentSize to size of windowItem
+                        if requestedScale is "auto" then
+                            set previewScale to targetWidth / (item 1 of currentSize)
+                        end if
+                        set size of windowItem to {((item 1 of currentSize) * previewScale) as integer, ((item 2 of currentSize) * previewScale) as integer}
+                        return
                     end if
-                    set size of windowItem to {((item 1 of currentSize) * previewScale) as integer, ((item 2 of currentSize) * previewScale) as integer}
-                    return
-                end if
-            end repeat
-        end tell
+                end repeat
+            end tell
+        end repeat
     end tell
 end run
 APPLESCRIPT

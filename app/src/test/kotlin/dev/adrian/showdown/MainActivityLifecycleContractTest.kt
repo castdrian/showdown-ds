@@ -111,6 +111,16 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun teamSpritesAreRerequestedWhenTheSpriteStyleChanges() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("private val requestedTeamSprites = mutableMapOf<String, BattleSpriteRequest>()"))
+        assertTrue(source.contains("val request = BattleSpriteRequest.forOpponent(species, session.spriteStyle)"))
+        assertTrue(source.contains("if (requestedTeamSprites[species] == request) return"))
+        assertTrue(source.contains("teamSprites.remove(species)"))
+    }
+
+    @Test
     fun onStopDismissesTheThorPresentationBeforeTheActivityLeavesTheScreen() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val stop = source.substringAfter("override fun onStop() {").substringBefore("override fun onStart")
@@ -199,6 +209,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("loginClient.upkeep(serverEndpoint, challenge)"))
         assertTrue(source.contains("sessionRestorePending = loginClient.hasSession()"))
         assertTrue(source.contains("!sessionRestorePending && (credentialsStore.load() == null || update.named)"))
+        assertTrue(source.contains("if (update.named) \"Signed in as \${update.username}.\" else \"Ready for a battle.\""))
         assertTrue(source.contains("sessionStore.clear()"))
     }
 

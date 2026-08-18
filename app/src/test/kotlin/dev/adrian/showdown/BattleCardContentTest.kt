@@ -33,10 +33,11 @@ class BattleCardContentTest {
         )
 
         val singleContent = BattleCardContent.from(single)
-        val compactContent = BattleCardContent.from(compact)
+        val compactContent = BattleCardContent.from(compact, single.item)
         val liveSingleContent = BattleCardContent.from(single, "87/100")
 
         assertEquals(singleContent, compactContent)
+        assertEquals("Leftovers", liveSingleContent.item)
         assertEquals(singleContent.title, liveSingleContent.title)
         assertEquals(singleContent.levelLabel, liveSingleContent.levelLabel)
         assertEquals("87/100", liveSingleContent.hpLabel)
@@ -79,9 +80,10 @@ class BattleCardContentTest {
             moveEffects = listOf("Roost")
         )
 
-        val content = BattleCardContent.from(combatant)
+        val content = BattleCardContent.from(combatant, details.item)
 
         assertEquals(BattleCardContent.from(details, "62/100"), content)
+        assertEquals("Leftovers", content.item)
         assertEquals("62/100", content.hpLabel)
         assertEquals(0.62f, content.fraction, 0.001f)
     }

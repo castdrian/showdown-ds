@@ -39,6 +39,8 @@ class BattleSceneView(
     private var opponentPlaceholder: ShowdownSpriteCache.SpriteAsset? = null
     private var requestedPlayerSprite: BattleSpriteRequest? = null
     private var requestedOpponentSprite: BattleSpriteRequest? = null
+    private val itemSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
+    private val requestedItemSprites = mutableSetOf<String>()
     private var requestedBackdrop = ""
     private val effectAssets = mutableMapOf<String, Bitmap>()
     private val requestedEffects = mutableSetOf<String>()
@@ -413,12 +415,34 @@ class BattleSceneView(
             opponentActiveSprites,
             requestedOpponentActiveSprites
         )
+        requestHeldItemSprites()
         SHOWDOWN_EFFECTS.forEach { name ->
             if (requestedEffects.add(name)) {
                 spriteCache.requestEffect(name) { asset ->
                     if (asset != null) effectAssets[name] = asset
                     invalidate()
                 }
+            }
+        }
+    }
+
+    private fun requestHeldItemSprites() {
+        val itemNames = buildList {
+            add(session.playerDetails().item)
+            add(session.opponentDetails().item)
+            session.playerActiveCombatants().forEach { combatant ->
+                add(session.detailsForActiveCombatant(true, combatant.slot)?.item.orEmpty())
+            }
+            session.opponentActiveCombatants().forEach { combatant ->
+                add(session.detailsForActiveCombatant(false, combatant.slot)?.item.orEmpty())
+            }
+        }
+        itemNames.forEach { item ->
+            val path = BattleItemPresentation.iconPath(item) ?: return@forEach
+            if (!requestedItemSprites.add(path)) return@forEach
+            spriteCache.requestItem(item) { asset ->
+                itemSprites[path] = asset
+                invalidate()
             }
         }
     }
@@ -726,7 +750,28 @@ class BattleSceneView(
         canvas.drawText("Item", left, row, paint)
         paint.textAlign = Paint.Align.RIGHT
         paint.color = INK
-        canvas.drawText(ellipsizeToWidth(details.item, right - left - 110f * scale, paint), right, row, paint)
+        val itemName = BattleItemPresentation.visibleName(details.item)
+        val itemPath = BattleItemPresentation.iconPath(details.item)
+        val itemIconSize = itemPath?.let { minOf(42f * scale, bounds.height() * 0.12f) } ?: 0f
+        val itemTextRight = if (itemIconSize > 0f) right - itemIconSize - 12f * scale else right
+        canvas.drawText(
+            ellipsizeToWidth(itemName ?: "Unknown item", itemTextRight - left, paint),
+            itemTextRight,
+            row,
+            paint
+        )
+        itemPath?.let { path ->
+            itemSprites[path]?.draw(
+                canvas,
+                RectF(
+                    right - itemIconSize,
+                    row - itemIconSize * 0.78f,
+                    right,
+                    row + itemIconSize * 0.22f
+                ),
+                SystemClock.elapsedRealtime()
+            )
+        }
         paint.textAlign = Paint.Align.LEFT
         row += 62f * scale
         paint.textSize = readableTextSize(36f, scale, 16f)
@@ -816,7 +861,10 @@ class BattleSceneView(
                 drawCompactStatusCard(
                     canvas,
                     BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF(),
-                    BattleCardContent.from(combatant),
+                    BattleCardContent.from(
+                        combatant,
+                        session.detailsForActiveCombatant(player, combatant.slot)?.item.orEmpty()
+                    ),
                     scale,
                     alpha,
                     layout,
@@ -879,11 +927,14 @@ class BattleSceneView(
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.19f, scale, 9.5f)
         val levelWidth = paint.measureText(content.levelLabel)
+        val itemPath = BattleItemPresentation.iconPath(content.item)
+        val itemIconSize = itemPath?.let { minOf(30f * scale, height * 0.30f) } ?: 0f
+        val itemGap = if (itemPath == null) 0f else 10f * scale
         paint.color = Color.rgb(232, 232, 232)
         canvas.drawText(content.levelLabel, textRight, bounds.top + height * contentLayout.titleBaselineFraction, paint)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = readableTextSize(height * 0.27f, scale, 10.5f)
-        val titleWidth = (textRight - textLeft - levelWidth - 16f * scale).coerceAtLeast(0f)
+        val titleWidth = (textRight - textLeft - levelWidth - itemIconSize - itemGap - 16f * scale).coerceAtLeast(0f)
         paint.color = INK
         val titleBaseline = bounds.top + height * contentLayout.titleBaselineFraction
         val titleMeasuredWidth = paint.measureText(content.title)
@@ -896,6 +947,18 @@ class BattleSceneView(
         canvas.scale(titleHorizontalScale, 1f, textLeft, titleBaseline)
         canvas.drawText(content.title, textLeft, titleBaseline, paint)
         canvas.restore()
+        itemPath?.let { path ->
+            itemSprites[path]?.draw(
+                canvas,
+                RectF(
+                    textRight - levelWidth - itemGap - itemIconSize,
+                    titleBaseline - itemIconSize * 0.82f,
+                    textRight - levelWidth - itemGap,
+                    titleBaseline + itemIconSize * 0.18f
+                ),
+                SystemClock.elapsedRealtime()
+            )
+        }
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textAlign = Paint.Align.RIGHT
         paint.textSize = readableTextSize(height * 0.17f, scale, 9.5f)
