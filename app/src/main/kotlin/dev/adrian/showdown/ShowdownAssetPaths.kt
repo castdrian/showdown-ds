@@ -66,6 +66,11 @@ object ShowdownAssetPaths {
         "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/"
     )
 
+    private val shinyBackSpriteRoots = listOf(
+        "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda-shiny/",
+        "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda-shiny/"
+    )
+
     private val communityAnimatedSpriteRoots = mapOf(
         BattleSpriteSide.OPPONENT to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/",
         BattleSpriteSide.PLAYER to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/"
@@ -175,12 +180,23 @@ object ShowdownAssetPaths {
 
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
 
-    fun backSpriteIndexUrls() = listOf(
-        "https://www.pkparaiso.com/espada_escudo/sprites_pokemon_espalda.php",
-        "https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon_espalda.php",
-        "https://www.pkparaiso.com/sol-luna/sprites_pokemon_espalda.php",
-        "https://www.pkparaiso.com/xy/sprites_pokemon_espalda.php"
-    )
+    fun backSpriteIndexUrls(shiny: Boolean = false): List<String> {
+        val normalIndexes = listOf(
+            "https://www.pkparaiso.com/espada_escudo/sprites_pokemon_espalda.php",
+            "https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon_espalda.php",
+            "https://www.pkparaiso.com/sol-luna/sprites_pokemon_espalda.php",
+            "https://www.pkparaiso.com/xy/sprites_pokemon_espalda.php"
+        )
+        if (!shiny) return normalIndexes
+        return listOf(
+            normalIndexes[0],
+            "https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon_variocolores_espalda.php",
+            "https://www.pkparaiso.com/xy/sprites_pokemon_variocolores_espalda.php",
+            normalIndexes[1],
+            normalIndexes[2],
+            normalIndexes[3]
+        )
+    }
 
     fun pokeApiNationalDexNumber(payload: String): Int? {
         return runCatching {
@@ -261,9 +277,14 @@ object ShowdownAssetPaths {
     private fun regularBackSpriteCandidates(speciesNames: List<String>, shiny: Boolean): List<String> =
         speciesNames.flatMap { species ->
             hdSpriteNames(species).flatMap { spriteName ->
-                regularBackSpriteRoots.map { root ->
-                    if (root.endsWith("animados-espalda/")) "$root${spriteFileName(spriteName, backFacing = false, shiny)}"
-                    else "$root${spriteFileName(spriteName, backFacing = true, shiny)}"
+                buildList {
+                    regularBackSpriteRoots.forEach { root ->
+                        add(
+                            if (root.endsWith("animados-espalda/")) "$root${spriteFileName(spriteName, backFacing = false, shiny)}"
+                            else "$root${spriteFileName(spriteName, backFacing = true, shiny)}"
+                        )
+                    }
+                    if (shiny) shinyBackSpriteRoots.forEach { root -> add("$root${spriteFileName(spriteName, backFacing = false, shiny = false)}") }
                 }
             }
         }

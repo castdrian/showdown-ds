@@ -291,7 +291,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        val indexUrls = ShowdownAssetPaths.backSpriteIndexUrls()
+        val indexUrls = ShowdownAssetPaths.backSpriteIndexUrls(request.shiny)
         val speciesNames = ShowdownAssetPaths.pokeApiLookupNames(request.species)
 
         fun requestIndex(index: Int) {

@@ -52,4 +52,21 @@ class ShowdownBackSpriteIndexTest {
             ShowdownBackSpriteIndex.candidates(html, listOf("Corviknight"), shiny = true)
         )
     }
+
+    @Test
+    fun recognizesGenSixShinyBackIndexRootsWithoutAFilenameSuffix() {
+        val html = """
+            <img src="/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda-shiny/altaria-mega.gif">
+            <img src="/imagenes/xy/sprites/animados-espalda-shiny/altaria-mega.gif">
+            <img src="/imagenes/xy/sprites/animados-espalda/altaria-mega.gif">
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda-shiny/altaria-mega.gif",
+                "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda-shiny/altaria-mega.gif"
+            ),
+            ShowdownBackSpriteIndex.candidates(html, listOf("Altaria-Mega"), shiny = true)
+        )
+    }
 }

@@ -365,6 +365,17 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun includesDocumentedGenSixShinyBackRootsAndIndexes() {
+        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forPlayer("Altaria-Mega", BattleSession.SpriteStyle.MODERN_3D, shiny = true)
+        )
+        assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda-shiny/altaria-mega.gif"))
+        assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda-shiny/altaria.gif"))
+        assertTrue(ShowdownAssetPaths.backSpriteIndexUrls(shiny = true).contains("https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon_variocolores_espalda.php"))
+        assertTrue(ShowdownAssetPaths.backSpriteIndexUrls(shiny = true).contains("https://www.pkparaiso.com/xy/sprites_pokemon_variocolores_espalda.php"))
+    }
+
+    @Test
     fun buildsShinyPokeApiFacingAndHdCandidates() {
         assertEquals(
             listOf(

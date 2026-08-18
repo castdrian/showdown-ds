@@ -2,7 +2,7 @@ package dev.adrian.showdown
 
 object ShowdownBackSpriteIndex {
     private val imagePathPattern = Regex(
-        """(?:href|src)=[\"']([^\"']*/sprites/(?:animados-gigante|animados-espalda|animados)/[^\"']+\.gif)[\"']""",
+        """(?:href|src)=[\"']([^\"']*/sprites/(?:animados-gigante|animados-espalda-shiny|animados-espalda|animados)/[^\"']+\.gif)[\"']""",
         RegexOption.IGNORE_CASE
     )
 
@@ -13,10 +13,10 @@ object ShowdownBackSpriteIndex {
             val spriteRoot = path.substringAfter("/sprites/").substringBefore('/')
             val fileName = path.substringAfterLast('/')
             val fileStem = fileName.dropLast(".gif".length)
-            val isShiny = fileStem.endsWith("-s", ignoreCase = true)
+            val isShiny = fileStem.endsWith("-s", ignoreCase = true) || spriteRoot.equals("animados-espalda-shiny", ignoreCase = true)
             if (isShiny != shiny) return@mapNotNull null
-            val nonShinyStem = if (isShiny) fileStem.dropLast(2) else fileStem
-            val isBack = spriteRoot == "animados-espalda" || nonShinyStem.endsWith("-back", ignoreCase = true)
+            val nonShinyStem = if (fileStem.endsWith("-s", ignoreCase = true)) fileStem.dropLast(2) else fileStem
+            val isBack = spriteRoot.equals("animados-espalda", ignoreCase = true) || spriteRoot.equals("animados-espalda-shiny", ignoreCase = true) || nonShinyStem.endsWith("-back", ignoreCase = true)
             if (!isBack) return@mapNotNull null
             val spriteName = nonShinyStem.removeSuffix("-back")
             if (requestedNames.contains(normalize(spriteName))) absoluteUrl(path) else null
