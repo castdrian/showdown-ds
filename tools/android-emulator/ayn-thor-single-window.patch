@@ -141,3 +141,20 @@ index 8cacba4027a..1fe07d814020 100644
 +        return;
 +    }
      performRotationLocked(rotation);
+
+diff --git a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
+--- a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
++++ b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
+@@ -162,6 +162,9 @@
+                     continue;
+                 }
+
++                multiDisplay.get_display_pose(currentDisplayId, &currentDisplayOffsetX,
++                                              &currentDisplayOffsetY, &currentDisplayW,
++                                              &currentDisplayH);
++                if (currentDisplayId != 0 && currentDisplayW == 1240 &&
++                    currentDisplayH == 1080) {
++                    currentDisplayW = 1085;
++                    currentDisplayH = 945;
++                }
+                 float rotation = static_cast<float>(mFb->getZrot());

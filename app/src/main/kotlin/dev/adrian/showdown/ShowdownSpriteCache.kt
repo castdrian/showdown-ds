@@ -250,14 +250,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                         return@requestSpriteCandidates
                     }
                     val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-                    fun requestModernLocalOrRegular() {
-                        requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
-                            if (modernLocalAsset != null) {
-                                receiver(modernLocalAsset)
+                    fun requestRegularOrModernLocal() {
+                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                            if (regularRemoteAsset != null) {
+                                receiver(regularRemoteAsset)
                             } else {
-                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                    if (regularRemoteAsset != null) {
-                                        receiver(regularRemoteAsset)
+                                requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
+                                    if (modernLocalAsset != null) {
+                                        receiver(modernLocalAsset)
                                     } else {
                                         requestSmallSpriteResolution(request, plan, receiver)
                                     }
@@ -265,7 +265,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             }
                         }
                     }
-                    requestModernLocalOrRegular()
+                    requestRegularOrModernLocal()
                 }
             }
         }

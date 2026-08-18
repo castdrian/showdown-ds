@@ -234,12 +234,12 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun keepsModernBackAnimationsAheadOfLegacyRemoteFallbacks() {
+    fun prefersHigherResolutionBackAnimationsBeforeLocalFallbacks() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forPlayer("Deoxys", BattleSession.SpriteStyle.MODERN_3D)
         )
         assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/deoxys.gif"))
-        assertTrue(candidates.indexOf("sprites/xyani-back/deoxys.gif") < candidates.indexOf("https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/deoxys.gif"))
+        assertTrue(candidates.indexOf("https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/deoxys.gif") < candidates.indexOf("sprites/xyani-back/deoxys.gif"))
     }
 
     @Test
@@ -249,7 +249,7 @@ class ShowdownAssetPathsTest {
         )
         val hdCandidate = "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/incineroar.gif"
         assertTrue(candidates.contains(hdCandidate))
-        assertTrue(candidates.indexOf("sprites/xyani-back/incineroar.gif") < candidates.indexOf(hdCandidate))
+        assertTrue(candidates.indexOf(hdCandidate) < candidates.indexOf("sprites/xyani-back/incineroar.gif"))
     }
 
     @Test
@@ -260,7 +260,7 @@ class ShowdownAssetPathsTest {
         val giantCandidate = "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/corviknight-back.gif"
         val standardCandidate = "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/corviknight-back.gif"
         assertTrue(candidates.indexOf(giantCandidate) < candidates.indexOf(standardCandidate))
-        assertTrue(candidates.indexOf("sprites/xyani-back/corviknight.gif") < candidates.indexOf(standardCandidate))
+        assertTrue(candidates.indexOf(standardCandidate) < candidates.indexOf("sprites/xyani-back/corviknight.gif"))
     }
 
     @Test
