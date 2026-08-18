@@ -259,20 +259,25 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             }
                         }
                     }
-                    requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                        if (regularRemoteAsset != null) {
-                            receiver(regularRemoteAsset)
-                        } else if (request.side == BattleSpriteSide.OPPONENT) {
-                            requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
-                                if (highResolutionAsset != null) {
-                                    receiver(highResolutionAsset)
-                                } else {
-                                    requestModernLocalOrSmall()
-                                }
+                    fun requestRegularOrModernFallback() {
+                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                            if (regularRemoteAsset != null) {
+                                receiver(regularRemoteAsset)
+                            } else {
+                                requestModernLocalOrSmall()
                             }
-                        } else {
-                            requestModernLocalOrSmall()
                         }
+                    }
+                    if (request.side == BattleSpriteSide.OPPONENT) {
+                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                            if (highResolutionAsset != null) {
+                                receiver(highResolutionAsset)
+                            } else {
+                                requestRegularOrModernFallback()
+                            }
+                        }
+                    } else {
+                        requestRegularOrModernFallback()
                     }
                 }
             }
