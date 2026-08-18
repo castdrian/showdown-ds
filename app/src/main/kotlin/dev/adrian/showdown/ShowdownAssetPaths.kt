@@ -121,14 +121,12 @@ object ShowdownAssetPaths {
             staticCollections.forEach { collection ->
                 speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection, request.shiny) }
             }
-            candidates += placeholder(BattleSpriteSide.PLAYER)
         } else {
             staticCollections.forEach { collection ->
                 speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.OPPONENT, collection, request.shiny) }
             }
             candidates += dexSprite(request.species)
             candidates += "sprites/dex/${animationId(request.species)}.png"
-            candidates += placeholder(BattleSpriteSide.OPPONENT)
         }
         return candidates.toList()
     }
@@ -333,8 +331,6 @@ object ShowdownAssetPaths {
     }
 
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
-
-    fun placeholder(side: BattleSpriteSide) = "sprites/${if (side == BattleSpriteSide.PLAYER) "ani-back" else "ani"}/substitute.gif"
 
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
 

@@ -1762,12 +1762,6 @@ class CommandDeckView(
             if (requestedTeamSprites[displayName] != request) return@requestPokemon
             if (sprite != null) {
                 teamSprites[displayName] = sprite
-                postInvalidateOnAnimation()
-                return@requestPokemon
-            }
-            spriteCache.requestPlaceholder(BattleSpriteSide.OPPONENT) { placeholder ->
-                if (requestedTeamSprites[displayName] == request && placeholder != null) teamSprites[displayName] = placeholder
-                postInvalidateOnAnimation()
             }
             postInvalidateOnAnimation()
         }

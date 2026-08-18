@@ -95,7 +95,7 @@ object ShowdownChangelog {
                 "Active battle sprites now resolve from species identifiers while keeping nicknames readable in the battle UI.",
                 "Singles battles now use the same species-resolved active sprite path as multi-Pokémon battles.",
                 "Concurrent sprite, effect, audio, and data requests now share downloads without dropping waiting callbacks.",
-                "Active Pokémon now use side-specific placeholders while a switched-in sprite loads, preventing stale orientation flashes.",
+                "Active Pokémon now show species-specific animated fallback art while HD artwork loads, and generic Substitute decoys are never used as loading art.",
                 "The secondary Thor display keeps controller focus available for touch and hardware input.",
                 "Lower-screen controls now size themselves from the Thor lower panel's actual display density instead of inheriting the upper-screen metrics.",
                 "Unknown move records no longer arm the generic damage cue, preventing sound effects from being attached to unclassified animations.",

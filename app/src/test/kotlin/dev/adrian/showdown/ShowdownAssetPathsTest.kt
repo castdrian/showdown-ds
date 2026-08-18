@@ -48,12 +48,23 @@ class ShowdownAssetPathsTest {
                 "sprites/xy/furfroulareine.png",
                 "sprites/xy/furfrou.png",
                 "sprites/dex/furfrou-la-reine.png",
-                "sprites/dex/furfroulareine.png",
-                "sprites/ani/substitute.gif"
+                "sprites/dex/furfroulareine.png"
             ),
             candidates.filter { it.startsWith("sprites/") }
         )
         assertTrue(candidates.filter { it.startsWith("https://") }.isNotEmpty())
+    }
+
+    @Test
+    fun neverUsesSubstituteAsASpeciesFallback() {
+        val requests = listOf(
+            BattleSpriteRequest.forOpponent("Furfrou-La Reine", BattleSession.SpriteStyle.MODERN_3D),
+            BattleSpriteRequest.forPlayer("Furfrou-La Reine", BattleSession.SpriteStyle.MODERN_3D)
+        )
+
+        requests.forEach { request ->
+            assertTrue(ShowdownAssetPaths.battleSpriteCandidates(request).none { it.contains("substitute") })
+        }
     }
 
     @Test
@@ -66,8 +77,7 @@ class ShowdownAssetPathsTest {
                 "sprites/xyani/ironhands.gif",
                 "sprites/xy/ironhands.png",
                 "sprites/dex/iron-hands.png",
-                "sprites/dex/ironhands.png",
-                "sprites/ani/substitute.gif"
+                "sprites/dex/ironhands.png"
             ),
             candidates.filter { it.startsWith("sprites/") }
         )
@@ -220,7 +230,7 @@ class ShowdownAssetPathsTest {
         )
         assertTrue(candidates.none { it.contains("/FRONT/") })
         assertTrue(candidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
-        assertEquals("sprites/ani-back/substitute.gif", candidates.last())
+        assertEquals("sprites/xy-back/ironvaliant.png", candidates.last())
     }
 
     @Test
@@ -233,7 +243,7 @@ class ShowdownAssetPathsTest {
         assertFalse(frontCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
         assertTrue(backCandidates.none { it.contains("/FRONT/") })
         assertTrue(backCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
-        assertEquals("sprites/ani-back/substitute.gif", backCandidates.last())
+        assertEquals("sprites/xy-back/ironvaliant.png", backCandidates.last())
     }
 
     @Test

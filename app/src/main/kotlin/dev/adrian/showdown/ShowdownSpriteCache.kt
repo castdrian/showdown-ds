@@ -24,6 +24,28 @@ import java.util.concurrent.Executors
 import kotlin.math.min
 import org.json.JSONObject
 
+internal class ProgressiveAssetDelivery<T> {
+    private var fallbackDelivered = false
+    private var resolutionDelivered = false
+
+    @Synchronized
+    fun deliverFallback(asset: T, receiver: (T) -> Unit) {
+        if (resolutionDelivered) return
+        fallbackDelivered = true
+        receiver(asset)
+    }
+
+    @Synchronized
+    fun deliverResolution(asset: T?, receiver: (T?) -> Unit) {
+        if (asset == null) {
+            if (!fallbackDelivered) receiver(null)
+            return
+        }
+        resolutionDelivered = true
+        receiver(asset)
+    }
+}
+
 class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
         private val bitmap: Bitmap?,
@@ -96,6 +118,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
+            val delivery = ProgressiveAssetDelivery<SpriteAsset>()
+            requestPokeApiAnimatedSprite(request) { asset ->
+                asset?.let { delivery.deliverFallback(it, receiver) }
+            }
+            requestResolutionPlan(
+                request = request,
+                plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request)
+            ) { asset ->
+                delivery.deliverResolution(asset, receiver)
+            }
+            return
+        }
         requestResolutionPlan(
             request = request,
             plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request),
@@ -110,10 +145,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             plan = ShowdownAssetPaths.dexSpriteResolutionPlan(species),
             receiver = receiver
         )
-    }
-
-    fun requestPlaceholder(side: BattleSpriteSide, receiver: (SpriteAsset?) -> Unit) {
-        requestSprite(ShowdownAssetPaths.placeholder(side), receiver)
     }
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {

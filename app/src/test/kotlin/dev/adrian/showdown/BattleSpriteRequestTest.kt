@@ -69,7 +69,7 @@ class BattleSpriteRequestTest {
 
         val playerCandidates = ShowdownAssetPaths.battleSpriteCandidates(player)
         assertTrue(playerCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
-        assertEquals("sprites/ani-back/substitute.gif", playerCandidates.last())
+        assertEquals("sprites/xy-back/ironvaliant.png", playerCandidates.last())
         assertTrue(playerCandidates.none { it.contains("/FRONT/") })
         assertEquals(
             "sprites/xyani/ironvaliant.gif",
@@ -94,7 +94,10 @@ class BattleSpriteRequestTest {
         assertFalse(source.contains("legacyLocalCandidates"))
         assertTrue(source.contains("receiver(standardAsset)"))
         val modernHdIndex = source.indexOf("requestPokeApiModernHdSprite(request)")
-        val animatedFallbackIndex = source.indexOf("requestPokeApiAnimatedSprite(request)")
+        val animatedFallbackIndex = source.indexOf(
+            "requestPokeApiAnimatedSprite(request)",
+            source.indexOf("private fun requestSmallSpriteResolution")
+        )
         val verifiedIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)", animatedFallbackIndex)
         val backIndex = source.indexOf("private fun requestBackSpriteResolution")
         val scrapedBackIndex = source.indexOf("requestScrapedBackSpriteResolution(request)", backIndex)

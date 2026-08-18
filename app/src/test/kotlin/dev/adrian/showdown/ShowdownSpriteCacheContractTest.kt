@@ -1,6 +1,8 @@
 package dev.adrian.showdown
 
 import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -24,10 +26,35 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun modernRequestsStartARealAnimatedFallbackWithoutSubstitute() {
+        val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val requestSource = cacheSource.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
+        val deckSource = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(requestSource.contains("requestPokeApiAnimatedSprite(request)"))
+        assertFalse(deckSource.contains("requestPlaceholder"))
+    }
+
+    @Test
+    fun hdResolutionCanReplaceFallbackButLateFallbackCannotDowngradeIt() {
+        val delivered = mutableListOf<String>()
+        val gate = ProgressiveAssetDelivery<String>()
+
+        gate.deliverFallback("regular") { delivered.add(it) }
+        gate.deliverResolution("hd") { delivered.add(it ?: "") }
+        gate.deliverFallback("late") { delivered.add(it) }
+
+        assertEquals(listOf("regular", "hd"), delivered)
+    }
+
+    @Test
     fun modernArtworkResolutionKeepsAnimatedSourcesAheadOfStaticFallbacks() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val modernHdIndex = source.indexOf("requestPokeApiModernHdSprite(request)")
-        val animatedFallbackIndex = source.indexOf("requestPokeApiAnimatedSprite(request)")
+        val animatedFallbackIndex = source.indexOf(
+            "requestPokeApiAnimatedSprite(request)",
+            source.indexOf("private fun requestSmallSpriteResolution")
+        )
         val frontVerifiedIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)", animatedFallbackIndex)
         val backIndex = source.indexOf("private fun requestBackSpriteResolution")
         val scrapedBackIndex = source.indexOf("requestScrapedBackSpriteResolution(request)", backIndex)
