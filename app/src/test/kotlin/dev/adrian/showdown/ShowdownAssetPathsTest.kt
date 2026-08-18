@@ -264,6 +264,31 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun keepsOfficialBackSourcesInTheRegularRemoteTier() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forPlayer("Incineroar", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val officialBack = "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/incineroar.gif"
+        val communityBack = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/INCINEROAR.gif"
+
+        assertFalse(plan.preferredRemoteCandidates.contains(officialBack))
+        assertTrue(plan.regularRemoteCandidates.contains(officialBack))
+        assertTrue(plan.communityRemoteCandidates.contains(communityBack))
+        assertTrue(plan.allCandidates.indexOf(communityBack) < plan.allCandidates.indexOf("sprites/xyani-back/incineroar.gif"))
+    }
+
+    @Test
+    fun includesOrasBackSourcesBeforeShowdownFallbacks() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forPlayer("Altaria-Mega", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val orasBack = "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda/altaria-mega.gif"
+
+        assertTrue(plan.regularRemoteCandidates.contains(orasBack))
+        assertTrue(plan.allCandidates.indexOf(orasBack) < plan.allCandidates.indexOf("sprites/xyani-back/altariamega.gif"))
+    }
+
+    @Test
     fun exposesAnimatedPokeApiFallbacksWithTheCorrectFacing() {
         assertEquals(listOf("shaymin-sky", "shaymin"), ShowdownAssetPaths.pokeApiLookupNames("Shaymin-Sky"))
         assertEquals(
@@ -275,8 +300,7 @@ class ShowdownAssetPathsTest {
         )
         assertEquals(
             listOf(
-                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901-back.gif",
-                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/901-back.gif"
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/901-back.gif"
             ),
             ShowdownAssetPaths.hdAnimatedSpriteCandidates(901, BattleSpriteSide.PLAYER)
         )

@@ -51,14 +51,18 @@ object ShowdownAssetPaths {
     private val regularSpriteRoots = listOf(
         "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/",
         "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados/",
+        "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados/",
         "https://www.pkparaiso.com/imagenes/xy/sprites/animados/"
     )
 
-    private val hdBackSpriteRoots = hdNumberedSpriteRoots
+    private val hdBackSpriteRoots = listOf(
+        "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/"
+    )
 
     private val regularBackSpriteRoots = listOf(
         "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/",
         "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/",
+        "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda/",
         "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/"
     )
 
@@ -171,6 +175,13 @@ object ShowdownAssetPaths {
         path.contains("/sprites/animados/") || path.contains("/sprites/animados-espalda/")
 
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
+
+    fun backSpriteIndexUrls() = listOf(
+        "https://www.pkparaiso.com/espada_escudo/sprites_pokemon_espalda.php",
+        "https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon_espalda.php",
+        "https://www.pkparaiso.com/sol-luna/sprites_pokemon_espalda.php",
+        "https://www.pkparaiso.com/xy/sprites_pokemon_espalda.php"
+    )
 
     fun pokeApiNationalDexNumber(payload: String): Int? {
         return runCatching {
