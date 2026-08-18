@@ -126,8 +126,8 @@ class BattleSpriteRequestTest {
         assertTrue(animatedFallbackIndex > localFallbackIndex)
         assertTrue(localFallbackIndex >= 0)
         assertTrue(verifiedIndex >= 0)
-        assertTrue(homeIndex > communityIndex)
-        assertTrue(homeIndex > regularIndex)
+        assertTrue(homeIndex < communityIndex)
+        assertTrue(homeIndex < regularIndex)
         assertTrue(homeIndex < localFallbackIndex)
         assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
     }

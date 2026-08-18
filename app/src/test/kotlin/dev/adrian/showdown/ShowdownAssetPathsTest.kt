@@ -387,6 +387,21 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun includesDocumentedFrontSpriteIndexPages() {
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/espada_escudo/sprites_pokemon.php",
+                "https://www.pkparaiso.com/ultra-sol-ultra-luna/sprites_pokemon_sin_bordes.php",
+                "https://www.pkparaiso.com/sol-luna/sprites_pokemon.php",
+                "https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon.php",
+                "https://www.pkparaiso.com/xy/sprites_pokemon.php"
+            ),
+            ShowdownAssetPaths.frontSpriteIndexUrls()
+        )
+        assertTrue(ShowdownAssetPaths.frontSpriteIndexUrls(shiny = true).contains("https://www.pkparaiso.com/xy/sprites_pokemon_variocolores.php"))
+    }
+
+    @Test
     fun buildsShinyPokeApiFacingAndHdCandidates() {
         assertEquals(
             listOf(

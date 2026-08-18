@@ -207,6 +207,24 @@ object ShowdownAssetPaths {
         )
     }
 
+    fun frontSpriteIndexUrls(shiny: Boolean = false): List<String> {
+        val normalIndexes = listOf(
+            "https://www.pkparaiso.com/espada_escudo/sprites_pokemon.php",
+            "https://www.pkparaiso.com/ultra-sol-ultra-luna/sprites_pokemon_sin_bordes.php",
+            "https://www.pkparaiso.com/sol-luna/sprites_pokemon.php",
+            "https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon.php",
+            "https://www.pkparaiso.com/xy/sprites_pokemon.php"
+        )
+        if (!shiny) return normalIndexes
+        return listOf(
+            normalIndexes[0],
+            normalIndexes[1],
+            "https://www.pkparaiso.com/sol-luna/sprites_pokemon_variocolores.php",
+            "https://www.pkparaiso.com/rubi-omega-zafiro-alfa/sprites_pokemon_variocolores.php",
+            "https://www.pkparaiso.com/xy/sprites_pokemon_variocolores.php"
+        )
+    }
+
     fun pokeApiNationalDexNumber(payload: String): Int? {
         return runCatching {
             JSONObject(payload)
