@@ -119,8 +119,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val bitmap: Bitmap?,
         private val movie: Movie?,
         private val width: Int,
-        private val height: Int,
-        private val mirrorHorizontally: Boolean = false
+        private val height: Int
     ) {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
@@ -144,8 +143,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
                 null,
                 right - left + 1,
-                image.height,
-                mirrorHorizontally
+                image.height
             )
         }
 
@@ -156,7 +154,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             val left = destination.centerX() - drawWidth / 2f
             val top = destination.centerY() - drawHeight / 2f
             canvas.save()
-            if (flipHorizontally xor mirrorHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
+            if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
             if (bitmap != null) {
                 canvas.drawBitmap(bitmap, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
@@ -183,7 +181,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
         }
 
-        fun mirroredForPlayer() = if (mirrorHorizontally) this else SpriteAsset(bitmap, movie, width, height, true)
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -365,7 +362,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                             if (modernLocalAsset != null) {
                                                 receiver(modernLocalAsset)
                                             } else {
-                                                requestScavioAnimatedSprite(request, receiver)
+                                                receiver(null)
                                             }
                                         }
                                     }
@@ -583,7 +580,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 }.orEmpty()
                 requestSpriteCandidates(candidates) { asset ->
                     if (asset != null) {
-                        receiver(if (request.backFacing) asset.mirroredForPlayer() else asset)
+                        receiver(asset)
                     } else {
                         requestLookup(index + 1)
                     }

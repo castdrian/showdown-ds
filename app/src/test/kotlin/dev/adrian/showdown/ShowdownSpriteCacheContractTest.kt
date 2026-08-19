@@ -112,7 +112,7 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun keepsTrueAnimatedBackSpritesAheadOfMirroredFrontFallbacks() {
+    fun keepsTrueAnimatedBackSpritesWithoutMirroredFrontFallbacks() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val backResolver = source.substringAfter("private fun requestBackSpriteResolution")
             .substringBefore("private fun requestScrapedBackSpriteResolution")
@@ -121,13 +121,14 @@ class ShowdownSpriteCacheContractTest {
 
         assertTrue(
             backResolver.indexOf("requestModernLocalSpriteResolution(request, plan)") <
-                backResolver.indexOf("requestScavioAnimatedSprite(request, receiver)")
+                backResolver.indexOf("receiver(null)")
         )
         assertTrue(
             frontResolver.indexOf("requestRegularRemoteSpriteResolution(plan)") <
                 frontResolver.indexOf("requestScavioAnimatedSprite(request)")
         )
-        assertTrue(source.contains("asset.mirroredForPlayer()"))
+        assertFalse(backResolver.contains("requestScavioAnimatedSprite"))
+        assertFalse(source.contains("asset.mirroredForPlayer()"))
     }
 
     @Test
