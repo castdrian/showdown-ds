@@ -29,6 +29,53 @@ internal fun isGenericSpritePlaceholder(path: String): Boolean {
     return fileName.equals("substitute", ignoreCase = true) || fileName.equals("decoy", ignoreCase = true)
 }
 
+internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
+    if (bytes.size < 13) return false
+    val signature = bytes.copyOfRange(0, 6).toString(Charsets.US_ASCII)
+    if (signature != "GIF87a" && signature != "GIF89a") return false
+    var offset = 13
+    val screenPacked = bytes[10].toInt() and 0xff
+    if (screenPacked and 0x80 != 0) {
+        offset += 3 * (1 shl ((screenPacked and 0x07) + 1))
+    }
+    var frameCount = 0
+    while (offset < bytes.size) {
+        when (bytes[offset].toInt() and 0xff) {
+            0x21 -> {
+                if (offset + 2 > bytes.size) return false
+                offset = skipGifSubBlocks(bytes, offset + 2) ?: return false
+            }
+            0x2c -> {
+                if (offset + 10 > bytes.size) return false
+                val imagePacked = bytes[offset + 9].toInt() and 0xff
+                offset += 10
+                if (imagePacked and 0x80 != 0) {
+                    offset += 3 * (1 shl ((imagePacked and 0x07) + 1))
+                }
+                if (offset >= bytes.size) return false
+                offset = skipGifSubBlocks(bytes, offset + 1) ?: return false
+                frameCount += 1
+                if (frameCount > 1) return true
+            }
+            0x3b -> return false
+            else -> return false
+        }
+    }
+    return false
+}
+
+private fun skipGifSubBlocks(bytes: ByteArray, start: Int): Int? {
+    var offset = start
+    while (offset < bytes.size) {
+        val length = bytes[offset].toInt() and 0xff
+        offset += 1
+        if (length == 0) return offset
+        if (offset + length > bytes.size) return null
+        offset += length
+    }
+    return null
+}
+
 internal class ProgressiveAssetDelivery<T> {
     private var fallbackDelivered = false
     private var resolutionDelivered = false
@@ -627,8 +674,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun decodeSprite(file: File, path: String): SpriteAsset? {
-        return if (path.endsWith(".gif")) {
-            Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 }?.let(SpriteAsset::fromMovie)
+        return if (path.endsWith(".gif", ignoreCase = true)) {
+            if (!hasMultipleGifFrames(file.readBytes())) return null
+            Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 && it.duration() > 0 }?.let(SpriteAsset::fromMovie)
         } else {
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }

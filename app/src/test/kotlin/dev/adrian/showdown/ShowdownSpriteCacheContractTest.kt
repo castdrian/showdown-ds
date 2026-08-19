@@ -13,7 +13,15 @@ class ShowdownSpriteCacheContractTest {
 
         assertTrue(source.contains("Movie.decodeFile(file.path)"))
         assertTrue(source.contains("movie.setTime((elapsedMillis % maxOf(movie.duration(), 1000)).toInt())"))
+        assertTrue(source.contains("hasMultipleGifFrames(file.readBytes())"))
+        assertTrue(source.contains("it.duration() > 0"))
         assertTrue(source.contains("val isAnimated get() = movie != null"))
+    }
+
+    @Test
+    fun rejectsOneFrameGifArtwork() {
+        assertFalse(hasMultipleGifFrames(testGif(1)))
+        assertTrue(hasMultipleGifFrames(testGif(2)))
     }
 
     @Test
@@ -129,5 +137,17 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { resourceNumber ->"))
         assertTrue(source.contains("pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny)"))
         assertTrue(source.contains("candidates(resourceNumber)"))
+    }
+
+    private fun testGif(frameCount: Int): ByteArray {
+        val header = "GIF89a".toByteArray(Charsets.US_ASCII)
+        val screen = byteArrayOf(1, 0, 1, 0, 0, 0, 0)
+        val frame = byteArrayOf(
+            0x2c,
+            0, 0, 0, 0, 1, 0, 1, 0, 0,
+            0x02,
+            0x02, 0x4c, 0x01, 0x00
+        )
+        return header + screen + ByteArray(frame.size * frameCount) { index -> frame[index % frame.size] } + byteArrayOf(0x3b)
     }
 }
