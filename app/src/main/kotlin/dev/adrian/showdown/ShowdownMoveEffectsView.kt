@@ -261,6 +261,83 @@ class ShowdownMoveEffectsView(
                         }
                         function installBattleLogHooks() {
                             if (typeof BattleLog === 'undefined' || BattleLog.prototype.__showdownNativeBattleLogHooked) return;
+                            var originalAdd = BattleLog.prototype.add;
+                            var nativeJoinLeave = null;
+                            var nativeJoinLeaveKey = null;
+                            var nativeJoinLeaveSequence = 0;
+                            var nativeRenameKey = null;
+                            var nativeRenameSequence = 0;
+                            function nativeUser(value) {
+                                var raw = String(value || '');
+                                if (typeof BattleTextParser !== 'undefined' && BattleTextParser.parseNameParts) {
+                                    var parsed = BattleTextParser.parseNameParts(raw);
+                                    return {
+                                        group: String(parsed.group || ''),
+                                        name: String(parsed.name || raw)
+                                    };
+                                }
+                                return {group: '', name: raw};
+                            }
+                            function escapeNativeText(value) {
+                                return String(value || '')
+                                    .replace(/&/g, '&amp;')
+                                    .replace(/</g, '&lt;')
+                                    .replace(/>/g, '&gt;');
+                            }
+                            function nativeFormattedUser(value) {
+                                var parsed = nativeUser(value);
+                                return parsed.group + parsed.name;
+                            }
+                            function nativeJoinLeaveMarkup(instance) {
+                                var parts = [];
+                                if (nativeJoinLeave.joins.length) {
+                                    parts.push(instance.textList(nativeJoinLeave.joins) + ' joined');
+                                }
+                                if (nativeJoinLeave.leaves.length) {
+                                    parts.push(instance.textList(nativeJoinLeave.leaves) + ' left');
+                                }
+                                nativeBattleMarkup(
+                                    nativeJoinLeaveKey,
+                                    '<small class="gray">' + escapeNativeText(parts.join('; ')) + '</small>'
+                                );
+                            }
+                            BattleLog.prototype.add = function (args, kwArgs) {
+                                if (!args || !args.length || (kwArgs && kwArgs.silent)) {
+                                    return originalAdd.apply(this, arguments);
+                                }
+                                var type = String(args[0] || '');
+                                if (type === 'join' || type === 'j' || type === 'leave' || type === 'l') {
+                                    nativeRenameKey = null;
+                                    if (!nativeJoinLeave) {
+                                        nativeJoinLeave = {joins: [], leaves: []};
+                                        nativeJoinLeaveKey = 'joinleave-' + (++nativeJoinLeaveSequence);
+                                    }
+                                    var user = nativeFormattedUser(args[1]);
+                                    var target = type === 'join' || type === 'j' ? nativeJoinLeave.joins : nativeJoinLeave.leaves;
+                                    var opposite = type === 'join' || type === 'j' ? nativeJoinLeave.leaves : nativeJoinLeave.joins;
+                                    var oppositeIndex = opposite.indexOf(user);
+                                    if (oppositeIndex >= 0) opposite.splice(oppositeIndex, 1);
+                                    if (target.indexOf(user) < 0) target.push(user);
+                                    nativeJoinLeaveMarkup(this);
+                                } else if (type === 'name' || type === 'n') {
+                                    var renamedUser = nativeUser(args[1]);
+                                    if (!(typeof toID === 'function' && toID(args[2] || '') === toID(renamedUser.name))) {
+                                        if (!nativeRenameKey) nativeRenameKey = 'rename-' + (++nativeRenameSequence);
+                                        nativeBattleMarkup(
+                                            nativeRenameKey,
+                                            '<small class="gray">' +
+                                                escapeNativeText(renamedUser.group + renamedUser.name) +
+                                                ' renamed from ' + escapeNativeText(args[2]) +
+                                                '.</small>'
+                                        );
+                                    }
+                                } else {
+                                    nativeJoinLeave = null;
+                                    nativeJoinLeaveKey = null;
+                                    nativeRenameKey = null;
+                                }
+                                return originalAdd.apply(this, arguments);
+                            };
                             var originalAddDiv = BattleLog.prototype.addDiv;
                             BattleLog.prototype.addDiv = function (className, html) {
                                 if (!nativeBattleLogMarkupActive) nativeBattleLog(html);
