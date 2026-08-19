@@ -69,4 +69,17 @@ class ShowdownBackSpriteIndexTest {
             ShowdownBackSpriteIndex.candidates(html, listOf("Altaria-Mega"), shiny = true)
         )
     }
+
+    @Test
+    fun separatesGiantBackAssetsFromRegularBackAssets() {
+        val html = """
+            <a href="/imagenes/espada_escudo/sprites/animados-gigante/alcremie-back.gif">
+            <img src="/imagenes/espada_escudo/sprites/animados/alcremie-back.gif">
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/alcremie-back.gif"),
+            ShowdownBackSpriteIndex.highResolutionCandidates(html, listOf("Alcremie"))
+        )
+    }
 }

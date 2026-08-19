@@ -172,6 +172,23 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun probesShinyCommunityFrontAndBackAnimationsBeforePixelFallbacks() {
+        val front = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forOpponent("Brambleghast", BattleSession.SpriteStyle.MODERN_3D, shiny = true)
+        )
+        val back = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forPlayer("Brambleghast", BattleSession.SpriteStyle.MODERN_3D, shiny = true)
+        )
+        val frontCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT_SHINY/BRAMBLEGHAST%20shiny.gif"
+        val backCandidate = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK_SHINY/BRAMBLEGHAST%20back%20shiny.gif"
+
+        assertTrue(front.contains(frontCandidate))
+        assertTrue(back.contains(backCandidate))
+        assertTrue(front.indexOf(frontCandidate) < front.indexOf("sprites/xyani-shiny/brambleghast.gif"))
+        assertTrue(back.indexOf(backCandidate) < back.indexOf("sprites/xyani-back-shiny/brambleghast.gif"))
+    }
+
+    @Test
     fun defersVerifiedStaticBackArtworkUntilAnimatedFallbacksHaveBeenChecked() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)

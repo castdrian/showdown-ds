@@ -77,8 +77,14 @@ object ShowdownAssetPaths {
     )
 
     private val communityAnimatedSpriteRoots = mapOf(
-        BattleSpriteSide.OPPONENT to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/",
-        BattleSpriteSide.PLAYER to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/"
+        false to mapOf(
+            BattleSpriteSide.OPPONENT to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/",
+            BattleSpriteSide.PLAYER to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/"
+        ),
+        true to mapOf(
+            BattleSpriteSide.OPPONENT to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT_SHINY/",
+            BattleSpriteSide.PLAYER to "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK_SHINY/"
+        )
     )
 
     fun battleSprite(request: BattleSpriteRequest): String {
@@ -302,19 +308,32 @@ object ShowdownAssetPaths {
         speciesNames: List<String>,
         side: BattleSpriteSide,
         shiny: Boolean
-    ): List<String> = if (shiny) emptyList() else speciesNames.flatMap { species ->
-        communityAnimatedSpriteNames(species).flatMap { spriteName ->
-            buildList {
-                communityAnimatedSpriteRoots[side]?.let { root ->
-                    add("$root$spriteName.gif")
-                    if (side == BattleSpriteSide.PLAYER) {
-                        add("$root${spriteName}_back.gif")
-                        add("$root${spriteName}%20back.gif")
+    ): List<String> = speciesNames.flatMap { species ->
+        val names = communityAnimatedSpriteNames(species)
+        val fileNames = buildList {
+            names.forEach { name ->
+                add(name)
+                if (shiny) {
+                    add("$name shiny")
+                }
+            }
+            if (side == BattleSpriteSide.PLAYER) {
+                names.forEach { name ->
+                    add("$name back")
+                    add("${name}_back")
+                    if (shiny) {
+                        add("$name back shiny")
+                        add("${name}_back_shiny")
+                        add("$name shiny back")
                     }
                 }
             }
         }
-    }
+        fileNames.map { fileName ->
+            val encodedName = fileName.replace(" ", "%20")
+            communityAnimatedSpriteRoots[shiny]?.get(side)?.let { root -> "$root$encodedName.gif" }
+        }.filterNotNull()
+    }.distinct()
 
     private fun spriteFileName(spriteName: String, backFacing: Boolean, shiny: Boolean): String =
         buildString {

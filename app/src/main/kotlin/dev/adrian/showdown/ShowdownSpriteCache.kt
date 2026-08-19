@@ -24,6 +24,11 @@ import java.util.concurrent.Executors
 import kotlin.math.min
 import org.json.JSONObject
 
+internal fun isGenericSpritePlaceholder(path: String): Boolean {
+    val fileName = path.substringBefore('?').substringAfterLast('/').substringBeforeLast('.')
+    return fileName.equals("substitute", ignoreCase = true) || fileName.equals("decoy", ignoreCase = true)
+}
+
 internal class ProgressiveAssetDelivery<T> {
     private var fallbackDelivered = false
     private var resolutionDelivered = false
@@ -227,12 +232,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
+        val usablePaths = paths.filterNot(::isGenericSpritePlaceholder)
+
         fun request(index: Int) {
-            if (index >= paths.size) {
+            if (index >= usablePaths.size) {
                 receiver(null)
                 return
             }
-            requestSprite(paths[index]) { asset ->
+            requestSprite(usablePaths[index]) { asset ->
                 if (asset != null) receiver(asset) else request(index + 1)
             }
         }
@@ -266,15 +273,27 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestScrapedBackSpriteResolution(request) { scrapedAsset ->
+        requestScrapedBackSpriteResolution(request, highResolutionOnly = true) { scrapedAsset ->
             if (scrapedAsset != null) {
                 receiver(scrapedAsset)
             } else {
-                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                    if (regularRemoteAsset != null) {
-                        receiver(regularRemoteAsset)
+                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                    if (communityAsset != null) {
+                        receiver(communityAsset)
                     } else {
-                        requestVerifiedBackThenCommunitySpriteResolution(request, plan, receiver)
+                        requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedRegularAsset ->
+                            if (scrapedRegularAsset != null) {
+                                receiver(scrapedRegularAsset)
+                            } else {
+                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                    if (regularRemoteAsset != null) {
+                                        receiver(regularRemoteAsset)
+                                    } else {
+                                        requestVerifiedBackThenModernLocalSpriteResolution(request, plan, receiver)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -283,6 +302,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private fun requestScrapedBackSpriteResolution(
         request: BattleSpriteRequest,
+        highResolutionOnly: Boolean,
         receiver: (SpriteAsset?) -> Unit
     ) {
         val indexUrls = ShowdownAssetPaths.backSpriteIndexUrls(request.shiny)
@@ -295,7 +315,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             }
             requestBytes(indexUrls[index]) { file ->
                 val candidates = file?.let { cachedFile ->
-                    runCatching { ShowdownBackSpriteIndex.candidates(cachedFile.readText(), speciesNames, request.shiny) }.getOrDefault(emptyList())
+                    runCatching {
+                        val html = cachedFile.readText()
+                        if (highResolutionOnly) {
+                            ShowdownBackSpriteIndex.highResolutionCandidates(html, speciesNames, request.shiny)
+                        } else {
+                            ShowdownBackSpriteIndex.candidates(html, speciesNames, request.shiny)
+                        }
+                    }.getOrDefault(emptyList())
                 }.orEmpty()
                 requestSpriteCandidates(candidates) { asset ->
                     if (asset != null) receiver(asset) else requestIndex(index + 1)
@@ -306,7 +333,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestIndex(0)
     }
 
-    private fun requestVerifiedBackThenCommunitySpriteResolution(
+    private fun requestVerifiedBackThenModernLocalSpriteResolution(
         request: BattleSpriteRequest,
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
@@ -315,7 +342,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (verifiedAsset != null) {
                 receiver(verifiedAsset)
             } else {
-                requestCommunityThenModernLocalSpriteResolution(request, plan, receiver)
+                requestModernLocalSpriteResolution(request, plan, receiver)
             }
         }
     }
@@ -333,17 +360,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     if (highResolutionAsset != null) {
                         receiver(highResolutionAsset)
                     } else {
-                        requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
-                            if (regularScrapedAsset != null) {
-                                receiver(regularScrapedAsset)
+                        requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                            if (communityAsset != null) {
+                                receiver(communityAsset)
                             } else {
-                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                    if (regularRemoteAsset != null) {
-                                        receiver(regularRemoteAsset)
+                                requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
+                                    if (regularScrapedAsset != null) {
+                                        receiver(regularScrapedAsset)
                                     } else {
-                                        requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                            if (communityAsset != null) {
-                                                receiver(communityAsset)
+                                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                            if (regularRemoteAsset != null) {
+                                                receiver(regularRemoteAsset)
                                             } else {
                                                 requestModernLocalSpriteResolution(request, plan, receiver)
                                             }
@@ -390,20 +417,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
 
         requestIndex(0)
-    }
-
-    private fun requestCommunityThenModernLocalSpriteResolution(
-        request: BattleSpriteRequest,
-        plan: ShowdownSpriteResolutionPlan,
-        receiver: (SpriteAsset?) -> Unit
-    ) {
-        requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-            if (communityAsset != null) {
-                receiver(communityAsset)
-            } else {
-                requestModernLocalSpriteResolution(request, plan, receiver)
-            }
-        }
     }
 
     private fun requestModernLocalSpriteResolution(

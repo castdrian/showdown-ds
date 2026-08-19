@@ -23,6 +23,9 @@ object ShowdownBackSpriteIndex {
         }.distinct().sortedWith(compareBy { path -> if (path.contains("/animados-gigante/")) 0 else 1 }).toList()
     }
 
+    fun highResolutionCandidates(html: String, speciesNames: List<String>, shiny: Boolean = false): List<String> =
+        candidates(html, speciesNames, shiny).filter { it.contains("/animados-gigante/") }
+
     private fun normalizedNames(value: String): List<String> = listOf(value, value.replace('-', ' ')).map(::normalize).distinct()
 
     private fun normalize(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
