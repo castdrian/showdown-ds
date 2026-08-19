@@ -67,6 +67,31 @@ class BattleSessionTest {
     }
 
     @Test
+    fun upperBattleFeedOmitsBattleMetadataWhileActivityKeepsIt() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|gametype|singles",
+                "|gen|9",
+                "|tier|[Gen 9] Random Battle",
+                "|teamsize|p1|6",
+                "|rule|Species Clause: Limit one of each Pokémon",
+                "|rated"
+            )
+        )
+
+        assertEquals(listOf("Battle started."), session.battleFeedEntries())
+        assertTrue(session.battleLog().contains("Battle type: Singles."))
+        assertTrue(session.battleLog().contains("Generation 9 battle."))
+        assertTrue(session.battleLog().contains("Format: [Gen 9] Random Battle"))
+        assertTrue(session.battleLog().contains("p1 team size: 6"))
+        assertTrue(session.battleLog().contains("Rule: Species Clause: Limit one of each Pokémon"))
+        assertTrue(session.battleLog().contains("Rated battle."))
+    }
+
+    @Test
     fun upperBattleFeedKeepsMoreThanThePreviousFiveVisibleEntries() {
         val session = BattleSession()
         session.appendShowdownBattleLog((1..7).joinToString("<br />") { "Event $it" })

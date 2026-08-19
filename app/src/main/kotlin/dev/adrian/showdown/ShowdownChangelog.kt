@@ -43,6 +43,7 @@ object ShowdownChangelog {
                 "Saved Random Doubles Battle selections now survive a server format refresh instead of silently falling back to singles.",
                 "Live battle decisions now become actionable immediately while the readable send-out and move playback continues, keeping the server timer in sync.",
                 "The full user-facing battle history remains available for activity and replay review without crowding the live battle surface.",
+                "Live battle messages now hide protocol metadata such as team sizes and rules while keeping it available in Activity.",
                 "Thor touch and controller focus now restores cleanly after the app returns from the background.",
                 "Team Library now keeps repeated confirmations from stacking duplicate custom dialogs.",
                 "Multi-Pokémon battles now keep the party Poké Ball strip on the remaining visible HP card while a partner faints.",
