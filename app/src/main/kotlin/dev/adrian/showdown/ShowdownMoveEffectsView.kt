@@ -391,7 +391,7 @@ class ShowdownMoveEffectsView(
                                 return !normalized || /^move\s*:/i.test(normalized);
                             }
                             function keepsDirectMoveDamageWindow(args) {
-                                return args[0] === '-crit' || args[0] === '-supereffective' || args[0] === '-resisted';
+                                return args[0] === '-anim' || args[0] === '-crit' || args[0] === '-supereffective' || args[0] === '-resisted';
                             }
                             Battle.prototype.runMinor = function (args) {
                                 var resultCue = null;

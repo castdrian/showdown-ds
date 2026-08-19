@@ -100,6 +100,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("return !normalized || /^move\\s*:/i.test(normalized);"))
         assertFalse(source.contains("return !normalized;"))
         assertTrue(source.contains("function keepsDirectMoveDamageWindow(args)"))
+        assertTrue(source.contains("args[0] === '-anim' || args[0] === '-crit'"))
         assertTrue(source.contains("args[0] !== '-damage' && args[0] !== '-sethp' && !keepsDirectMoveDamageWindow(args)"))
         assertTrue(source.contains("var directMoveDamage = this.scene.__showdownNativeDamageWindow && isDirectMoveDamage(kwArgs.from);"))
         assertTrue(source.contains("queueNativeHealthEvent(this.scene, args[1], directMoveDamage ? 'damage' : 'other');"))
