@@ -26,12 +26,14 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun modernRequestsStartARealAnimatedFallbackWithoutSubstitute() {
+    fun modernRequestsStartAHighResolutionFallbackWithoutSubstitute() {
         val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val requestSource = cacheSource.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
         val deckSource = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
 
-        assertTrue(requestSource.contains("requestPokeApiAnimatedSprite(request)"))
+        assertTrue(requestSource.contains("requestPokeApiFallbackSprite(request)"))
+        assertTrue(cacheSource.contains("requestPokeApiHighResolutionSprite(request)"))
+        assertTrue(cacheSource.contains("requestPokeApiAnimatedSprite(request, receiver)"))
         assertFalse(deckSource.contains("requestPlaceholder"))
     }
 
