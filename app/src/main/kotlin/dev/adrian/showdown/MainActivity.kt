@@ -957,7 +957,10 @@ class MainActivity : Activity() {
         searchUsesRandomTeams: Boolean? = null
     ) {
         val format = searchFormat?.let { id ->
-            val normalizedId = id.trim()
+            val normalizedId = ShowdownFormatCompatibility.canonicalId(id, searchLabel) ?: id.trim()
+            val normalizedLabel = searchLabel
+                ?.let(ShowdownFormatCompatibility::canonicalizeLegacyText)
+                ?.trim()
             session.availableMatchFormats().firstOrNull { it.id.trim().equals(normalizedId, true) }
                 ?.let { advertised ->
                     advertised.copy(
@@ -968,8 +971,8 @@ class MainActivity : Activity() {
                 ?: BattleSession.MatchFormat.defaults.firstOrNull { it.id.trim().equals(normalizedId, true) }
                 ?: BattleSession.MatchFormat(
                     id = normalizedId,
-                    label = searchLabel?.trim().takeUnless { it.isNullOrBlank() } ?: ShowdownTeamLibraryQuery.displayFormat(normalizedId),
-                    menuLabel = searchLabel?.trim().takeUnless { it.isNullOrBlank() } ?: ShowdownTeamLibraryQuery.displayFormat(normalizedId),
+                    label = normalizedLabel.takeUnless { it.isNullOrBlank() } ?: ShowdownTeamLibraryQuery.displayFormat(normalizedId),
+                    menuLabel = normalizedLabel.takeUnless { it.isNullOrBlank() } ?: ShowdownTeamLibraryQuery.displayFormat(normalizedId),
                     usesRandomTeams = searchUsesRandomTeams ?: BattleSession.MatchFormat.usesRandomTeamsFor(normalizedId),
                     canSearch = false
                 )
@@ -2086,7 +2089,8 @@ class MainActivity : Activity() {
             ?: decodeLobbyCommands(preferences.getString("pending_lobby_commands", null))
         reconnectLobbyCommands = savedInstanceState?.getStringArrayList("reconnect_lobby_commands")?.takeIf { it.isNotEmpty() }
             ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
-        activeSearchFormat = savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null)
+        activeSearchFormat = (savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null))
+            ?.let { ShowdownFormatCompatibility.canonicalId(it) }
         activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
         val hasSavedBattleIdentity = savedInstanceState?.containsKey("battle_participant") == true || preferences.contains("battle_participant")
         battleWasRegistered = if (savedInstanceState?.containsKey("battle_registered") == true) {
@@ -2105,10 +2109,13 @@ class MainActivity : Activity() {
             preferences.getBoolean("battle_spectator", false)
         }
         if (activeBattleRoomId != null && !hasSavedBattleIdentity && !battleWasRegistered && !battleIsSpectator) battleWasParticipant = true
-        pendingBattleSearchFormat = savedInstanceState?.getString("pending_battle_search_format")
-            ?: preferences.getString("pending_battle_search_format", null)
-        pendingBattleSearchLabel = savedInstanceState?.getString("pending_battle_search_label")
-            ?: preferences.getString("pending_battle_search_label", null)
+        val restoredPendingBattleSearchLabel = (savedInstanceState?.getString("pending_battle_search_label")
+            ?: preferences.getString("pending_battle_search_label", null))
+            ?.let(ShowdownFormatCompatibility::canonicalizeLegacyText)
+        pendingBattleSearchLabel = restoredPendingBattleSearchLabel
+        pendingBattleSearchFormat = (savedInstanceState?.getString("pending_battle_search_format")
+            ?: preferences.getString("pending_battle_search_format", null))
+            ?.let { ShowdownFormatCompatibility.canonicalId(it, restoredPendingBattleSearchLabel) }
         pendingBattleSearchUsesRandomTeams = if (savedInstanceState?.containsKey("pending_battle_search_random") == true) {
             savedInstanceState.getBoolean("pending_battle_search_random")
         } else {
@@ -2130,6 +2137,8 @@ class MainActivity : Activity() {
         battleProtocolReady = false
         session.setLiveBattleActive(false)
         if (battleIsSpectator) session.setSpectatorMode(true)
+        pendingLobbyStatus = pendingLobbyStatus?.let(ShowdownFormatCompatibility::canonicalizeLegacyText)
+        persistLobbyState()
         connectLobbySocket()
     }
 
@@ -2756,11 +2765,19 @@ class MainActivity : Activity() {
     }
 
     private fun startChallenge(username: String, format: BattleSession.MatchFormat, packedTeam: String?) {
+        val normalizedId = ShowdownFormatCompatibility.canonicalId(format.id, format.label) ?: format.id.trim()
+        val normalizedMenuLabel = format.menuLabel.trim()
+            .takeUnless {
+                it.isBlank() ||
+                    it.equals(format.id.trim(), true) ||
+                    ShowdownFormatCompatibility.isLegacyHdMatchup(it)
+            }
+            ?.let(ShowdownFormatCompatibility::canonicalizeLegacyText)
+            ?: readableFormatLabel(normalizedId)
         val normalizedFormat = format.copy(
-            id = format.id.trim(),
-            label = readableFormatLabel(format.id),
-            menuLabel = format.menuLabel.trim().takeUnless { it.isBlank() || it.equals(format.id.trim(), true) }
-                ?: readableFormatLabel(format.id)
+            id = normalizedId,
+            label = readableFormatLabel(normalizedId),
+            menuLabel = normalizedMenuLabel
         )
         startLobbyConnection(
             ShowdownLobbyState.challengeCommands(username, normalizedFormat.id, packedTeam),
