@@ -329,21 +329,21 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (scrapedAsset != null) {
                 receiver(scrapedAsset)
             } else {
-                requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
-                    if (regularScrapedAsset != null) {
-                        receiver(regularScrapedAsset)
+                requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
+                    if (highResolutionAsset != null) {
+                        receiver(highResolutionAsset)
                     } else {
-                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                            if (regularRemoteAsset != null) {
-                                receiver(regularRemoteAsset)
+                        requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
+                            if (regularScrapedAsset != null) {
+                                receiver(regularScrapedAsset)
                             } else {
-                                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                    if (communityAsset != null) {
-                                        receiver(communityAsset)
+                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                    if (regularRemoteAsset != null) {
+                                        receiver(regularRemoteAsset)
                                     } else {
-                                        requestPokeApiHighResolutionSprite(request) { highResolutionAsset ->
-                                            if (highResolutionAsset != null) {
-                                                receiver(highResolutionAsset)
+                                        requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                                            if (communityAsset != null) {
+                                                receiver(communityAsset)
                                             } else {
                                                 requestModernLocalSpriteResolution(request, plan, receiver)
                                             }
