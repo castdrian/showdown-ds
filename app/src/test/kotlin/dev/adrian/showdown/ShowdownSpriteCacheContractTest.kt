@@ -90,4 +90,15 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(localIndex < animatedFallbackIndex)
         assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
     }
+
+    @Test
+    fun formFallbacksUseThePokeApiResourceId() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { resourceNumber, _ ->"))
+        assertTrue(source.contains("pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny)"))
+        assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { _, nationalDexNumber ->"))
+        assertTrue(source.contains("hdAnimatedSpriteCandidates(nationalDexNumber, request.side, request.shiny)"))
+        assertTrue(source.contains("candidates(resourceNumber, nationalDexNumber)"))
+    }
 }

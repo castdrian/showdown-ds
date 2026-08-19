@@ -475,8 +475,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestPokeApiSpriteCandidates(request, { number ->
-            ShowdownAssetPaths.hdAnimatedSpriteCandidates(number, request.side, request.shiny)
+        requestPokeApiSpriteCandidates(request, { _, nationalDexNumber ->
+            ShowdownAssetPaths.hdAnimatedSpriteCandidates(nationalDexNumber, request.side, request.shiny)
         }, receiver)
     }
 
@@ -484,14 +484,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestPokeApiSpriteCandidates(request, { number ->
-            listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(number, request.side, request.shiny))
+        requestPokeApiSpriteCandidates(request, { resourceNumber, _ ->
+            listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny))
         }, receiver)
     }
 
     private fun requestPokeApiSpriteCandidates(
         request: BattleSpriteRequest,
-        candidates: (Int) -> List<String>,
+        candidates: (Int, Int) -> List<String>,
         receiver: (SpriteAsset?) -> Unit
     ) {
         fun requestLookup(index: Int) {
@@ -513,7 +513,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     requestLookup(index + 1)
                     return@requestBytes
                 }
-                requestSpriteCandidates(candidates(nationalDexNumber)) { asset ->
+                requestSpriteCandidates(candidates(resourceNumber, nationalDexNumber)) { asset ->
                     if (asset != null) receiver(asset) else requestLookup(index + 1)
                 }
             }
