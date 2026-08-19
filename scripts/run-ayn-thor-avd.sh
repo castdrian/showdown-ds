@@ -12,9 +12,16 @@ overlay_emulator="$repo_root/.emulator-overlay/emulator"
 overlay_patch_digest_file="$repo_root/.emulator-overlay/ayn-thor-single-window.patch.sha256"
 overlay_patch_file="$repo_root/tools/android-emulator/ayn-thor-single-window.patch"
 audio_args=()
-vsync_rate="${AYN_THOR_VSYNC_RATE:-120}"
-gpu_mode="${AYN_THOR_GPU_MODE:-auto}"
+vsync_rate="${AYN_THOR_VSYNC_RATE:-60}"
+default_gpu_mode="auto"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    default_gpu_mode="host"
+fi
+gpu_mode="${AYN_THOR_GPU_MODE:-$default_gpu_mode}"
 window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
+cpu_cores="${AYN_THOR_CPU_CORES:-2}"
+ram_size_mb="${AYN_THOR_RAM_MB:-1536}"
+vm_heap_size_mb="${AYN_THOR_HEAP_MB:-192}"
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
@@ -80,6 +87,21 @@ case "$gpu_mode" in
         ;;
 esac
 
+if [[ ! "$cpu_cores" =~ ^[1-8]$ ]]; then
+    printf '%s\n' "AYN_THOR_CPU_CORES must be a whole number between 1 and 8."
+    exit 1
+fi
+
+if [[ ! "$ram_size_mb" =~ ^[0-9]+$ || "$ram_size_mb" -lt 1536 ]]; then
+    printf '%s\n' "AYN_THOR_RAM_MB must be at least 1536."
+    exit 1
+fi
+
+if [[ ! "$vm_heap_size_mb" =~ ^[0-9]+$ || "$vm_heap_size_mb" -lt 192 ]]; then
+    printf '%s\n' "AYN_THOR_HEAP_MB must be at least 192."
+    exit 1
+fi
+
 if [[ "$(uname -s)" == "Darwin" && -z "${AYN_THOR_AUDIO_BACKEND:-}" ]]; then
     audio_args=(-audio coreaudio)
 elif [[ -n "${AYN_THOR_AUDIO_BACKEND:-}" ]]; then
@@ -143,11 +165,18 @@ set_avd_config "hw.display1.yOffset" "0"
 set_avd_config "hw.multi_display_window" "no"
 set_avd_config "hw.hotplug_multi_display" "no"
 set_avd_config "hw.initialOrientation" "landscape"
+set_avd_config "hw.cpu.ncore" "$cpu_cores"
+set_avd_config "hw.ramSize" "$ram_size_mb"
+set_avd_config "vm.heapSize" "$vm_heap_size_mb"
 
 export ANDROID_AVD_HOME="$avd_home"
 export ANDROID_SDK_ROOT="$sdk_root"
 adb_binary="$sdk_root/platform-tools/adb"
 device_serial="${ANDROID_SERIAL:-emulator-5554}"
+
+adb_command() {
+    perl -e 'alarm 12; exec @ARGV' -- "$adb_binary" "$@"
+}
 
 thor_qemu_pids() {
     ps -axo pid=,command= | awk -v avd="$avd_name" '$0 ~ /qemu-system-(aarch64|x86_64)/ {for (i = 1; i < NF; i += 1) if ($i == "-avd" && $(i + 1) == avd) print $1}'
@@ -188,9 +217,9 @@ wait_for_android_boot() {
     local device_state
     while (( attempt < 120 )); do
         (( attempt += 1 ))
-        device_state="$($adb_binary -s "$device_serial" get-state 2>/dev/null || true)"
+        device_state="$(adb_command -s "$device_serial" get-state 2>/dev/null || true)"
         if [[ "$device_state" == "device" ]]; then
-            boot_completed="$($adb_binary -s "$device_serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            boot_completed="$(adb_command -s "$device_serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
             if [[ "$boot_completed" == "1" ]]; then
                 return 0
             fi
@@ -208,11 +237,11 @@ activate_secondary_display() {
     local display_info
     while (( attempt < 20 )); do
         (( attempt += 1 ))
-        if "$adb_binary" -s "$device_serial" shell am broadcast \
+        if adb_command -s "$device_serial" shell am broadcast \
             -a com.android.emulator.multidisplay.START \
             -n com.android.emulator.multidisplay/.MultiDisplayServiceReceiver \
             --user 0 >/dev/null 2>&1; then
-            display_info="$($adb_binary -s "$device_serial" shell dumpsys display 2>/dev/null || true)"
+            display_info="$(adb_command -s "$device_serial" shell dumpsys display 2>/dev/null || true)"
             if [[ "$display_info" == *"virtual:com.android.emulator.multidisplay"* ]]; then
                 return 0
             fi
@@ -227,7 +256,7 @@ verify_thor_displays() {
     local display_info
     while (( attempt < 20 )); do
         (( attempt += 1 ))
-        display_info="$($adb_binary -s "$device_serial" shell dumpsys display 2>/dev/null || true)"
+        display_info="$(adb_command -s "$device_serial" shell dumpsys display 2>/dev/null || true)"
         if printf '%s\n' "$display_info" | grep -Eq 'DisplayViewport\{type=INTERNAL,.*displayId=0,.*orientation=0,.*logicalFrame=Rect\(0, 0 - 1920, 1080\)' &&
             printf '%s\n' "$display_info" | grep -Eq 'DisplayViewport\{type=VIRTUAL,.*displayId=[1-9][0-9]*,.*orientation=0,.*logicalFrame=Rect\(0, 0 - 1240, 1080\)'; then
             return 0
@@ -293,6 +322,14 @@ APPLESCRIPT
 stop_emulator() {
     if kill -0 "$emulator_pid" 2>/dev/null; then
         kill "$emulator_pid" 2>/dev/null || true
+        local attempt=0
+        while kill -0 "$emulator_pid" 2>/dev/null && (( attempt < 20 )); do
+            (( attempt += 1 ))
+            sleep 0.25
+        done
+        if kill -0 "$emulator_pid" 2>/dev/null; then
+            kill -KILL "$emulator_pid" 2>/dev/null || true
+        fi
     fi
 }
 
