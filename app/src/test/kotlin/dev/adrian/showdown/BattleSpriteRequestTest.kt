@@ -93,7 +93,6 @@ class BattleSpriteRequestTest {
 
         assertFalse(source.contains("legacyLocalCandidates"))
         assertTrue(source.contains("receiver(standardAsset)"))
-        val modernHdIndex = source.indexOf("requestPokeApiModernHdSprite(request)")
         val animatedFallbackIndex = source.indexOf(
             "requestPokeApiAnimatedSprite(request)",
             source.indexOf("private fun requestSmallSpriteResolution")
@@ -106,6 +105,8 @@ class BattleSpriteRequestTest {
         val verifiedBackCandidatesIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)", verifiedBackIndex)
         val backCommunityIndex = source.indexOf("requestCommunityThenModernLocalSpriteResolution(request, plan, receiver)", verifiedBackIndex)
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
+        val frontHdIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)", frontIndex)
+        val frontAnimatedIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = false)", frontIndex)
         val communityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)", frontIndex)
         val homeIndex = source.indexOf("requestPokeApiHighResolutionSprite(request)", frontIndex)
         val regularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", frontIndex)
@@ -118,17 +119,18 @@ class BattleSpriteRequestTest {
         assertTrue(backCommunityIndex >= 0)
         assertTrue(verifiedBackCandidatesIndex < backCommunityIndex)
         assertTrue(backRegularIndex < backCommunityIndex)
+        assertTrue(frontHdIndex >= 0)
+        assertTrue(frontAnimatedIndex > frontHdIndex)
+        assertTrue(regularIndex > frontAnimatedIndex)
         assertTrue(communityIndex >= 0)
-        assertTrue(modernHdIndex < communityIndex)
-        assertTrue(localFallbackIndex > modernHdIndex)
-        assertTrue(regularIndex > communityIndex)
+        assertTrue(communityIndex > regularIndex)
+        assertTrue(homeIndex > communityIndex)
         assertTrue(verifiedBackCandidatesIndex < animatedFallbackIndex)
         assertTrue(animatedFallbackIndex > localFallbackIndex)
         assertTrue(localFallbackIndex >= 0)
         assertTrue(verifiedIndex >= 0)
-        assertTrue(homeIndex < communityIndex)
-        assertTrue(homeIndex < regularIndex)
         assertTrue(homeIndex < localFallbackIndex)
-        assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
+        assertFalse(source.contains("requestPokeApiModernHdSprite"))
+        assertFalse(source.contains("hdAnimatedSpriteCandidates"))
     }
 }

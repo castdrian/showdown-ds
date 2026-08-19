@@ -50,7 +50,6 @@ class ShowdownSpriteCacheContractTest {
     @Test
     fun modernArtworkResolutionKeepsAnimatedSourcesAheadOfStaticFallbacks() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
-        val modernHdIndex = source.indexOf("requestPokeApiModernHdSprite(request)")
         val animatedFallbackIndex = source.indexOf(
             "requestPokeApiAnimatedSprite(request)",
             source.indexOf("private fun requestSmallSpriteResolution")
@@ -63,6 +62,8 @@ class ShowdownSpriteCacheContractTest {
         val verifiedBackCandidatesIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)", verifiedBackIndex)
         val backCommunityIndex = source.indexOf("requestCommunityThenModernLocalSpriteResolution(request, plan, receiver)", verifiedBackIndex)
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
+        val frontHdIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)", frontIndex)
+        val frontAnimatedIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = false)", frontIndex)
         val frontCommunityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)", frontIndex)
         val homeIndex = source.indexOf("requestPokeApiHighResolutionSprite(request)", frontIndex)
         val frontRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", frontIndex)
@@ -76,29 +77,29 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(backCommunityIndex >= 0)
         assertTrue(verifiedBackCandidatesIndex < backCommunityIndex)
         assertTrue(backRegularIndex < backCommunityIndex)
+        assertTrue(frontHdIndex >= 0)
+        assertTrue(frontAnimatedIndex > frontHdIndex)
+        assertTrue(frontRegularIndex > frontAnimatedIndex)
         assertTrue(frontCommunityIndex >= 0)
-        assertTrue(frontRegularIndex > frontCommunityIndex)
-        assertTrue(frontCommunityIndex > homeIndex)
-        assertTrue(modernHdIndex < backRegularIndex)
+        assertTrue(frontCommunityIndex > frontRegularIndex)
+        assertTrue(homeIndex > frontCommunityIndex)
         assertTrue(homeIndex < localIndex)
-        assertTrue(homeIndex < frontRegularIndex)
+        assertTrue(frontRegularIndex < homeIndex)
         assertTrue(verifiedBackCandidatesIndex < animatedFallbackIndex)
         assertTrue(animatedFallbackIndex > localIndex)
         assertTrue(localIndex >= 0)
         assertTrue(frontVerifiedIndex >= 0)
-        assertTrue(homeIndex > modernHdIndex)
         assertTrue(localIndex < animatedFallbackIndex)
-        assertTrue(source.indexOf("ShowdownAssetPaths.hdAnimatedSpriteCandidates") < source.indexOf("ShowdownAssetPaths.pokeApiAnimatedSprite"))
+        assertFalse(source.contains("requestPokeApiModernHdSprite"))
+        assertFalse(source.contains("hdAnimatedSpriteCandidates"))
     }
 
     @Test
     fun formFallbacksUseThePokeApiResourceId() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
-        assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { resourceNumber, _ ->"))
+        assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { resourceNumber ->"))
         assertTrue(source.contains("pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny)"))
-        assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { _, nationalDexNumber ->"))
-        assertTrue(source.contains("hdAnimatedSpriteCandidates(nationalDexNumber, request.side, request.shiny)"))
-        assertTrue(source.contains("candidates(resourceNumber, nationalDexNumber)"))
+        assertTrue(source.contains("candidates(resourceNumber)"))
     }
 }

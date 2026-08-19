@@ -1,6 +1,5 @@
 package dev.adrian.showdown
 
-import org.json.JSONObject
 import java.util.Locale
 
 data class ShowdownSpriteResolutionPlan(
@@ -225,17 +224,6 @@ object ShowdownAssetPaths {
         )
     }
 
-    fun pokeApiNationalDexNumber(payload: String): Int? {
-        return runCatching {
-            JSONObject(payload)
-                .optJSONObject("species")
-                ?.optString("url")
-                ?.trimEnd('/')
-                ?.substringAfterLast('/')
-                ?.toIntOrNull()
-        }.getOrNull()?.takeIf { it > 0 }
-    }
-
     fun pokeApiAnimatedSprite(number: Int, side: BattleSpriteSide, shiny: Boolean = false): String {
         val facingPath = if (side == BattleSpriteSide.PLAYER) "back/" else ""
         val shinyPath = if (shiny) "shiny/" else ""
@@ -247,15 +235,6 @@ object ShowdownAssetPaths {
 
     fun pokeApiStandardSprite(number: Int, side: BattleSpriteSide, shiny: Boolean = false): String =
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}${if (shiny) "shiny/" else ""}$number.png"
-
-    fun hdAnimatedSpriteCandidates(number: Int, side: BattleSpriteSide, shiny: Boolean = false): List<String> =
-        (if (side == BattleSpriteSide.PLAYER) hdBackSpriteRoots else hdNumberedSpriteRoots).map { root ->
-            if (side == BattleSpriteSide.PLAYER && root.endsWith("animados-espalda/")) {
-                "$root$number${if (shiny) "-s" else ""}.gif"
-            } else {
-                "$root$number${if (side == BattleSpriteSide.PLAYER) "-back" else ""}${if (shiny) "-s" else ""}.gif"
-            }
-        }
 
     private fun trueBackSpritePaths(species: String): List<String> = when (animationId(species)) {
         "ironvaliant" -> listOf(
