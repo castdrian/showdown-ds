@@ -1,5 +1,7 @@
 package dev.adrian.showdown
 
+import kotlin.math.roundToLong
+
 data class BattleAudioCuePlayback(
     val cue: BattleAudioCue,
     val delayMillis: Long
@@ -8,11 +10,17 @@ data class BattleAudioCuePlayback(
 class BattleAudioCuePlaybackQueue {
     private var nextStandardAvailableAtMillis = 0L
     private var lastImpactAtMillis = Long.MIN_VALUE
+    private var playbackSpeed = 1f
 
     @Synchronized
     fun reset(nowMillis: Long = 0L) {
         nextStandardAvailableAtMillis = nowMillis
         lastImpactAtMillis = Long.MIN_VALUE
+    }
+
+    @Synchronized
+    fun setPlaybackSpeed(value: Float) {
+        playbackSpeed = value.coerceIn(0.5f, 2f)
     }
 
     @Synchronized
@@ -22,7 +30,7 @@ class BattleAudioCuePlaybackQueue {
             BattleAudioCue.SUPER_EFFECTIVE,
             BattleAudioCue.NOT_VERY_EFFECTIVE -> maxOf(
                 requestedAtMillis,
-                lastImpactAtMillis + impactResultDelayMillis
+                lastImpactAtMillis + playbackDurationMillis(BattleAudioCue.GENERIC_DAMAGE) + CUE_GAP_MILLIS
             )
             BattleAudioCue.STAT_BOOST,
             BattleAudioCue.STAT_DROP -> requestedAtMillis
@@ -30,7 +38,7 @@ class BattleAudioCuePlaybackQueue {
         if (cue == BattleAudioCue.GENERIC_DAMAGE) lastImpactAtMillis = startAtMillis
         nextStandardAvailableAtMillis = maxOf(
             nextStandardAvailableAtMillis,
-            startAtMillis + cue.playbackDurationMillis + CUE_GAP_MILLIS
+            startAtMillis + playbackDurationMillis(cue) + CUE_GAP_MILLIS
         )
         return BattleAudioCuePlayback(cue, startAtMillis - requestedAtMillis)
     }
@@ -38,8 +46,11 @@ class BattleAudioCuePlaybackQueue {
     @Synchronized
     fun availableAtMillis(): Long = nextStandardAvailableAtMillis
 
+    @Synchronized
+    fun playbackDurationMillis(cue: BattleAudioCue): Long =
+        (cue.playbackDurationMillis / playbackSpeed).roundToLong().coerceAtLeast(1L)
+
     private companion object {
         const val CUE_GAP_MILLIS = 24L
-        val impactResultDelayMillis = BattleAudioCue.GENERIC_DAMAGE.playbackDurationMillis + CUE_GAP_MILLIS
     }
 }

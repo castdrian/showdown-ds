@@ -14,6 +14,8 @@ class BattleAudioThreadingContractTest {
         assertTrue(source.contains("private fun initializeTransientSoundPool()"))
         assertTrue(source.contains("transientSoundPool = createSoundPool(8)"))
         assertTrue(source.contains("audioCueHandler.post(::loadBattleSounds)"))
+        assertTrue(source.contains("fun setPlaybackSpeed(speed: Float)"))
+        assertTrue(source.contains("battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, battlePlaybackSpeed)"))
         assertTrue(source.contains("private fun loadBattleSounds()"))
         assertTrue(source.contains("audioCueHandler.post { selectMusic(requestedMusic) }"))
         assertTrue(source.contains("audioCueHandler.post { bgmPlayer?.pause() }"))

@@ -82,4 +82,22 @@ class BattleAudioCuePlaybackQueueTest {
 
         assertEquals(1_724L, queue.availableAtMillis())
     }
+
+    @Test
+    fun scalesTheEffectivenessGapWithBattlePlaybackSpeed() {
+        val queue = BattleAudioCuePlaybackQueue()
+        queue.setPlaybackSpeed(0.5f)
+
+        queue.enqueue(BattleAudioCue.GENERIC_DAMAGE, 1_000L)
+
+        assertEquals(1_424L, queue.enqueue(BattleAudioCue.SUPER_EFFECTIVE, 1_000L).delayMillis)
+    }
+
+    @Test
+    fun clampsSoundPoolPlaybackToItsSupportedRateRange() {
+        val queue = BattleAudioCuePlaybackQueue()
+        queue.setPlaybackSpeed(4f)
+
+        assertEquals(350L, queue.playbackDurationMillis(BattleAudioCue.GENERIC_DAMAGE))
+    }
 }

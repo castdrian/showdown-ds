@@ -67,6 +67,7 @@ class BattleAudio(
     private val soundEffectsEnabled = AtomicBoolean(true)
     @Volatile
     private var musicEnabled = false
+    private var battlePlaybackSpeed = 1f
     private val released = AtomicBoolean(false)
     private val previewRunnables = mutableSetOf<Runnable>()
     @Volatile
@@ -127,6 +128,15 @@ class BattleAudio(
             } else {
                 bgmPlayer?.pause()
             }
+        }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        val nextSpeed = speed.coerceIn(0.5f, 2f)
+        audioCueHandler.postAtFrontOfQueue {
+            if (released.get()) return@postAtFrontOfQueue
+            battlePlaybackSpeed = nextSpeed
+            cuePlaybackQueue.setPlaybackSpeed(nextSpeed)
         }
     }
 
@@ -245,7 +255,7 @@ class BattleAudio(
                 .sortedBy { it.remainingDelayMillis }
                 .map { it.copy(queuedAtMillis = it.queuedAtMillis + pausedDurationMillis) }
             val restoredEndMillis = restored.maxOfOrNull {
-                it.remainingDelayMillis + it.cue.playbackDurationMillis + BATTLE_CUE_GAP_MILLIS
+                it.remainingDelayMillis + cuePlaybackQueue.playbackDurationMillis(it.cue) + BATTLE_CUE_GAP_MILLIS
             } ?: 0L
             cuePlaybackQueue.reset(maxOf(nowMillis, cuePlaybackQueue.availableAtMillis(), nowMillis + restoredEndMillis))
             pausedBattleCues.clear()
@@ -338,7 +348,9 @@ class BattleAudio(
 
     private fun playBattleCueNow(cue: BattleAudioCue, soundId: Int, queuedAtMillis: Long, plannedDelayMillis: Long) {
         if (released.get() || !soundEffectsEnabled.get()) return
-        val streamId = runCatching { battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, 1f) }.getOrDefault(0)
+        val streamId = runCatching {
+            battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, battlePlaybackSpeed)
+        }.getOrDefault(0)
         val playbackAccepted = streamId != 0
         if (playbackAccepted) activeBattleStreamIds += streamId
         val actualDelayMillis = (SystemClock.elapsedRealtime() - queuedAtMillis).coerceAtLeast(0L)

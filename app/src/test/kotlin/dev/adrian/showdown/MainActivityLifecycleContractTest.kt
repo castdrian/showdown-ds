@@ -29,6 +29,14 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun replaySpeedIsPropagatedToBattleAudio() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("battleAudio.setPlaybackSpeed(replaySpeed)"))
+        assertTrue(source.contains("replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)"))
+    }
+
+    @Test
     fun resumeRestoresTheThorPresentationIfAndroidDismissedIt() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")

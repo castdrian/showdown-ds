@@ -353,6 +353,7 @@ class MainActivity : Activity() {
             session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
         }
         battleAudio = BattleAudio(this, spriteCache, session)
+        battleAudio.setPlaybackSpeed(replaySpeed)
         battleAudio.updateOptions(session)
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         setContentView(createPrimaryScreen())
@@ -814,6 +815,7 @@ class MainActivity : Activity() {
         }
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         battleScene?.setPlaybackSpeed(replaySpeed)
+        battleAudio.setPlaybackSpeed(replaySpeed)
         getSharedPreferences("showdown", MODE_PRIVATE).edit().putFloat("battle_speed", replaySpeed).apply()
         if (session.isReplayMode()) updateReplayStatus() else session.setConnectionStatus("Battle playback speed: ${replaySpeed.trimTrailingZero()}×")
     }
@@ -5143,6 +5145,7 @@ class MainActivity : Activity() {
         replayPaused = false
         replayPausedForLifecycle = false
         replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
+        battleAudio.setPlaybackSpeed(replaySpeed)
         ensureShowdownMoveEffects()
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         battleScene?.setPlaybackSpeed(replaySpeed)

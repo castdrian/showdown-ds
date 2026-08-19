@@ -294,15 +294,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (scrapedRegularAsset != null) {
                                 receiver(scrapedRegularAsset)
                             } else {
-                                requestScavioAnimatedSprite(request) { scavioAsset ->
-                                    if (scavioAsset != null) {
-                                        receiver(scavioAsset)
+                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                    if (regularRemoteAsset != null) {
+                                        receiver(regularRemoteAsset)
                                     } else {
-                                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                            if (regularRemoteAsset != null) {
-                                                receiver(regularRemoteAsset)
+                                        requestModernLocalSpriteResolution(request, plan) { modernLocalAsset ->
+                                            if (modernLocalAsset != null) {
+                                                receiver(modernLocalAsset)
                                             } else {
-                                                requestModernLocalSpriteResolution(request, plan, receiver)
+                                                requestScavioAnimatedSprite(request, receiver)
                                             }
                                         }
                                     }
@@ -394,13 +394,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (regularScrapedAsset != null) {
                                 receiver(regularScrapedAsset)
                             } else {
-                                requestScavioAnimatedSprite(request) { scavioAsset ->
-                                    if (scavioAsset != null) {
-                                        receiver(scavioAsset)
+                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                    if (regularRemoteAsset != null) {
+                                        receiver(regularRemoteAsset)
                                     } else {
-                                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                            if (regularRemoteAsset != null) {
-                                                receiver(regularRemoteAsset)
+                                        requestScavioAnimatedSprite(request) { scavioAsset ->
+                                            if (scavioAsset != null) {
+                                                receiver(scavioAsset)
                                             } else {
                                                 requestModernLocalSpriteResolution(request, plan, receiver)
                                             }
