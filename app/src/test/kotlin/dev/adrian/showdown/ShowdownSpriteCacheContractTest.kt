@@ -102,6 +102,17 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun backArtworkResolutionTraversesPaginatedSpriteIndexes() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val backResolver = source.substringAfter("private fun requestScrapedBackSpriteResolution")
+            .substringBefore("private fun requestVerifiedBackThenModernLocalSpriteResolution")
+
+        assertTrue(backResolver.contains("ShowdownSpriteIndexGroups.pageUrls(html, indexUrl)"))
+        assertTrue(backResolver.contains("fun requestPage(pageIndex: Int, pageFile: File?)"))
+        assertTrue(backResolver.contains("requestBytes(pageUrls[nextPageIndex])"))
+    }
+
+    @Test
     fun formFallbacksUseThePokeApiResourceId() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
