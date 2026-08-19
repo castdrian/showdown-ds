@@ -4799,7 +4799,7 @@ class BattleSession {
         private const val BATTLE_HISTORY_LIMIT = 1024
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
         private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
-            "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle type: .+|Generation \\d+ battle\\.|Format: .+|Rule: .+|.+ team size: \\d+|Rated battle\\.)$"
+            "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|Format: .+|Rule: .+|.+ team size: \\d+|Rated battle\\.)$"
         )
         private val SHOWDOWN_LOG_BREAK_TAG = Regex(
             "(?i)<br(?:\\s+[^>]*)?\\s*/?>|</?(?:address|article|aside|blockquote|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)(?:\\s+[^>]*)?\\s*/?>"
