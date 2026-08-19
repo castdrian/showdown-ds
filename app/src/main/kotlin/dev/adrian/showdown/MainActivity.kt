@@ -2788,7 +2788,8 @@ class MainActivity : Activity() {
     }
 
     private fun showIncomingChallengeIfNeeded(username: String, format: String) {
-        val challengeKey = "${normalizeShowdownId(username)}|${format.trim().lowercase()}"
+        val normalizedFormat = ShowdownFormatCompatibility.canonicalId(format) ?: format.trim().lowercase()
+        val challengeKey = "${normalizeShowdownId(username)}|$normalizedFormat"
         if (displayedIncomingChallenge == challengeKey) return
         displayedIncomingChallenge = challengeKey
         showIncomingChallenge(username, format)

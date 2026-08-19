@@ -173,7 +173,11 @@ class ShowdownLobbyState {
             }
             return if (battleRoom) "Battle room" else "Game room"
         }
-        return value?.toString()?.trim()?.takeIf(String::isNotBlank) ?: if (battleRoom) "Battle room" else "Game room"
+        val scalar = value?.toString()?.trim().orEmpty()
+        if (battleRoom && ShowdownFormatCompatibility.isLegacyHdMatchup(scalar)) {
+            return "Battle · ${ShowdownTeamLibraryQuery.displayFormat(canonicalLobbyFormatId(scalar))}"
+        }
+        return scalar.takeIf(String::isNotBlank) ?: if (battleRoom) "Battle room" else "Game room"
     }
 
     private fun isBattleRoom(roomId: String) = roomId.startsWith("battle-")

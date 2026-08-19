@@ -90,6 +90,15 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun canonicalizesLegacyScalarBattleMetadata() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-hdmatchup-1\":\"HD matchup\"}}"))
+
+        assertEquals("Battle · [Gen 9] Random Battle", lobby.battles["battle-hdmatchup-1"])
+    }
+
+    @Test
     fun tracksPublicRoomsFromTheShowdownRoomQuery() {
         val lobby = ShowdownLobbyState()
 
