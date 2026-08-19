@@ -153,7 +153,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 canvas.restore()
                 return
             }
-            movie.setTime((elapsedMillis % maxOf(movie.duration(), 1000)).toInt())
+            movie.setTime((elapsedMillis % movie.duration().toLong().coerceAtLeast(1L)).toInt())
             canvas.translate(left, top)
             canvas.scale(scale, scale)
             movie.draw(canvas, 0f, 0f)
