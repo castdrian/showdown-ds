@@ -744,10 +744,45 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private fun decodeSprite(file: File, path: String): SpriteAsset? {
         return if (path.endsWith(".gif", ignoreCase = true)) {
             if (!hasMultipleGifFrames(file.readBytes())) return null
-            Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 && it.duration() > 0 }?.let(SpriteAsset::fromMovie)
+            Movie.decodeFile(file.path)?.takeIf {
+                it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
+            }?.let(SpriteAsset::fromMovie)
         } else {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
+        }
+    }
+
+    private fun hasDistinctMovieFrames(movie: Movie): Boolean {
+        val movieWidth = movie.width()
+        val movieHeight = movie.height()
+        val duration = movie.duration()
+        if (movieWidth <= 0 || movieHeight <= 0 || duration <= 0) return false
+        val sampleWidth = movieWidth.coerceAtMost(128)
+        val sampleHeight = movieHeight.coerceAtMost(128)
+        val sample = Bitmap.createBitmap(sampleWidth, sampleHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(sample)
+        val pixels = IntArray(sampleWidth * sampleHeight)
+        val sampleTimes = (0..4).map { index ->
+            (duration.toLong() * index / 4L).toInt().coerceAtMost(duration - 1)
+        }.distinct()
+        return try {
+            var firstFrame: IntArray? = null
+            for (time in sampleTimes) {
+                sample.eraseColor(0)
+                movie.setTime(time)
+                canvas.save()
+                canvas.scale(sampleWidth / movieWidth.toFloat(), sampleHeight / movieHeight.toFloat())
+                movie.draw(canvas, 0f, 0f)
+                canvas.restore()
+                sample.getPixels(pixels, 0, sampleWidth, 0, 0, sampleWidth, sampleHeight)
+                val currentFrame = pixels.copyOf()
+                if (firstFrame != null && !firstFrame.contentEquals(currentFrame)) return true
+                firstFrame = currentFrame
+            }
+            false
+        } finally {
+            sample.recycle()
         }
     }
 

@@ -14,6 +14,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("Movie.decodeFile(file.path)"))
         assertTrue(source.contains("movie.setTime((elapsedMillis % movie.duration().toLong().coerceAtLeast(1L)).toInt())"))
         assertTrue(source.contains("hasMultipleGifFrames(file.readBytes())"))
+        assertTrue(source.contains("hasDistinctMovieFrames(it)"))
         assertTrue(source.contains("it.duration() > 0"))
         assertTrue(source.contains("val isAnimated get() = movie != null"))
     }
