@@ -12,18 +12,29 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val moveTypes = mutableMapOf<String, String>()
     private val moveInfo = mutableMapOf<String, BattleSession.MoveInfo>()
     private val pokemonTypes = mutableMapOf<String, List<String>>()
+    private val pokemonAbilities = mutableMapOf<String, List<String>>()
+    private val pokemonMoves = mutableMapOf<String, List<String>>()
     private val moveNames = mutableListOf<String>()
     private val pokemonNames = mutableListOf<String>()
     private val itemNames = mutableListOf<String>()
     private val abilityNames = mutableListOf<String>()
     private val listeners = mutableListOf<() -> Unit>()
     private var loading = false
+    private var loaded = false
 
     fun typeFor(move: String) = moveTypes[moveId(move)]
 
     fun infoFor(move: String) = moveInfo[moveId(move)]
 
     fun typesFor(species: String) = pokemonTypes[speciesId(species)]
+
+    fun abilitiesFor(species: String) = pokemonAbilities[speciesId(species)]
+        .orEmpty()
+        .map { displayName(it, abilityNames) }
+
+    fun movesFor(species: String) = pokemonMoves[speciesId(species)]
+        .orEmpty()
+        .map { displayName(it, moveNames) }
 
     fun moveNames() = moveNames.toList()
 
@@ -42,7 +53,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     fun natureNames() = NATURE_NAMES
 
     fun load(listener: () -> Unit) {
-        if (moveTypes.isNotEmpty() && pokemonTypes.isNotEmpty() && moveNames.isNotEmpty() && pokemonNames.isNotEmpty() && itemNames.isNotEmpty() && abilityNames.isNotEmpty()) {
+        if (loaded) {
             listener()
             return
         }
@@ -57,34 +68,43 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                     if (executor.isShutdown) return@requestItems
                     resourceCache.requestAbilities { abilitiesFile ->
                         if (executor.isShutdown) return@requestAbilities
-                        executor.execute {
-                            val moveContents = file?.readText().orEmpty()
-                            val pokemonContents = pokedexFile?.readText().orEmpty()
-                            val itemContents = itemsFile?.readText().orEmpty()
-                            val abilityContents = abilitiesFile?.readText().orEmpty()
-                            val loadedMoveTypes = parseMoveTypes(moveContents)
-                            val loadedMoveInfo = parseMoveInfo(moveContents)
-                            val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
-                            val loadedMoveNames = parseMoveNames(moveContents)
-                            val loadedPokemonNames = parsePokemonNames(pokemonContents)
-                            val loadedItemNames = parseScriptNames(itemContents)
-                            val loadedAbilityNames = parseScriptNames(abilityContents)
-                            mainHandler.post {
-                                loading = false
-                                moveTypes.putAll(loadedMoveTypes)
-                                moveInfo.putAll(loadedMoveInfo)
-                                pokemonTypes.putAll(loadedPokemonTypes)
-                                moveNames.clear()
-                                moveNames += loadedMoveNames
-                                pokemonNames.clear()
-                                pokemonNames += loadedPokemonNames
-                                itemNames.clear()
-                                itemNames += loadedItemNames
-                                abilityNames.clear()
-                                abilityNames += loadedAbilityNames
-                                val callbacks = listeners.toList()
-                                listeners.clear()
-                                callbacks.forEach { it() }
+                        resourceCache.requestLearnsets { learnsetsFile ->
+                            if (executor.isShutdown) return@requestLearnsets
+                            executor.execute {
+                                val moveContents = file?.readText().orEmpty()
+                                val pokemonContents = pokedexFile?.readText().orEmpty()
+                                val itemContents = itemsFile?.readText().orEmpty()
+                                val abilityContents = abilitiesFile?.readText().orEmpty()
+                                val learnsetsContents = learnsetsFile?.readText().orEmpty()
+                                val loadedMoveTypes = parseMoveTypes(moveContents)
+                                val loadedMoveInfo = parseMoveInfo(moveContents)
+                                val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
+                                val loadedPokemonAbilities = parsePokemonAbilities(pokemonContents)
+                                val loadedPokemonMoves = parseLearnsets(learnsetsContents)
+                                val loadedMoveNames = parseMoveNames(moveContents)
+                                val loadedPokemonNames = parsePokemonNames(pokemonContents)
+                                val loadedItemNames = parseScriptNames(itemContents)
+                                val loadedAbilityNames = parseScriptNames(abilityContents)
+                                mainHandler.post {
+                                    loading = false
+                                    loaded = true
+                                    moveTypes.putAll(loadedMoveTypes)
+                                    moveInfo.putAll(loadedMoveInfo)
+                                    pokemonTypes.putAll(loadedPokemonTypes)
+                                    pokemonAbilities.putAll(loadedPokemonAbilities)
+                                    pokemonMoves.putAll(loadedPokemonMoves)
+                                    moveNames.clear()
+                                    moveNames += loadedMoveNames
+                                    pokemonNames.clear()
+                                    pokemonNames += loadedPokemonNames
+                                    itemNames.clear()
+                                    itemNames += loadedItemNames
+                                    abilityNames.clear()
+                                    abilityNames += loadedAbilityNames
+                                    val callbacks = listeners.toList()
+                                    listeners.clear()
+                                    callbacks.forEach { it() }
+                                }
                             }
                         }
                     }
@@ -148,6 +168,39 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                     }
                 }
             }.getOrDefault(emptyMap())
+        }
+
+        fun parsePokemonAbilities(contents: String): Map<String, List<String>> {
+            return runCatching {
+                val pokemon = JSONObject(contents)
+                buildMap {
+                    pokemon.keys().forEach { id ->
+                        val abilities = pokemon.optJSONObject(id)?.optJSONObject("abilities") ?: return@forEach
+                        val parsed = abilities.keys().asSequence()
+                            .sortedWith(compareBy<String> { it != "0" }.thenBy { it })
+                            .mapNotNull { key ->
+                                abilities.optString(key).trim().takeIf { it.isNotBlank() }?.let(::moveId)
+                            }
+                            .distinct()
+                            .toList()
+                        if (parsed.isNotEmpty()) put(id, parsed)
+                    }
+                }
+            }.getOrDefault(emptyMap())
+        }
+
+        fun parseLearnsets(contents: String): Map<String, List<String>> {
+            if (contents.isBlank()) return emptyMap()
+            val speciesPattern = Regex("""(?s)([a-z0-9]+):\{learnset:\{(.*?)\}\}""")
+            val movePattern = Regex("""([a-z0-9]+):\[""")
+            return speciesPattern.findAll(contents).mapNotNull { speciesMatch ->
+                val moves = movePattern.findAll(speciesMatch.groupValues[2])
+                    .map { it.groupValues[1] }
+                    .distinct()
+                    .sorted()
+                    .toList()
+                moves.takeIf { it.isNotEmpty() }?.let { speciesMatch.groupValues[1] to it }
+            }.toMap()
         }
 
         fun parseMoveNames(contents: String): List<String> = parseNames(contents)

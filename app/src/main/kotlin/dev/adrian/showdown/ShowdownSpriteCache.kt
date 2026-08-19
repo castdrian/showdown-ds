@@ -274,6 +274,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestBytes("data/abilities.js", receiver)
     }
 
+    fun requestLearnsets(receiver: (File?) -> Unit) {
+        requestBytes("data/learnsets.js", receiver)
+    }
+
     override fun close() {
         downloadExecutor.shutdownNow()
         memoryCache.evictAll()

@@ -4734,7 +4734,12 @@ class MainActivity : Activity() {
             .forEach { field ->
                 field.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                    override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = updateTeamSetSummary(editor)
+                    override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                        updateTeamSetSummary(editor)
+                        if (field === editor.species && editor.details.visibility == View.VISIBLE) {
+                            updateTeamEditorSuggestions(editor)
+                        }
+                    }
                     override fun afterTextChanged(editable: Editable?) = Unit
                 })
             }
@@ -4857,13 +4862,16 @@ class MainActivity : Activity() {
         val itemNames = moveDex.itemNames()
         val abilityNames = moveDex.abilityNames()
         val moveNames = moveDex.moveNames()
+        val species = editor.species.text.toString()
+        val speciesAbilityNames = moveDex.abilitiesFor(species).ifEmpty { abilityNames }
+        val speciesMoveNames = moveDex.movesFor(species).ifEmpty { moveNames }
         val natureNames = moveDex.natureNames()
         val typeNames = ShowdownMoveDex.typeNames()
         val teraTypeNames = ShowdownMoveDex.teraTypeNames()
         updateTeamSuggestions(editor.species, pokemonNames)
         updateTeamSuggestions(editor.item, itemNames)
-        updateTeamSuggestions(editor.ability, abilityNames)
-        editor.moves.forEach { updateTeamSuggestions(it, moveNames) }
+        updateTeamSuggestions(editor.ability, speciesAbilityNames)
+        editor.moves.forEach { updateTeamSuggestions(it, speciesMoveNames) }
         updateTeamSuggestions(editor.nature, natureNames)
         updateTeamSuggestions(editor.hiddenPowerType, typeNames)
         updateTeamSuggestions(editor.teraType, teraTypeNames)

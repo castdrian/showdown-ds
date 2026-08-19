@@ -18,6 +18,27 @@ class ShowdownMoveDexTest {
     }
 
     @Test
+    fun parsesSpeciesAbilitiesInOfficialSlotOrder() {
+        val abilities = ShowdownMoveDex.parsePokemonAbilities(
+            """{"pikachu":{"abilities":{"H":"Lightning Rod","0":"Static"}},"eevee":{"abilities":{"0":"Run Away","1":"Adaptability","H":"Anticipation"}}}"""
+        )
+
+        assertEquals(listOf("static", "lightningrod"), abilities["pikachu"])
+        assertEquals(listOf("runaway", "adaptability", "anticipation"), abilities["eevee"])
+    }
+
+    @Test
+    fun parsesOfficialSpeciesLearnsetsWithoutReadingMoveDataAsSpecies() {
+        val learnsets = ShowdownMoveDex.parseLearnsets(
+            "exports.BattleLearnsets = {pikachu:{learnset:{thunderbolt:[\"9M\"],volttackle:[\"9E\"]}},eevee:{learnset:{tackle:[\"9L1\"]}}}"
+        )
+
+        assertEquals(listOf("thunderbolt", "volttackle"), learnsets["pikachu"])
+        assertEquals(listOf("tackle"), learnsets["eevee"])
+        assertFalse(learnsets.containsKey("thunderbolt"))
+    }
+
+    @Test
     fun parsesSearchableNamesFromShowdownData() {
         val contents = "{\"tackle\":{\"name\":\"Tackle\"},\"icebeam\":{\"name\":\"Ice Beam\"}}"
 
