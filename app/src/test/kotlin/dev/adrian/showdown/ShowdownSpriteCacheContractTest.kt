@@ -21,6 +21,7 @@ class ShowdownSpriteCacheContractTest {
     @Test
     fun rejectsOneFrameGifArtwork() {
         assertFalse(hasMultipleGifFrames(testGif(1)))
+        assertFalse(hasMultipleGifFrames(testGif(2, identicalFrames = true)))
         assertTrue(hasMultipleGifFrames(testGif(2)))
     }
 
@@ -139,7 +140,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("candidates(resourceNumber)"))
     }
 
-    private fun testGif(frameCount: Int): ByteArray {
+    private fun testGif(frameCount: Int, identicalFrames: Boolean = false): ByteArray {
         val header = "GIF89a".toByteArray(Charsets.US_ASCII)
         val screen = byteArrayOf(1, 0, 1, 0, 0, 0, 0)
         val frame = byteArrayOf(
@@ -148,6 +149,11 @@ class ShowdownSpriteCacheContractTest {
             0x02,
             0x02, 0x4c, 0x01, 0x00
         )
-        return header + screen + ByteArray(frame.size * frameCount) { index -> frame[index % frame.size] } + byteArrayOf(0x3b)
+        val frames = (0 until frameCount).flatMap { frameIndex ->
+            frame.mapIndexed { byteIndex, value ->
+                if (!identicalFrames && byteIndex == 12) (0x4c + frameIndex).toByte() else value
+            }
+        }.toByteArray()
+        return header + screen + frames + byteArrayOf(0x3b)
     }
 }

@@ -38,7 +38,10 @@ internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
     if (screenPacked and 0x80 != 0) {
         offset += 3 * (1 shl ((screenPacked and 0x07) + 1))
     }
+    if (offset > bytes.size) return false
     var frameCount = 0
+    var firstFrameSignature: ByteArray? = null
+    var hasDistinctFrame = false
     while (offset < bytes.size) {
         when (bytes[offset].toInt() and 0xff) {
             0x21 -> {
@@ -47,21 +50,29 @@ internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
             }
             0x2c -> {
                 if (offset + 10 > bytes.size) return false
+                val frameStart = offset
                 val imagePacked = bytes[offset + 9].toInt() and 0xff
                 offset += 10
                 if (imagePacked and 0x80 != 0) {
                     offset += 3 * (1 shl ((imagePacked and 0x07) + 1))
                 }
                 if (offset >= bytes.size) return false
-                offset = skipGifSubBlocks(bytes, offset + 1) ?: return false
+                val frameEnd = skipGifSubBlocks(bytes, offset + 1) ?: return false
+                val frameSignature = bytes.copyOfRange(frameStart, frameEnd)
+                val firstSignature = firstFrameSignature
+                if (firstSignature == null) {
+                    firstFrameSignature = frameSignature
+                } else if (!frameSignature.contentEquals(firstSignature)) {
+                    hasDistinctFrame = true
+                }
                 frameCount += 1
-                if (frameCount > 1) return true
+                offset = frameEnd
             }
-            0x3b -> return false
+            0x3b -> break
             else -> return false
         }
     }
-    return false
+    return frameCount > 1 && hasDistinctFrame
 }
 
 private fun skipGifSubBlocks(bytes: ByteArray, start: Int): Int? {
