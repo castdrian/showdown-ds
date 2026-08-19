@@ -50,7 +50,7 @@ object ShowdownTeamBackupCodec {
 
     private fun isValidPackedTeam(packed: String): Boolean = packed.split(']').all { set ->
         val fields = set.split('|')
-        fields.size >= 5 && fields.getOrNull(1).orEmpty().isNotBlank()
+        fields.size >= 5 && (fields.getOrNull(0).orEmpty().isNotBlank() || fields.getOrNull(1).orEmpty().isNotBlank())
     }
 
     private fun normalizeMetadata(team: ShowdownTeam): TeamMetadata {

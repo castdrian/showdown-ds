@@ -121,7 +121,7 @@ object ShowdownTeamCodec {
         if (input.isBlank()) return emptyList()
         return when {
             input.startsWith("[") || input.startsWith("{") -> parseJson(input)
-            '|' in input || (']' in input && !looksLikeBetaClientExport(input)) -> unpack(input)
+            '|' in input -> unpack(input)
             else -> parseText(input)
         }
     }
@@ -189,10 +189,11 @@ object ShowdownTeamCodec {
     }
 
     private fun packSet(set: ShowdownTeamSet): String {
-        val nickname = set.nickname.trim()
-        val species = set.species.trim().takeUnless { it.isBlank() || it.equals(nickname, true) }.orEmpty()
+        val speciesName = set.species.trim().ifBlank { set.nickname.trim() }
+        val displayName = set.nickname.trim().ifBlank { speciesName }
+        val species = speciesName.takeUnless { packedId(displayName) == packedId(it) }.orEmpty()
         val fields = listOf(
-            nickname,
+            displayName,
             species,
             packedId(set.item),
             packedId(set.ability),
@@ -220,13 +221,19 @@ object ShowdownTeamCodec {
         return values.joinToString(",").trimEnd(',')
     }
 
-    private fun parseText(input: String): List<ShowdownTeamSet> = input
-        .split(Regex("\\r?\\n\\s*\\r?\\n"))
-        .mapNotNull(::parseTextSet)
-
-    private fun looksLikeBetaClientExport(input: String): Boolean = input.lineSequence()
-        .map(String::trim)
-        .any { Regex("^\\[[^\\]]+](?:\\s*@.*)?$").matches(it) }
+    private fun parseText(input: String): List<ShowdownTeamSet> {
+        val blocks = mutableListOf<String>()
+        val current = mutableListOf<String>()
+        fun flush() {
+            if (current.any { it.isNotBlank() }) blocks += current.joinToString("\n")
+            current.clear()
+        }
+        input.lineSequence().forEach { line ->
+            if (line.trim().isBlank() || line.trim() == "---") flush() else current += line
+        }
+        flush()
+        return blocks.mapNotNull(::parseTextSet)
+    }
 
     private fun parseJson(input: String): List<ShowdownTeamSet> = runCatching {
         val values = if (input.startsWith("[")) JSONArray(input) else JSONArray().put(JSONObject(input))
@@ -317,6 +324,7 @@ object ShowdownTeamCodec {
         var nature = ""
         var level = 100
         var happiness = 255
+        var happinessSpecified = false
         var shiny = false
         var pokeBall = ""
         var hiddenPowerType = ""
@@ -332,10 +340,13 @@ object ShowdownTeamCodec {
                     ability = betaAbility.groupValues[1].trim()
                     item = betaAbility.groupValues.getOrNull(2).orEmpty().trim()
                 }
-                line.startsWith("Ability:", true) -> ability = line.substringAfter(':').trim()
+                line.startsWith("Ability:", true) || line.startsWith("Trait:", true) -> ability = line.substringAfter(':').trim()
                 line.endsWith(" Nature", true) -> nature = line.removeSuffix(" Nature").trim()
                 line.startsWith("Level:", true) -> level = line.substringAfter(':').trim().toIntOrNull() ?: 100
-                line.startsWith("Happiness:", true) -> happiness = line.substringAfter(':').trim().toIntOrNull() ?: 255
+                line.startsWith("Happiness:", true) -> {
+                    happiness = line.substringAfter(':').trim().toIntOrNull() ?: 255
+                    happinessSpecified = true
+                }
                 line.startsWith("Shiny:", true) -> shiny = line.substringAfter(':').trim().equals("yes", true)
                 line.startsWith("Hidden Power:", true) -> hiddenPowerType = line.substringAfter(':').trim()
                 line.startsWith("Gigantamax:", true) -> gigantamax = line.substringAfter(':').trim().equals("yes", true)
@@ -348,9 +359,14 @@ object ShowdownTeamCodec {
                     evs = parseStatValues(evLine) { 0 }
                 }
                 line.startsWith("IVs:", true) -> ivs = parseStatValues(line.substringAfter(':')) { 31 }
-                line.startsWith("-") -> moves += line.removePrefix("-").trim()
+                line.startsWith("-") || line.startsWith("~") -> {
+                    val move = line.drop(1).trim()
+                    moves += Regex("^Hidden Power \\[([^]]+)]$", RegexOption.IGNORE_CASE)
+                        .replace(move) { "Hidden Power ${it.groupValues[1]}" }
+                }
             }
         }
+        if (!happinessSpecified && moves.any { ShowdownMoveDex.moveId(it) == "frustration" }) happiness = 0
         return ShowdownTeamSet(
             nickname = nickname,
             species = species,
@@ -400,16 +416,16 @@ object ShowdownTeamCodec {
         if (set.level != 100) lines += "Level: ${set.level.coerceIn(1, 100)}"
         if (set.shiny) lines += "Shiny: Yes"
         if (set.happiness != 255) lines += "Happiness: ${set.happiness.coerceIn(0, 255)}"
+        if (set.pokeBall.isNotBlank()) lines += "Pokeball: ${set.pokeBall.trim()}"
+        if (set.hiddenPowerType.isNotBlank()) lines += "Hidden Power: ${set.hiddenPowerType.trim()}"
+        if (set.dynamaxLevel != 10) lines += "Dynamax Level: ${set.dynamaxLevel.coerceIn(0, 10)}"
+        if (set.gigantamax) lines += "Gigantamax: Yes"
+        if (set.teraType.isNotBlank()) lines += "Tera Type: ${set.teraType.trim()}"
         val evText = formatStatValues(set.evs, 0)
         if (evText.isNotBlank()) lines += "EVs: $evText"
         if (set.nature.isNotBlank()) lines += "${set.nature.trim()} Nature"
-        if (set.pokeBall.isNotBlank()) lines += "Poké Ball: ${set.pokeBall.trim()}"
         val ivText = formatStatValues(set.ivs, 31)
         if (ivText.isNotBlank()) lines += "IVs: $ivText"
-        if (set.hiddenPowerType.isNotBlank()) lines += "Hidden Power: ${set.hiddenPowerType.trim()}"
-        if (set.gigantamax) lines += "Gigantamax: Yes"
-        if (set.dynamaxLevel != 10) lines += "Dynamax Level: ${set.dynamaxLevel.coerceIn(0, 10)}"
-        if (set.teraType.isNotBlank()) lines += "Tera Type: ${set.teraType.trim()}"
         set.moves.take(4).mapTo(lines) { "- ${it.trim()}" }
         return lines.joinToString("\n")
     }

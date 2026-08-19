@@ -74,9 +74,28 @@ class ShowdownTeamCodecTest {
             )
         )
 
-        assertEquals("|Pikachu|||thunderbolt||,252,,,,4|||||", packed)
+        assertEquals("Pikachu||||thunderbolt||,252,,,,4|||||", packed)
         assertEquals(listOf(0, 252, 0, 0, 0, 4), ShowdownTeamCodec.unpack(packed).single().evs)
         assertTrue(ShowdownTeamCodec.unpack("").isEmpty())
+    }
+
+    @Test
+    fun parsesOfficialSeparatorsLegacyAbilityAndTildeMoves() {
+        val sets = ShowdownTeamCodec.parse(
+            """Pikachu @ Light Ball
+Trait: Static
+~ Thunderbolt
+~ Hidden Power [Ice]
+---
+Snorlax @ Leftovers
+Ability: Thick Fat
+- Frustration"""
+        )
+
+        assertEquals(2, sets.size)
+        assertEquals("Static", sets[0].ability)
+        assertEquals(listOf("Thunderbolt", "Hidden Power Ice"), sets[0].moves)
+        assertEquals(0, sets[1].happiness)
     }
 
     @Test
