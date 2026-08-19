@@ -33,6 +33,9 @@ internal fun isHighResolutionSpritePath(path: String): Boolean =
     path.contains("/animados-gigante/", ignoreCase = true) ||
         path.contains("/animados-sinbordes-gigante/", ignoreCase = true)
 
+internal fun requiresAnimatedSprite(path: String, animatedOnly: Boolean): Boolean =
+    animatedOnly || isHighResolutionSpritePath(path)
+
 internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
     if (bytes.size < 13) return false
     val signature = bytes.copyOfRange(0, 6).toString(Charsets.US_ASCII)
@@ -341,8 +344,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(null)
                 return
             }
-            requestSprite(usablePaths[index]) { asset ->
-                if (asset != null && (!animatedOnly || asset.isAnimated)) receiver(asset) else request(index + 1)
+            val path = usablePaths[index]
+            requestSprite(path) { asset ->
+                if (asset != null && (!requiresAnimatedSprite(path, animatedOnly) || asset.isAnimated)) receiver(asset) else request(index + 1)
             }
         }
         request(0)

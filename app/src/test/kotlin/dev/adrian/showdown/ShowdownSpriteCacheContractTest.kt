@@ -32,8 +32,10 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/mabosstiff.gif"))
         assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/azelf.png"))
         assertFalse(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/xy/sprites/animados/azelf.gif"))
+        assertTrue(requiresAnimatedSprite("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/mabosstiff.gif", false))
+        assertFalse(requiresAnimatedSprite("sprites/dex/mabosstiff.png", false))
         assertTrue(source.contains("private fun requestAnimatedSpriteCandidates"))
-        assertTrue(source.contains("!animatedOnly || asset.isAnimated"))
+        assertTrue(source.contains("requiresAnimatedSprite(path, animatedOnly)"))
         assertTrue(source.contains("if (isHighResolutionSpritePath(path)) return null"))
     }
 
