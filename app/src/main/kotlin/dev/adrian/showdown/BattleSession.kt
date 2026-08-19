@@ -1093,7 +1093,7 @@ class BattleSession {
 
     fun setMatchFormat(format: MatchFormat) {
         matchFormat = ShowdownFormatCompatibility.canonical(format)
-        status = "Battle format: ${matchFormat.label}"
+        status = "Battle format: ${matchFormatDisplayLabel()}"
         notifyListeners()
     }
 
@@ -4100,8 +4100,8 @@ class BattleSession {
     }
 
     private fun menuAction(index: Int) = when (index) {
-        0 -> "Find a ${matchFormat.label}"
-        1 -> "Battle format ${matchFormat.menuLabel}"
+        0 -> "Find a ${matchFormatDisplayLabel()}"
+        1 -> "Battle format ${matchFormatMenuLabel()}"
         2 -> "Open battle chat"
         3 -> when {
             liveBattleActive && !replayMode && !spectatorMode && isBattleParticipant() -> "Forfeit"
@@ -4122,7 +4122,7 @@ class BattleSession {
 
     private fun applyMenuSelection() {
         if (focusedMenuItem == 0) {
-            status = "Connecting to a ${matchFormat.label}…"
+            status = "Connecting to a ${matchFormatDisplayLabel()}…"
             publishClientAction(ClientAction.FIND_BATTLE)
         } else {
             status = when (focusedMenuItem) {
@@ -4300,6 +4300,13 @@ class BattleSession {
             }
         }
     }
+
+    private fun matchFormatDisplayLabel(): String = ShowdownTeamLibraryQuery.displayFormat(
+        matchFormat.id,
+        availableMatchFormats
+    )
+
+    private fun matchFormatMenuLabel(): String = ShowdownFormatCompatibility.canonical(matchFormat).menuLabel
 
     private fun confirmMoveRequestSwitch() {
         val activeRequest = activeRequests.getOrNull(activeSlotIndex)

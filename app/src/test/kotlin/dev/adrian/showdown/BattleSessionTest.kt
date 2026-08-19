@@ -23,6 +23,22 @@ class BattleSessionTest {
     }
 
     @Test
+    fun formatControlsDoNotExposeTheLegacyHdMatchupLabel() {
+        val session = BattleSession()
+        session.setMatchFormat(BattleSession.MatchFormat("gen9randombattle", "HD matchup", "HD matchup"))
+
+        assertEquals("Battle format: [Gen 9] Random Battle", session.status)
+        assertEquals("Find a [Gen 9] Random Battle", session.menuItems()[0])
+        assertEquals("Battle format Gen 9 Random", session.menuItems()[1])
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(0)
+        session.confirmSelection()
+
+        assertEquals("Connecting to a [Gen 9] Random Battle…", session.status)
+    }
+
+    @Test
     fun upperBattleFeedOmitsTurnMarkersWithoutChangingTheFullTranscript() {
         val session = BattleSession()
         session.appendShowdownBattleLog("Battle started!<br />Turn 1<br />Go! Pikachu!")
