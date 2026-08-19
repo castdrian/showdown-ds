@@ -89,7 +89,9 @@ class CommandDeckView(
         }
         lastRenderedTeamDecision = teamDecision
         lastRenderedDecisionKind = decisionKind
-        if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null) {
+        val visibleAnimatedTeamSprite = (teamDecision || session.panel == BattleSession.Panel.TEAM) &&
+            teamSprites.values.any { it.isAnimated }
+        if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null || visibleAnimatedTeamSprite) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         } else if (session.battleClockSeconds() != null) {
             postInvalidateDelayed(1000L)

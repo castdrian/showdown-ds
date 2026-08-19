@@ -130,6 +130,16 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun visibleTeamSpritesKeepAnimatedArtworkRepainting() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("val visibleAnimatedTeamSprite = (teamDecision || session.panel == BattleSession.Panel.TEAM)"))
+        assertTrue(source.contains("teamSprites.values.any { it.isAnimated }"))
+        assertTrue(source.contains("|| visibleAnimatedTeamSprite)"))
+        assertTrue(source.contains("postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)"))
+    }
+
+    @Test
     fun onStopDismissesTheThorPresentationBeforeTheActivityLeavesTheScreen() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val stop = source.substringAfter("override fun onStop() {").substringBefore("override fun onStart")
