@@ -42,7 +42,7 @@ class ShowdownLobbyStateTest {
         )
 
         assertEquals("Alice vs. Bob", lobby.battles["battle-gen9ou-1"])
-        assertEquals("Battle · gen9ou", lobby.battles["battle-gen9ou-2"])
+        assertEquals("Battle · [Gen 9] OU", lobby.battles["battle-gen9ou-2"])
         assertEquals("Battle room", lobby.battles["battle-gen9ou-3"])
     }
 
@@ -69,6 +69,24 @@ class ShowdownLobbyStateTest {
 
         assertEquals("gen7randombattle", lobby.incomingChallenges["gladion"])
         assertEquals(ShowdownLobbyState.OutgoingChallenge("lillie", "gen7ou"), lobby.outgoingChallenge)
+    }
+
+    @Test
+    fun canonicalizesLegacyFormatIdsAcrossSearchesChallengesAndBattleMetadata() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(
+            listOf(
+                "|updatesearch|{\"searching\":[\"HD matchup\"],\"games\":{\"battle-hdmatchup-1\":{\"format\":\"HD matchup\"}}}",
+                "|updatechallenges|{\"challengesFrom\":{\"gladion\":\"HD matchup\"},\"challengeTo\":{\"to\":\"lillie\",\"format\":\"HD matchup\"}}"
+            )
+        )
+
+        assertTrue(lobby.isSearching("gen9randombattle"))
+        assertTrue(lobby.isSearching("hdmatchup"))
+        assertEquals("gen9randombattle", lobby.incomingChallenges["gladion"])
+        assertEquals(ShowdownLobbyState.OutgoingChallenge("lillie", "gen9randombattle"), lobby.outgoingChallenge)
+        assertEquals("Battle · [Gen 9] Random Battle", lobby.battles["battle-hdmatchup-1"])
     }
 
     @Test
@@ -142,6 +160,11 @@ class ShowdownLobbyStateTest {
             ShowdownLobbyState.challengeCommands("Gladion", "gen7ou", "Pikachu||lightball")
         )
         assertEquals(listOf("/utm null", "/accept Gladion"), ShowdownLobbyState.acceptChallengeCommands("Gladion", null))
+        assertEquals(listOf("/utm null", "/search gen9randombattle"), ShowdownLobbyState.searchCommands("HD matchup", null))
+        assertEquals(
+            listOf("/utm null", "/challenge Gladion, gen9randombattle"),
+            ShowdownLobbyState.challengeCommands("Gladion", "HD matchup", null)
+        )
         assertEquals("/reject Gladion", ShowdownLobbyState.rejectChallengeCommand("Gladion"))
         assertEquals("/cancelchallenge Gladion", ShowdownLobbyState.cancelChallengeCommand("Gladion"))
         assertEquals("/cancelsearch", ShowdownLobbyState.cancelSearchCommand())

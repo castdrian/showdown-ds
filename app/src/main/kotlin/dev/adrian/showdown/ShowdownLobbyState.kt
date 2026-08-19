@@ -2,6 +2,9 @@ package dev.adrian.showdown
 
 import org.json.JSONObject
 
+private fun canonicalLobbyFormatId(value: String): String =
+    ShowdownFormatCompatibility.canonicalId(value) ?: value.trim()
+
 class ShowdownLobbyState {
     data class OutgoingChallenge(val username: String, val format: String)
     data class RoomSummary(val id: String, val title: String, val description: String, val userCount: Int, val section: String)
@@ -24,10 +27,10 @@ class ShowdownLobbyState {
     var outgoingChallenge: OutgoingChallenge? = null
         private set
 
-    fun isSearching(format: String) = format in activeSearches
+    fun isSearching(format: String) = canonicalLobbyFormatId(format) in activeSearches
 
     fun clearSearch(format: String) {
-        activeSearches.remove(format)
+        activeSearches.remove(canonicalLobbyFormatId(format))
     }
 
     fun clear() {
@@ -145,7 +148,9 @@ class ShowdownLobbyState {
         val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return
         activeSearches.clear()
         state.optJSONArray("searching")?.let { searches ->
-            for (index in 0 until searches.length()) searches.optString(index).takeIf { it.isNotBlank() }?.let(activeSearches::add)
+            for (index in 0 until searches.length()) {
+                searches.optString(index).takeIf { it.isNotBlank() }?.let(::canonicalLobbyFormatId)?.let(activeSearches::add)
+            }
         }
         activeGames.clear()
         state.optJSONObject("games")?.let { games ->
@@ -163,7 +168,9 @@ class ShowdownLobbyState {
                 .map(String::trim)
                 .filter(String::isNotBlank)
             if (players.isNotEmpty()) return players.joinToString(" vs. ")
-            value.optString("format").trim().takeIf(String::isNotBlank)?.let { return "${if (battleRoom) "Battle" else "Game"} · $it" }
+            value.optString("format").trim().takeIf(String::isNotBlank)?.let { format ->
+                return "${if (battleRoom) "Battle" else "Game"} · ${ShowdownTeamLibraryQuery.displayFormat(canonicalLobbyFormatId(format))}"
+            }
             return if (battleRoom) "Battle room" else "Game room"
         }
         return value?.toString()?.trim()?.takeIf(String::isNotBlank) ?: if (battleRoom) "Battle room" else "Game room"
@@ -175,10 +182,13 @@ class ShowdownLobbyState {
         val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return
         pendingChallenges.clear()
         state.optJSONObject("challengesFrom")?.let { challenges ->
-            challenges.keys().forEach { username -> challenges.optString(username).takeIf { it.isNotBlank() }?.let { pendingChallenges[username] = it } }
+            challenges.keys().forEach { username ->
+                challenges.optString(username).takeIf { it.isNotBlank() }?.let(::canonicalLobbyFormatId)?.let { pendingChallenges[username] = it }
+            }
         }
         outgoingChallenge = state.optJSONObject("challengeTo")?.let { challenge ->
-            OutgoingChallenge(challenge.optString("to"), challenge.optString("format")).takeIf { it.username.isNotBlank() && it.format.isNotBlank() }
+            OutgoingChallenge(challenge.optString("to"), canonicalLobbyFormatId(challenge.optString("format")))
+                .takeIf { it.username.isNotBlank() && it.format.isNotBlank() }
         }
     }
 
@@ -191,11 +201,14 @@ class ShowdownLobbyState {
             if (reason.contains("does not exist", true)) "That battle room expired. Find another battle." else reason
         }
 
-        fun searchCommands(format: String, packedTeam: String?) = listOf("/utm ${packedTeam?.takeIf { it.isNotBlank() } ?: "null"}", "/search $format")
+        fun searchCommands(format: String, packedTeam: String?) = listOf(
+            "/utm ${packedTeam?.takeIf { it.isNotBlank() } ?: "null"}",
+            "/search ${canonicalLobbyFormatId(format)}"
+        )
 
         fun challengeCommands(username: String, format: String, packedTeam: String?) = listOf(
             "/utm ${packedTeam?.takeIf { it.isNotBlank() } ?: "null"}",
-            "/challenge ${username.trim()}, $format"
+            "/challenge ${username.trim()}, ${canonicalLobbyFormatId(format)}"
         )
 
         fun acceptChallengeCommands(username: String, packedTeam: String?) = listOf(
