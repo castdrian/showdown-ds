@@ -989,7 +989,7 @@ class BattleSession {
 
     fun isLiveBattleActive() = liveBattleActive
 
-    fun isBattleParticipant() = localUsername?.takeIf(String::isNotBlank)?.let { username ->
+    fun isBattleParticipant() = restoredPlayerSlot != null || localUsername?.takeIf(String::isNotBlank)?.let { username ->
         sideNames.values.any { it.equals(username, true) }
     } == true
 

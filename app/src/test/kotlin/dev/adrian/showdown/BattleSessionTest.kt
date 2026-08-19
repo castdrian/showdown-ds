@@ -594,6 +594,7 @@ class BattleSessionTest {
         assertEquals("p2", session.battlePlayerSlot())
         assertEquals("GuestOld", session.playerName)
         assertEquals("ThorOpp", session.opponentName)
+        assertTrue(session.isBattleParticipant())
     }
 
     @Test
