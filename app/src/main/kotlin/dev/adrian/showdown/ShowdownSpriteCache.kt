@@ -398,21 +398,46 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(null)
                 return
             }
-            requestBytes(indexUrls[index]) { file ->
-                val candidates = file?.let { cachedFile ->
-                    runCatching { ShowdownFrontSpriteIndex.candidates(cachedFile.readText(), speciesNames, request.shiny) }.getOrDefault(emptyList())
-                }.orEmpty().let { allCandidates ->
-                    if (highResolutionOnly) {
-                        allCandidates.filter { candidate ->
-                            candidate.contains("/animados-gigante/") || candidate.contains("/animados-sinbordes-gigante/")
+            val indexUrl = indexUrls[index]
+            requestBytes(indexUrl) { file ->
+                val html = file?.let { cachedFile -> runCatching { cachedFile.readText() }.getOrNull() }
+                val pageUrls = if (html == null) emptyList() else {
+                    listOf(indexUrl) + ShowdownSpriteIndexGroups.pageUrls(html, indexUrl)
+                }.distinct()
+
+                fun requestPage(pageIndex: Int, pageFile: File?) {
+                    if (pageIndex >= pageUrls.size) {
+                        requestIndex(index + 1)
+                        return
+                    }
+                    val candidates = pageFile?.let { cachedFile ->
+                        runCatching { ShowdownFrontSpriteIndex.candidates(cachedFile.readText(), speciesNames, request.shiny) }.getOrDefault(emptyList())
+                    }.orEmpty().let { allCandidates ->
+                        if (highResolutionOnly) {
+                            allCandidates.filter { candidate ->
+                                candidate.contains("/animados-gigante/") || candidate.contains("/animados-sinbordes-gigante/")
+                            }
+                        } else {
+                            allCandidates
                         }
-                    } else {
-                        allCandidates
+                    }
+                    requestSpriteCandidates(candidates) { asset ->
+                        if (asset != null) {
+                            receiver(asset)
+                        } else {
+                            val nextPageIndex = pageIndex + 1
+                            if (nextPageIndex >= pageUrls.size) {
+                                requestIndex(index + 1)
+                            } else {
+                                requestBytes(pageUrls[nextPageIndex]) { nextPageFile ->
+                                    requestPage(nextPageIndex, nextPageFile)
+                                }
+                            }
+                        }
                     }
                 }
-                requestSpriteCandidates(candidates) { asset ->
-                    if (asset != null) receiver(asset) else requestIndex(index + 1)
-                }
+
+                requestPage(0, file)
             }
         }
 
