@@ -220,14 +220,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
         if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
             val delivery = ProgressiveAssetDelivery<SpriteAsset>(SpriteAsset::isAnimated)
+            requestPokeApiFallbackSprite(request) { asset ->
+                asset?.let { delivery.deliverFallback(it, receiver) }
+            }
             requestResolutionPlan(
                 request = request,
                 plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request)
             ) { asset ->
                 delivery.deliverResolution(asset, receiver)
-            }
-            requestPokeApiFallbackSprite(request) { asset ->
-                asset?.let { delivery.deliverFallback(it, receiver) }
             }
             return
         }

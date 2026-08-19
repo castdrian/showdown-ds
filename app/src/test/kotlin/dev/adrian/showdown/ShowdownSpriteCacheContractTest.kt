@@ -72,6 +72,18 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun modernRequestsQueueTheGuaranteedFallbackBeforeRemoteResolution() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val requestSource = source.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
+        val fallbackIndex = requestSource.indexOf("requestPokeApiFallbackSprite(request)")
+        val resolutionIndex = requestSource.indexOf("requestResolutionPlan(")
+
+        assertTrue(fallbackIndex >= 0)
+        assertTrue(resolutionIndex >= 0)
+        assertTrue(fallbackIndex < resolutionIndex)
+    }
+
+    @Test
     fun hdResolutionCanReplaceFallbackButLateFallbackCannotDowngradeIt() {
         val delivered = mutableListOf<String>()
         val gate = ProgressiveAssetDelivery<String>()
