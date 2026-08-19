@@ -99,6 +99,15 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun canonicalizesLegacyStructuredBattleTitles() {
+        val lobby = ShowdownLobbyState()
+
+        lobby.applyProtocol(listOf("|updatesearch|{\"games\":{\"battle-hdmatchup-1\":{\"title\":\"HD matchup\"}}}"))
+
+        assertEquals("Battle · [Gen 9] Random Battle", lobby.battles["battle-hdmatchup-1"])
+    }
+
+    @Test
     fun tracksPublicRoomsFromTheShowdownRoomQuery() {
         val lobby = ShowdownLobbyState()
 

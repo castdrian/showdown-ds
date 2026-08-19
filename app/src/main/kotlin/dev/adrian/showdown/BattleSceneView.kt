@@ -495,7 +495,8 @@ class BattleSceneView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = 22f * scale
         paint.color = CYAN
-        canvas.drawText(session.matchFormat.label, 180f * scale, 143f * scale, paint)
+        val formatLabel = ShowdownTeamLibraryQuery.displayFormat(session.matchFormat.id, session.availableMatchFormats())
+        canvas.drawText(formatLabel, 180f * scale, 143f * scale, paint)
         val card = RectF(width * 0.12f, height * 0.25f, width * 0.88f, height * 0.77f)
         paint.shader = LinearGradient(card.left, card.top, card.right, card.bottom, Color.rgb(25, 61, 79), Color.rgb(8, 26, 43), Shader.TileMode.CLAMP)
         canvas.drawRoundRect(card, 34f * scale, 34f * scale, paint)

@@ -3,10 +3,17 @@ package dev.adrian.showdown
 import java.util.Locale
 
 object ShowdownFormatCompatibility {
+    private val legacyHdMatchupText = Regex("(?i)\\bHD[\\s_-]*matchup\\b")
+
     fun isLegacyHdMatchup(value: String?): Boolean = value
         ?.lowercase(Locale.ROOT)
         ?.filter(Char::isLetterOrDigit)
         ?.equals("hdmatchup", true) == true
+
+    fun canonicalizeLegacyText(value: String): String = value.replace(
+        legacyHdMatchupText,
+        BattleSession.MatchFormat.GEN9_RANDOM.label
+    )
 
     fun canonicalId(id: String?, label: String? = null): String? {
         val trimmed = id?.trim().orEmpty()

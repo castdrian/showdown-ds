@@ -14,6 +14,15 @@ class BattleSessionTest {
     }
 
     @Test
+    fun waitingStatusDoesNotExposeTheLegacyHdMatchupLabel() {
+        val session = BattleSession()
+
+        session.setConnectionStatus("HD matchup challenge sent to Gladion.")
+
+        assertEquals("[Gen 9] Random Battle challenge sent to Gladion.", session.status)
+    }
+
+    @Test
     fun upperBattleFeedOmitsTurnMarkersWithoutChangingTheFullTranscript() {
         val session = BattleSession()
         session.appendShowdownBattleLog("Battle started!<br />Turn 1<br />Go! Pikachu!")

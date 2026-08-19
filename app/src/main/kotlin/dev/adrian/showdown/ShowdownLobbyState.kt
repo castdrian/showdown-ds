@@ -163,7 +163,12 @@ class ShowdownLobbyState {
     private fun gameDescription(roomId: String, value: Any?): String {
         val battleRoom = isBattleRoom(roomId)
         if (value is JSONObject) {
-            value.optString("title").trim().takeIf(String::isNotBlank)?.let { return it }
+            value.optString("title").trim().takeIf(String::isNotBlank)?.let { title ->
+                if (battleRoom && ShowdownFormatCompatibility.isLegacyHdMatchup(title)) {
+                    return "Battle · ${ShowdownTeamLibraryQuery.displayFormat(canonicalLobbyFormatId(title))}"
+                }
+                return ShowdownFormatCompatibility.canonicalizeLegacyText(title)
+            }
             val players = listOf(value.optString("p1"), value.optString("p2"))
                 .map(String::trim)
                 .filter(String::isNotBlank)

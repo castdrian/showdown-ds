@@ -942,7 +942,7 @@ class BattleSession {
     fun localUsername() = localUsername.orEmpty()
 
     fun setConnectionStatus(value: String) {
-        status = value
+        status = ShowdownFormatCompatibility.canonicalizeLegacyText(value)
         notifyListeners()
     }
 

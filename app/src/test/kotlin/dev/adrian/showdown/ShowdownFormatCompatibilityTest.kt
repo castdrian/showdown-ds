@@ -18,6 +18,14 @@ class ShowdownFormatCompatibilityTest {
     }
 
     @Test
+    fun canonicalizesLegacyFormatTextInWaitingStatus() {
+        assertEquals(
+            "[Gen 9] Random Battle challenge sent to Gladion.",
+            ShowdownFormatCompatibility.canonicalizeLegacyText("HD matchup challenge sent to Gladion.")
+        )
+    }
+
+    @Test
     fun preservesValidFormatIdentityAndLabels() {
         val format = BattleSession.MatchFormat(" gen9ou ", " [Gen 9] OU ", " OU ")
 
