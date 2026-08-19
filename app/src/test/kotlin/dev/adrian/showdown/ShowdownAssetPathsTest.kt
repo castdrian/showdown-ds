@@ -37,6 +37,14 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun staticFallbacksCoverShowdownIdentifiersForNewSpecies() {
+        assertEquals(
+            listOf("sprites/dex/iron-moth.png", "sprites/dex/ironmoth.png"),
+            ShowdownAssetPaths.staticDexSpriteCandidates("Iron Moth")
+        )
+    }
+
+    @Test
     fun fallsBackToTheBaseSpeciesForUnavailableFormSprites() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forOpponent("Furfrou-La Reine", BattleSession.SpriteStyle.MODERN_3D)

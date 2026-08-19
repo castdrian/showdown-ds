@@ -353,6 +353,11 @@ object ShowdownAssetPaths {
 
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
 
+    fun staticDexSpriteCandidates(species: String): List<String> = linkedSetOf(
+        dexSprite(species),
+        "sprites/dex/${animationId(species)}.png"
+    ).toList()
+
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
 
     fun itemSprite(item: String): String? {

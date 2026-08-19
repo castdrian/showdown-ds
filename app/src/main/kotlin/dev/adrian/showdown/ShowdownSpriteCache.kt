@@ -132,7 +132,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val bitmap: Bitmap?,
         private val movie: Movie?,
         private val width: Int,
-        private val height: Int
+        private val height: Int,
+        private val mirrorWhenDrawn: Boolean = false
     ) {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
@@ -156,11 +157,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
                 null,
                 right - left + 1,
-                image.height
+                image.height,
+                mirrorWhenDrawn
             )
         }
 
-        fun draw(canvas: Canvas, destination: RectF, elapsedMillis: Long, flipHorizontally: Boolean = false, alpha: Int = 255) {
+        fun withMirrorWhenDrawn(mirror: Boolean) = SpriteAsset(bitmap, movie, width, height, mirror)
+
+        fun draw(canvas: Canvas, destination: RectF, elapsedMillis: Long, flipHorizontally: Boolean = mirrorWhenDrawn, alpha: Int = 255) {
             val scale = min(destination.width() / width, destination.height() / height)
             val drawWidth = width * scale
             val drawHeight = height * scale
@@ -189,9 +193,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
 
         companion object {
-            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
+            fun fromBitmap(bitmap: Bitmap, mirrorWhenDrawn: Boolean = false) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height, mirrorWhenDrawn)
 
-            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
+            fun fromMovie(movie: Movie, mirrorWhenDrawn: Boolean = false) = SpriteAsset(null, movie, movie.width(), movie.height(), mirrorWhenDrawn)
         }
 
     }
@@ -643,11 +647,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        if (request.backFacing) {
-            receiver(null)
-            return
+        requestSpriteCandidates(ShowdownAssetPaths.staticDexSpriteCandidates(request.species)) { asset ->
+            receiver(asset?.withMirrorWhenDrawn(request.backFacing))
         }
-        requestSprite(ShowdownAssetPaths.dexSprite(request.species), receiver)
     }
 
     private fun isModernLocalCandidate(path: String) =

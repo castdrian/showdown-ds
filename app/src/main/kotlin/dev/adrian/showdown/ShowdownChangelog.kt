@@ -15,6 +15,7 @@ object ShowdownChangelog {
                 "Damage, effectiveness, and stat-change sounds now follow the matching battle animation.",
                 "High-resolution artwork is preferred for battle and team previews, with correct rear-facing fallbacks.",
                 "Animated sprite fallbacks now replace static artwork even when they finish loading later.",
+                "Species without an available animated back asset now keep a visible final Showdown fallback instead of a blank battle slot.",
                 "The AYN Thor presentation keeps the large battle screen above the compact control screen with reliable touch input.",
                 "Singles, doubles, and triples now share compact HP cards and readable switch screens.",
                 "Live matchmaking, reconnects, replay playback, chat, rooms, and account sessions are more resilient.",

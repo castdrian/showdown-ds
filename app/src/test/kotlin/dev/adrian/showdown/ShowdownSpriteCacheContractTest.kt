@@ -164,8 +164,9 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(modernLocalIndex >= 0)
         assertTrue(animatedIndex > modernLocalIndex)
         assertTrue(staticIndex > animatedIndex)
-        assertTrue(source.contains("if (request.backFacing)"))
-        assertTrue(source.contains("requestSprite(ShowdownAssetPaths.dexSprite(request.species), receiver)"))
+        assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)"))
+        assertTrue(source.contains("withMirrorWhenDrawn(request.backFacing)"))
+        assertTrue(source.contains("requestAnimatedSpriteCandidates"))
     }
 
     @Test
@@ -187,6 +188,20 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { resourceNumber ->"))
         assertTrue(source.contains("pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny)"))
         assertTrue(source.contains("candidates(resourceNumber)"))
+    }
+
+    @Test
+    fun staticBackFallbackKeepsAnimatedTiersAheadOfTheMirroredEmergencyAsset() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val backResolver = source.substringAfter("private fun requestBackSpriteResolution")
+            .substringBefore("private fun requestScrapedBackSpriteResolution")
+        val animatedResolution = source.indexOf("requestModernLocalSpriteResolution(request, plan)")
+        val staticFallback = source.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)")
+
+        assertTrue(backResolver.contains("requestRegularRemoteSpriteResolution(plan)"))
+        assertTrue(animatedResolution >= 0)
+        assertTrue(staticFallback > animatedResolution)
+        assertTrue(source.contains("withMirrorWhenDrawn(request.backFacing)"))
     }
 
     private fun testGif(frameCount: Int, identicalFrames: Boolean = false): ByteArray {
