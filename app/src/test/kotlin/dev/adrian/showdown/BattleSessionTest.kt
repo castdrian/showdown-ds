@@ -108,6 +108,17 @@ class BattleSessionTest {
     }
 
     @Test
+    fun battleTierDoesNotExposeTheLegacyHdMatchupLabel() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(listOf("|init|battle", "|tier|HD matchup"))
+
+        assertEquals("[Gen 9] Random Battle", session.format)
+        assertTrue(session.battleLog().contains("Format: [Gen 9] Random Battle"))
+        assertFalse(session.battleLog().any { it.contains("HD matchup", true) })
+    }
+
+    @Test
     fun upperBattleFeedKeepsMoreThanThePreviousFiveVisibleEntries() {
         val session = BattleSession()
         session.appendShowdownBattleLog((1..7).joinToString("<br />") { "Event $it" })

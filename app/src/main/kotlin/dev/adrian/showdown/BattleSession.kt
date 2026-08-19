@@ -1428,7 +1428,7 @@ class BattleSession {
                     "showteam" -> applyShowTeam(fields)
                     "gen" -> fields.getOrNull(2)?.toIntOrNull()?.let { appendLog("Generation $it battle.") }
                     "tier" -> if (fields.size > 2) {
-                        format = fields[2]
+                        format = ShowdownFormatCompatibility.canonicalizeLegacyText(fields[2])
                         appendLog("Format: $format")
                     }
                     "rule" -> fields.getOrNull(2)?.let(::sanitizeMarkup)?.takeIf { it.isNotBlank() }?.let { appendLog("Rule: $it") }
