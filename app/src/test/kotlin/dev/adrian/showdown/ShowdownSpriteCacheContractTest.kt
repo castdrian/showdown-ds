@@ -165,6 +165,8 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(animatedIndex > modernLocalIndex)
         assertTrue(staticIndex > animatedIndex)
         assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)"))
+        assertTrue(source.contains(".filter { it.startsWith(\"sprites/dex/\") }"))
+        assertTrue(source.contains(".filterNot(::isHighResolutionSpritePath)"))
         assertTrue(source.contains("withMirrorWhenDrawn(request.backFacing)"))
         assertTrue(source.contains("requestAnimatedSpriteCandidates"))
     }

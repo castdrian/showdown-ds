@@ -647,7 +647,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestSpriteCandidates(ShowdownAssetPaths.staticDexSpriteCandidates(request.species)) { asset ->
+        val standardCandidates = ShowdownAssetPaths.staticDexSpriteCandidates(request.species)
+            .filter { it.startsWith("sprites/dex/") }
+            .filterNot(::isHighResolutionSpritePath)
+        requestSpriteCandidates(standardCandidates) { asset ->
             receiver(asset?.withMirrorWhenDrawn(request.backFacing))
         }
     }
