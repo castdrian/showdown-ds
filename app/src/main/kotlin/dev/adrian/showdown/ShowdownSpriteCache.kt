@@ -29,6 +29,10 @@ internal fun isGenericSpritePlaceholder(path: String): Boolean {
     return fileName.equals("substitute", ignoreCase = true) || fileName.equals("decoy", ignoreCase = true)
 }
 
+internal fun isHighResolutionSpritePath(path: String): Boolean =
+    path.contains("/animados-gigante/", ignoreCase = true) ||
+        path.contains("/animados-sinbordes-gigante/", ignoreCase = true)
+
 internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
     if (bytes.size < 13) return false
     val signature = bytes.copyOfRange(0, 6).toString(Charsets.US_ASCII)
@@ -301,6 +305,18 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
+        requestSpriteCandidates(paths, animatedOnly = false, receiver)
+    }
+
+    private fun requestAnimatedSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
+        requestSpriteCandidates(paths, animatedOnly = true, receiver)
+    }
+
+    private fun requestSpriteCandidates(
+        paths: List<String>,
+        animatedOnly: Boolean,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
         val usablePaths = paths.filterNot(::isGenericSpritePlaceholder)
 
         fun request(index: Int) {
@@ -309,7 +325,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 return
             }
             requestSprite(usablePaths[index]) { asset ->
-                if (asset != null) receiver(asset) else request(index + 1)
+                if (asset != null && (!animatedOnly || asset.isAnimated)) receiver(asset) else request(index + 1)
             }
         }
         request(0)
@@ -324,10 +340,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             requestSpriteCandidates(plan.allCandidates, receiver)
             return
         }
-        requestSpriteCandidates(plan.preferredRemoteCandidates) { asset ->
+        requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { asset ->
             if (asset != null) {
                 receiver(asset)
-                return@requestSpriteCandidates
+                return@requestAnimatedSpriteCandidates
             }
             if (request.backFacing) {
                 requestBackSpriteResolution(request, plan, receiver)
@@ -346,7 +362,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (scrapedAsset != null) {
                 receiver(scrapedAsset)
             } else {
-                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
                     if (communityAsset != null) {
                         receiver(communityAsset)
                     } else {
@@ -414,7 +430,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             }
                         }.getOrDefault(emptyList())
                     }.orEmpty()
-                    requestSpriteCandidates(candidates) { asset ->
+                    requestAnimatedSpriteCandidates(candidates) { asset ->
                         if (asset != null) {
                             receiver(asset)
                         } else {
@@ -446,7 +462,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (scrapedAsset != null) {
                 receiver(scrapedAsset)
             } else {
-                requestSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
                     if (communityAsset != null) {
                         receiver(communityAsset)
                     } else {
@@ -509,13 +525,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     }.orEmpty().let { allCandidates ->
                         if (highResolutionOnly) {
                             allCandidates.filter { candidate ->
-                                candidate.contains("/animados-gigante/") || candidate.contains("/animados-sinbordes-gigante/")
+                                isHighResolutionSpritePath(candidate)
                             }
                         } else {
                             allCandidates
                         }
                     }
-                    requestSpriteCandidates(candidates) { asset ->
+                    requestAnimatedSpriteCandidates(candidates) { asset ->
                         if (asset != null) {
                             receiver(asset)
                         } else {
@@ -544,7 +560,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         receiver: (SpriteAsset?) -> Unit
     ) {
         val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
-        requestSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
+        requestAnimatedSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
             if (modernLocalAsset != null) {
                 receiver(modernLocalAsset)
             } else {
@@ -563,7 +579,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestSpriteCandidates(plan.regularRemoteCandidates, receiver)
+        requestAnimatedSpriteCandidates(plan.regularRemoteCandidates, receiver)
     }
 
     private fun requestScavioAnimatedSprite(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
@@ -578,7 +594,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 val candidates = file?.let { cachedFile ->
                     runCatching { ScavioAnimatedSpriteIndex.candidates(cachedFile.readText()) }.getOrDefault(emptyList())
                 }.orEmpty()
-                requestSpriteCandidates(candidates) { asset ->
+                requestAnimatedSpriteCandidates(candidates) { asset ->
                     if (asset != null) {
                         receiver(asset)
                     } else {
@@ -661,7 +677,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     requestLookup(index + 1)
                     return@requestBytes
                 }
-                requestSpriteCandidates(candidates(resourceNumber)) { asset ->
+                requestAnimatedSpriteCandidates(candidates(resourceNumber)) { asset ->
                     if (asset != null) receiver(asset) else requestLookup(index + 1)
                 }
             }
@@ -708,6 +724,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (!hasMultipleGifFrames(file.readBytes())) return null
             Movie.decodeFile(file.path)?.takeIf { it.width() > 0 && it.height() > 0 && it.duration() > 0 }?.let(SpriteAsset::fromMovie)
         } else {
+            if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }
     }

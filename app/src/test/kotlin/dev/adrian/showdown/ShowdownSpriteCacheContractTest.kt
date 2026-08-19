@@ -26,6 +26,18 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun highResolutionArtworkMustRemainAnimated() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/mabosstiff.gif"))
+        assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/azelf.png"))
+        assertFalse(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/xy/sprites/animados/azelf.gif"))
+        assertTrue(source.contains("private fun requestAnimatedSpriteCandidates"))
+        assertTrue(source.contains("!animatedOnly || asset.isAnimated"))
+        assertTrue(source.contains("if (isHighResolutionSpritePath(path)) return null"))
+    }
+
+    @Test
     fun keepsBattleBackdropsVisibleWhileRemoteArtworkLoads() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
@@ -85,13 +97,13 @@ class ShowdownSpriteCacheContractTest {
         val scrapedBackIndex = source.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = true)", backIndex)
         val scrapedBackRegularIndex = source.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = false)", backIndex)
         val backRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", backIndex)
-        val backCommunityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)", backIndex)
+        val backCommunityIndex = source.indexOf("requestAnimatedSpriteCandidates(plan.communityRemoteCandidates)", backIndex)
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
         val frontHdIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)", frontIndex)
         val frontAnimatedIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = false)", frontIndex)
-        val frontCommunityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)", frontIndex)
+        val frontCommunityIndex = source.indexOf("requestAnimatedSpriteCandidates(plan.communityRemoteCandidates)", frontIndex)
         val frontRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", frontIndex)
-        val localIndex = source.indexOf("requestSpriteCandidates(modernLocalCandidates)")
+        val localIndex = source.indexOf("requestAnimatedSpriteCandidates(modernLocalCandidates)")
 
         assertTrue(backRegularIndex >= 0)
         assertTrue(scrapedBackIndex >= 0)
@@ -134,7 +146,7 @@ class ShowdownSpriteCacheContractTest {
     @Test
     fun staticShowdownArtworkIsOnlyTheFinalFrontFacingFallback() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
-        val modernLocalIndex = source.indexOf("requestSpriteCandidates(modernLocalCandidates)")
+        val modernLocalIndex = source.indexOf("requestAnimatedSpriteCandidates(modernLocalCandidates)")
         val animatedIndex = source.indexOf("requestSmallSpriteResolution(request)", modernLocalIndex)
         val staticIndex = source.indexOf("requestStaticShowdownFallback(request, receiver)", animatedIndex)
 
