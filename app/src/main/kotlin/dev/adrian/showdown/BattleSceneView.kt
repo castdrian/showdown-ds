@@ -14,7 +14,6 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import dev.adrian.showdown.R
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.pow
@@ -641,7 +640,7 @@ class BattleSceneView(
         val iconGap = 16f * scale
         val headerHeight = 82f * scale
         val title = "SHOWDOWN!"
-        val format = session.format.uppercase(Locale.ROOT)
+        val format = ShowdownTeamLibraryQuery.displayFormat(session.matchFormat.id, session.availableMatchFormats())
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textSize = 34f * scale
         val titleLeft = padding + innerInset + iconSize + iconGap
