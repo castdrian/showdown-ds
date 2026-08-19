@@ -528,6 +528,7 @@ class MainActivity : Activity() {
         battleScene?.setPlaybackPaused(true)
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
+        if (::session.isInitialized && shouldMaintainConnection) persistLobbyState(flushToDisk = true)
         if (::battleAudio.isInitialized) {
             battleAudio.pauseBattleCues()
             battleAudio.pauseMusic()

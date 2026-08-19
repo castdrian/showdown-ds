@@ -198,6 +198,7 @@ class MainActivityLifecycleContractTest {
     @Test
     fun flushesCriticalLiveRecoveryStateBeforeLifecycleOrProcessBoundaries() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val pause = source.substringAfter("override fun onPause() {").substringBefore("override fun onStop")
         val stop = source.substringAfter("override fun onStop() {").substringBefore("override fun onStart")
         val join = source.substringAfter("private fun joinMatchedBattle(").substringBefore("private fun scheduleReconnect")
         val start = source.substringAfter("private fun startLobbyConnection(").substringBefore("private fun dismissConnectionTransitionDialogs")
@@ -208,6 +209,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("private fun persistLobbyState(flushToDisk: Boolean = false)"))
         assertTrue(persistence.contains("if (flushToDisk)"))
         assertTrue(persistence.contains("editor.commit()"))
+        assertTrue(pause.contains("persistLobbyState(flushToDisk = true)"))
         assertTrue(stop.contains("persistLobbyState(flushToDisk = true)"))
         assertTrue(join.contains("persistLobbyState(flushToDisk = true)"))
         assertTrue(start.contains("persistLobbyState(flushToDisk = true)"))

@@ -18,6 +18,7 @@ object ShowdownChangelog {
                 "The AYN Thor presentation keeps the large battle screen above the compact control screen with reliable touch input.",
                 "Singles, doubles, and triples now share compact HP cards and readable switch screens.",
                 "Live matchmaking, reconnects, replay playback, chat, rooms, and account sessions are more resilient.",
+                "Live battle recovery state is flushed when the app pauses, protecting reconnects across display and lifecycle transitions.",
                 "Team Builder now supports Showdown formats, four searchable moves, EVs, IVs, and packed or text imports and exports.",
                 "Team Builder suggestions now follow the selected Pokémon's official abilities and learnset."
             )
