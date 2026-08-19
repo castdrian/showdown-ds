@@ -308,4 +308,14 @@ class MainActivityLifecycleContractTest {
         assertTrue(sender.contains("&& it.canSearch"))
         assertTrue(sender.contains("?: \"/search \${searchFormat.id}\""))
     }
+
+    @Test
+    fun opensSavedReplaysInsideTheClient() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val replayDialog = source.substringAfter("private fun showReplayUploaded").substringBefore("private fun showReplayControls")
+
+        assertTrue(replayDialog.contains("ShowdownReplayImporter.normalize(url)"))
+        assertTrue(replayDialog.contains("loadReplay(normalized)"))
+        assertFalse(replayDialog.contains("startActivity(Intent(Intent.ACTION_VIEW"))
+    }
 }

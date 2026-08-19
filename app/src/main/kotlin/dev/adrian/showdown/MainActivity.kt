@@ -7,7 +7,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -4997,9 +4996,14 @@ class MainActivity : Activity() {
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown replay", url))
                 session.setConnectionStatus("Replay URL copied to the clipboard.")
             }
-            .setPositiveButton("Open") { _, _ ->
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                    .onFailure { session.setConnectionStatus("Open $url in a browser.") }
+            .setPositiveButton("Open") { dialog, _ ->
+                val normalized = ShowdownReplayImporter.normalize(url)
+                dialog.dismiss()
+                if (normalized == null) {
+                    session.setConnectionStatus("That replay URL is invalid.")
+                } else {
+                    loadReplay(normalized)
+                }
             }
             .show()
     }
