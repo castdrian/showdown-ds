@@ -33,8 +33,14 @@ internal fun isHighResolutionSpritePath(path: String): Boolean =
     path.contains("/animados-gigante/", ignoreCase = true) ||
         path.contains("/animados-sinbordes-gigante/", ignoreCase = true)
 
+internal fun isAnimatedSpritePath(path: String): Boolean =
+    path.contains("/sprites/animados", ignoreCase = true) ||
+        path.startsWith("sprites/ani", ignoreCase = true) ||
+        path.startsWith("sprites/xyani", ignoreCase = true) ||
+        path.contains("/Animated_sprites_by_Ghasty001/", ignoreCase = true)
+
 internal fun requiresAnimatedSprite(path: String, animatedOnly: Boolean): Boolean =
-    animatedOnly || isHighResolutionSpritePath(path)
+    animatedOnly || isAnimatedSpritePath(path)
 
 internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
     if (bytes.size < 13) return false
@@ -742,6 +748,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun decodeSprite(file: File, path: String): SpriteAsset? {
+        if (isAnimatedSpritePath(path) && !path.endsWith(".gif", ignoreCase = true)) return null
         return if (path.endsWith(".gif", ignoreCase = true)) {
             if (!hasMultipleGifFrames(file.readBytes())) return null
             Movie.decodeFile(file.path)?.takeIf {

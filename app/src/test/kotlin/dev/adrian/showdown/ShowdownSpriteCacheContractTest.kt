@@ -33,10 +33,15 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/mabosstiff.gif"))
         assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/azelf.png"))
         assertFalse(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/xy/sprites/animados/azelf.gif"))
+        assertTrue(isAnimatedSpritePath("https://www.pkparaiso.com/imagenes/xy/sprites/animados/azelf.gif"))
+        assertTrue(isAnimatedSpritePath("sprites/xyani/azelf.gif"))
+        assertTrue(isAnimatedSpritePath("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/Azelf.gif"))
+        assertFalse(isAnimatedSpritePath("sprites/dex/azelf.png"))
         assertTrue(requiresAnimatedSprite("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/mabosstiff.gif", false))
         assertFalse(requiresAnimatedSprite("sprites/dex/mabosstiff.png", false))
         assertTrue(source.contains("private fun requestAnimatedSpriteCandidates"))
         assertTrue(source.contains("requiresAnimatedSprite(path, animatedOnly)"))
+        assertTrue(source.contains("isAnimatedSpritePath(path) && !path.endsWith(\".gif\", ignoreCase = true)"))
         assertTrue(source.contains("if (isHighResolutionSpritePath(path)) return null"))
     }
 
