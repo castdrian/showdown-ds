@@ -28,7 +28,7 @@ object ShowdownTeamLibraryQuery {
         .sortedWith(String.CASE_INSENSITIVE_ORDER)
 
     fun formats(teams: List<ShowdownTeam>): List<String> = teams
-        .map { it.format.trim() }
+        .map { canonicalFormatId(it.format) }
         .filter(String::isNotBlank)
         .distinctBy(String::lowercase)
         .sortedWith(String.CASE_INSENSITIVE_ORDER)
@@ -76,10 +76,10 @@ object ShowdownTeamLibraryQuery {
             .filter(String::isNotBlank)
             .map(String::lowercase)
         val folder = filter.folder?.trim()
-        val format = filter.format?.trim()
+        val format = filter.format?.let(::canonicalFormatId)
         return teams.filter { team ->
             val folderMatches = folder == null || team.folder.trim().equals(folder, true)
-            val formatMatches = format == null || team.format.trim().equals(format, true)
+            val formatMatches = format == null || canonicalFormatId(team.format).equals(format, true)
             val searchText = buildString {
                 append(team.name)
                 append(' ')
@@ -97,4 +97,7 @@ object ShowdownTeamLibraryQuery {
         teams,
         ShowdownTeamLibraryFilter(format = format)
     )
+
+    private fun canonicalFormatId(value: String): String =
+        ShowdownFormatCompatibility.canonicalId(value) ?: value.trim()
 }

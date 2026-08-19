@@ -21,6 +21,16 @@ class ShowdownTeamLibraryQueryTest {
     }
 
     @Test
+    fun canonicalizesLegacyFormatsForTeamLibraryNavigation() {
+        val legacyTeams = teams + ShowdownTeam("legacy", "Legacy", "HD matchup", "|Pikachu|||thunderbolt")
+
+        assertEquals(
+            listOf("gen8ou", "gen9ou", "gen9randombattle"),
+            ShowdownTeamLibraryQuery.formats(legacyTeams)
+        )
+    }
+
+    @Test
     fun formatsUseReadableShowdownLabelsWhenTheServerLabelIsUnavailable() {
         assertEquals("[Gen 9] Random Battle", ShowdownTeamLibraryQuery.displayFormat(" gen9randombattle "))
         assertEquals("[Gen 9] OU", ShowdownTeamLibraryQuery.displayFormat("gen9ou"))
@@ -92,6 +102,16 @@ class ShowdownTeamLibraryQueryTest {
                 teams + ShowdownTeam("legacy", "Legacy", " gen9ou ", "|Politoed|||scald"),
                 " GEN9OU "
             ).map { it.name }
+        )
+    }
+
+    @Test
+    fun matchingFormatFindsTeamsSavedWithLegacyHdMatchupMetadata() {
+        val legacy = ShowdownTeam("legacy", "Legacy", "HD matchup", "|Pikachu|||thunderbolt")
+
+        assertEquals(
+            listOf("Legacy"),
+            ShowdownTeamLibraryQuery.matchingFormat(listOf(legacy), "gen9randombattle").map { it.name }
         )
     }
 }
