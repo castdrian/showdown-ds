@@ -44,11 +44,7 @@ class ShowdownAssetPathsTest {
         assertEquals(
             listOf(
                 "sprites/xyani/furfroulareine.gif",
-                "sprites/xyani/furfrou.gif",
-                "sprites/xy/furfroulareine.png",
-                "sprites/xy/furfrou.png",
-                "sprites/dex/furfrou-la-reine.png",
-                "sprites/dex/furfroulareine.png"
+                "sprites/xyani/furfrou.gif"
             ),
             candidates.filter { it.startsWith("sprites/") }
         )
@@ -68,16 +64,13 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun fallsBackToRegularAnimationAndDexSpritesForNewSpecies() {
+    fun fallsBackToRegularAnimationForNewSpecies() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forOpponent("Iron Hands", BattleSession.SpriteStyle.MODERN_3D)
         )
         assertEquals(
             listOf(
-                "sprites/xyani/ironhands.gif",
-                "sprites/xy/ironhands.png",
-                "sprites/dex/iron-hands.png",
-                "sprites/dex/ironhands.png"
+                "sprites/xyani/ironhands.gif"
             ),
             candidates.filter { it.startsWith("sprites/") }
         )
@@ -105,7 +98,7 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun keepsBanetteAnimationAheadOfStaticFrontFallbacks() {
+    fun keepsBanetteAnimationAheadOfPixelFallbacks() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forOpponent("Banette", BattleSession.SpriteStyle.MODERN_3D)
         )
@@ -189,19 +182,12 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun defersVerifiedStaticBackArtworkUntilAnimatedFallbacksHaveBeenChecked() {
+    fun doesNotAddStaticBackArtworkWhenAnimatedBackArtworkIsUnavailable() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
         )
-        val verifiedBack = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
-
-        assertTrue(plan.preferredRemoteCandidates.none { it == verifiedBack })
-        assertEquals(listOf(verifiedBack), plan.verifiedRemoteCandidates)
         assertTrue(plan.fallbackCandidates.first().contains("sprites/xyani-back/ironvaliant.gif"))
-        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
-            BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
-        )
-        assertTrue(candidates.indexOf(verifiedBack) > candidates.indexOf("sprites/xyani-back/ironvaliant.gif"))
+        assertTrue(plan.allCandidates.none { it.endsWith(".png") })
     }
 
     @Test
@@ -231,12 +217,13 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun fallsBackToStaticXyFrontSpritesForSpeciesWithoutAnimatedAssets() {
-        assertTrue(
-            ShowdownAssetPaths.battleSpriteCandidates(
-                BattleSpriteRequest.forOpponent("Pecharunt", BattleSession.SpriteStyle.MODERN_3D)
-            ).contains("sprites/xy/pecharunt.png")
+    fun battleCandidatesRemainAnimatedWhenHdArtworkIsMissing() {
+        val candidates = ShowdownAssetPaths.battleSpriteCandidates(
+            BattleSpriteRequest.forOpponent("Pecharunt", BattleSession.SpriteStyle.MODERN_3D)
         )
+
+        assertTrue(candidates.any { it.endsWith(".gif") })
+        assertTrue(candidates.none { it.endsWith(".png") })
     }
 
     @Test
@@ -245,8 +232,8 @@ class ShowdownAssetPathsTest {
             BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
         )
         assertTrue(candidates.none { it.contains("/FRONT/") })
-        assertTrue(candidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
-        assertEquals("sprites/xy-back/ironvaliant.png", candidates.last())
+        assertTrue(candidates.none { it.endsWith(".png") })
+        assertEquals("sprites/xyani-back/ironvaliant.gif", candidates.last())
     }
 
     @Test
@@ -256,10 +243,9 @@ class ShowdownAssetPathsTest {
 
         assertTrue(frontCandidates.contains("sprites/xyani/ironvaliant.gif"))
         assertFalse(frontCandidates.any { it.contains("gen5") })
-        assertFalse(frontCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
         assertTrue(backCandidates.none { it.contains("/FRONT/") })
-        assertTrue(backCandidates.contains("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"))
-        assertEquals("sprites/xy-back/ironvaliant.png", backCandidates.last())
+        assertTrue(backCandidates.none { it.endsWith(".png") })
+        assertEquals("sprites/xyani-back/ironvaliant.gif", backCandidates.last())
     }
 
     @Test
@@ -338,18 +324,6 @@ class ShowdownAssetPathsTest {
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/back/901.gif",
             ShowdownAssetPaths.pokeApiAnimatedSprite(901, BattleSpriteSide.PLAYER)
         )
-        assertEquals(
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/1006.png",
-            ShowdownAssetPaths.pokeApiHighResolutionSprite(1006)
-        )
-        assertEquals(
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1008.png",
-            ShowdownAssetPaths.pokeApiStandardSprite(1008, BattleSpriteSide.PLAYER)
-        )
-        assertEquals(
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1008.png",
-            ShowdownAssetPaths.pokeApiStandardSprite(1008, BattleSpriteSide.OPPONENT)
-        )
     }
 
     @Test
@@ -405,18 +379,25 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun limitsHighResolutionCrawlsToGiantSpriteIndexPages() {
+        assertEquals(
+            listOf("https://www.pkparaiso.com/espada_escudo/sprites_pokemon_espalda.php"),
+            ShowdownAssetPaths.highResolutionBackSpriteIndexUrls()
+        )
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/espada_escudo/sprites_pokemon.php",
+                "https://www.pkparaiso.com/ultra-sol-ultra-luna/sprites_pokemon_sin_bordes.php"
+            ),
+            ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls()
+        )
+    }
+
+    @Test
     fun buildsShinyPokeApiFacingCandidates() {
         assertEquals(
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/back/shiny/901.gif",
             ShowdownAssetPaths.pokeApiAnimatedSprite(901, BattleSpriteSide.PLAYER, shiny = true)
-        )
-        assertEquals(
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/shiny/901.png",
-            ShowdownAssetPaths.pokeApiHighResolutionSprite(901, shiny = true)
-        )
-        assertEquals(
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/shiny/901.png",
-            ShowdownAssetPaths.pokeApiStandardSprite(901, BattleSpriteSide.PLAYER, shiny = true)
         )
     }
 

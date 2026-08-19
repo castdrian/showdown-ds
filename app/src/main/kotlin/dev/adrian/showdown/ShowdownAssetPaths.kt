@@ -5,7 +5,6 @@ import java.util.Locale
 data class ShowdownSpriteResolutionPlan(
     val preferredRemoteCandidates: List<String>,
     val communityRemoteCandidates: List<String>,
-    val verifiedRemoteCandidates: List<String>,
     val regularRemoteCandidates: List<String>,
     val fallbackCandidates: List<String>,
     val usesModernAnimatedFallback: Boolean
@@ -13,13 +12,13 @@ data class ShowdownSpriteResolutionPlan(
     val allCandidates: List<String>
         get() {
             if (!usesModernAnimatedFallback) {
-                return preferredRemoteCandidates + communityRemoteCandidates + verifiedRemoteCandidates + regularRemoteCandidates + fallbackCandidates
+                return preferredRemoteCandidates + communityRemoteCandidates + regularRemoteCandidates + fallbackCandidates
             }
             val modernLocalCandidates = fallbackCandidates.filter {
-                it.startsWith("sprites/xyani") || it.startsWith("sprites/xy/")
+                it.startsWith("sprites/xyani")
             }
             val remainingFallbackCandidates = fallbackCandidates - modernLocalCandidates.toSet()
-            return preferredRemoteCandidates + communityRemoteCandidates + regularRemoteCandidates + modernLocalCandidates + verifiedRemoteCandidates + remainingFallbackCandidates
+            return preferredRemoteCandidates + communityRemoteCandidates + regularRemoteCandidates + modernLocalCandidates + remainingFallbackCandidates
         }
 }
 
@@ -127,22 +126,8 @@ object ShowdownAssetPaths {
                 regularFrontSpriteCandidates(speciesNames, request.shiny).forEach { candidates += it }
             }
         }
-        val verifiedBackPaths = if (request.backFacing) trueBackSpritePaths(request.species) else emptyList()
-        verifiedBackPaths.forEach { candidates += it }
-        val staticCollections = request.style.staticCollections
         collections.forEach { collection ->
             speciesNames.forEach { name -> candidates += animatedBattleSprite(name, request.side, collection, request.shiny) }
-        }
-        if (request.backFacing) {
-            staticCollections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.PLAYER, collection, request.shiny) }
-            }
-        } else {
-            staticCollections.forEach { collection ->
-                speciesNames.forEach { name -> candidates += staticBattleSprite(name, BattleSpriteSide.OPPONENT, collection, request.shiny) }
-            }
-            candidates += dexSprite(request.species)
-            candidates += "sprites/dex/${animationId(request.species)}.png"
         }
         return candidates.toList()
     }
@@ -170,10 +155,8 @@ object ShowdownAssetPaths {
         return ShowdownSpriteResolutionPlan(
             preferredRemoteCandidates = remoteCandidates
                 .filterNot(::isCommunityAnimatedCandidate)
-                .filterNot(::isVerifiedRemoteCandidate)
                 .filterNot(::isRegularAnimatedCandidate),
             communityRemoteCandidates = remoteCandidates.filter(::isCommunityAnimatedCandidate),
-            verifiedRemoteCandidates = remoteCandidates.filter(::isVerifiedRemoteCandidate),
             regularRemoteCandidates = remoteCandidates.filter(::isRegularAnimatedCandidate),
             fallbackCandidates = candidates.drop(firstLocalCandidate),
             usesModernAnimatedFallback = usesModernAnimatedFallback
@@ -182,9 +165,6 @@ object ShowdownAssetPaths {
 
     private fun isCommunityAnimatedCandidate(path: String) =
         path.startsWith("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/")
-
-    private fun isVerifiedRemoteCandidate(path: String) =
-        path == "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
 
     private fun isRegularAnimatedCandidate(path: String) =
         path.contains("/sprites/animados/") ||
@@ -212,6 +192,9 @@ object ShowdownAssetPaths {
         )
     }
 
+    fun highResolutionBackSpriteIndexUrls(shiny: Boolean = false): List<String> =
+        backSpriteIndexUrls(shiny).take(1)
+
     fun frontSpriteIndexUrls(shiny: Boolean = false): List<String> {
         val normalIndexes = listOf(
             "https://www.pkparaiso.com/espada_escudo/sprites_pokemon.php",
@@ -230,23 +213,13 @@ object ShowdownAssetPaths {
         )
     }
 
+    fun highResolutionFrontSpriteIndexUrls(shiny: Boolean = false): List<String> =
+        frontSpriteIndexUrls(shiny).take(2)
+
     fun pokeApiAnimatedSprite(number: Int, side: BattleSpriteSide, shiny: Boolean = false): String {
         val facingPath = if (side == BattleSpriteSide.PLAYER) "back/" else ""
         val shinyPath = if (shiny) "shiny/" else ""
         return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${facingPath}${shinyPath}$number.gif"
-    }
-
-    fun pokeApiHighResolutionSprite(number: Int, shiny: Boolean = false): String =
-        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/${if (shiny) "shiny/" else ""}$number.png"
-
-    fun pokeApiStandardSprite(number: Int, side: BattleSpriteSide, shiny: Boolean = false): String =
-        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${if (side == BattleSpriteSide.PLAYER) "back/" else ""}${if (shiny) "shiny/" else ""}$number.png"
-
-    private fun trueBackSpritePaths(species: String): List<String> = when (animationId(species)) {
-        "ironvaliant" -> listOf(
-            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/back/1006.png"
-        )
-        else -> emptyList()
     }
 
     private fun battleSprite(species: String, side: BattleSpriteSide, collection: String, shiny: Boolean = false) =
@@ -254,9 +227,6 @@ object ShowdownAssetPaths {
 
     private fun animatedBattleSprite(species: String, side: BattleSpriteSide, collection: String, shiny: Boolean = false) =
         "sprites/${spriteCollection(collection, side, shiny)}/${animationId(species)}.gif"
-
-    private fun staticBattleSprite(species: String, side: BattleSpriteSide, collection: String, shiny: Boolean = false) =
-        "sprites/${spriteCollection(collection, side, shiny)}/${animationId(species)}.png"
 
     private fun spriteCollection(collection: String, side: BattleSpriteSide, shiny: Boolean): String {
         val facingCollection = if (side == BattleSpriteSide.PLAYER) "$collection-back" else collection

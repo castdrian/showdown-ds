@@ -61,10 +61,9 @@ class BattleSession {
 
     enum class SpriteStyle(
         val displayName: String,
-        val animatedCollection: String,
-        val staticCollections: List<String>
+        val animatedCollection: String
     ) {
-        MODERN_3D("HD animated", "xyani", listOf("xy"))
+        MODERN_3D("HD animated", "xyani")
     }
 
     enum class FeedbackType {

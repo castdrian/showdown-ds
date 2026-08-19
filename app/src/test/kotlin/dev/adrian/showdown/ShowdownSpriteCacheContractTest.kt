@@ -26,7 +26,7 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun modernRequestsStartAHighResolutionFallbackWithoutSubstitute() {
+    fun modernRequestsStartAnAnimatedFallbackWithoutSubstitute() {
         val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val requestSource = cacheSource.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
         val deckSource = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
@@ -35,8 +35,10 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(isGenericSpritePlaceholder("sprites/ani-back/decoy.gif"))
         assertFalse(isGenericSpritePlaceholder("sprites/xyani-back/kilowattrel.gif"))
         assertTrue(requestSource.contains("requestPokeApiFallbackSprite(request)"))
-        assertTrue(cacheSource.contains("requestPokeApiHighResolutionSprite(request)"))
         assertTrue(cacheSource.contains("requestPokeApiAnimatedSprite(request, receiver)"))
+        assertFalse(cacheSource.contains("requestPokeApiHighResolutionSprite"))
+        assertFalse(cacheSource.contains("pokeApiHighResolutionSprite"))
+        assertFalse(cacheSource.contains("requestPokeApiStandardSprite"))
         assertFalse(deckSource.contains("requestPlaceholder"))
     }
 
@@ -53,25 +55,21 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun modernArtworkResolutionKeepsAnimatedSourcesAheadOfStaticFallbacks() {
+    fun modernArtworkResolutionUsesAnimatedSourcesAtEveryTier() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val animatedFallbackIndex = source.indexOf(
             "requestPokeApiAnimatedSprite(request)",
             source.indexOf("private fun requestSmallSpriteResolution")
         )
-        val frontVerifiedIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)", animatedFallbackIndex)
         val backIndex = source.indexOf("private fun requestBackSpriteResolution")
         val scrapedBackIndex = source.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = true)", backIndex)
         val scrapedBackRegularIndex = source.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = false)", backIndex)
         val backRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", backIndex)
-        val verifiedBackIndex = source.indexOf("private fun requestVerifiedBackThenModernLocalSpriteResolution")
-        val verifiedBackCandidatesIndex = source.indexOf("requestSpriteCandidates(plan.verifiedRemoteCandidates)", verifiedBackIndex)
         val backCommunityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)", backIndex)
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
         val frontHdIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)", frontIndex)
         val frontAnimatedIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = false)", frontIndex)
         val frontCommunityIndex = source.indexOf("requestSpriteCandidates(plan.communityRemoteCandidates)", frontIndex)
-        val homeIndex = source.indexOf("requestPokeApiHighResolutionSprite(request)", frontIndex)
         val frontRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", frontIndex)
         val localIndex = source.indexOf("requestSpriteCandidates(modernLocalCandidates)")
 
@@ -80,22 +78,14 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(scrapedBackIndex < backRegularIndex)
         assertTrue(scrapedBackRegularIndex > backCommunityIndex)
         assertTrue(backCommunityIndex > scrapedBackIndex)
-        assertTrue(verifiedBackIndex > backRegularIndex)
-        assertTrue(verifiedBackCandidatesIndex >= 0)
-        assertTrue(verifiedBackCandidatesIndex > backRegularIndex)
         assertTrue(frontHdIndex >= 0)
         assertTrue(frontAnimatedIndex > frontHdIndex)
+        assertTrue(source.contains("ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls(request.shiny)"))
         assertTrue(frontCommunityIndex >= 0)
         assertTrue(frontCommunityIndex < frontRegularIndex)
         assertTrue(frontRegularIndex > frontAnimatedIndex)
-        assertTrue(homeIndex < frontAnimatedIndex)
-        assertTrue(homeIndex < frontRegularIndex)
-        assertTrue(homeIndex < frontCommunityIndex)
-        assertTrue(homeIndex < localIndex)
-        assertTrue(verifiedBackCandidatesIndex < animatedFallbackIndex)
         assertTrue(animatedFallbackIndex > localIndex)
         assertTrue(localIndex >= 0)
-        assertTrue(frontVerifiedIndex >= 0)
         assertTrue(localIndex < animatedFallbackIndex)
         assertFalse(source.contains("requestPokeApiModernHdSprite"))
         assertFalse(source.contains("hdAnimatedSpriteCandidates"))
@@ -105,9 +95,10 @@ class ShowdownSpriteCacheContractTest {
     fun backArtworkResolutionTraversesPaginatedSpriteIndexes() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val backResolver = source.substringAfter("private fun requestScrapedBackSpriteResolution")
-            .substringBefore("private fun requestVerifiedBackThenModernLocalSpriteResolution")
+            .substringBefore("private fun requestModernLocalSpriteResolution")
 
         assertTrue(backResolver.contains("ShowdownSpriteIndexGroups.pageUrls(html, indexUrl)"))
+        assertTrue(backResolver.contains("ShowdownAssetPaths.highResolutionBackSpriteIndexUrls(request.shiny)"))
         assertTrue(backResolver.contains("fun requestPage(pageIndex: Int, pageFile: File?)"))
         assertTrue(backResolver.contains("requestBytes(pageUrls[nextPageIndex])"))
     }
