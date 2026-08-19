@@ -12,7 +12,7 @@ overlay_emulator="$repo_root/.emulator-overlay/emulator"
 overlay_patch_digest_file="$repo_root/.emulator-overlay/ayn-thor-single-window.patch.sha256"
 overlay_patch_file="$repo_root/tools/android-emulator/ayn-thor-single-window.patch"
 audio_args=()
-vsync_rate="${AYN_THOR_VSYNC_RATE:-60}"
+vsync_rate="${AYN_THOR_VSYNC_RATE:-30}"
 default_gpu_mode="auto"
 if [[ "$(uname -s)" == "Darwin" ]]; then
     default_gpu_mode="host"
@@ -72,9 +72,9 @@ if [[ "$window_scale" != "auto" && ! "$window_scale" =~ ^0\.[1-9][0-9]*$|^1(\.0*
 fi
 
 case "$vsync_rate" in
-    60|90|120) ;;
+    30|60|90|120) ;;
     *)
-        printf '%s\n' "AYN_THOR_VSYNC_RATE must be 60, 90, or 120."
+        printf '%s\n' "AYN_THOR_VSYNC_RATE must be 30, 60, 90, or 120."
         exit 1
         ;;
 esac
@@ -165,6 +165,7 @@ set_avd_config "hw.display1.yOffset" "0"
 set_avd_config "hw.multi_display_window" "no"
 set_avd_config "hw.hotplug_multi_display" "no"
 set_avd_config "hw.initialOrientation" "landscape"
+set_avd_config "hw.lcd.vsync" "$vsync_rate"
 set_avd_config "hw.cpu.ncore" "$cpu_cores"
 set_avd_config "hw.ramSize" "$ram_size_mb"
 set_avd_config "vm.heapSize" "$vm_heap_size_mb"

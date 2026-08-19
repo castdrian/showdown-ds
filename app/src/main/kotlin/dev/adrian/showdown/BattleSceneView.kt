@@ -371,46 +371,65 @@ class BattleSceneView(
                 }
             }
         }
-        val playerCombatant = session.playerActiveCombatants().firstOrNull()
-        val playerSpecies = playerCombatant?.species
-            ?.ifBlank { session.playerPokemon }
-            ?: session.playerPokemon
-        val playerRequest = BattleSpriteRequests.single(playerSpecies, BattleSpriteSide.PLAYER, session.spriteStyle, playerCombatant?.shiny == true)
-        if (playerRequest != requestedPlayerSprite) {
-            requestedPlayerSprite = playerRequest
+        val playerActiveCombatants = session.playerActiveCombatants()
+        val opponentActiveCombatants = session.opponentActiveCombatants()
+        if (session.isSinglesBattle() || playerActiveCombatants.isEmpty()) {
+            val playerCombatant = playerActiveCombatants.firstOrNull()
+            val playerSpecies = playerCombatant?.species
+                ?.ifBlank { session.playerPokemon }
+                ?: session.playerPokemon
+            val playerRequest = BattleSpriteRequests.single(playerSpecies, BattleSpriteSide.PLAYER, session.spriteStyle, playerCombatant?.shiny == true)
+            if (playerRequest != requestedPlayerSprite) {
+                requestedPlayerSprite = playerRequest
+                playerSprite = null
+                spriteCache.requestPokemon(playerRequest) { asset ->
+                    if (playerRequest == requestedPlayerSprite) {
+                        playerSprite = asset
+                        invalidate()
+                    }
+                }
+            }
+        } else {
+            requestedPlayerSprite = null
             playerSprite = null
-            spriteCache.requestPokemon(playerRequest) { asset ->
-                if (playerRequest == requestedPlayerSprite) {
-                    playerSprite = asset
-                    invalidate()
+        }
+        if (session.isSinglesBattle() || opponentActiveCombatants.isEmpty()) {
+            val opponentCombatant = opponentActiveCombatants.firstOrNull()
+            val opponentSpecies = opponentCombatant?.species
+                ?.ifBlank { session.opponentPokemon }
+                ?: session.opponentPokemon
+            val opponentRequest = BattleSpriteRequests.single(opponentSpecies, BattleSpriteSide.OPPONENT, session.spriteStyle, opponentCombatant?.shiny == true)
+            if (opponentRequest != requestedOpponentSprite) {
+                requestedOpponentSprite = opponentRequest
+                opponentSprite = null
+                spriteCache.requestPokemon(opponentRequest) { asset ->
+                    if (opponentRequest == requestedOpponentSprite) {
+                        opponentSprite = asset
+                        invalidate()
+                    }
                 }
             }
-        }
-        val opponentCombatant = session.opponentActiveCombatants().firstOrNull()
-        val opponentSpecies = opponentCombatant?.species
-            ?.ifBlank { session.opponentPokemon }
-            ?: session.opponentPokemon
-        val opponentRequest = BattleSpriteRequests.single(opponentSpecies, BattleSpriteSide.OPPONENT, session.spriteStyle, opponentCombatant?.shiny == true)
-        if (opponentRequest != requestedOpponentSprite) {
-            requestedOpponentSprite = opponentRequest
+        } else {
+            requestedOpponentSprite = null
             opponentSprite = null
-            spriteCache.requestPokemon(opponentRequest) { asset ->
-                if (opponentRequest == requestedOpponentSprite) {
-                    opponentSprite = asset
-                    invalidate()
-                }
-            }
         }
-        requestActiveSprites(
-            BattleSpriteRequests.active(session.playerActiveCombatants(), BattleSpriteSide.PLAYER, session.spriteStyle),
-            playerActiveSprites,
-            requestedPlayerActiveSprites
-        )
-        requestActiveSprites(
-            BattleSpriteRequests.active(session.opponentActiveCombatants(), BattleSpriteSide.OPPONENT, session.spriteStyle),
-            opponentActiveSprites,
-            requestedOpponentActiveSprites
-        )
+        if (session.isSinglesBattle()) {
+            requestedPlayerActiveSprites.clear()
+            requestedOpponentActiveSprites.clear()
+            playerActiveSprites.clear()
+            opponentActiveSprites.clear()
+        } else {
+            requestActiveSprites(
+                BattleSpriteRequests.active(playerActiveCombatants, BattleSpriteSide.PLAYER, session.spriteStyle),
+                playerActiveSprites,
+                requestedPlayerActiveSprites
+            )
+            requestActiveSprites(
+                BattleSpriteRequests.active(opponentActiveCombatants, BattleSpriteSide.OPPONENT, session.spriteStyle),
+                opponentActiveSprites,
+                requestedOpponentActiveSprites
+            )
+        }
         requestHeldItemSprites()
         SHOWDOWN_EFFECTS.forEach { name ->
             if (requestedEffects.add(name)) {
