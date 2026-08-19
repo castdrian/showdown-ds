@@ -95,6 +95,11 @@ class BattleSceneView(
         val playerCombatants = session.playerActiveCombatants()
         val opponentCombatants = session.opponentActiveCombatants()
         val nowNanos = System.nanoTime()
+        if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) {
+            battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
+            drawLobby(canvas, width, height, scale)
+            return
+        }
         if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
@@ -477,6 +482,7 @@ class BattleSceneView(
     }
 
     private fun drawLobby(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        val replayLoading = session.isReplayMode() && !session.hasBattleProtocolTranscript()
         paint.alpha = 255
         paint.shader = LinearGradient(0f, 0f, width, height, Color.rgb(7, 17, 34), Color.rgb(20, 46, 58), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, width, height, paint)
@@ -490,7 +496,7 @@ class BattleSceneView(
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = 46f * scale
         paint.color = INK
-        canvas.drawText("SHOWDOWN!", 178f * scale, 111f * scale, paint)
+        canvas.drawText(if (replayLoading) "REPLAY" else "SHOWDOWN!", 178f * scale, 111f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = 22f * scale
         paint.color = CYAN
@@ -508,11 +514,21 @@ class BattleSceneView(
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = 54f * scale
         paint.color = INK
-        canvas.drawText("Ready for a battle", card.left + 68f * scale, card.top + 108f * scale, paint)
+        canvas.drawText(
+            if (replayLoading) "Loading replay" else "Ready for a battle",
+            card.left + 68f * scale,
+            card.top + 108f * scale,
+            paint
+        )
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = 28f * scale
         paint.color = MUTED
-        canvas.drawText("Use the lower screen to connect, search, or challenge.", card.left + 68f * scale, card.top + 165f * scale, paint)
+        canvas.drawText(
+            if (replayLoading) "Preparing the battle timeline." else "Use the lower screen to connect, search, or challenge.",
+            card.left + 68f * scale,
+            card.top + 165f * scale,
+            paint
+        )
         val statusWidth = card.width() - 136f * scale
         paint.textSize = 34f * scale
         val statusLines = mutableListOf<String>()
@@ -551,7 +567,12 @@ class BattleSceneView(
         }
         paint.textSize = 24f * scale
         paint.color = CYAN
-        canvas.drawText("Menu: Find battle  ·  Challenge player  ·  Team library", card.left + 68f * scale, card.bottom - 70f * scale, paint)
+        canvas.drawText(
+            if (replayLoading) "Playback will begin shortly" else "Menu: Find battle  ·  Challenge player  ·  Team library",
+            card.left + 68f * scale,
+            card.bottom - 70f * scale,
+            paint
+        )
     }
 
     private fun multiCombatantX(width: Float, player: Boolean, index: Int, count: Int): Float {

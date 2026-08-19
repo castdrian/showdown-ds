@@ -313,9 +313,13 @@ class MainActivityLifecycleContractTest {
     fun opensSavedReplaysInsideTheClient() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val replayDialog = source.substringAfter("private fun showReplayUploaded").substringBefore("private fun showReplayControls")
+        val replay = source.substringAfter("private fun showReplay(replay: ShowdownReplayPayload)").substringBefore("private fun showFormatPicker")
 
         assertTrue(replayDialog.contains("ShowdownReplayImporter.normalize(url)"))
         assertTrue(replayDialog.contains("loadReplay(normalized)"))
         assertFalse(replayDialog.contains("startActivity(Intent(Intent.ACTION_VIEW"))
+        assertTrue(replay.contains("session.prepareForReplay()"))
+        assertTrue(replay.contains("session.setConnectionStatus(\"Loading replay…\")"))
+        assertTrue(replay.contains("listOf(\"|init|battle\") + lines"))
     }
 }

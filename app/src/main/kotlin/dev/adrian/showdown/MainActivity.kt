@@ -5134,10 +5134,11 @@ class MainActivity : Activity() {
         chatRoomState.clear()
         pendingChatRoomId = null
         clearBattlePlayback()
-        session.prepareForLobby()
+        session.prepareForReplay()
         replay.players.firstOrNull()?.let(session::setLocalUsername)
         session.setReplayMode(true)
         session.setLiveBattleActive(true)
+        session.setConnectionStatus("Loading replay…")
         val replayStartsPaused = restoredReplayPaused
         replayPaused = false
         replayPausedForLifecycle = false
@@ -5146,7 +5147,10 @@ class MainActivity : Activity() {
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
         battleScene?.setPlaybackSpeed(replaySpeed)
         showdownMoveEffects?.setPlaybackPaused(false)
-        enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)
+        val replayLines = replay.log.lines().let { lines ->
+            if (lines.any { it.startsWith("|init|battle") }) lines else listOf("|init|battle") + lines
+        }
+        enqueueBattlePlayback(null, null, replayLines, resetOnBattleInit = false)
         if (replayStartsPaused) setReplayPaused(true)
         replayStatus = "Replay: ${replay.title}"
         if (replayPaused) updateReplayStatus()

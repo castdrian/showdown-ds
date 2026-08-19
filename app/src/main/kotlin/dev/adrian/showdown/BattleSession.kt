@@ -988,6 +988,8 @@ class BattleSession {
 
     fun isLiveBattleActive() = liveBattleActive
 
+    fun hasBattleProtocolTranscript() = hasBattleProtocolTranscript
+
     fun isBattleParticipant() = restoredPlayerSlot != null || localUsername?.takeIf(String::isNotBlank)?.let { username ->
         sideNames.values.any { it.equals(username, true) }
     } == true
@@ -1075,6 +1077,20 @@ class BattleSession {
         decisionKind = DecisionKind.WAIT
         panel = Panel.MENU
         status = LOBBY_STATUS
+        latestBattleEvent = status
+        latestBattleEventAtNanos = System.nanoTime()
+        notifyListeners()
+    }
+
+    fun prepareForReplay() {
+        prepareForLobby()
+        battleLog.clear()
+        battleLog += "Loading replay…"
+        activityMessages.clear()
+        activityMessages += battleLog
+        activityOrigins.clear()
+        repeat(battleLog.size) { activityOrigins += ActivityOrigin.SYSTEM }
+        status = "Loading replay…"
         latestBattleEvent = status
         latestBattleEventAtNanos = System.nanoTime()
         notifyListeners()

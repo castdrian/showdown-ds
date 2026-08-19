@@ -515,6 +515,21 @@ class CommandDeckView(
     }
 
     private fun drawMoves(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) {
+            moveBounds.fill(null)
+            gimmickBounds.fill(null)
+            targetBounds.fill(null)
+            drawEmptyPanel(
+                canvas,
+                width,
+                height,
+                scale,
+                "Loading replay",
+                "Preparing the battle timeline.",
+                "Playback will begin shortly"
+            )
+            return
+        }
         if (session.isSpectatorMode() && !session.isBattleFinished()) {
             moveBounds.fill(null)
             gimmickBounds.fill(null)

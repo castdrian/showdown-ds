@@ -1055,6 +1055,22 @@ class BattleSessionTest {
     }
 
     @Test
+    fun replayPreparationUsesALoadingStateUntilBattleProtocolArrives() {
+        val session = BattleSession()
+
+        session.prepareForReplay()
+
+        assertFalse(session.hasBattleProtocolTranscript())
+        assertEquals(listOf("Loading replay…"), session.battleLog())
+        assertEquals("Loading replay…", session.status)
+
+        session.applyProtocolLine("|init|battle")
+
+        assertTrue(session.hasBattleProtocolTranscript())
+        assertEquals(listOf("Battle started."), session.battleLog())
+    }
+
+    @Test
     fun newBattleStartsOnTheFightPanelAfterLeavingTheLobbyMenu() {
         val session = BattleSession()
         session.prepareForLobby()

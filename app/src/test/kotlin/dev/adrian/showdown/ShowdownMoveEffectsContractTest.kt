@@ -136,7 +136,7 @@ class ShowdownMoveEffectsContractTest {
     @Test
     fun pausedReplayAppliesItsInitialChunkBeforePausingPlayback() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val enqueueIndex = source.indexOf("enqueueBattlePlayback(null, null, replay.log.lines(), resetOnBattleInit = false)")
+        val enqueueIndex = source.indexOf("enqueueBattlePlayback(null, null, replayLines, resetOnBattleInit = false)")
         val pauseIndex = source.indexOf("if (replayStartsPaused) setReplayPaused(true)", enqueueIndex)
 
         assertTrue(enqueueIndex >= 0)
