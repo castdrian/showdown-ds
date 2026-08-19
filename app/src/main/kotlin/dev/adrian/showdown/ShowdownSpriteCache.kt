@@ -56,7 +56,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val bitmap: Bitmap?,
         private val movie: Movie?,
         private val width: Int,
-        private val height: Int
+        private val height: Int,
+        private val mirrorHorizontally: Boolean = false
     ) {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
@@ -76,7 +77,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             }
             if (right < left) return this
             if (left == 0 && right == image.width - 1) return this
-            return fromBitmap(Bitmap.createBitmap(image, left, 0, right - left + 1, image.height))
+            return SpriteAsset(
+                Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
+                null,
+                right - left + 1,
+                image.height,
+                mirrorHorizontally
+            )
         }
 
         fun draw(canvas: Canvas, destination: RectF, elapsedMillis: Long, flipHorizontally: Boolean = false, alpha: Int = 255) {
@@ -86,7 +93,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             val left = destination.centerX() - drawWidth / 2f
             val top = destination.centerY() - drawHeight / 2f
             canvas.save()
-            if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
+            if (flipHorizontally xor mirrorHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
             if (bitmap != null) {
                 canvas.drawBitmap(bitmap, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
@@ -112,6 +119,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
             fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
         }
+
+        fun mirroredForPlayer() = if (mirrorHorizontally) this else SpriteAsset(bitmap, movie, width, height, true)
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -285,11 +294,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (scrapedRegularAsset != null) {
                                 receiver(scrapedRegularAsset)
                             } else {
-                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                    if (regularRemoteAsset != null) {
-                                        receiver(regularRemoteAsset)
+                                requestScavioAnimatedSprite(request) { scavioAsset ->
+                                    if (scavioAsset != null) {
+                                        receiver(scavioAsset)
                                     } else {
-                                        requestModernLocalSpriteResolution(request, plan, receiver)
+                                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                            if (regularRemoteAsset != null) {
+                                                receiver(regularRemoteAsset)
+                                            } else {
+                                                requestModernLocalSpriteResolution(request, plan, receiver)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -379,11 +394,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (regularScrapedAsset != null) {
                                 receiver(regularScrapedAsset)
                             } else {
-                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                    if (regularRemoteAsset != null) {
-                                        receiver(regularRemoteAsset)
+                                requestScavioAnimatedSprite(request) { scavioAsset ->
+                                    if (scavioAsset != null) {
+                                        receiver(scavioAsset)
                                     } else {
-                                        requestModernLocalSpriteResolution(request, plan, receiver)
+                                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                                            if (regularRemoteAsset != null) {
+                                                receiver(regularRemoteAsset)
+                                            } else {
+                                                requestModernLocalSpriteResolution(request, plan, receiver)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -477,6 +498,31 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         receiver: (SpriteAsset?) -> Unit
     ) {
         requestSpriteCandidates(plan.regularRemoteCandidates, receiver)
+    }
+
+    private fun requestScavioAnimatedSprite(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        val names = ShowdownAssetPaths.spriteSpeciesNamesForExternalLookup(request.species)
+
+        fun requestLookup(index: Int) {
+            if (index >= names.size) {
+                receiver(null)
+                return
+            }
+            requestBytes(ScavioAnimatedSpriteIndex.apiUrl(names[index])) { file ->
+                val candidates = file?.let { cachedFile ->
+                    runCatching { ScavioAnimatedSpriteIndex.candidates(cachedFile.readText()) }.getOrDefault(emptyList())
+                }.orEmpty()
+                requestSpriteCandidates(candidates) { asset ->
+                    if (asset != null) {
+                        receiver(if (request.backFacing) asset.mirroredForPlayer() else asset)
+                    } else {
+                        requestLookup(index + 1)
+                    }
+                }
+            }
+        }
+
+        requestLookup(0)
     }
 
     private fun requestSmallSpriteResolution(

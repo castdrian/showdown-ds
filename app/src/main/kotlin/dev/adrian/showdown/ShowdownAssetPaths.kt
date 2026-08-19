@@ -174,6 +174,8 @@ object ShowdownAssetPaths {
 
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
 
+    fun spriteSpeciesNamesForExternalLookup(species: String): List<String> = spriteSpeciesNames(species)
+
     fun backSpriteIndexUrls(shiny: Boolean = false): List<String> {
         val normalIndexes = listOf(
             "https://www.pkparaiso.com/espada_escudo/sprites_pokemon_espalda.php",
