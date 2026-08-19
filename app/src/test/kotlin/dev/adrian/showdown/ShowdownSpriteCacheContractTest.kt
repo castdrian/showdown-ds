@@ -92,7 +92,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls(request.shiny)"))
         assertTrue(frontCommunityIndex >= 0)
         assertTrue(frontCommunityIndex < frontRegularIndex)
-        assertTrue(frontRegularIndex > frontAnimatedIndex)
+        assertTrue(frontRegularIndex < frontAnimatedIndex)
         assertTrue(animatedFallbackIndex > localIndex)
         assertTrue(localIndex >= 0)
         assertTrue(localIndex < animatedFallbackIndex)

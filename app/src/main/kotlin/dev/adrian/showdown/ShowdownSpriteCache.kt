@@ -348,13 +348,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     if (communityAsset != null) {
                         receiver(communityAsset)
                     } else {
-                        requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedRegularAsset ->
-                            if (scrapedRegularAsset != null) {
-                                receiver(scrapedRegularAsset)
+                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                            if (regularRemoteAsset != null) {
+                                receiver(regularRemoteAsset)
                             } else {
-                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                    if (regularRemoteAsset != null) {
-                                        receiver(regularRemoteAsset)
+                                requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedRegularAsset ->
+                                    if (scrapedRegularAsset != null) {
+                                        receiver(scrapedRegularAsset)
                                     } else {
                                         requestModernLocalSpriteResolution(request, plan) { modernLocalAsset ->
                                             if (modernLocalAsset != null) {
@@ -448,13 +448,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     if (communityAsset != null) {
                         receiver(communityAsset)
                     } else {
-                        requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
-                            if (regularScrapedAsset != null) {
-                                receiver(regularScrapedAsset)
+                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                            if (regularRemoteAsset != null) {
+                                receiver(regularRemoteAsset)
                             } else {
-                                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                                    if (regularRemoteAsset != null) {
-                                        receiver(regularRemoteAsset)
+                                requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
+                                    if (regularScrapedAsset != null) {
+                                        receiver(regularScrapedAsset)
                                     } else {
                                         requestScavioAnimatedSprite(request) { scavioAsset ->
                                             if (scavioAsset != null) {

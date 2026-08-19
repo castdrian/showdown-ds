@@ -119,7 +119,7 @@ class BattleSpriteRequestTest {
         assertTrue(frontAnimatedIndex > frontHdIndex)
         assertTrue(communityIndex >= 0)
         assertTrue(communityIndex < regularIndex)
-        assertTrue(regularIndex > frontAnimatedIndex)
+        assertTrue(regularIndex < frontAnimatedIndex)
         assertTrue(animatedFallbackIndex > localFallbackIndex)
         assertTrue(localFallbackIndex >= 0)
         assertFalse(source.contains("requestPokeApiModernHdSprite"))
