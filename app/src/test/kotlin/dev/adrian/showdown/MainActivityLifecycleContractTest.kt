@@ -33,7 +33,7 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 
         assertTrue(source.contains("battleAudio.setPlaybackSpeed(replaySpeed)"))
-        assertTrue(source.contains("replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)"))
+        assertTrue(source.contains("replaySpeed = BattlePlaybackSpeed.coerce(restoredReplaySpeed)"))
     }
 
     @Test

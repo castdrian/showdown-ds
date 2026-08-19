@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -278,5 +279,26 @@ class BattleFeedPresentationTest {
         presentation.update(listOf("New battle"), true, 5_000L)
 
         assertEquals(0f, presentation.frame(5_000L)?.alpha)
+    }
+
+    @Test
+    fun keepsTheTerminalBattleResultVisibleUntilTheNextBattle() {
+        val presentation = BattleFeedPresentation()
+
+        presentation.update(
+            listOf("Pikachu used Thunderbolt!", "ADRIAN won the battle."),
+            true,
+            1_000L,
+            "ADRIAN won the battle."
+        )
+
+        assertEquals("ADRIAN won the battle.", presentation.frame(30_000L)?.text)
+        assertEquals(1f, presentation.frame(30_000L)?.alpha)
+        assertFalse(presentation.needsAnimation(30_000L))
+
+        presentation.reset()
+        presentation.update(listOf("Battle started."), true, 31_000L)
+
+        assertEquals("Battle started.", presentation.frame(31_000L)?.text)
     }
 }

@@ -468,6 +468,7 @@ class BattleSession {
         private set
     var battleFinished = false
         private set
+    private var terminalBattleResult = ""
     var battlePhase = BattlePhase.LOBBY
         private set
     var battleFeedVisible = true
@@ -484,6 +485,8 @@ class BattleSession {
         ?: !opponentCondition.contains("FNT", true)
 
     fun isBattleFinished() = battleFinished
+
+    fun battleResult() = terminalBattleResult.takeIf { battleFinished && it.isNotBlank() }
 
     fun battleInfo() = BattleInfo(
         weather,
@@ -1070,6 +1073,7 @@ class BattleSession {
         hasBattleProtocolTranscript = false
         liveBattleActive = false
         battleFinished = false
+        terminalBattleResult = ""
         battlePhase = BattlePhase.LOBBY
         battleFeedVisible = true
         decisionAvailable = false
@@ -1701,6 +1705,7 @@ class BattleSession {
         availableTeraType = ""
         panel = Panel.MOVES
         battleFinished = false
+        terminalBattleResult = ""
         battlePhase = BattlePhase.BATTLE
         openingEntrances = 0
         latestOpeningEntranceAtNanos = 0L
@@ -3055,37 +3060,20 @@ class BattleSession {
 
     private fun applyWin(fields: List<String>) {
         fields.getOrNull(2)?.let {
-            clearBattleClock()
-            status = "$it won the battle."
-            appendLog(status)
-            decisionAvailable = false
-            choiceCanBeCancelled = false
-            decisionKind = DecisionKind.WAIT
-            requestId = null
-            selectedGimmick = null
-            teamPreviewOrder.clear()
-            teamPreviewRequiredSize = 0
-            activeRequests.clear()
-            activeChoices.clear()
-            autoPassActiveSlots.clear()
-            revivingTeamIndices.clear()
-            usedGimmickFamilies.clear()
-            forceSwitchChoices.clear()
-            forceSwitchSlots.clear()
-            targetOptions.clear()
-            activeSlotIndex = 0
-            requiredSwitches = 0
-            selectedTargetIndex = -1
-            battleFinished = true
-            battlePhase = BattlePhase.FINISHED
+            finishBattle("$it won the battle.")
         }
     }
 
     private fun applyTie(fields: List<String>) {
-        clearBattleClock()
         val reason = fields.drop(2).joinToString("|").ifBlank { "The battle ended." }
-        status = reason
-        appendLog(reason)
+        finishBattle(reason)
+    }
+
+    private fun finishBattle(result: String) {
+        clearBattleClock()
+        terminalBattleResult = result
+        status = result
+        appendLog(result)
         decisionAvailable = false
         choiceCanBeCancelled = false
         decisionKind = DecisionKind.WAIT

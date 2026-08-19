@@ -139,7 +139,7 @@ class BattleAudio(
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        val nextSpeed = speed.coerceIn(0.5f, 2f)
+        val nextSpeed = BattlePlaybackSpeed.coerce(speed)
         audioCueHandler.postAtFrontOfQueue {
             if (released.get()) return@postAtFrontOfQueue
             battlePlaybackSpeed = nextSpeed

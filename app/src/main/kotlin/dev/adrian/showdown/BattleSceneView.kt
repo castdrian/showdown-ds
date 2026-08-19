@@ -1159,7 +1159,8 @@ class BattleSceneView(
         val nowMillis = SystemClock.elapsedRealtime()
         battleFeedBounds.setEmpty()
         val feedEntries = session.battleFeedEntries()
-        battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis)
+        val persistentText = session.battleResult()
+        battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis, persistentText)
         val frame = battleFeedPresentation.frame(nowMillis) ?: return
         val alpha = frame.alpha
         val glassAlpha = alpha.pow(0.62f)

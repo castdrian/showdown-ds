@@ -112,7 +112,7 @@ class ShowdownMoveEffectsView(
             return
         }
         if (released) return
-        val nextSpeed = speed.coerceIn(0.25f, 4f)
+        val nextSpeed = BattlePlaybackSpeed.coerce(speed)
         if (nextSpeed == playbackSpeed) return
         playbackSpeed = nextSpeed
         runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
@@ -590,7 +590,7 @@ class ShowdownMoveEffectsView(
                                 if (synchronizeBattleLog) nativeBattleLogSynchronized(generation);
                             },
                             setSpeed: function (speed) {
-                                animationSpeed = Math.max(0.25, Math.min(4, Number(speed) || 1));
+                                animationSpeed = Math.max(${BattlePlaybackSpeed.MINIMUM}, Math.min(${BattlePlaybackSpeed.MAXIMUM}, Number(speed) || 1));
                                 if (battle) battle.scene.acceleration = animationSpeed;
                             },
                             setPerspective: function (side) {

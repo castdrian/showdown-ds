@@ -10,18 +10,9 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
-                "Battle format names now use Showdown's official [Gen 9] Random Battle label.",
-                "Battle messages now appear as complete, readable lines with a gentle fade between events.",
-                "Damage, effectiveness, and stat-change sounds now follow the matching battle animation.",
-                "High-resolution artwork is preferred for battle and team previews, with correct rear-facing fallbacks.",
-                "Animated sprite fallbacks now replace static artwork even when they finish loading later.",
-                "Species without an available animated back asset now keep a visible final Showdown fallback instead of a blank battle slot.",
-                "The AYN Thor presentation keeps the large battle screen above the compact control screen with reliable touch input.",
-                "Singles, doubles, and triples now share compact HP cards and readable switch screens.",
-                "Live matchmaking, reconnects, replay playback, chat, rooms, and account sessions are more resilient.",
-                "Live battle recovery state is flushed when the app pauses, protecting reconnects across display and lifecycle transitions.",
-                "Team Builder now supports Showdown formats, four searchable moves, EVs, IVs, and packed or text imports and exports.",
-                "Team Builder suggestions now follow the selected Pokémon's official abilities and learnset."
+                "Finished battles keep the final Showdown result visible on the upper display.",
+                "Battle animation, text pacing, and sound effects now share a synchronized 0.5×–2× speed range.",
+                "Battle controls now include a 2× speed option."
             )
         ),
         ShowdownChangelogEntry(

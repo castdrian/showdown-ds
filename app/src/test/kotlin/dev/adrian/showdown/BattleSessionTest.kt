@@ -2120,6 +2120,7 @@ class BattleSessionTest {
         assertEquals("0 fnt", session.opponentHp)
         assertEquals(0f, session.opponentHealthFraction())
         assertEquals("ADRIAN won the battle.", session.status)
+        assertEquals("ADRIAN won the battle.", session.battleResult())
         assertTrue(session.isBattleFinished())
         assertTrue(feedback.any { it.type == BattleSession.FeedbackType.POKEMON_CRY && it.actor == "Incineroar" })
         assertTrue(feedback.any { it.type == BattleSession.FeedbackType.MOVE && it.move == "Flare Blitz" })
@@ -2129,6 +2130,17 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertTrue(session.chatMessages().last().contains("/choose move 1|28"))
+    }
+
+    @Test
+    fun terminalBattleResultSurvivesLaterConnectionStatusUpdates() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|win|ADRIAN")
+        session.setConnectionStatus("Replay: [Gen 9] Random Battle ADRIAN vs. GLADION")
+
+        assertEquals("ADRIAN won the battle.", session.battleResult())
+        assertEquals("Replay: [Gen 9] Random Battle ADRIAN vs. GLADION", session.status)
     }
 
     @Test

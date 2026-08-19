@@ -83,6 +83,7 @@ class ShowdownMoveEffectsContractTest {
         assertFalse(source.contains("var hideFrame = 0;"))
         assertTrue(source.contains("updateAcceleration.call(scene);"))
         assertTrue(source.contains("scene.acceleration = animationSpeed;"))
+        assertTrue(source.contains("Math.max(\${BattlePlaybackSpeed.MINIMUM}, Math.min(\${BattlePlaybackSpeed.MAXIMUM}, Number(speed) || 1))"))
         assertFalse(source.contains("scene.acceleration *= animationSpeed;"))
         assertTrue(source.contains("this.scene.__showdownNativeDamageArmed = moveCanDamage(move);"))
         assertTrue(source.contains("this.scene.__showdownNativeDamageWindow = this.scene.__showdownNativeDamageArmed;"))

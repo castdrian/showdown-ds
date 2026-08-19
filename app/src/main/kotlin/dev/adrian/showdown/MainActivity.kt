@@ -805,7 +805,7 @@ class MainActivity : Activity() {
     }
 
     private fun setReplaySpeed(value: Float) {
-        val nextSpeed = value.coerceIn(0.25f, 4f)
+        val nextSpeed = BattlePlaybackSpeed.coerce(value)
         if (nextSpeed == replaySpeed) return
         if (battlePacketPlaybackScheduled && !replayPaused) {
             val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
@@ -5023,7 +5023,7 @@ class MainActivity : Activity() {
     }
 
     private fun showReplayControls() {
-        val speeds = listOf(0.5f, 0.75f, 1f, 1.5f)
+        val speeds = listOf(0.5f, 0.75f, 1f, 1.5f, 2f)
         val labels = mutableListOf<String>()
         if (session.isReplayMode()) labels += if (replayPaused) "Resume replay" else "Pause replay"
         labels += speeds.map { "Set battle speed to ${it.trimTrailingZero()}×" }
@@ -5156,7 +5156,7 @@ class MainActivity : Activity() {
         val replayStartsPaused = restoredReplayPaused
         replayPaused = false
         replayPausedForLifecycle = false
-        replaySpeed = restoredReplaySpeed.coerceIn(0.25f, 4f)
+        replaySpeed = BattlePlaybackSpeed.coerce(restoredReplaySpeed)
         battleAudio.setPlaybackSpeed(replaySpeed)
         ensureShowdownMoveEffects()
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
@@ -5318,7 +5318,7 @@ class MainActivity : Activity() {
 
     private fun loadUserPreferences() {
         val preferences = getSharedPreferences("showdown", MODE_PRIVATE)
-        replaySpeed = preferences.getFloat("battle_speed", DEFAULT_BATTLE_SPEED).coerceIn(0.25f, 4f)
+        replaySpeed = BattlePlaybackSpeed.coerce(preferences.getFloat("battle_speed", DEFAULT_BATTLE_SPEED))
         val runtimeSpriteStyle = BattleSession.SpriteStyle.MODERN_3D
         preferences.edit()
             .putString("sprite_style", runtimeSpriteStyle.name)

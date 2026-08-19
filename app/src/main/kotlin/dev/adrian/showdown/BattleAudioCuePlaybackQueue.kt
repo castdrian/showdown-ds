@@ -20,7 +20,7 @@ class BattleAudioCuePlaybackQueue {
 
     @Synchronized
     fun setPlaybackSpeed(value: Float) {
-        playbackSpeed = value.coerceIn(0.5f, 2f)
+        playbackSpeed = BattlePlaybackSpeed.coerce(value)
     }
 
     @Synchronized

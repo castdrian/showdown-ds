@@ -40,7 +40,7 @@ object BattlePlaybackTiming {
 
     fun scaledPause(pauseMillis: Long, speed: Float): Long {
         if (pauseMillis <= 0L) return 0L
-        return (pauseMillis / speed.coerceIn(0.25f, 4f)).roundToLong().coerceAtLeast(1L)
+        return (pauseMillis / BattlePlaybackSpeed.coerce(speed)).roundToLong().coerceAtLeast(1L)
     }
 
     private fun readableMessageCount(lines: List<String>): Long = lines.count { line ->
