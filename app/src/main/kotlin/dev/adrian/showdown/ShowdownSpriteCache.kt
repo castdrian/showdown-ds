@@ -97,13 +97,19 @@ internal class ProgressiveAssetDelivery<T>(
     private var fallbackDelivered = false
     private var resolutionDelivered = false
     private var fallbackAsset: T? = null
+    private var resolutionAsset: T? = null
+    private var deliveredAsset: T? = null
 
     @Synchronized
     fun deliverFallback(asset: T, receiver: (T) -> Unit) {
-        if (resolutionDelivered) return
         fallbackDelivered = true
         fallbackAsset = asset
-        receiver(asset)
+        val current = deliveredAsset
+        val canUpgradeResolution = resolutionDelivered && resolutionAsset?.let { !isAnimated(it) } == true && isAnimated(asset)
+        if ((!resolutionDelivered && (current == null || !isAnimated(current))) || canUpgradeResolution) {
+            deliveredAsset = asset
+            receiver(asset)
+        }
     }
 
     @Synchronized
@@ -113,7 +119,10 @@ internal class ProgressiveAssetDelivery<T>(
             return
         }
         if (fallbackAsset?.let(isAnimated) == true && !isAnimated(asset)) return
+        if (deliveredAsset?.let(isAnimated) == true && !isAnimated(asset)) return
         resolutionDelivered = true
+        resolutionAsset = asset
+        deliveredAsset = asset
         receiver(asset)
     }
 }

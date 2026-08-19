@@ -87,6 +87,17 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun lateAnimatedFallbackUpgradesAStaticResolution() {
+        val delivered = mutableListOf<String>()
+        val gate = ProgressiveAssetDelivery<String> { it == "animated" }
+
+        gate.deliverResolution("static") { delivered.add(it ?: "") }
+        gate.deliverFallback("animated") { delivered.add(it) }
+
+        assertEquals(listOf("static", "animated"), delivered)
+    }
+
+    @Test
     fun modernArtworkResolutionUsesAnimatedSourcesAtEveryTier() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val animatedFallbackIndex = source.indexOf(
