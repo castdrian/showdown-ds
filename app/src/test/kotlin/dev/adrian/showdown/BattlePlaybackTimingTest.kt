@@ -59,6 +59,26 @@ class BattlePlaybackTimingTest {
     }
 
     @Test
+    fun isolatesEveryBattleEndEventAndLeavesTimeToReadIt() {
+        val lines = listOf(
+            "|move|p1a: Pikachu|Tackle|p2a: Eevee",
+            "|draw|The battle ended in a draw.",
+            "|prematureend|"
+        )
+
+        assertEquals(
+            listOf(
+                listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee"),
+                listOf("|draw|The battle ended in a draw."),
+                listOf("|prematureend|")
+            ),
+            BattlePlaybackTiming.chunks(lines)
+        )
+        assertEquals(4_000L, BattlePlaybackTiming.pauseAfter(listOf("|draw|The battle ended in a draw.")))
+        assertEquals(4_000L, BattlePlaybackTiming.pauseAfter(listOf("|prematureend|")))
+    }
+
+    @Test
     fun identifiesDecisionChunksForImmediateLiveControls() {
         assertTrue(BattlePlaybackTiming.isDecisionChunk(listOf("|request|{}")))
         assertFalse(BattlePlaybackTiming.isDecisionChunk(listOf("|turn|1")))

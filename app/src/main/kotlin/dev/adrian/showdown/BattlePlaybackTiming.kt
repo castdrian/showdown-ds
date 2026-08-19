@@ -21,7 +21,12 @@ object BattlePlaybackTiming {
 
     fun pauseAfter(lines: List<String>): Long {
         val actionPause = when {
-            lines.any { it.startsWith("|win|") || it.startsWith("|tie|") } -> END_OF_BATTLE_PAUSE_MILLIS
+            lines.any {
+                it.startsWith("|win|") ||
+                    it.startsWith("|tie|") ||
+                    it.startsWith("|draw|") ||
+                    it.startsWith("|prematureend|")
+            } -> END_OF_BATTLE_PAUSE_MILLIS
             lines.any { it.startsWith("|faint|") } -> FAINT_PAUSE_MILLIS
             lines.any { it.startsWith("|move|") } -> MOVE_PAUSE_MILLIS
             lines.any { it.startsWith("|switch|") || it.startsWith("|drag|") || it.startsWith("|replace|") } -> SWITCH_PAUSE_MILLIS
@@ -52,7 +57,9 @@ object BattlePlaybackTiming {
             line.startsWith("|turn|") ||
             line.startsWith("|request|") ||
             line.startsWith("|win|") ||
-            line.startsWith("|tie|")
+            line.startsWith("|tie|") ||
+            line.startsWith("|draw|") ||
+            line.startsWith("|prematureend|")
 
     private const val MOVE_PAUSE_MILLIS = EVENT_PAUSE_MILLIS
     private const val FAINT_PAUSE_MILLIS = 3_200L
