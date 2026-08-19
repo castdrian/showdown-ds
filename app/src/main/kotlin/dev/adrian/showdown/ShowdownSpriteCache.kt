@@ -87,14 +87,18 @@ private fun skipGifSubBlocks(bytes: ByteArray, start: Int): Int? {
     return null
 }
 
-internal class ProgressiveAssetDelivery<T> {
+internal class ProgressiveAssetDelivery<T>(
+    private val isAnimated: (T) -> Boolean = { false }
+) {
     private var fallbackDelivered = false
     private var resolutionDelivered = false
+    private var fallbackAsset: T? = null
 
     @Synchronized
     fun deliverFallback(asset: T, receiver: (T) -> Unit) {
         if (resolutionDelivered) return
         fallbackDelivered = true
+        fallbackAsset = asset
         receiver(asset)
     }
 
@@ -104,6 +108,7 @@ internal class ProgressiveAssetDelivery<T> {
             if (!fallbackDelivered) receiver(null)
             return
         }
+        if (fallbackAsset?.let(isAnimated) == true && !isAnimated(asset)) return
         resolutionDelivered = true
         receiver(asset)
     }
@@ -191,7 +196,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
         if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
-            val delivery = ProgressiveAssetDelivery<SpriteAsset>()
+            val delivery = ProgressiveAssetDelivery<SpriteAsset>(SpriteAsset::isAnimated)
             requestResolutionPlan(
                 request = request,
                 plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request)
@@ -546,7 +551,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (modernLocalAsset != null) {
                 receiver(modernLocalAsset)
             } else {
-                requestSmallSpriteResolution(request, receiver)
+                requestSmallSpriteResolution(request) { animatedAsset ->
+                    if (animatedAsset != null) {
+                        receiver(animatedAsset)
+                    } else {
+                        requestStaticShowdownFallback(request, receiver)
+                    }
+                }
             }
         }
     }
@@ -600,6 +611,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(null)
             }
         }
+    }
+
+    private fun requestStaticShowdownFallback(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        if (request.backFacing) {
+            receiver(null)
+            return
+        }
+        requestSprite(ShowdownAssetPaths.dexSprite(request.species), receiver)
     }
 
     private fun isModernLocalCandidate(path: String) =

@@ -64,6 +64,17 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun staticResolutionCannotDowngradeAnAnimatedFallback() {
+        val delivered = mutableListOf<String>()
+        val gate = ProgressiveAssetDelivery<String> { it == "animated" }
+
+        gate.deliverFallback("animated") { delivered.add(it) }
+        gate.deliverResolution("static") { delivered.add(it ?: "") }
+
+        assertEquals(listOf("animated"), delivered)
+    }
+
+    @Test
     fun modernArtworkResolutionUsesAnimatedSourcesAtEveryTier() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val animatedFallbackIndex = source.indexOf(
@@ -117,6 +128,20 @@ class ShowdownSpriteCacheContractTest {
                 frontResolver.indexOf("requestScavioAnimatedSprite(request)")
         )
         assertTrue(source.contains("asset.mirroredForPlayer()"))
+    }
+
+    @Test
+    fun staticShowdownArtworkIsOnlyTheFinalFrontFacingFallback() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val modernLocalIndex = source.indexOf("requestSpriteCandidates(modernLocalCandidates)")
+        val animatedIndex = source.indexOf("requestSmallSpriteResolution(request)", modernLocalIndex)
+        val staticIndex = source.indexOf("requestStaticShowdownFallback(request, receiver)", animatedIndex)
+
+        assertTrue(modernLocalIndex >= 0)
+        assertTrue(animatedIndex > modernLocalIndex)
+        assertTrue(staticIndex > animatedIndex)
+        assertTrue(source.contains("if (request.backFacing)"))
+        assertTrue(source.contains("requestSprite(ShowdownAssetPaths.dexSprite(request.species), receiver)"))
     }
 
     @Test
