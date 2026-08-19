@@ -1092,8 +1092,8 @@ class BattleSession {
         if (playerSide) "Go! ${displayPokemonName(pokemon)}!" else "$opponentName sent out ${displayPokemonName(pokemon)}!"
 
     fun setMatchFormat(format: MatchFormat) {
-        matchFormat = format
-        status = "Battle format: ${format.label}"
+        matchFormat = ShowdownFormatCompatibility.canonical(format)
+        status = "Battle format: ${matchFormat.label}"
         notifyListeners()
     }
 
@@ -1111,6 +1111,8 @@ class BattleSession {
 
     fun applyServerFormats(lines: List<String>) {
         val formats = lines.flatMap(::parseServerFormats)
+            .map(ShowdownFormatCompatibility::canonical)
+            .distinctBy { it.id.trim().lowercase() }
         if (formats.isEmpty()) return
         val currentWasAdvertised = availableMatchFormats.any { it.id.trim().equals(matchFormat.id.trim(), true) }
         val selected = formats.firstOrNull {
@@ -1123,7 +1125,7 @@ class BattleSession {
         if (refreshedFormats.none { it.id.trim().equals(selected.id.trim(), true) }) refreshedFormats.add(0, selected)
         availableMatchFormats.clear()
         availableMatchFormats += refreshedFormats
-        matchFormat = selected
+        matchFormat = ShowdownFormatCompatibility.canonical(selected)
         notifyListeners()
     }
 

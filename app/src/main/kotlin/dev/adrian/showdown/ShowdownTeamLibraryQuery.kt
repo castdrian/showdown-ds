@@ -34,7 +34,7 @@ object ShowdownTeamLibraryQuery {
         .sortedWith(String.CASE_INSENSITIVE_ORDER)
 
     fun displayFormat(format: String): String {
-        val normalized = format.trim()
+        val normalized = ShowdownFormatCompatibility.canonicalId(format) ?: format.trim()
         if (normalized.isBlank()) return "Unknown format"
         val match = Regex("^gen(\\d+)([a-z0-9]+)$", RegexOption.IGNORE_CASE).matchEntire(normalized)
             ?: return normalized
@@ -45,13 +45,13 @@ object ShowdownTeamLibraryQuery {
     }
 
     fun resolveFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): BattleSession.MatchFormat? {
-        val normalized = format.trim()
-        return knownFormats.firstOrNull { it.id.trim().equals(normalized, true) }
+        val normalized = ShowdownFormatCompatibility.canonicalId(format) ?: return null
+        return knownFormats.firstOrNull { ShowdownFormatCompatibility.canonicalId(it.id, it.label) == normalized }
     }
 
     fun matchFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): BattleSession.MatchFormat {
-        val normalized = format.trim()
-        val advertised = resolveFormat(normalized, knownFormats)
+        val normalized = ShowdownFormatCompatibility.canonicalId(format) ?: format.trim()
+        val advertised = resolveFormat(normalized, knownFormats)?.let(ShowdownFormatCompatibility::canonical)
         val readableLabel = displayFormat(normalized, knownFormats)
         return advertised?.copy(
             id = advertised.id.trim(),
@@ -62,7 +62,8 @@ object ShowdownTeamLibraryQuery {
     }
 
     fun displayFormat(format: String, knownFormats: Collection<BattleSession.MatchFormat>): String {
-        val advertised = resolveFormat(format, knownFormats)
+        val normalized = ShowdownFormatCompatibility.canonicalId(format) ?: format.trim()
+        val advertised = resolveFormat(normalized, knownFormats)?.let(ShowdownFormatCompatibility::canonical)
         return advertised?.label?.trim()
             ?.takeUnless { it.isBlank() || it.equals(advertised.id.trim(), true) }
             ?: displayFormat(format)

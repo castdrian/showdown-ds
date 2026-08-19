@@ -5255,8 +5255,7 @@ class MainActivity : Activity() {
         val saved = preferences.getString("match_format", null)
         val normalizedSaved = saved?.trim()
         val savedLabel = preferences.getString("match_format_label", null)?.trim()
-        val normalizedSavedLabel = savedLabel.orEmpty().lowercase(Locale.ROOT).filter(Char::isLetterOrDigit)
-        if (normalizedSaved?.lowercase(Locale.ROOT) == "hdmatchup" || normalizedSavedLabel == "hdmatchup") {
+        if (ShowdownFormatCompatibility.isLegacyHdMatchup(normalizedSaved) || ShowdownFormatCompatibility.isLegacyHdMatchup(savedLabel)) {
             val defaultFormat = BattleSession.MatchFormat.GEN9_RANDOM
             preferences.edit()
                 .putString("match_format", defaultFormat.id)
@@ -5264,10 +5263,11 @@ class MainActivity : Activity() {
                 .apply()
             return defaultFormat
         }
-        return BattleSession.MatchFormat.defaults.firstOrNull { it.id.trim().equals(normalizedSaved, true) }
+        val canonicalId = ShowdownFormatCompatibility.canonicalId(normalizedSaved, savedLabel)
+        return BattleSession.MatchFormat.defaults.firstOrNull { it.id.trim().equals(canonicalId, true) }
             ?: saved?.let {
                 BattleSession.MatchFormat(
-                    id = it.trim(),
+                    id = canonicalId ?: it.trim(),
                     label = savedLabel.takeUnless { label -> label.isNullOrBlank() } ?: it.trim(),
                     canSearch = false
                 )

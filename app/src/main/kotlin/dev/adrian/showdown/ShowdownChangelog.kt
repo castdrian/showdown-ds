@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Legacy HD matchup labels now migrate to the official [Gen 9] Random Battle name across lobby, matchmaking, challenges, and teams.",
                 "Move health and result audio events now survive renderer handoffs, while cues only play when Showdown renders the matching animation.",
                 "AYN Thor display-pose updates now preserve the upper-screen-over-lower-screen physical order after the emulator reconfigures its displays.",
                 "AYN Thor's lower preview now starts after the complete upper panel and its gap, so the two screens never overlap.",
