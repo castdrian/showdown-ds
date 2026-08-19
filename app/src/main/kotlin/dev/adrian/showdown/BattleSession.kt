@@ -460,6 +460,8 @@ class BattleSession {
         private set
     var hapticsEnabled = true
         private set
+    var announcerEnabled = false
+        private set
     var spriteStyle = SpriteStyle.MODERN_3D
         private set
     var selectedGimmick: BattleGimmick? = null
@@ -1115,11 +1117,13 @@ class BattleSession {
     fun applyUserPreferences(
         soundEffects: Boolean,
         music: Boolean,
-        haptics: Boolean
+        haptics: Boolean,
+        announcer: Boolean = false
     ) {
         soundEffectsEnabled = soundEffects
         musicEnabled = music
         hapticsEnabled = haptics
+        announcerEnabled = announcer
         this.spriteStyle = SpriteStyle.MODERN_3D
         notifyListeners()
     }
@@ -4126,12 +4130,13 @@ class BattleSession {
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
         5 -> "Background music ${if (musicEnabled) "on" else "off"}"
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
-        7 -> "Sprite style ${spriteStyle.displayName}"
-        8 -> "Team library"
-        9 -> "Rooms"
-        10 -> "Showdown account"
-        11 -> "Configure server"
-        12 -> if (replayMode) "Replay controls" else "Battle controls"
+        7 -> "Announcer ${if (announcerEnabled) "on" else "off"}"
+        8 -> "Sprite style ${spriteStyle.displayName}"
+        9 -> "Team library"
+        10 -> "Rooms"
+        11 -> "Showdown account"
+        12 -> "Configure server"
+        13 -> if (replayMode) "Replay controls" else "Battle controls"
         else -> if (battleFinished) "Save replay" else "Battle timer ${if (battleTimerEnabled) "on" else "off"}"
     }
 
@@ -4176,26 +4181,30 @@ class BattleSession {
                     "Haptics ${if (hapticsEnabled) "enabled." else "disabled."}"
                 }
                 7 -> {
+                    announcerEnabled = !announcerEnabled
+                    "Announcer ${if (announcerEnabled) "enabled." else "disabled."}"
+                }
+                8 -> {
                     spriteStyle = SpriteStyle.MODERN_3D
                     "HD animated sprite style enabled."
                 }
-                8 -> {
+                9 -> {
                     publishClientAction(ClientAction.CONFIGURE_TEAM)
                     "Manage your saved teams."
                 }
-                9 -> {
+                10 -> {
                     publishClientAction(ClientAction.OPEN_ROOMS)
                     "Browse Showdown rooms."
                 }
-                10 -> {
+                11 -> {
                     publishClientAction(ClientAction.CONFIGURE_ACCOUNT)
                     "Configure your Showdown account."
                 }
-                11 -> {
+                12 -> {
                     publishClientAction(ClientAction.CONFIGURE_SERVER)
                     "Choose a Pokémon Showdown server."
                 }
-                12 -> {
+                13 -> {
                     publishClientAction(ClientAction.OPEN_REPLAY_CONTROLS)
                     "Adjust battle playback."
                 }
@@ -4210,7 +4219,7 @@ class BattleSession {
                 }
             }
         }
-        if (focusedMenuItem in 4..7) publishClientAction(ClientAction.SETTINGS_CHANGED)
+        if (focusedMenuItem in 4..8) publishClientAction(ClientAction.SETTINGS_CHANGED)
     }
 
     private fun confirmTeamSelection() {
@@ -4793,7 +4802,7 @@ class BattleSession {
     }
 
     companion object {
-        const val MENU_ITEM_COUNT = 14
+        const val MENU_ITEM_COUNT = 15
         const val MENU_COLUMNS = 3
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
         private const val BATTLE_HISTORY_LIMIT = 1024

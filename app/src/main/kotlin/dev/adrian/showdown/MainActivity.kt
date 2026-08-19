@@ -227,7 +227,10 @@ class MainActivity : Activity() {
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
-        runOnUiThread { applyBattleProtocolToEffects(lines) }
+        runOnUiThread {
+            if (::battleAudio.isInitialized) BattleAnnouncerCueResolver.cuesForProtocol(lines).forEach(battleAudio::playAnnouncerCue)
+            applyBattleProtocolToEffects(lines)
+        }
     }
     private val decisionListener = BattleSession.DecisionListener { command ->
         if (session.isSpectatorMode()) {
@@ -5324,7 +5327,8 @@ class MainActivity : Activity() {
         session.applyUserPreferences(
             soundEffects = preferences.getBoolean("sound_effects", true),
             music = preferences.getBoolean("music", true),
-            haptics = preferences.getBoolean("haptics", true)
+            haptics = preferences.getBoolean("haptics", true),
+            announcer = preferences.getBoolean("announcer", false)
         )
     }
 
@@ -5333,6 +5337,7 @@ class MainActivity : Activity() {
             .putBoolean("sound_effects", session.soundEffectsEnabled)
             .putBoolean("music", session.musicEnabled)
             .putBoolean("haptics", session.hapticsEnabled)
+            .putBoolean("announcer", session.announcerEnabled)
             .putString("sprite_style", session.spriteStyle.name)
             .putBoolean("sprite_style_migrated", true)
             .apply()

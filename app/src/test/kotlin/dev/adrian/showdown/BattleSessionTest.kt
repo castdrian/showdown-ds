@@ -1237,7 +1237,7 @@ class BattleSessionTest {
 
         assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(7)
+        session.selectMenuItem(8)
         session.confirmSelection()
 
         assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
@@ -2619,13 +2619,13 @@ class BattleSessionTest {
         session.selectPanel(BattleSession.Panel.MENU)
         session.selectMenuItem(0)
         session.confirmSelection()
-        session.selectMenuItem(8)
-        session.confirmSelection()
         session.selectMenuItem(9)
         session.confirmSelection()
         session.selectMenuItem(10)
         session.confirmSelection()
         session.selectMenuItem(11)
+        session.confirmSelection()
+        session.selectMenuItem(12)
         session.confirmSelection()
         assertEquals(
             listOf(
@@ -2647,7 +2647,7 @@ class BattleSessionTest {
         session.applyProtocolLine("|init|battle")
 
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(12)
+        session.selectMenuItem(13)
         session.confirmSelection()
 
         assertEquals(listOf(BattleSession.ClientAction.OPEN_REPLAY_CONTROLS), actions)
@@ -2683,15 +2683,15 @@ class BattleSessionTest {
         session.setLocalUsername("ADRIAN")
         session.setLiveBattleActive(true)
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(13)
+        session.selectMenuItem(14)
         session.confirmSelection()
 
         assertEquals(listOf(BattleSession.ClientAction.TOGGLE_BATTLE_TIMER), actions)
-        assertEquals("Battle timer off", session.menuItems()[13])
+        assertEquals("Battle timer off", session.menuItems()[14])
 
         session.applyProtocolLine("|inactive|Time left: 60 sec this turn | 300 sec total | 30 sec grace")
         assertTrue(session.isBattleTimerEnabled())
-        assertEquals("Battle timer on", session.menuItems()[13])
+        assertEquals("Battle timer on", session.menuItems()[14])
 
         session.applyProtocolLine("|inactiveoff|")
         assertFalse(session.isBattleTimerEnabled())
@@ -2717,10 +2717,10 @@ class BattleSessionTest {
 
         session.applyProtocolLine("|win|ADRIAN")
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(13)
+        session.selectMenuItem(14)
         session.confirmSelection()
 
-        assertEquals("Save replay", session.menuItems()[13])
+        assertEquals("Save replay", session.menuItems()[14])
         assertEquals(listOf(BattleSession.ClientAction.SAVE_REPLAY), actions)
     }
 
@@ -2774,13 +2774,34 @@ class BattleSessionTest {
         session.applyUserPreferences(
             soundEffects = false,
             music = true,
-            haptics = false
+            haptics = false,
+            announcer = true
         )
 
         assertFalse(session.soundEffectsEnabled)
         assertTrue(session.musicEnabled)
         assertFalse(session.hapticsEnabled)
+        assertTrue(session.announcerEnabled)
         assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
+    }
+
+    @Test
+    fun announcerMenuIsOffByDefaultAndTogglesWithSettings() {
+        val session = BattleSession()
+        val actions = mutableListOf<BattleSession.ClientAction>()
+        session.addClientActionListener { actions += it }
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        assertFalse(session.announcerEnabled)
+        assertEquals("Announcer off", session.menuItems()[7])
+
+        session.selectMenuItem(7)
+        session.confirmSelection()
+
+        assertTrue(session.announcerEnabled)
+        assertEquals("Announcer on", session.menuItems()[7])
+        assertEquals("Announcer enabled.", session.status)
+        assertEquals(listOf(BattleSession.ClientAction.SETTINGS_CHANGED), actions)
     }
 
     @Test
@@ -2788,13 +2809,13 @@ class BattleSessionTest {
         val session = BattleSession()
 
         session.selectPanel(BattleSession.Panel.MENU)
-        assertEquals("Sprite style HD animated", session.menuItems()[7])
+        assertEquals("Sprite style HD animated", session.menuItems()[8])
 
-        session.selectMenuItem(7)
+        session.selectMenuItem(8)
         session.confirmSelection()
 
         assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
-        assertEquals("Sprite style HD animated", session.menuItems()[7])
+        assertEquals("Sprite style HD animated", session.menuItems()[8])
         assertEquals("HD animated sprite style enabled.", session.status)
     }
 
@@ -2950,7 +2971,7 @@ class BattleSessionTest {
         assertFalse(session.isReplayMode())
         assertFalse(session.decisionAvailable)
         assertEquals("Leave battle", session.menuItems()[3])
-        assertEquals("Battle controls", session.menuItems()[12])
+        assertEquals("Battle controls", session.menuItems()[13])
     }
 
     @Test
@@ -3025,10 +3046,10 @@ class BattleSessionTest {
 
         session.setReplayMode(true)
         session.selectPanel(BattleSession.Panel.MENU)
-        session.selectMenuItem(12)
+        session.selectMenuItem(13)
         session.confirmSelection()
 
-        assertEquals("Replay controls", session.menuItems()[12])
+        assertEquals("Replay controls", session.menuItems()[13])
         assertEquals(listOf(BattleSession.ClientAction.OPEN_REPLAY_CONTROLS), actions)
     }
 }

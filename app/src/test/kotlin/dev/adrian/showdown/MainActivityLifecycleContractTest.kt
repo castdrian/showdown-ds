@@ -178,7 +178,8 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
 
-        assertTrue(listener.contains("runOnUiThread { applyBattleProtocolToEffects(lines) }"))
+        assertTrue(listener.contains("runOnUiThread {"))
+        assertTrue(listener.contains("applyBattleProtocolToEffects(lines)"))
         assertTrue(source.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
         assertTrue(source.contains("if (!effectsAlreadyCreated && lines.any { it.startsWith(\"|init|battle\") }) return"))
     }

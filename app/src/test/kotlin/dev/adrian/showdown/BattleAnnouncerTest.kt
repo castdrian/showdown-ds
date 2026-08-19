@@ -1,0 +1,44 @@
+package dev.adrian.showdown
+
+import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class BattleAnnouncerTest {
+    @Test
+    fun protocolEventsResolveToTheRelevantAnnouncerCues() {
+        assertEquals(BattleAnnouncerCue.BATTLE_START, BattleAnnouncerCueResolver.cueForProtocolLine("|init|battle"))
+        assertEquals(BattleAnnouncerCue.MOVE, BattleAnnouncerCueResolver.cueForProtocolLine("|move|p1a: Pikachu|Thunderbolt|p2a: Gengar"))
+        assertEquals(BattleAnnouncerCue.HIT, BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Gengar|0 fnt"))
+        assertEquals(BattleAnnouncerCue.BURN, BattleAnnouncerCueResolver.cueForProtocolLine("|-status|p2a: Gengar|brn"))
+        assertEquals(BattleAnnouncerCue.SANDSTORM, BattleAnnouncerCueResolver.cueForProtocolLine("|-weather|Sandstorm|[from] ability: Sand Stream"))
+        assertEquals(BattleAnnouncerCue.BATTLE_END, BattleAnnouncerCueResolver.cueForProtocolLine("|win|ADRIAN"))
+    }
+
+    @Test
+    fun nonAnnouncerProtocolEventsRemainSilent() {
+        assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-boost|p1a: Pikachu|atk|1"))
+        assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|chat|ADRIAN|Good luck!"))
+        assertEquals(
+            listOf(BattleAnnouncerCue.MOVE, BattleAnnouncerCue.HIT),
+            BattleAnnouncerCueResolver.cuesForProtocol(
+                listOf(
+                    "|move|p1a: Pikachu|Thunderbolt|p2a: Gengar",
+                    "|-damage|p2a: Gengar|40/100"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun assetsUseTheSelectedClipFromTheBundledSubset() {
+        val path = BattleAnnouncerAssets.assetPath(BattleAnnouncerCue.BATTLE_START)
+
+        assertEquals("announcer/tb_014.wav", path)
+        BattleAnnouncerCue.values().forEach { cue ->
+            assertTrue(File("src/main/assets/${BattleAnnouncerAssets.assetPath(cue)}").isFile)
+        }
+    }
+}

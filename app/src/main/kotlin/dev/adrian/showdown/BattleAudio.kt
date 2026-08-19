@@ -9,6 +9,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
 import java.io.File
+import java.io.FileOutputStream
 import java.util.ArrayDeque
 import java.util.Collections
 import java.util.LinkedHashMap
@@ -51,6 +52,7 @@ class BattleAudio(
     private val failedBattleCues = Collections.synchronizedSet(mutableSetOf<BattleAudioCue>())
     private val transientSoundIds = LinkedHashMap<String, Int>(16, 0.75f, true)
     private val transientSoundPathsById = mutableMapOf<Int, String>()
+    private val announcerFiles = mutableMapOf<BattleAnnouncerCue, File?>()
     private val loadedTransientSoundIds = mutableSetOf<Int>()
     private val activeBattleStreamIds = mutableSetOf<Int>()
     private val pendingBattleCues = ArrayDeque<PendingBattleCue>()
@@ -67,6 +69,8 @@ class BattleAudio(
     private val soundEffectsEnabled = AtomicBoolean(true)
     @Volatile
     private var musicEnabled = false
+    @Volatile
+    private var announcerEnabled = false
     private var battlePlaybackSpeed = 1f
     private val released = AtomicBoolean(false)
     private val previewRunnables = mutableSetOf<Runnable>()
@@ -109,8 +113,11 @@ class BattleAudio(
         if (released.get()) return
         val requestedMusic = MUSIC[session.showdownMusicIndex()]
         if (requestedMusic != selectedMusic) audioCueHandler.post { selectMusic(requestedMusic) }
+        val wasAnnouncerEnabled = announcerEnabled
         val effectsEnabled = session.soundEffectsEnabled
         soundEffectsEnabled.set(effectsEnabled)
+        announcerEnabled = session.announcerEnabled
+        if (announcerEnabled && !wasAnnouncerEnabled) audioCueHandler.post(::preloadAnnouncerAssets)
         if (!effectsEnabled) {
             audioCueHandler.post {
                 clearPendingBattleCues()
@@ -375,6 +382,14 @@ class BattleAudio(
         }
     }
 
+    fun playAnnouncerCue(cue: BattleAnnouncerCue) {
+        if (!announcerEnabled || !soundEffectsEnabled.get()) return
+        audioCueHandler.post {
+            if (!announcerEnabled || !soundEffectsEnabled.get()) return@post
+            announcerFile(cue)?.let { playTransientSound(it.path, 0.64f) }
+        }
+    }
+
     private fun startMusicIfReady() {
         if (!musicEnabled || bgmPlayer != null) return
         val file = bgmFile ?: return
@@ -442,6 +457,24 @@ class BattleAudio(
                 bgmFile = file
                 startMusicIfReady()
             }
+        }
+    }
+
+    private fun preloadAnnouncerAssets() {
+        BattleAnnouncerCue.values().forEach(::announcerFile)
+    }
+
+    private fun announcerFile(cue: BattleAnnouncerCue): File? = announcerFiles.getOrPut(cue) {
+        val target = File(context.cacheDir, "showdown-announcer-${cue.assetName}.wav")
+        if (target.isFile) {
+            target
+        } else {
+            runCatching {
+                context.assets.open(BattleAnnouncerAssets.assetPath(cue)).use { input ->
+                    FileOutputStream(target).use { output -> input.copyTo(output) }
+                }
+                target
+            }.getOrNull()
         }
     }
 
