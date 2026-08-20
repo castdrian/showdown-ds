@@ -31,6 +31,11 @@ class ShowdownMoveEffectsView(
     private var playbackSpeed = 1f
     private var battlePerspective = "p1"
     private var released = false
+    private val nativeIdlePauseRunnable = Runnable {
+        if (!released && pageLoaded && !playbackPaused) {
+            runJavascript("window.ShowdownNativeEffects.pauseWhenIdle();")
+        }
+    }
     private val nativeAudioBridge = NativeAudioBridge(audioCueListener, audioCueResetter, audioMoveResetter)
     private val nativeBattleLogBridge = NativeBattleLogBridge(battleLogListener, battleMarkupListener, battleLogSyncListener)
 
@@ -99,10 +104,12 @@ class ShowdownMoveEffectsView(
         if (playbackPaused == paused) return
         playbackPaused = paused
         if (paused) {
+            mainHandler.removeCallbacks(nativeIdlePauseRunnable)
             runJavascript("window.ShowdownNativeEffects.pause();")
         } else {
             runJavascript("window.ShowdownNativeEffects.resume();")
             flushPendingPackets()
+            scheduleNativeIdlePause()
         }
     }
 
@@ -136,6 +143,7 @@ class ShowdownMoveEffectsView(
         }
         if (released) return
         released = true
+        mainHandler.removeCallbacks(nativeIdlePauseRunnable)
         pendingPackets.clear()
         val cleanup = { cleanupOnMainThread() }
         if (pageLoaded) {
@@ -149,17 +157,26 @@ class ShowdownMoveEffectsView(
 
     private fun flushPendingPackets(allowSeedWhilePaused: Boolean = false) {
         if ((!allowSeedWhilePaused && playbackPaused) || !pageLoaded) return
+        var dispatched = false
         while (true) {
             when (val packet = pendingPackets.poll() ?: break) {
                 is ShowdownMoveEffectsQueue.Packet.Seed -> evaluateJavascript(
                     "window.ShowdownNativeEffects.seed(${JSONArray(packet.lines)});",
                     null
-                )
+                ).also { dispatched = true }
                 is ShowdownMoveEffectsQueue.Packet.Receive -> evaluateJavascript(
                     "window.ShowdownNativeEffects.receive(${JSONArray(packet.lines)}, ${packet.battleLogGeneration}, ${packet.synchronizeBattleLog});",
                     null
-                )
+                ).also { dispatched = true }
             }
+        }
+        if (dispatched) scheduleNativeIdlePause()
+    }
+
+    private fun scheduleNativeIdlePause() {
+        mainHandler.removeCallbacks(nativeIdlePauseRunnable)
+        if (!released && pageLoaded && !playbackPaused) {
+            mainHandler.postDelayed(nativeIdlePauseRunnable, NATIVE_IDLE_CHECK_DELAY_MILLIS)
         }
     }
 
@@ -177,6 +194,7 @@ class ShowdownMoveEffectsView(
         const val BASE_URL = "https://play.pokemonshowdown.com/"
         const val NATIVE_AUDIO_BRIDGE = "ShowdownNativeAudio"
         const val NATIVE_BATTLE_LOG_BRIDGE = "ShowdownNativeBattleLog"
+        const val NATIVE_IDLE_CHECK_DELAY_MILLIS = 350L
         val DOCUMENT = """
             <!doctype html>
             <html>
@@ -241,6 +259,25 @@ class ShowdownMoveEffectsView(
                         }
                         var nativeBattleLogGeneration = 0;
                         var nativeBattleLogMarkupActive = false;
+                        var nativeIdlePauseTimer = null;
+                        function clearNativeIdlePauseTimer() {
+                            if (nativeIdlePauseTimer === null) return;
+                            clearTimeout(nativeIdlePauseTimer);
+                            nativeIdlePauseTimer = null;
+                        }
+                        function requestNativeIdlePause() {
+                            clearNativeIdlePauseTimer();
+                            function pauseWhenReady() {
+                                nativeIdlePauseTimer = null;
+                                if (!battle || battle.paused) return;
+                                if (battle.atQueueEnd) {
+                                    battle.pause();
+                                    return;
+                                }
+                                nativeIdlePauseTimer = setTimeout(pauseWhenReady, 250);
+                            }
+                            pauseWhenReady();
+                        }
                         function nativeBattleLog(value) {
                             if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
                             window.ShowdownNativeBattleLog.entry(String(value), nativeBattleLogGeneration);
@@ -533,6 +570,7 @@ class ShowdownMoveEffectsView(
                             hideChrome();
                         }
                         function destroyBattle() {
+                            clearNativeIdlePauseTimer();
                             if (!battle) return;
                             if (battle.scene) battle.scene.stopAnimation();
                             battle.destroy();
@@ -570,6 +608,7 @@ class ShowdownMoveEffectsView(
                         window.addEventListener('resize', layout);
                         window.ShowdownNativeEffects = {
                             seed: function (lines) {
+                                clearNativeIdlePauseTimer();
                                 createBattle();
                                 captureNativeBattleLog = false;
                                 nativeBattleLogGeneration = 0;
@@ -579,6 +618,7 @@ class ShowdownMoveEffectsView(
                                 battle.scene.animationOn();
                             },
                             receive: function (lines, generation, synchronizeBattleLog) {
+                                clearNativeIdlePauseTimer();
                                 if (!battle || lines.some(function (line) { return line.indexOf('|init|battle') === 0; })) createBattle();
                                 captureNativeBattleLog = true;
                                 nativeBattleLogGeneration = Number(generation) || 0;
@@ -596,12 +636,17 @@ class ShowdownMoveEffectsView(
                                 applyNativeBattlePerspective();
                             },
                             pause: function () {
+                                clearNativeIdlePauseTimer();
                                 if (battle) battle.pause();
                             },
                             resume: function () {
                                 if (battle && battle.paused) battle.play();
                             },
+                            pauseWhenIdle: function () {
+                                requestNativeIdlePause();
+                            },
                             release: function () {
+                                clearNativeIdlePauseTimer();
                                 if (chromeObserver) {
                                     chromeObserver.disconnect();
                                     chromeObserver = null;

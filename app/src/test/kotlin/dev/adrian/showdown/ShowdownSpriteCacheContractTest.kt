@@ -97,14 +97,13 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun usesBoundedPlatformAnimationDecodingOnModernAndroid() {
+    fun usesManuallyPacedAnimationDecoding() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
-        assertTrue(source.contains("ImageDecoder.decodeDrawable(ImageDecoder.createSource(file))"))
-        assertTrue(source.contains("decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)"))
-        assertTrue(source.contains("decoder.setTargetSize((width * scale).toInt(), (height * scale).toInt())"))
-        assertTrue(source.contains("it is AnimatedImageDrawable"))
-        assertTrue(source.contains("const val MAX_ANIMATED_SPRITE_DIMENSION = 512"))
+        assertTrue(source.contains("private fun animatedFrameAt(elapsedMillis: Long)"))
+        assertTrue(source.contains("private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L"))
+        assertFalse(source.contains("AnimatedImageDrawable"))
+        assertFalse(source.contains("ImageDecoder.decodeDrawable"))
         assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
     }
 

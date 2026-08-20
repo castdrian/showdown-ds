@@ -25,6 +25,6 @@ class ShowdownPokedexSpriteView(context: Context) : View(context) {
             RectF(12f, 8f, width.toFloat() - 12f, height.toFloat() - 8f),
             System.currentTimeMillis()
         )
-        if (sprite?.isAnimated == true) postInvalidateDelayed(48L)
+        if (sprite?.isAnimated == true) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
     }
 }

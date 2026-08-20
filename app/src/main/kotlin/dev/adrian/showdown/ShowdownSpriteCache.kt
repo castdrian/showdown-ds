@@ -4,15 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.ImageDecoder
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.Animatable
-import android.graphics.drawable.AnimatedImageDrawable
-import android.graphics.drawable.Drawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
@@ -112,7 +107,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
         private val bitmap: Bitmap?,
         private val movie: Movie?,
-        private val animatedDrawable: Drawable?,
         private val width: Int,
         private val height: Int
     ) {
@@ -120,7 +114,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private var animatedFrame: Bitmap? = null
         private var animatedFrameTime = Long.MIN_VALUE
 
-        val isAnimated get() = movie != null || animatedDrawable != null
+        val isAnimated get() = movie != null
 
         fun estimatedMemoryBytes(): Int {
             val pixels = width.toLong() * height.toLong() * 4L
@@ -144,7 +138,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             return SpriteAsset(
                 Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
                 null,
-                null,
                 right - left + 1,
                 image.height
             )
@@ -158,15 +151,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             val top = destination.centerY() - drawHeight / 2f
             canvas.save()
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
-            val drawable = animatedDrawable
-            if (drawable != null) {
-                drawable.alpha = alpha.coerceIn(0, 255)
-                drawable.setBounds(left.toInt(), top.toInt(), (left + drawWidth).toInt(), (top + drawHeight).toInt())
-                if (drawable is Animatable && !drawable.isRunning) drawable.start()
-                drawable.draw(canvas)
-                canvas.restore()
-                return
-            }
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
             val image = bitmap ?: animatedFrameAt(elapsedMillis)
             if (image == null) {
@@ -196,17 +180,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         companion object {
             private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L
 
-            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, null, bitmap.width, bitmap.height)
+            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
 
-            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, null, movie.width(), movie.height())
-
-            fun fromDrawable(drawable: Drawable) = SpriteAsset(
-                null,
-                null,
-                drawable,
-                drawable.intrinsicWidth,
-                drawable.intrinsicHeight
-            )
+            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
         }
 
     }
@@ -776,34 +752,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         if (isAnimatedSpritePath(path) && !path.endsWith(".gif", ignoreCase = true)) return null
         return if (path.endsWith(".gif", ignoreCase = true)) {
             if (!hasMultipleGifFrames(file.readBytes())) return null
-            decodeAnimatedDrawable(file) ?: Movie.decodeFile(file.path)?.takeIf {
+            Movie.decodeFile(file.path)?.takeIf {
                 it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
             }?.let(SpriteAsset::fromMovie)
         } else {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }
-    }
-
-    private fun decodeAnimatedDrawable(file: File): SpriteAsset? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
-        return runCatching {
-            val drawable = ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) { decoder, info, _ ->
-                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
-                val width = info.size.width
-                val height = info.size.height
-                val largestDimension = maxOf(width, height)
-                if (largestDimension > MAX_ANIMATED_SPRITE_DIMENSION) {
-                    val scale = MAX_ANIMATED_SPRITE_DIMENSION.toFloat() / largestDimension
-                    decoder.setTargetSize((width * scale).toInt(), (height * scale).toInt())
-                }
-            }
-            drawable.takeIf {
-                it is AnimatedImageDrawable &&
-                    it.intrinsicWidth > 0 &&
-                    it.intrinsicHeight > 0
-            }?.let(SpriteAsset::fromDrawable)
-        }.getOrNull()
     }
 
     private fun hasDistinctMovieFrames(movie: Movie): Boolean {
@@ -890,7 +845,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private companion object {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
-        const val MAX_ANIMATED_SPRITE_DIMENSION = 512
         const val STATIC_BACK_FALLBACK_DELAY_MILLIS = 1500L
         const val MAX_FILE_BYTES = 64 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
