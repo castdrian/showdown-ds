@@ -434,25 +434,25 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestScrapedFrontSpriteResolution(request, highResolutionOnly = true) { scrapedAsset ->
-            if (scrapedAsset != null) {
-                receiver(scrapedAsset)
+        requestScavioAnimatedSprite(request) { scavioAsset ->
+            if (scavioAsset != null) {
+                receiver(scavioAsset)
             } else {
-                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                    if (regularRemoteAsset != null) {
-                        receiver(regularRemoteAsset)
+                requestScrapedFrontSpriteResolution(request, highResolutionOnly = true) { scrapedAsset ->
+                    if (scrapedAsset != null) {
+                        receiver(scrapedAsset)
                     } else {
-                        requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
-                            if (regularScrapedAsset != null) {
-                                receiver(regularScrapedAsset)
+                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                            if (regularRemoteAsset != null) {
+                                receiver(regularRemoteAsset)
                             } else {
-                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                    if (communityAsset != null) {
-                                        receiver(communityAsset)
+                                requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
+                                    if (regularScrapedAsset != null) {
+                                        receiver(regularScrapedAsset)
                                     } else {
-                                        requestScavioAnimatedSprite(request) { scavioAsset ->
-                                            if (scavioAsset != null) {
-                                                receiver(scavioAsset)
+                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                                            if (communityAsset != null) {
+                                                receiver(communityAsset)
                                             } else {
                                                 requestModernLocalSpriteResolution(request, plan, receiver)
                                             }
@@ -561,6 +561,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestScavioAnimatedSprite(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        if (request.shiny) {
+            receiver(null)
+            return
+        }
         val names = ShowdownAssetPaths.spriteSpeciesNamesForExternalLookup(request.species)
 
         fun requestLookup(index: Int) {

@@ -86,6 +86,7 @@ class ShowdownSpriteCacheContractTest {
         val backCommunityIndex = source.indexOf("requestAnimatedSpriteCandidates(plan.communityRemoteCandidates)", backIndex)
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
         val frontHdIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)", frontIndex)
+        val scavioIndex = source.indexOf("requestScavioAnimatedSprite(request)", frontIndex)
         val frontAnimatedIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = false)", frontIndex)
         val frontCommunityIndex = source.indexOf("requestAnimatedSpriteCandidates(plan.communityRemoteCandidates)", frontIndex)
         val frontRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan)", frontIndex)
@@ -98,8 +99,12 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(scrapedBackRegularIndex > backRegularIndex)
         assertTrue(backCommunityIndex > scrapedBackRegularIndex)
         assertTrue(frontHdIndex >= 0)
+        assertTrue(scavioIndex < frontHdIndex)
+        assertTrue(scavioIndex < frontRegularIndex)
         assertTrue(frontAnimatedIndex > frontHdIndex)
+        assertTrue(frontAnimatedIndex > scavioIndex)
         assertTrue(source.contains("ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls(request.shiny)"))
+        assertTrue(source.contains("if (request.shiny)"))
         assertTrue(frontCommunityIndex >= 0)
         assertTrue(frontRegularIndex < frontAnimatedIndex)
         assertTrue(frontCommunityIndex > frontAnimatedIndex)
@@ -123,8 +128,8 @@ class ShowdownSpriteCacheContractTest {
                 backResolver.indexOf("receiver(null)")
         )
         assertTrue(
-            frontResolver.indexOf("requestRegularRemoteSpriteResolution(plan)") <
-                frontResolver.indexOf("requestScavioAnimatedSprite(request)")
+            frontResolver.indexOf("requestScavioAnimatedSprite(request)") <
+                frontResolver.indexOf("requestRegularRemoteSpriteResolution(plan)")
         )
         assertFalse(backResolver.contains("requestScavioAnimatedSprite"))
         assertFalse(source.contains("asset.mirroredForPlayer()"))
