@@ -3917,8 +3917,20 @@ class BattleSession {
         targetOptions.clear()
         selectedTargetIndex = -1
         val move = displayedMoves().getOrNull(focusedMove) ?: return
-        if (activeRequests.size <= 1 || !requestTargetable) return
+        val freeForAll = isFreeForAllBattle()
+        if ((!freeForAll && activeRequests.size <= 1) || !requestTargetable) return
         val target = move.target.lowercase()
+        if (freeForAll) {
+            if (target !in setOf("normal", "adjacentfoe", "adjacentally", "any")) return
+            targetOptions += opponentActiveCombatants.values
+                .filterNot { it.condition.contains("FNT", true) }
+                .mapNotNull { combatant ->
+                    freeForAllTargetLocation(combatant.slot)?.let { choice ->
+                        TargetOption("Foe: ${displayPokemonName(combatant.name, combatant.species)}", choice)
+                    }
+                }
+            return
+        }
         val selfPosition = activeSlotIndex + 1
         val allyPositions = activeSlots(playerActiveCombatants, activeRequests.size)
         val foePositions = activeSlots(opponentActiveCombatants, activeRequests.size)
@@ -3958,6 +3970,17 @@ class BattleSession {
             .mapNotNull { activeSlotNumber(it.slot) }
             .distinct()
             .sorted()
+    }
+
+    private fun freeForAllTargetLocation(targetSlot: String): String? {
+        val sourceSide = playerSlot.removePrefix("p").toIntOrNull() ?: return null
+        val targetSide = targetSlot.substringBefore(':').removePrefix("p").takeWhile(Char::isDigit).toIntOrNull() ?: return null
+        if (sourceSide == targetSide) return null
+        val sourceHalf = (sourceSide - 1) % 2
+        val targetHalf = (targetSide - 1) % 2
+        val targetPosition = (targetSide - 1) / 2 + 1
+        val location = if (sourceHalf == targetHalf) -targetPosition else targetPosition
+        return if (location > 0) "+$location" else location.toString()
     }
 
     private fun appendLog(entry: String) {
@@ -4739,7 +4762,7 @@ class BattleSession {
 
     private fun isPlayerSide(side: String): Boolean {
         val normalizedSide = side.substringBefore(':').trim()
-        if (gameType.equals("freeforall", true)) {
+        if (isFreeForAllBattle()) {
             val ownerSide = if (normalizedSide.lastOrNull()?.let { it in 'a'..'z' || it in 'A'..'Z' } == true) {
                 normalizedSide.dropLast(1)
             } else {
@@ -4751,6 +4774,8 @@ class BattleSession {
         val sideGroup = battleSideGroup(side)
         return (playerGroup != null && playerGroup == sideGroup) || (playerGroup == null && side.startsWith(playerSlot))
     }
+
+    private fun isFreeForAllBattle() = gameType.equals("freeforall", true)
 
     private fun battleSideGroup(side: String): Int? = side
         .removePrefix("p")
