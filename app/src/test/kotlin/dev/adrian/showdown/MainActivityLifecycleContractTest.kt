@@ -239,6 +239,18 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun teamAndLadderFormatPickersUseTheSearchableCustomSurface() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val ladderPicker = source.substringAfter("private fun showLadderFormatPicker()").substringBefore("private fun showPrivateMessageComposer")
+        val teamPicker = source.substringAfter("private fun showTeamFormatPicker(target: EditText)").substringBefore("private data class TeamStatEditor")
+
+        assertTrue(ladderPicker.contains("setSearchableSingleChoiceItems"))
+        assertTrue(ladderPicker.contains("ShowdownFormatSearch::searchText"))
+        assertTrue(teamPicker.contains("setSearchableSingleChoiceItems"))
+        assertTrue(teamPicker.contains("ShowdownFormatSearch::searchText"))
+    }
+
+    @Test
     fun doesNotFeedInitialBattlePacketToFreshlySeededEffectsViewTwice() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")

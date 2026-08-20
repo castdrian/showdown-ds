@@ -1368,7 +1368,12 @@ class MainActivity : Activity() {
         val formats = session.availableMatchFormats().filter { it.canSearch }.ifEmpty { session.availableMatchFormats() }
         ShowdownDialogBuilder(this)
             .setTitle("Ladder format")
-            .setSingleChoiceItems(formats.map { readableFormatLabel(it.id) }.toTypedArray(), formats.indexOfFirst { it.id.trim().equals(ladderFormatId?.trim(), true) }) { _, selected ->
+            .setSearchableSingleChoiceItems(
+                "Search by format name or ID",
+                formats.map { readableFormatLabel(it.id) },
+                formats.indexOfFirst { it.id.trim().equals(ladderFormatId?.trim(), true) },
+                formats.map(ShowdownFormatSearch::searchText)
+            ) { _, selected ->
                 val format = formats[selected]
                 showLadderDialog(format)
             }
@@ -4581,12 +4586,15 @@ class MainActivity : Activity() {
         val formats = (session.availableMatchFormats() + typedFormat.takeIf { it.isNotBlank() }?.let { BattleSession.MatchFormat(it, it) })
             .filterNotNull()
             .distinctBy { it.id.trim().lowercase() }
-        val labels = formats.map { format -> readableFormatLabel(format.id) }
         ShowdownDialogBuilder(this)
             .setTitle("Choose team format")
-            .setSingleChoiceItems(labels.toTypedArray(), formats.indexOfFirst { it.id.trim().equals(typedFormat.trim(), true) }) { dialog, selected ->
+            .setSearchableSingleChoiceItems(
+                "Search by format name or ID",
+                formats.map { format -> readableFormatLabel(format.id) },
+                formats.indexOfFirst { it.id.trim().equals(typedFormat.trim(), true) },
+                formats.map(ShowdownFormatSearch::searchText)
+            ) { _, selected ->
                 target.setText(formats[selected].id.trim())
-                dialog.dismiss()
             }
             .setNegativeButton("Cancel", null)
             .show()
