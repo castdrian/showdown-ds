@@ -373,21 +373,12 @@ class ShowdownMoveEffectsView(
                                 if (!move) return false;
                                 var category = String(move.category || '').toLowerCase();
                                 if (category === 'status') return false;
-                                var basePower = Number(move.basePower);
-                                var hasFixedDamage = move.damage !== undefined && move.damage !== null && move.damage !== 0 && move.damage !== false;
-                                var hasDamageCallback = typeof move.damageCallback === 'function' || typeof move.basePowerCallback === 'function';
                                 var dexMove = window.BattleMovedex && window.BattleMovedex[move.id];
                                 if (dexMove) {
                                     var dexCategory = String(dexMove.category || '').toLowerCase();
-                                    if (dexCategory === 'status') return false;
-                                    if (dexCategory === 'physical' || dexCategory === 'special') category = dexCategory;
-                                    basePower = Number(dexMove.basePower);
-                                    hasFixedDamage = hasFixedDamage || (dexMove.damage !== undefined && dexMove.damage !== null && dexMove.damage !== 0 && dexMove.damage !== false);
-                                    hasDamageCallback = hasDamageCallback || typeof dexMove.damageCallback === 'function' || typeof dexMove.basePowerCallback === 'function';
+                                    if (dexCategory) category = dexCategory;
                                 }
-                                return hasDamageCallback ||
-                                    ((category === 'physical' || category === 'special') &&
-                                        ((isFinite(basePower) && basePower > 0) || hasFixedDamage));
+                                return category === 'physical' || category === 'special';
                             }
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
