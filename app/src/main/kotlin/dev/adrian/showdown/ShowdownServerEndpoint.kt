@@ -18,6 +18,11 @@ data class ShowdownServerEndpoint(
         return "${ladderBaseUrl.trimEnd('/')}/ladder/$encodedFormat.json"
     }
 
+    fun userUrl(username: String): String {
+        val encodedUsername = URLEncoder.encode(username.trim(), StandardCharsets.UTF_8.name()).replace("+", "%20")
+        return "${ladderBaseUrl.trimEnd('/')}/users/$encodedUsername.json"
+    }
+
     companion object {
         val playShowdown = ShowdownServerEndpoint("Pokémon Showdown", "wss://sim3.psim.us/showdown/websocket")
         val emulatorLocal = ShowdownServerEndpoint("This Mac", "ws://10.0.2.2:8000/showdown/websocket")

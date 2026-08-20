@@ -40,6 +40,7 @@ class ShowdownServerEndpointTest {
         assertEquals("https://play.pokemonshowdown.com/api/changepassword", endpoint?.changePasswordUrl)
         assertEquals("https://play.pokemonshowdown.com/api/upkeep", endpoint?.upkeepUrl)
         assertEquals("https://pokemonshowdown.com/ladder/gen9ou.json", endpoint?.ladderUrl("gen9ou"))
+        assertEquals("https://pokemonshowdown.com/users/Alice.json", endpoint?.userUrl("Alice"))
     }
 
     @Test

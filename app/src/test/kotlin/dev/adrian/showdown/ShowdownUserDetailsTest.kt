@@ -50,4 +50,20 @@ class ShowdownUserDetailsTest {
         assertEquals("/cmd userdetails Alice", ShowdownUserDetails.queryCommand(" Alice "))
         assertEquals("/friend add Alice", ShowdownUserDetails.addFriendCommand(" Alice "))
     }
+
+    @Test
+    fun parsesPublicProfileRatings() {
+        val profile = ShowdownUserDetails.parsePublicPayload(
+            "{" +
+                "\"username\":\"Alice\",\"userid\":\"alice\",\"ratings\":{" +
+                "\"gen9ou\":{\"elo\":1823.4,\"gxe\":71.2}," +
+                "\"gen9uu\":{\"elo\":1600,\"gxe\":64.5}" +
+                "}}"
+        )
+
+        requireNotNull(profile)
+        assertEquals("Alice", profile.name)
+        assertEquals("gen9ou", profile.ratings.first().format)
+        assertEquals(1823.4, profile.ratings.first().elo, 0.01)
+    }
 }

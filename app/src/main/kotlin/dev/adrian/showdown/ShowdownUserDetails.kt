@@ -4,6 +4,7 @@ import org.json.JSONObject
 
 object ShowdownUserDetails {
     data class Room(val id: String, val playerOne: String, val playerTwo: String, val isPrivate: Boolean)
+    data class Rating(val format: String, val elo: Double, val gxe: Double)
 
     data class Profile(
         val userid: String,
@@ -15,7 +16,8 @@ object ShowdownUserDetails {
         val autoconfirmed: Boolean,
         val online: Boolean,
         val friended: Boolean,
-        val rooms: List<Room>
+        val rooms: List<Room>,
+        val ratings: List<Rating> = emptyList()
     )
 
     fun parse(line: String): Profile? {
@@ -50,6 +52,36 @@ object ShowdownUserDetails {
             online = roomsValue is JSONObject,
             friended = payload.optBoolean("friended", false),
             rooms = rooms
+        )
+    }
+
+    fun parsePublicPayload(payload: String): Profile? {
+        val data = runCatching { JSONObject(payload) }.getOrNull() ?: return null
+        val userid = data.optString("userid").trim().ifBlank { data.optString("id").trim() }
+        val name = data.optString("username").trim().ifBlank { data.optString("name").trim().ifBlank { userid } }
+        if (userid.isBlank() || name.isBlank()) return null
+        val ratings = data.optJSONObject("ratings")?.let { ratingData ->
+            ratingData.keys().asSequence().mapNotNull { format ->
+                val rating = ratingData.optJSONObject(format) ?: return@mapNotNull null
+                Rating(
+                    format = format,
+                    elo = rating.optDouble("elo", 0.0),
+                    gxe = rating.optDouble("gxe", 0.0)
+                )
+            }.sortedByDescending(Rating::elo).toList()
+        }.orEmpty()
+        return Profile(
+            userid = userid,
+            name = name,
+            avatar = data.opt("avatar")?.toString()?.trim()?.takeIf { it.isNotBlank() },
+            status = "Public profile",
+            group = "Registered account",
+            customGroup = "",
+            autoconfirmed = data.optBoolean("autoconfirmed", false),
+            online = false,
+            friended = false,
+            rooms = emptyList(),
+            ratings = ratings
         )
     }
 

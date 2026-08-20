@@ -410,6 +410,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun playerLookupSupportsGuestWebApiProfiles() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val composer = source.substringAfter("private fun showFindUserComposer()").substringBefore("private fun requestUserDetails")
+        val request = source.substringAfter("private fun requestUserDetails").substringBefore("private fun renderUserDetails")
+
+        assertFalse(composer.contains("Sign in to look up another player"))
+        assertTrue(request.contains("userFetcher.fetch"))
+        assertTrue(request.contains("ShowdownUserDetails.queryCommand"))
+    }
+
+    @Test
     fun closesStaleLobbyAndTeamDialogsBeforeStartingAnotherConnectionFlow() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val transition = source.substringAfter("private fun startLobbyConnection(")

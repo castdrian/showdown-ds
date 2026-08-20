@@ -77,6 +77,7 @@ class MainActivity : Activity() {
     private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
     private lateinit var replayFetcher: ShowdownReplayFetcher
     private lateinit var ladderFetcher: ShowdownLadderFetcher
+    private lateinit var userFetcher: ShowdownUserFetcher
     private var showdownConnection: ShowdownConnection? = null
     private var pendingTeamUpload: PendingTeamUpload? = null
     private var pendingTeamPrivacy: PendingTeamPrivacy? = null
@@ -168,6 +169,7 @@ class MainActivity : Activity() {
     private var accountDialog: ShowdownDialog? = null
     private var userDetailsDialog: ShowdownDialog? = null
     private var pendingUserDetailsId: String? = null
+    private var userDetailsRequestToken = 0L
     private var friendsDialog: ShowdownDialog? = null
     private var friendsContentView: TextView? = null
     private var friendsInput: EditText? = null
@@ -333,6 +335,7 @@ class MainActivity : Activity() {
         teamUrlFetcher = ShowdownTeamUrlFetcher()
         replayFetcher = ShowdownReplayFetcher()
         ladderFetcher = ShowdownLadderFetcher()
+        userFetcher = ShowdownUserFetcher()
         session = BattleSession().apply { prepareForLobby() }
         session.setMatchFormat(loadMatchFormat())
         loadUserPreferences()
@@ -506,6 +509,7 @@ class MainActivity : Activity() {
         if (::teamUrlFetcher.isInitialized) teamUrlFetcher.close()
         if (::replayFetcher.isInitialized) replayFetcher.close()
         if (::ladderFetcher.isInitialized) ladderFetcher.close()
+        if (::userFetcher.isInitialized) userFetcher.close()
         showdownMoveEffects?.release()
         showdownMoveEffects = null
         primaryFrame = null
@@ -1508,10 +1512,6 @@ class MainActivity : Activity() {
     }
 
     private fun showFindUserComposer() {
-        if (!authenticated || !serverUserNamed) {
-            session.setConnectionStatus("Sign in to look up another player.")
-            return
-        }
         val targetInput = EditText(this).apply {
             hint = "Username"
             setSingleLine(true)
@@ -1533,8 +1533,10 @@ class MainActivity : Activity() {
     }
 
     private fun requestUserDetails(target: String) {
-        pendingUserDetailsId = normalizeShowdownId(target)
+        val normalizedTarget = normalizeShowdownId(target)
         userDetailsDialog?.dismiss()
+        pendingUserDetailsId = normalizedTarget
+        val requestToken = ++userDetailsRequestToken
         val density = resources.displayMetrics.density
         val loading = TextView(this).apply {
             text = "Loading ${target.trim()}…"
@@ -1545,19 +1547,33 @@ class MainActivity : Activity() {
         val dialog = ShowdownDialogBuilder(this)
             .setTitle("Player profile")
             .setView(loading)
-            .setNegativeButton("Close") { _, _ -> pendingUserDetailsId = null }
+            .setNegativeButton("Close") { _, _ ->
+                pendingUserDetailsId = null
+                userDetailsRequestToken += 1
+            }
             .create()
         dialog.setOnDismissListener {
             if (userDetailsDialog === dialog) {
                 userDetailsDialog = null
                 pendingUserDetailsId = null
+                userDetailsRequestToken += 1
             }
         }
         userDetailsDialog = dialog
         dialog.show()
-        if (showdownConnection?.sendGlobal(ShowdownUserDetails.queryCommand(target)) != true) {
-            dialog.dismiss()
-            session.setConnectionStatus("Showdown connection is not ready yet.")
+        if (authenticated && serverUserNamed && showdownConnection?.sendGlobal(ShowdownUserDetails.queryCommand(target)) == true) {
+            session.setConnectionStatus("Loading ${target.trim()} from Showdown…")
+            return
+        }
+        userFetcher.fetch(serverEndpoint, target) { result ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (requestToken != userDetailsRequestToken || pendingUserDetailsId != normalizedTarget) return@runOnUiThread
+                result.onSuccess(::renderUserDetails).onFailure {
+                    dialog.dismiss()
+                    session.setConnectionStatus("Could not load that Showdown player profile.")
+                }
+            }
         }
     }
 
@@ -1573,7 +1589,7 @@ class MainActivity : Activity() {
         }
         val addFriend = Button(this).apply {
             text = if (profile.friended) "Already friends" else "Add friend"
-            isEnabled = !profile.friended
+            isEnabled = authenticated && serverUserNamed && !profile.friended
             setOnClickListener {
                 if (showdownConnection?.sendGlobal(ShowdownUserDetails.addFriendCommand(profile.name)) == true) {
                     session.setConnectionStatus("Friend request sent to ${profile.name}.")
@@ -1595,7 +1611,10 @@ class MainActivity : Activity() {
             .setTitle(profile.name)
             .setView(root)
             .setNegativeButton("Close", null)
-            .setNeutralButton("Message") { _, _ -> showPrivateMessageDialog(profile.name) }
+            .setNeutralButton("Message") { _, _ ->
+                if (authenticated && serverUserNamed) showPrivateMessageDialog(profile.name)
+                else session.setConnectionStatus("Sign in to message a player.")
+            }
             .setPositiveButton("Challenge") { _, _ -> showChallengeComposer(profile.name) }
             .create()
         dialog.setOnDismissListener {
@@ -1623,6 +1642,13 @@ class MainActivity : Activity() {
                 add(if (battle.isBlank()) room.id else "${room.id}: $battle")
             }
             if (profile.rooms.size > 16) add("…and ${profile.rooms.size - 16} more")
+        }
+        if (profile.ratings.isNotEmpty()) {
+            add("")
+            add("Top ladder ratings")
+            profile.ratings.take(8).forEach { rating ->
+                add("${readableFormatLabel(rating.format)}: Elo ${rating.elo.toInt()} · GXE ${rating.gxe.toInt()}%")
+            }
         }
     }.joinToString("\n")
 
@@ -3099,14 +3125,7 @@ class MainActivity : Activity() {
         }
         val findUser = Button(this).apply {
             text = "Find a user"
-            setOnClickListener {
-                if (!authenticated || !serverUserNamed) {
-                    session.setConnectionStatus("Sign in to look up another player.")
-                } else {
-                    accountDialog?.dismiss()
-                    showFindUserComposer()
-                }
-            }
+            setOnClickListener { accountDialog?.dismiss(); showFindUserComposer() }
         }
         val register = Button(this).apply {
             text = "Create account"
