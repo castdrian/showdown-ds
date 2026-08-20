@@ -505,6 +505,7 @@ class MainActivity : Activity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (ShowdownDialog.dispatchControllerKey(this, keyCode)) return true
         if (event.repeatCount > 0 && isConfirmButton(keyCode)) return true
         return if (handleControllerKey(keyCode)) true else super.onKeyDown(keyCode, event)
     }
@@ -517,6 +518,11 @@ class MainActivity : Activity() {
         if (event.source and InputDevice.SOURCE_JOYSTICK != InputDevice.SOURCE_JOYSTICK || event.action != MotionEvent.ACTION_MOVE) return false
         val horizontal = axisDirection(event, MotionEvent.AXIS_X, MotionEvent.AXIS_HAT_X)
         val vertical = axisDirection(event, MotionEvent.AXIS_Y, MotionEvent.AXIS_HAT_Y)
+        if (ShowdownDialog.dispatchControllerMotion(this, horizontal, vertical)) {
+            controllerHorizontal = horizontal
+            controllerVertical = vertical
+            return true
+        }
         if (horizontal != controllerHorizontal || vertical != controllerVertical) {
             controllerHorizontal = horizontal
             controllerVertical = vertical
@@ -5508,6 +5514,7 @@ class MainActivity : Activity() {
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
             if (event.action == KeyEvent.ACTION_DOWN) {
+                if (ShowdownDialog.dispatchControllerKey(this@MainActivity, event.keyCode)) return true
                 if (event.repeatCount > 0 && isConfirmButton(event.keyCode)) return true
                 if (handleControllerKey(event.keyCode)) return true
             }

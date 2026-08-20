@@ -197,6 +197,20 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun controllerInputIsConsumedByTheTopCustomDialog() {
+        val activitySource = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val dialogSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownDialog.kt").readText()
+
+        assertTrue(activitySource.contains("ShowdownDialog.dispatchControllerKey(this, keyCode)"))
+        assertTrue(activitySource.contains("ShowdownDialog.dispatchControllerKey(this@MainActivity, event.keyCode)"))
+        assertTrue(dialogSource.contains("override fun dispatchKeyEvent(event: KeyEvent): Boolean"))
+        assertTrue(dialogSource.contains("override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean"))
+        assertTrue(dialogSource.contains("private fun handleControllerKey(keyCode: Int): Boolean"))
+        assertTrue(dialogSource.contains("buttonViews[it]?.performClick()"))
+        assertTrue(dialogSource.contains("fun dispatchControllerMotion(hostContext: Context, horizontal: Int, vertical: Int): Boolean"))
+    }
+
+    @Test
     fun defersTheMoveDexUntilBattleOrTeamEditingNeedsIt() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val onCreate = source.substringAfter("override fun onCreate(savedInstanceState: Bundle?)").substringBefore("override fun onNewIntent")

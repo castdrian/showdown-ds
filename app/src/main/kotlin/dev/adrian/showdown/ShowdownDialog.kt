@@ -6,6 +6,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -25,12 +28,23 @@ class ShowdownDialog(context: Context) : Dialog(context) {
         const val BUTTON_POSITIVE = -1
         const val BUTTON_NEGATIVE = -2
         const val BUTTON_NEUTRAL = -3
+        private val controllerActionOrder = listOf(BUTTON_NEGATIVE, BUTTON_NEUTRAL, BUTTON_POSITIVE)
         private val openDialogs = linkedSetOf<ShowdownDialog>()
 
         fun dismissOpenDialogs(hostContext: Context) {
             openDialogs.toList()
                 .filter { it.hostContext === hostContext && it.isShowing }
                 .forEach { it.dismiss() }
+        }
+
+        fun dispatchControllerKey(hostContext: Context, keyCode: Int): Boolean {
+            val dialog = openDialogs.lastOrNull { it.hostContext === hostContext && it.isShowing } ?: return false
+            return dialog.handleControllerKey(keyCode)
+        }
+
+        fun dispatchControllerMotion(hostContext: Context, horizontal: Int, vertical: Int): Boolean {
+            val dialog = openDialogs.lastOrNull { it.hostContext === hostContext && it.isShowing } ?: return false
+            return dialog.handleControllerMotion(horizontal, vertical)
         }
     }
 
@@ -52,6 +66,9 @@ class ShowdownDialog(context: Context) : Dialog(context) {
     private var titleView: TextView? = null
     private val buttonViews = mutableMapOf<Int, TextView>()
     private var shell: LinearLayout? = null
+    private var focusedControllerActionIndex = 0
+    private var controllerHorizontal = 0
+    private var controllerVertical = 0
 
     override fun setTitle(title: CharSequence?) {
         dialogTitle = title ?: ""
@@ -105,6 +122,8 @@ class ShowdownDialog(context: Context) : Dialog(context) {
         val display = context.resources.displayMetrics
         window?.setLayout((display.widthPixels * 0.84f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
         shell?.requestFocus()
+        focusedControllerActionIndex = controllerActions().indexOf(BUTTON_POSITIVE).takeIf { it >= 0 } ?: 0
+        updateControllerActionFocus()
         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
             ?.hideSoftInputFromWindow(shell?.windowToken, 0)
     }
@@ -112,6 +131,29 @@ class ShowdownDialog(context: Context) : Dialog(context) {
     override fun onStop() {
         openDialogs -= this
         super.onStop()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (event.repeatCount > 0 && isConfirmKey(event.keyCode)) return true
+            if (handleControllerKey(event.keyCode)) return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK && event.action == MotionEvent.ACTION_MOVE) {
+            return handleControllerMotion(
+                axisDirection(event, MotionEvent.AXIS_X, MotionEvent.AXIS_HAT_X),
+                axisDirection(event, MotionEvent.AXIS_Y, MotionEvent.AXIS_HAT_Y)
+            )
+        }
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (event.repeatCount > 0 && isConfirmKey(keyCode)) return true
+        return if (handleControllerKey(keyCode)) true else super.onKeyDown(keyCode, event)
     }
 
     private fun setAction(which: Int, text: CharSequence, listener: ((ShowdownDialog, Int) -> Unit)?, kind: Int): ShowdownDialog {
@@ -212,6 +254,94 @@ class ShowdownDialog(context: Context) : Dialog(context) {
         }
         root.addView(actionBar, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
+    }
+
+    private fun controllerActions(): List<Int> = controllerActionOrder.filter { buttonViews.containsKey(it) }
+
+    private fun handleControllerKey(keyCode: Int): Boolean {
+        val availableActions = controllerActions()
+        when (keyCode) {
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                dismiss()
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_UP -> {
+                if (availableActions.isNotEmpty()) {
+                    focusedControllerActionIndex = (focusedControllerActionIndex - 1 + availableActions.size) % availableActions.size
+                    updateControllerActionFocus()
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (availableActions.isNotEmpty()) {
+                    focusedControllerActionIndex = (focusedControllerActionIndex + 1) % availableActions.size
+                    updateControllerActionFocus()
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> {
+                availableActions.getOrNull(focusedControllerActionIndex)?.let { buttonViews[it]?.performClick() }
+                return true
+            }
+            KeyEvent.KEYCODE_BUTTON_L1,
+            KeyEvent.KEYCODE_BUTTON_R1,
+            KeyEvent.KEYCODE_BUTTON_X,
+            KeyEvent.KEYCODE_BUTTON_Y,
+            KeyEvent.KEYCODE_BUTTON_L2,
+            KeyEvent.KEYCODE_BUTTON_R2,
+            KeyEvent.KEYCODE_BUTTON_SELECT,
+            KeyEvent.KEYCODE_BUTTON_START,
+            KeyEvent.KEYCODE_BUTTON_THUMBL,
+            KeyEvent.KEYCODE_BUTTON_THUMBR,
+            KeyEvent.KEYCODE_MENU -> return true
+            else -> return false
+        }
+    }
+
+    private fun isConfirmKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_BUTTON_A ||
+        keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+
+    private fun handleControllerMotion(horizontal: Int, vertical: Int): Boolean {
+        if (horizontal != controllerHorizontal || vertical != controllerVertical) {
+            controllerHorizontal = horizontal
+            controllerVertical = vertical
+            when {
+                horizontal < 0 || vertical < 0 -> moveControllerFocus(-1)
+                horizontal > 0 || vertical > 0 -> moveControllerFocus(1)
+            }
+        }
+        return true
+    }
+
+    private fun axisDirection(event: MotionEvent, primaryAxis: Int, fallbackAxis: Int): Int {
+        var value = event.getAxisValue(primaryAxis)
+        if (kotlin.math.abs(value) < 0.45f) value = event.getAxisValue(fallbackAxis)
+        return when {
+            value > 0.45f -> 1
+            value < -0.45f -> -1
+            else -> 0
+        }
+    }
+
+    private fun moveControllerFocus(direction: Int) {
+        val availableActions = controllerActions()
+        if (availableActions.isEmpty()) return
+        focusedControllerActionIndex = (focusedControllerActionIndex + direction + availableActions.size) % availableActions.size
+        updateControllerActionFocus()
+    }
+
+    private fun updateControllerActionFocus() {
+        val availableActions = controllerActions()
+        availableActions.forEachIndexed { index, which ->
+            val button = buttonViews[which] ?: return@forEachIndexed
+            val focused = index == focusedControllerActionIndex
+            button.setTextColor(if (focused) Color.rgb(229, 252, 248) else Color.rgb(137, 221, 215))
+            button.background = if (focused) {
+                surface(Color.rgb(24, 124, 129), Color.rgb(121, 218, 211), 16f)
+            } else {
+                surface(Color.rgb(15, 50, 67), Color.rgb(53, 117, 127), 16f)
+            }
+        }
     }
 
     private fun styleView(view: View) {

@@ -19,7 +19,8 @@ object ShowdownChangelog {
                 "The optional PBR announcer now recognizes Gen 9 Snow weather as its winter weather callout.",
                 "Stat-reset effects now use the matching rise or drop sound in the optional audio layer.",
                 "Matchmaking now exposes an explicit Cancel search action while a queue is active.",
-                "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure."
+                "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure.",
+                "Controller navigation now stays inside custom dialogs instead of triggering the battle menu underneath."
             )
         ),
         ShowdownChangelogEntry(
