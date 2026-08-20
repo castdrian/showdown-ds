@@ -53,7 +53,8 @@ object BattleAnnouncerCueResolver {
             "init" -> BattleAnnouncerCue.BATTLE_START.takeIf { fields.getOrNull(2) == "battle" }
             "switch", "drag", "replace" -> BattleAnnouncerCue.SWITCH
             "move" -> BattleAnnouncerCue.MOVE
-            "-damage" -> BattleAnnouncerCue.HIT.takeIf { isDirectMoveDamage(fields) }
+            "-damage" -> BattleAnnouncerCue.HIT.takeIf { isDirectMoveDamage(fields, allowUnannotated = true) }
+            "-sethp" -> BattleAnnouncerCue.HIT.takeIf { isDirectMoveDamage(fields, allowUnannotated = false) }
             "-hitcount" -> BattleAnnouncerCue.MULTI_HIT
             "-miss" -> BattleAnnouncerCue.MISS
             "-fail", "-block", "-notarget" -> BattleAnnouncerCue.FAIL
@@ -77,7 +78,12 @@ object BattleAnnouncerCueResolver {
         }
     }
 
-    private fun isDirectMoveDamage(fields: List<String>): Boolean = fields.size == 4
+    private fun isDirectMoveDamage(fields: List<String>, allowUnannotated: Boolean): Boolean {
+        val source = fields.drop(4)
+            .firstOrNull { it.trim().startsWith("[from]", true) }
+            ?.trim()
+        return source?.startsWith("[from] move:", true) ?: allowUnannotated
+    }
 }
 
 object BattleAnnouncerAssets {

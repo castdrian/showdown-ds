@@ -36,6 +36,15 @@ class BattleAnnouncerTest {
     fun residualDamageDoesNotAnnounceAMoveImpact() {
         assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p1a: Pikachu|90/100|[from] brn"))
         assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Garchomp|90/100|[from] ability: Rough Skin"))
+        assertEquals(
+            BattleAnnouncerCue.HIT,
+            BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Garchomp|40/100|[from] move: Stealth Rock")
+        )
+        assertEquals(
+            BattleAnnouncerCue.HIT,
+            BattleAnnouncerCueResolver.cueForProtocolLine("|-sethp|p1a: Pikachu|60/100|p2a: Garchomp|40/100|[from] move: Pain Split")
+        )
+        assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-sethp|p1a: Pikachu|60/100|p2a: Garchomp|40/100"))
         assertEquals(BattleAnnouncerCue.HIT, BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Garchomp|90/100"))
     }
 
