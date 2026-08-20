@@ -13,6 +13,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val moveInfo = mutableMapOf<String, BattleSession.MoveInfo>()
     private val pokemonTypes = mutableMapOf<String, List<String>>()
     private val pokemonAbilities = mutableMapOf<String, List<String>>()
+    private val pokemonAbilitySlots = mutableMapOf<String, Map<String, String>>()
     private val pokemonMoves = mutableMapOf<String, List<String>>()
     private val moveNames = mutableListOf<String>()
     private val pokemonNames = mutableListOf<String>()
@@ -50,6 +51,14 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     fun abilityNameFor(ability: String) = displayName(ability, abilityNames)
 
+    fun abilityFor(species: String, ability: String): String {
+        val rawAbility = ability.trim()
+        val resolvedAbility = pokemonAbilitySlots[speciesId(species)]?.get(rawAbility)
+            ?: pokemonAbilitySlots[speciesId(species)]?.get(rawAbility.uppercase(Locale.ROOT))
+            ?: rawAbility
+        return displayName(resolvedAbility, abilityNames)
+    }
+
     fun natureNames() = NATURE_NAMES
 
     fun load(listener: () -> Unit) {
@@ -80,6 +89,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                                 val loadedMoveInfo = parseMoveInfo(moveContents)
                                 val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
                                 val loadedPokemonAbilities = parsePokemonAbilities(pokemonContents)
+                                val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
                                 val loadedPokemonMoves = parseLearnsets(learnsetsContents)
                                 val loadedMoveNames = parseMoveNames(moveContents)
                                 val loadedPokemonNames = parsePokemonNames(pokemonContents)
@@ -92,6 +102,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                                     moveInfo.putAll(loadedMoveInfo)
                                     pokemonTypes.putAll(loadedPokemonTypes)
                                     pokemonAbilities.putAll(loadedPokemonAbilities)
+                                    pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
                                     pokemonMoves.putAll(loadedPokemonMoves)
                                     moveNames.clear()
                                     moveNames += loadedMoveNames
@@ -184,6 +195,23 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                             .distinct()
                             .toList()
                         if (parsed.isNotEmpty()) put(id, parsed)
+                    }
+                }
+            }.getOrDefault(emptyMap())
+        }
+
+        fun parsePokemonAbilitySlots(contents: String): Map<String, Map<String, String>> {
+            return runCatching {
+                val pokemon = JSONObject(contents)
+                buildMap {
+                    pokemon.keys().forEach { id ->
+                        val abilities = pokemon.optJSONObject(id)?.optJSONObject("abilities") ?: return@forEach
+                        val slots = buildMap {
+                            abilities.keys().forEach { slot ->
+                                abilities.optString(slot).trim().takeIf { it.isNotBlank() }?.let { put(slot, moveId(it)) }
+                            }
+                        }
+                        if (slots.isNotEmpty()) put(id, slots)
                     }
                 }
             }.getOrDefault(emptyMap())

@@ -288,6 +288,7 @@ class BattleSession {
     private var moveNameResolver: ((String) -> String)? = null
     private var itemNameResolver: ((String) -> String)? = null
     private var abilityNameResolver: ((String) -> String)? = null
+    private var abilitySlotResolver: ((String, String) -> String)? = null
     private val availableMatchFormats = MatchFormat.defaults.toMutableList()
     private val battleLog = mutableListOf("Battle started.", "Incineroar entered the field.", "Tapu Koko's Electric Surge activated!")
     private val markupEntries = mutableMapOf<String, String>()
@@ -615,6 +616,22 @@ class BattleSession {
         moveNameResolver = moveResolver
         itemNameResolver = itemResolver
         abilityNameResolver = abilityResolver
+        val updatedTeam = teamDetails.map(::resolveTeamDetailNames)
+        val updatedPlayer = resolveTeamDetailNames(playerDetails)
+        val updatedOpponent = resolveTeamDetailNames(opponentDetails)
+        val updatedOpponentTeam = opponentTeamDetails.map(::resolveTeamDetailNames)
+        if (updatedTeam == teamDetails && updatedPlayer == playerDetails && updatedOpponent == opponentDetails && updatedOpponentTeam == opponentTeamDetails) return
+        teamDetails.clear()
+        teamDetails += updatedTeam
+        playerDetails = updatedPlayer
+        opponentDetails = updatedOpponent
+        opponentTeamDetails.clear()
+        opponentTeamDetails += updatedOpponentTeam
+        notifyListeners()
+    }
+
+    fun setAbilitySlotResolver(resolver: (String, String) -> String) {
+        abilitySlotResolver = resolver
         val updatedTeam = teamDetails.map(::resolveTeamDetailNames)
         val updatedPlayer = resolveTeamDetailNames(playerDetails)
         val updatedOpponent = resolveTeamDetailNames(opponentDetails)
@@ -2203,7 +2220,7 @@ class BattleSession {
             gender = gender,
             hp = existing?.hp ?: "100/100",
             condition = existing?.condition ?: "READY",
-            ability = set.ability.takeIf(String::isNotBlank)?.let { abilityNameResolver?.invoke(it) ?: it }
+            ability = set.ability.takeIf(String::isNotBlank)?.let { resolveAbilityName(set.species, it) }
                 ?: existing?.ability ?: "Unknown ability",
             item = set.item.takeIf(String::isNotBlank)?.let { itemNameResolver?.invoke(it) ?: it }
                 ?: existing?.item ?: "Unknown item",
@@ -2216,12 +2233,17 @@ class BattleSession {
     }
 
     private fun resolveTeamDetailNames(details: PokemonDetails) = details.copy(
-        ability = details.ability.takeUnless { it.isBlank() || it == "Unknown ability" }?.let { abilityNameResolver?.invoke(it) ?: it }
+        ability = details.ability.takeUnless { it.isBlank() || it == "Unknown ability" }?.let { resolveAbilityName(details.species, it) }
             ?: details.ability,
         item = details.item.takeUnless { it.isBlank() || it == "Unknown item" }?.let { itemNameResolver?.invoke(it) ?: it }
             ?: details.item,
         moves = details.moves.map { moveNameResolver?.invoke(it) ?: it }
     )
+
+    private fun resolveAbilityName(species: String, ability: String): String {
+        val resolved = abilitySlotResolver?.invoke(species, ability) ?: ability
+        return abilityNameResolver?.invoke(resolved) ?: resolved
+    }
 
     private fun queueEntry(playerSide: Boolean): Long {
         val nowNanos = System.nanoTime()

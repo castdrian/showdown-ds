@@ -741,6 +741,7 @@ class MainActivity : Activity() {
         session.setMoveInfoResolver(moveDex::infoFor)
         session.setPokemonTypeResolver(moveDex::typesFor)
         session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
+        session.setAbilitySlotResolver(moveDex::abilityFor)
     }
 
     private fun ensureMoveDexLoaded() {

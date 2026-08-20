@@ -1891,6 +1891,19 @@ class BattleSessionTest {
     }
 
     @Test
+    fun revealedPackedAbilitySlotsUseSpeciesAwareNames() {
+        val session = BattleSession()
+        session.setAbilitySlotResolver { species, ability ->
+            if (species == "Pikachu" && ability == "H") "Lightning Rod" else ability
+        }
+        val packed = listOf("Pikachu", "Pikachu", "", "H", "", "", "", "", "", "", "", "").joinToString("|")
+
+        session.applyProtocolLine("|showteam|p2|$packed")
+
+        assertEquals("Lightning Rod", session.opponentPartyDetails().single().ability)
+    }
+
+    @Test
     fun activeDetailsDoNotCopyLeadMetadataToAnUnknownPartner() {
         val session = BattleSession()
 
