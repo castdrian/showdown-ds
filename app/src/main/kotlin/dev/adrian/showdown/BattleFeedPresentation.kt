@@ -23,6 +23,7 @@ class BattleFeedPresentation(
     private var playbackPausedAtMillis = 0L
     private var accumulatedPausedMillis = 0L
     private var persistentText: String? = null
+    private var pendingPersistentText: String? = null
 
     fun setPlaybackSpeed(value: Float) {
         playbackSpeed = BattlePlaybackSpeed.coerce(value)
@@ -69,6 +70,7 @@ class BattleFeedPresentation(
             currentStartedAtMillis = presentationNowMillis
         } else {
             currentText = null
+            promotePendingPersistentTextIfIdle()
         }
     }
 
@@ -77,23 +79,32 @@ class BattleFeedPresentation(
         if (observedEntries === entries && feedVisible == visible && this.persistentText == normalizedPersistentText) return
         val presentationNowMillis = presentationNowMillis(nowMillis)
         if (normalizedPersistentText != null) {
-            val changed = this.persistentText != normalizedPersistentText
-            this.persistentText = normalizedPersistentText
-            feedVisible = true
-            pendingMessages.clear()
-            currentText = normalizedPersistentText
-            if (changed) currentStartedAtMillis = presentationNowMillis
-            observedEntries = entries
+            if (this.persistentText == normalizedPersistentText) {
+                observedEntries = entries
+                return
+            }
+            pendingPersistentText = normalizedPersistentText
+            updateEntries(
+                entries.filterNot { BattleFeedMessageIdentity.matches(it, normalizedPersistentText) },
+                visible,
+                presentationNowMillis
+            )
+            promotePendingPersistentTextIfIdle()
             return
         }
-        if (this.persistentText != null) {
+        if (this.persistentText != null || pendingPersistentText != null) {
             clearMessageState()
         }
+        updateEntries(entries, visible, presentationNowMillis)
+    }
+
+    private fun updateEntries(entries: List<String>, visible: Boolean, presentationNowMillis: Long) {
         feedVisible = visible
         if (entries.isEmpty()) {
             pendingMessages.clear()
             currentText = null
             observedEntries = entries
+            promotePendingPersistentTextIfIdle()
             return
         }
         val previousEntries = observedEntries
@@ -139,11 +150,11 @@ class BattleFeedPresentation(
     }
 
     fun frame(nowMillis: Long): BattleFeedFrame? {
+        val presentationNowMillis = presentationNowMillis(nowMillis)
+        if (!playbackPaused) advance(presentationNowMillis)
         persistentText?.let { text ->
             return BattleFeedFrame(text = text, alpha = 1f, visibleText = text)
         }
-        val presentationNowMillis = presentationNowMillis(nowMillis)
-        if (!playbackPaused) advance(presentationNowMillis)
         val text = currentText ?: return null
         val ageMillis = (presentationNowMillis - currentStartedAtMillis).coerceAtLeast(0L)
         val fadeStartMillis = messageVisibleDurationMillis()
@@ -170,7 +181,7 @@ class BattleFeedPresentation(
     fun needsAnimation(nowMillis: Long): Boolean {
         if (persistentText != null) return false
         if (playbackPaused) return false
-        val text = currentText ?: return pendingMessages.isNotEmpty()
+        val text = currentText ?: return pendingMessages.isNotEmpty() || pendingPersistentText != null
         val ageMillis = (presentationNowMillis(nowMillis) - currentStartedAtMillis).coerceAtLeast(0L)
         return pendingMessages.isNotEmpty() || (text.isNotBlank() && ageMillis < messageVisibleDurationMillis() + scaledFadeDurationMillis())
     }
@@ -182,6 +193,8 @@ class BattleFeedPresentation(
             if (pendingMessages.isNotEmpty()) {
                 currentText = pendingMessages.removeFirst()
                 currentStartedAtMillis = nowMillis
+            } else {
+                promotePendingPersistentTextIfIdle()
             }
             return
         }
@@ -189,6 +202,17 @@ class BattleFeedPresentation(
         if (pendingMessages.isNotEmpty() && ageMillis >= messageVisibleDurationMillis() + scaledFadeDurationMillis()) {
             currentText = pendingMessages.removeFirst()
             currentStartedAtMillis = nowMillis
+        } else if (pendingMessages.isEmpty() && ageMillis >= messageVisibleDurationMillis() + scaledFadeDurationMillis()) {
+            currentText = null
+            promotePendingPersistentTextIfIdle()
+        }
+    }
+
+    private fun promotePendingPersistentTextIfIdle() {
+        if (currentText != null || pendingMessages.isNotEmpty()) return
+        pendingPersistentText?.let {
+            persistentText = it
+            pendingPersistentText = null
         }
     }
 
@@ -203,6 +227,7 @@ class BattleFeedPresentation(
         currentText = null
         currentStartedAtMillis = 0L
         persistentText = null
+        pendingPersistentText = null
     }
 
     private fun messageVisibleDurationMillis(): Long = maxOf(

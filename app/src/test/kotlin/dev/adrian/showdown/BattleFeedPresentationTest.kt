@@ -308,6 +308,8 @@ class BattleFeedPresentationTest {
             "ADRIAN won the battle."
         )
 
+        assertEquals("Pikachu used Thunderbolt!", presentation.frame(1_100L)?.text)
+        assertEquals("ADRIAN won the battle.", presentation.frame(2_800L)?.text)
         assertEquals("ADRIAN won the battle.", presentation.frame(30_000L)?.text)
         assertEquals(1f, presentation.frame(30_000L)?.alpha)
         assertFalse(presentation.needsAnimation(30_000L))
