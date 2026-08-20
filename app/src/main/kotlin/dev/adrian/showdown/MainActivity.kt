@@ -4360,9 +4360,6 @@ class MainActivity : Activity() {
                 session.setConnectionStatus("Uploading ${saved.name}…")
             }
         }
-        moveDex.load {
-            setEditors.filter { it.details.visibility == View.VISIBLE }.forEach(::updateTeamEditorSuggestions)
-        }
         val importButton = Button(this).apply {
             text = "Load Showdown export into editor"
             setOnClickListener {
@@ -4739,9 +4736,22 @@ class MainActivity : Activity() {
         ).forEach(details::addView)
         editor.section.addView(slotHeader, LinearLayout.LayoutParams(-1, -2))
         editor.section.addView(details, LinearLayout.LayoutParams(-1, -2))
+        val suggestionFields = editor.moves + listOf(
+            editor.species,
+            editor.item,
+            editor.ability,
+            editor.nature,
+            editor.hiddenPowerType,
+            editor.teraType
+        )
+        suggestionFields.forEach { field ->
+            field.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) ensureTeamEditorSuggestions(editor)
+            }
+        }
         slotHeader.setOnClickListener {
             details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-            if (details.visibility == View.VISIBLE) moveDex.load { updateTeamEditorSuggestions(editor) }
+            if (details.visibility == View.VISIBLE) ensureTeamEditorSuggestions(editor)
         }
         val summaryFields = listOf<EditText>(
             nickname,
@@ -4902,6 +4912,10 @@ class MainActivity : Activity() {
         updateTeamSuggestions(editor.nature, natureNames)
         updateTeamSuggestions(editor.hiddenPowerType, typeNames)
         updateTeamSuggestions(editor.teraType, teraTypeNames)
+    }
+
+    private fun ensureTeamEditorSuggestions(editor: TeamSetEditor) {
+        moveDex.load { updateTeamEditorSuggestions(editor) }
     }
 
     private fun styleTeamSuggestions(field: AutoCompleteTextView, suggestions: List<String>) {

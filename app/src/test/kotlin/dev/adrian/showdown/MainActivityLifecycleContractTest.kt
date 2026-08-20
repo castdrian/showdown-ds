@@ -189,12 +189,16 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val onCreate = source.substringAfter("override fun onCreate(savedInstanceState: Bundle?)").substringBefore("override fun onNewIntent")
         val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
+        val teamEditor = source.substringAfter("private fun showTeamEditor").substringBefore("private fun showTeamFormatPicker")
 
         assertFalse(onCreate.contains("moveDex.load"))
         assertTrue(source.contains("private fun bindMoveDexResolvers()"))
         assertTrue(source.contains("private fun ensureMoveDexLoaded()"))
         assertTrue(listener.contains("ensureMoveDexLoaded()"))
-        assertTrue(source.contains("if (details.visibility == View.VISIBLE) moveDex.load"))
+        assertFalse(teamEditor.contains("moveDex.load"))
+        assertTrue(source.contains("private fun ensureTeamEditorSuggestions(editor: TeamSetEditor)"))
+        assertTrue(source.contains("field.setOnFocusChangeListener"))
+        assertTrue(source.contains("if (details.visibility == View.VISIBLE) ensureTeamEditorSuggestions(editor)"))
     }
 
     @Test
