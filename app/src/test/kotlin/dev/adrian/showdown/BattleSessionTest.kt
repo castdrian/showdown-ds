@@ -1338,7 +1338,7 @@ class BattleSessionTest {
     }
 
     @Test
-    fun gimmickChoicesUseOfficialDynamaxAndTerastalizeSuffixes() {
+    fun gimmickChoicesUseOfficialDynamaxAndTerastallizeSuffixes() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
         session.addDecisionListener(decisions::add)
@@ -1355,7 +1355,7 @@ class BattleSessionTest {
         session.confirmSelection()
 
         assertEquals(
-            listOf("/choose move 1 max", "/choose move 1 terastalize"),
+            listOf("/choose move 1 max", "/choose move 1 terastallize"),
             decisions
         )
     }
