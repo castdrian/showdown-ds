@@ -40,6 +40,21 @@ class BattleAnnouncerTest {
     }
 
     @Test
+    fun multiHitPacketsAnnounceTheHitCountInsteadOfEveryIndividualImpact() {
+        assertEquals(
+            listOf(BattleAnnouncerCue.MOVE, BattleAnnouncerCue.MULTI_HIT),
+            BattleAnnouncerCueResolver.cuesForProtocol(
+                listOf(
+                    "|move|p1a: Pikachu|Bullet Seed|p2a: Garchomp",
+                    "|-damage|p2a: Garchomp|80/100",
+                    "|-damage|p2a: Garchomp|60/100",
+                    "|-hitcount|p2a: Garchomp|2"
+                )
+            )
+        )
+    }
+
+    @Test
     fun assetsUseTheSelectedClipFromTheBundledSubset() {
         val path = BattleAnnouncerAssets.assetPath(BattleAnnouncerCue.BATTLE_START)
 

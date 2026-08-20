@@ -21,7 +21,28 @@ enum class BattleAnnouncerCue(val assetName: String) {
 }
 
 object BattleAnnouncerCueResolver {
-    fun cuesForProtocol(lines: List<String>): List<BattleAnnouncerCue> = lines.mapNotNull(::cueForProtocolLine)
+    fun cuesForProtocol(lines: List<String>): List<BattleAnnouncerCue> {
+        val cues = mutableListOf<BattleAnnouncerCue>()
+        var moveDamageCueStart = -1
+        lines.forEach { line ->
+            when (val cue = cueForProtocolLine(line)) {
+                BattleAnnouncerCue.MOVE -> {
+                    cues += cue
+                    moveDamageCueStart = cues.size
+                }
+                BattleAnnouncerCue.HIT -> cues += cue
+                BattleAnnouncerCue.MULTI_HIT -> {
+                    if (moveDamageCueStart >= 0) {
+                        cues.subList(moveDamageCueStart, cues.size).removeAll { it == BattleAnnouncerCue.HIT }
+                    }
+                    cues += cue
+                }
+                null -> Unit
+                else -> cues += cue
+            }
+        }
+        return cues
+    }
 
     fun cueForProtocolLine(line: String): BattleAnnouncerCue? {
         val fields = line.split('|')
