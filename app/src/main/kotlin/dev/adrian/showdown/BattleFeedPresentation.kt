@@ -9,9 +9,9 @@ data class BattleFeedFrame(
 )
 
 class BattleFeedPresentation(
-    private val minimumMessageDurationMillis: Long = 1_500L,
-    private val holdDurationMillis: Long = 650L,
-    private val fadeDurationMillis: Long = 240L
+    private val minimumMessageDurationMillis: Long = 3_000L,
+    private val holdDurationMillis: Long = 2_600L,
+    private val fadeDurationMillis: Long = 400L
 ) {
     private val pendingMessages = ArrayDeque<String>()
     private var observedEntries: List<String>? = null

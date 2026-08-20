@@ -6,9 +6,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class BattleFeedPresentationTest {
+    private fun fastPresentation() = BattleFeedPresentation(
+        minimumMessageDurationMillis = 1_500L,
+        holdDurationMillis = 650L,
+        fadeDurationMillis = 240L
+    )
+
     @Test
     fun startsWithTheLatestMessageWithoutReplayingHistory() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
 
         presentation.update(listOf("Older", "Newest"), true, 1_000L)
 
@@ -18,12 +24,22 @@ class BattleFeedPresentationTest {
 
     @Test
     fun fadesAnUnchangedMessageAway() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("Move text"), true, 1_000L)
 
         assertEquals(1f, presentation.frame(1_500L)?.alpha)
         assertEquals(0.13f, presentation.frame(2_685L)?.alpha ?: 0f, 0.01f)
         assertNull(presentation.frame(2_750L))
+    }
+
+    @Test
+    fun keepsTheBattleMessageReadableAtTheDefaultBattleSpeed() {
+        val presentation = BattleFeedPresentation()
+        presentation.setPlaybackSpeed(0.75f)
+        presentation.update(listOf("Meowstic used Nasty Plot!"), true, 1_000L)
+
+        assertEquals("Meowstic used Nasty Plot!", presentation.frame(5_000L)?.visibleText)
+        assertNull(presentation.frame(5_600L))
     }
 
     @Test
@@ -71,7 +87,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun replacesTheMessageWhenAnewEntryArrives() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), true, 1_100L)
 
@@ -81,7 +97,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun fullyFadedMessageDoesNotResurfaceAfterHiddenBoundary() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("Old"), true, 1_000L)
         assertNull(presentation.frame(2_800L))
         presentation.update(listOf("Old"), false, 2_000L)
@@ -92,7 +108,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun hiddenBoundaryKeepsPendingMessagesInReadableOrder() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), true, 1_100L)
         presentation.update(listOf("First", "Second"), false, 1_200L)
@@ -104,7 +120,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun transcriptReconciliationDoesNotDiscardQueuedMessages() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("First", "Second"), true, 1_000L)
         presentation.update(listOf("First", "Native detail", "Second"), true, 1_100L)
 
@@ -114,7 +130,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun nativeWordingReplacementDoesNotCreateAnotherReadableEvent() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("First", "Pikachu recovered health."), true, 1_000L)
         presentation.update(listOf("First", "Pikachu restored health!"), true, 1_100L)
 
@@ -124,7 +140,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun separatorLetsTheCurrentMessageFinishItsReadableCycle() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First"), false, 1_100L)
 
@@ -133,7 +149,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun separatorWaitsBeforeStartingTheQueuedMessage() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), false, 1_100L)
 
@@ -146,7 +162,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun aNewBattleReplacesThePreviousMessageImmediately() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("Old battle"), true, 1_000L)
         presentation.update(listOf("New battle"), true, 1_100L)
 
@@ -155,7 +171,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun explicitResetAllowsAnIdenticalOpeningMessageToAppearAgain() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("Battle started."), true, 1_000L)
         presentation.reset()
         presentation.update(listOf("Battle started."), true, 2_000L)
@@ -165,7 +181,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun skipsSnapshotHistoryButQueuesLiveMessagesInOrder() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("Old 1", "Old 2", "Old 3"), true, 1_000L)
         presentation.update(listOf("Old 1", "Old 2", "Old 3", "New 1", "New 2"), true, 1_100L)
 
@@ -176,7 +192,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun keepsTheLatestLineWhenAHistoryWindowAdvances() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("One", "Two", "Three"), true, 1_000L)
         presentation.update(listOf("Two", "Three", "Four"), true, 1_100L)
 
@@ -186,7 +202,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun skipsAReplacedHistorySnapshotWithoutASharedBoundary() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("Protocol status", "Format"), true, 1_000L)
         presentation.update(
             listOf("Go! Pikachu!", "Pikachu used Tackle!", "It was super effective."),
@@ -200,7 +216,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun pausesTheMessageClockWhileTheActivityIsPaused() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("First"), true, 1_000L)
         presentation.update(listOf("First", "Second"), true, 1_100L)
         val beforePause = presentation.frame(1_200L)
@@ -231,7 +247,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun serializesEveryMessageInARecentBurst() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.update(listOf("Current"), true, 1_000L)
         presentation.update(listOf("Current") + (1..8).map { "Event $it" }, true, 1_100L)
 
@@ -273,7 +289,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun resetStartsReadableFeedClockAfterPause() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
         presentation.setPlaybackPaused(true, 1_000L)
         presentation.reset()
         presentation.update(listOf("New battle"), true, 5_000L)
@@ -283,7 +299,7 @@ class BattleFeedPresentationTest {
 
     @Test
     fun keepsTheTerminalBattleResultVisibleUntilTheNextBattle() {
-        val presentation = BattleFeedPresentation()
+        val presentation = fastPresentation()
 
         presentation.update(
             listOf("Pikachu used Thunderbolt!", "ADRIAN won the battle."),
