@@ -219,6 +219,9 @@ class MainActivity : Activity() {
     private val playbackAdvanceRunnable = Runnable {
         battlePacketPlaybackScheduled = false
         flushBattlePlayback()
+        if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty() && session.isBattleFinished()) {
+            releaseShowdownMoveEffects()
+        }
     }
     private var shouldMaintainConnection = false
     private var reconnectAttempt = 0
@@ -632,6 +635,13 @@ class MainActivity : Activity() {
         effects.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
         effects.seed(session.protocolHistory())
         return effects
+    }
+
+    private fun releaseShowdownMoveEffects() {
+        val effects = showdownMoveEffects ?: return
+        showdownMoveEffects = null
+        primaryFrame?.removeView(effects)
+        effects.release()
     }
 
     private fun showSecondaryDisplay() {

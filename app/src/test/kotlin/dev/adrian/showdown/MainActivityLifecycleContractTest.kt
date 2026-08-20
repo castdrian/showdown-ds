@@ -185,6 +185,18 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun releasesTheAnimationWebViewAfterFinishedPlaybackDrains() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val playback = source.substringAfter("private val playbackAdvanceRunnable").substringBefore("private var shouldMaintainConnection")
+
+        assertTrue(playback.contains("pendingBattlePackets.isEmpty()"))
+        assertTrue(playback.contains("session.isBattleFinished()"))
+        assertTrue(playback.contains("releaseShowdownMoveEffects()"))
+        assertTrue(source.contains("primaryFrame?.removeView(effects)"))
+        assertTrue(source.contains("effects.release()"))
+    }
+
+    @Test
     fun defersTheMoveDexUntilBattleOrTeamEditingNeedsIt() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val onCreate = source.substringAfter("override fun onCreate(savedInstanceState: Bundle?)").substringBefore("override fun onNewIntent")
