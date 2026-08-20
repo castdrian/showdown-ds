@@ -3091,6 +3091,22 @@ class BattleSessionTest {
     }
 
     @Test
+    fun matchedParticipantCanForfeitBeforeIdentityPacketIsApplied() {
+        val session = BattleSession()
+
+        session.setBattleParticipant(true)
+        session.setLiveBattleActive(true)
+
+        assertTrue(session.isBattleParticipant())
+        assertEquals("Forfeit", session.menuItems()[3])
+
+        session.setSpectatorMode(true)
+
+        assertFalse(session.isBattleParticipant())
+        assertEquals("Leave battle", session.menuItems()[3])
+    }
+
+    @Test
     fun spectatorModeClearsRequestsThatArriveWhileWatching() {
         val session = BattleSession()
 

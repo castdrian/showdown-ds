@@ -286,6 +286,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("battleProtocolIdentifiesLocalPlayer(lines)"))
         assertTrue(source.contains("battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)"))
         assertTrue(source.contains("battleProtocolPlayerSlot(lines)?.let(session::restoreBattlePlayerSlot)"))
+        assertTrue(source.contains("session.setBattleParticipant(true)"))
     }
 
     @Test

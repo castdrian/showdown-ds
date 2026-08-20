@@ -2155,6 +2155,7 @@ class MainActivity : Activity() {
         battleProtocolReady = false
         session.setLiveBattleActive(false)
         if (battleIsSpectator) session.setSpectatorMode(true)
+        session.setBattleParticipant(battleWasParticipant && !battleIsSpectator)
         pendingLobbyStatus = pendingLobbyStatus?.let(ShowdownFormatCompatibility::canonicalizeLegacyText)
         persistLobbyState()
         connectLobbySocket()
@@ -2597,6 +2598,7 @@ class MainActivity : Activity() {
                         if (startsBattle) battleProtocolReady = true
                         session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
                         if (battleIsSpectator) session.setSpectatorMode(true)
+                        if (!battleIsSpectator && battleWasParticipant) session.setBattleParticipant(true)
                         reconcilePendingDecisionCommand(lines)
                         enqueueBattlePlayback(connection, roomId, lines)
                     }
@@ -2640,6 +2642,7 @@ class MainActivity : Activity() {
         pendingDecisionCommand = null
         pendingDecisionSentConnection = null
         session.setLiveBattleActive(false)
+        session.setBattleParticipant(true)
         session.setConnectionStatus("Joining battle…")
         persistLobbyState(flushToDisk = true)
     }
@@ -2868,6 +2871,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Connect to Showdown before using lobby challenges.")
             return
         }
+        if (commands.any { it.startsWith("/accept ") }) session.setBattleParticipant(true)
         if (!connection.isTransportReady()) {
             pendingLobbyCommands = commands
             when {

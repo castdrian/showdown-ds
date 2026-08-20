@@ -370,6 +370,7 @@ class BattleSession {
     private var liveBattleActive = false
     private var replayMode = false
     private var spectatorMode = false
+    private var battleParticipant = false
     private var openingEntrances = 0
     private var latestOpeningEntranceAtNanos = 0L
     private var weather = ""
@@ -975,6 +976,7 @@ class BattleSession {
             status = if (decisionAvailable) "Choose a move" else "Battle starting"
         }
         if (!value) {
+            battleParticipant = false
             spectatorMode = false
             decisionAvailable = false
             choiceCanBeCancelled = false
@@ -1012,13 +1014,19 @@ class BattleSession {
 
     fun hasBattleProtocolTranscript() = hasBattleProtocolTranscript
 
-    fun isBattleParticipant() = !spectatorMode && (restoredPlayerSlot != null || localUsername?.takeIf(String::isNotBlank)?.let { username ->
+    fun setBattleParticipant(value: Boolean) {
+        battleParticipant = value && !spectatorMode
+        notifyListeners()
+    }
+
+    fun isBattleParticipant() = !spectatorMode && (battleParticipant || restoredPlayerSlot != null || localUsername?.takeIf(String::isNotBlank)?.let { username ->
         sideNames.values.any { it.equals(username, true) }
     } == true)
 
     fun setReplayMode(value: Boolean) {
         replayMode = value
         if (value) {
+            battleParticipant = false
             spectatorMode = false
             decisionAvailable = false
             choiceCanBeCancelled = false
@@ -1039,6 +1047,7 @@ class BattleSession {
     fun setSpectatorMode(value: Boolean) {
         spectatorMode = value
         if (value) {
+            battleParticipant = false
             replayMode = false
             decisionAvailable = false
             choiceCanBeCancelled = false
@@ -1070,6 +1079,7 @@ class BattleSession {
 
     fun prepareForLobby() {
         restoredPlayerSlot = null
+        battleParticipant = false
         applyInit(listOf("", "init", "battle"))
         replayMode = false
         spectatorMode = false
