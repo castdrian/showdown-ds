@@ -20,11 +20,12 @@ fi
 gpu_mode="${AYN_THOR_GPU_MODE:-$default_gpu_mode}"
 window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
 cpu_cores="${AYN_THOR_CPU_CORES:-2}"
-ram_size_mb="${AYN_THOR_RAM_MB:-1536}"
-vm_heap_size_mb="${AYN_THOR_HEAP_MB:-192}"
+ram_size_mb="${AYN_THOR_RAM_MB:-1280}"
+vm_heap_size_mb="${AYN_THOR_HEAP_MB:-160}"
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
+low_ram_args=(-lowram)
 renderer_feature_args=(-feature Vulkan)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 secondary_display_attempts=60
@@ -92,13 +93,13 @@ if [[ ! "$cpu_cores" =~ ^[1-8]$ ]]; then
     exit 1
 fi
 
-if [[ ! "$ram_size_mb" =~ ^[0-9]+$ || "$ram_size_mb" -lt 1536 ]]; then
-    printf '%s\n' "AYN_THOR_RAM_MB must be at least 1536."
+if [[ ! "$ram_size_mb" =~ ^[0-9]+$ || "$ram_size_mb" -lt 1280 ]]; then
+    printf '%s\n' "AYN_THOR_RAM_MB must be at least 1280."
     exit 1
 fi
 
-if [[ ! "$vm_heap_size_mb" =~ ^[0-9]+$ || "$vm_heap_size_mb" -lt 192 ]]; then
-    printf '%s\n' "AYN_THOR_HEAP_MB must be at least 192."
+if [[ ! "$vm_heap_size_mb" =~ ^[0-9]+$ || "$vm_heap_size_mb" -lt 160 ]]; then
+    printf '%s\n' "AYN_THOR_HEAP_MB must be at least 160."
     exit 1
 fi
 
@@ -336,6 +337,8 @@ stop_emulator() {
 
 "$emulator" \
     -avd "$avd_name" \
+    -memory "$ram_size_mb" \
+    "${low_ram_args[@]}" \
     -gpu "$gpu_mode" \
     -vsync-rate "$vsync_rate" \
     "${boot_animation_args[@]}" \
