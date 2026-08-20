@@ -14,6 +14,7 @@ class BattleAnnouncerTest {
         assertEquals(BattleAnnouncerCue.HIT, BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Gengar|0 fnt"))
         assertEquals(BattleAnnouncerCue.BURN, BattleAnnouncerCueResolver.cueForProtocolLine("|-status|p2a: Gengar|brn"))
         assertEquals(BattleAnnouncerCue.SANDSTORM, BattleAnnouncerCueResolver.cueForProtocolLine("|-weather|Sandstorm|[from] ability: Sand Stream"))
+        assertEquals(BattleAnnouncerCue.HAIL, BattleAnnouncerCueResolver.cueForProtocolLine("|-weather|Snow|[from] ability: Snow Warning"))
         assertEquals(BattleAnnouncerCue.BATTLE_END, BattleAnnouncerCueResolver.cueForProtocolLine("|win|ADRIAN"))
     }
 

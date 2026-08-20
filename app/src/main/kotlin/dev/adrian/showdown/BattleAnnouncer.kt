@@ -68,7 +68,7 @@ object BattleAnnouncerCueResolver {
                 else -> null
             }
             "-weather" -> when (fields.getOrNull(2)?.substringBefore(':')?.lowercase()) {
-                "hail" -> BattleAnnouncerCue.HAIL
+                "hail", "snow" -> BattleAnnouncerCue.HAIL
                 "sandstorm" -> BattleAnnouncerCue.SANDSTORM
                 else -> null
             }

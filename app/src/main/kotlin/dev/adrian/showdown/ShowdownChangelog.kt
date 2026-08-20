@@ -16,6 +16,7 @@ object ShowdownChangelog {
                 "Battle animation, text pacing, and sound effects now share a synchronized 0.5×–2× speed range.",
                 "Battle controls now include a 2× speed option.",
                 "The optional PBR announcer now plays cues sequentially, follows battle speed, and pauses with the app.",
+                "The optional PBR announcer now recognizes Gen 9 Snow weather as its winter weather callout.",
                 "Matchmaking now exposes an explicit Cancel search action while a queue is active."
             )
         ),
