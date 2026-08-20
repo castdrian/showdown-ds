@@ -111,6 +111,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val height: Int
     ) {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        private var animatedFrame: Bitmap? = null
+        private var animatedFrameTime = Long.MIN_VALUE
 
         val isAnimated get() = movie != null
 
@@ -145,26 +147,34 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             canvas.save()
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
-            if (bitmap != null) {
-                canvas.drawBitmap(bitmap, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
+            val image = bitmap ?: animatedFrameAt(elapsedMillis)
+            if (image == null) {
                 if (alpha < 255) canvas.restore()
                 canvas.restore()
                 return
             }
-            movie ?: run {
-                if (alpha < 255) canvas.restore()
-                canvas.restore()
-                return
-            }
-            movie.setTime((elapsedMillis % movie.duration().toLong().coerceAtLeast(1L)).toInt())
-            canvas.translate(left, top)
-            canvas.scale(scale, scale)
-            movie.draw(canvas, 0f, 0f)
+            canvas.drawBitmap(image, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
             if (alpha < 255) canvas.restore()
             canvas.restore()
         }
 
+        private fun animatedFrameAt(elapsedMillis: Long): Bitmap? {
+            val source = movie ?: return null
+            val duration = source.duration().toLong().coerceAtLeast(1L)
+            val frameTime = ((elapsedMillis / ANIMATED_FRAME_INTERVAL_MILLIS) * ANIMATED_FRAME_INTERVAL_MILLIS) % duration
+            if (animatedFrame != null && animatedFrameTime == frameTime) return animatedFrame
+            val frame = animatedFrame ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            frame.eraseColor(0)
+            source.setTime(frameTime.toInt())
+            source.draw(Canvas(frame), 0f, 0f)
+            animatedFrame = frame
+            animatedFrameTime = frameTime
+            return frame
+        }
+
         companion object {
+            private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L
+
             fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
 
             fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
