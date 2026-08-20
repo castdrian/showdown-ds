@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShowdownTeamLibraryQueryTest {
@@ -70,6 +71,16 @@ class ShowdownTeamLibraryQueryTest {
             listOf("Balance"),
             ShowdownTeamLibraryQuery.filter(teams, ShowdownTeamLibraryFilter(query = "gen9ou, makeitrain")).map { it.name }
         )
+    }
+
+    @Test
+    fun teamPickerSearchTextIncludesMetadataAndReadableExportFields() {
+        val searchText = ShowdownTeamLibraryQuery.searchText(teams[1])
+
+        assertTrue(searchText.contains("Balance"))
+        assertTrue(searchText.contains("gen9ou"))
+        assertTrue(searchText.contains("Gholdengo"))
+        assertTrue(searchText.contains("makeitrain"))
     }
 
     @Test

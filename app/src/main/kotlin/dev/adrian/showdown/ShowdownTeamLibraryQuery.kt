@@ -69,6 +69,20 @@ object ShowdownTeamLibraryQuery {
             ?: displayFormat(format)
     }
 
+    fun searchText(team: ShowdownTeam): String = buildString {
+        append(team.name)
+        append(' ')
+        append(team.format)
+        append(' ')
+        append(displayFormat(team.format))
+        append(' ')
+        append(team.folder)
+        append(' ')
+        append(team.packed)
+        append(' ')
+        append(ShowdownTeamCodec.toText(ShowdownTeamCodec.unpack(team.packed)))
+    }
+
     fun filter(teams: List<ShowdownTeam>, filter: ShowdownTeamLibraryFilter): List<ShowdownTeam> {
         val terms = filter.query
             .split(',')

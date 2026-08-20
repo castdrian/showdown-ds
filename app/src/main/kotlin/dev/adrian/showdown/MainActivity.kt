@@ -1999,8 +1999,12 @@ class MainActivity : Activity() {
     private fun showTeamPicker(teams: List<ShowdownTeam>, onSelected: (ShowdownTeam) -> Unit) {
         ShowdownDialogBuilder(this)
             .setTitle("Choose a team")
-            .setSingleChoiceItems(teams.map { "${it.name} · ${readableFormatLabel(it.format)}" }.toTypedArray(), -1) { dialog, selected ->
-                dialog.dismiss()
+            .setSearchableSingleChoiceItems(
+                "Search teams, Pokémon, or moves",
+                teams.map { "${it.name} · ${readableFormatLabel(it.format)}" },
+                -1,
+                teams.map(ShowdownTeamLibraryQuery::searchText)
+            ) { _, selected ->
                 onSelected(teams[selected])
             }
             .setNegativeButton("Cancel", null)

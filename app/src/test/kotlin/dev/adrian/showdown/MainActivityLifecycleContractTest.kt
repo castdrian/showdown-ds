@@ -243,11 +243,14 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val ladderPicker = source.substringAfter("private fun showLadderFormatPicker()").substringBefore("private fun showPrivateMessageComposer")
         val teamPicker = source.substringAfter("private fun showTeamFormatPicker(target: EditText)").substringBefore("private data class TeamStatEditor")
+        val teamSelectionPicker = source.substringAfter("private fun showTeamPicker(").substringBefore("private fun cancelActiveSearch")
 
         assertTrue(ladderPicker.contains("setSearchableSingleChoiceItems"))
         assertTrue(ladderPicker.contains("ShowdownFormatSearch::searchText"))
         assertTrue(teamPicker.contains("setSearchableSingleChoiceItems"))
         assertTrue(teamPicker.contains("ShowdownFormatSearch::searchText"))
+        assertTrue(teamSelectionPicker.contains("setSearchableSingleChoiceItems"))
+        assertTrue(teamSelectionPicker.contains("ShowdownTeamLibraryQuery::searchText"))
     }
 
     @Test
