@@ -1018,6 +1018,7 @@ class BattleSessionTest {
 
         assertEquals(listOf("Incineroar"), session.playerActiveCombatants().map { it.name })
         assertEquals(listOf("Tapu Koko", "Druddigon", "Landorus"), session.opponentActiveCombatants().map { it.name })
+        assertTrue(session.battleLog().contains("Battle type: Free-for-all."))
     }
 
     @Test

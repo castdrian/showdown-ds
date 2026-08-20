@@ -1782,6 +1782,8 @@ class BattleSession {
             "singles" -> "Singles"
             "doubles" -> "Doubles"
             "multi" -> "Multi"
+            "freeforall" -> "Free-for-all"
+            "rotation" -> "Rotation"
             else -> value.replaceFirstChar { it.uppercase() }
         }
         appendLog("Battle type: $label.")
