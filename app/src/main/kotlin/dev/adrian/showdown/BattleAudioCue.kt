@@ -34,6 +34,8 @@ object BattleAudioCueResolver {
             "-boost" -> statCue(fields.getOrNull(4)?.toIntOrNull(), BattleAudioCue.STAT_BOOST, BattleAudioCue.STAT_DROP)
             "-unboost" -> statCue(fields.getOrNull(4)?.toIntOrNull(), BattleAudioCue.STAT_DROP, BattleAudioCue.STAT_BOOST)
             "-setboost" -> statCue(fields.getOrNull(4)?.toIntOrNull(), BattleAudioCue.STAT_BOOST, BattleAudioCue.STAT_DROP)
+            "-clearpositiveboost", "-clearboost", "-clearallboost" -> BattleAudioCue.STAT_DROP
+            "-clearnegativeboost", "-restoreboost" -> BattleAudioCue.STAT_BOOST
             else -> null
         }
     }

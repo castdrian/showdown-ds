@@ -497,8 +497,8 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-boost' && magnitude !== 0) resultCue = magnitude > 0 ? 'stat_boost' : 'stat_drop';
                                     if (args[0] === '-unboost' && magnitude !== 0) resultCue = magnitude > 0 ? 'stat_drop' : 'stat_boost';
                                     if (args[0] === '-setboost' && magnitude !== 0) resultCue = magnitude > 0 ? 'stat_boost' : 'stat_drop';
-                                    if (args[0] === '-clearpositiveboost') resultCue = 'stat_drop';
-                                    if (args[0] === '-clearnegativeboost') resultCue = 'stat_boost';
+                                    if (args[0] === '-clearpositiveboost' || args[0] === '-clearboost' || args[0] === '-clearallboost') resultCue = 'stat_drop';
+                                    if (args[0] === '-clearnegativeboost' || args[0] === '-restoreboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
                                 }
                                 var result = originalRunMinor.apply(this, arguments);

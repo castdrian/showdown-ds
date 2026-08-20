@@ -20,6 +20,11 @@ class BattleAudioCueTest {
             BattleAudioCue.STAT_BOOST,
             BattleAudioCueResolver.cueForProtocolLine("|-setboost|p1a: Pikachu|atk|2|[from]ability: Contrary")
         )
+        assertEquals(BattleAudioCue.STAT_DROP, BattleAudioCueResolver.cueForProtocolLine("|-clearpositiveboost|p1a: Pikachu"))
+        assertEquals(BattleAudioCue.STAT_DROP, BattleAudioCueResolver.cueForProtocolLine("|-clearboost|p1a: Pikachu"))
+        assertEquals(BattleAudioCue.STAT_DROP, BattleAudioCueResolver.cueForProtocolLine("|-clearallboost"))
+        assertEquals(BattleAudioCue.STAT_BOOST, BattleAudioCueResolver.cueForProtocolLine("|-clearnegativeboost|p1a: Pikachu"))
+        assertEquals(BattleAudioCue.STAT_BOOST, BattleAudioCueResolver.cueForProtocolLine("|-restoreboost|p1a: Pikachu"))
         assertEquals(BattleAudioCue.GENERIC_DAMAGE, BattleAudioCueResolver.cueForNativeValue("generic_damage"))
         assertEquals(BattleAudioCue.SUPER_EFFECTIVE, BattleAudioCueResolver.cueForNativeValue("super_effective"))
     }
