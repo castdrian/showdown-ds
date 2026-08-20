@@ -4738,6 +4738,15 @@ class BattleSession {
     }
 
     private fun isPlayerSide(side: String): Boolean {
+        val normalizedSide = side.substringBefore(':').trim()
+        if (gameType.equals("freeforall", true)) {
+            val ownerSide = if (normalizedSide.lastOrNull()?.let { it in 'a'..'z' || it in 'A'..'Z' } == true) {
+                normalizedSide.dropLast(1)
+            } else {
+                normalizedSide
+            }
+            return ownerSide.equals(playerSlot, true)
+        }
         val playerGroup = battleSideGroup(playerSlot)
         val sideGroup = battleSideGroup(side)
         return (playerGroup != null && playerGroup == sideGroup) || (playerGroup == null && side.startsWith(playerSlot))

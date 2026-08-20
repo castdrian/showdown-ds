@@ -999,6 +999,28 @@ class BattleSessionTest {
     }
 
     @Test
+    fun freeForAllKeepsEveryOtherParticipantOnTheOpponentSide() {
+        val session = BattleSession()
+        session.setLocalUsername("ALLY")
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|freeforall",
+                "|player|p1|ALLY",
+                "|player|p2|FOE",
+                "|player|p3|FOE2",
+                "|player|p4|FOE3",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p3a: Druddigon|Druddigon, L50|100/100",
+                "|switch|p4a: Landorus|Landorus, L50|100/100"
+            )
+        )
+
+        assertEquals(listOf("Incineroar"), session.playerActiveCombatants().map { it.name })
+        assertEquals(listOf("Tapu Koko", "Druddigon", "Landorus"), session.opponentActiveCombatants().map { it.name })
+    }
+
+    @Test
     fun liveProtocolEventsCanBePresentedSeparatelyFromAuthoritativeState() {
         val session = BattleSession()
         val initialEvent = session.latestBattleEvent
