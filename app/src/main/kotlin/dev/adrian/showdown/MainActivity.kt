@@ -1012,14 +1012,24 @@ class MainActivity : Activity() {
                     beginBattleSearch()
                 } else {
                     val roomId = battles[selected - 1].key
-                    startLobbyConnection(
-                        listOf(ShowdownLobbyState.joinBattleCommand(roomId)),
-                        "Joining battle room…"
-                    )
+                    joinSpectatorBattle(roomId)
                 }
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    private fun joinSpectatorBattle(roomId: String) {
+        startLobbyConnection(
+            listOf(ShowdownLobbyState.joinBattleCommand(roomId)),
+            "Joining battle room…"
+        )
+        activeBattleRoomId = roomId
+        pendingBattleJoinRoomId = roomId
+        battleWasParticipant = false
+        battleIsSpectator = true
+        session.setSpectatorMode(true)
+        persistLobbyState(flushToDisk = true)
     }
 
     private fun showRoomList() {
@@ -1088,10 +1098,7 @@ class MainActivity : Activity() {
                             }
                         } else {
                             pendingChatRoomId = null
-                            startLobbyConnection(
-                                listOf(ShowdownLobbyState.joinBattleCommand(room.id)),
-                                "Joining ${room.title}…"
-                            )
+                            joinSpectatorBattle(room.id)
                         }
                     }
                 }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (8f * density).toInt()) })

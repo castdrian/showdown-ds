@@ -261,15 +261,24 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
-    fun routesDirectBattleRoomJoinsThroughPersistedLobbyCommands() {
+    fun roomListJoinsPublicBattlesAsReadOnlySpectators() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val roomSelection = source.substringAfter("selections.forEach { room ->")
             .substringBefore("val roomScroll = ScrollView(this)")
 
         assertTrue(roomSelection.contains("if (room.chatRoom)"))
-        assertTrue(roomSelection.contains("startLobbyConnection("))
-        assertTrue(roomSelection.contains("ShowdownLobbyState.joinBattleCommand(room.id)"))
+        assertTrue(roomSelection.contains("joinSpectatorBattle(room.id)"))
         assertTrue(roomSelection.contains("pendingChatRoomId = room.id"))
+    }
+
+    @Test
+    fun roomPickerJoinsPublicBattlesAsReadOnlySpectators() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val picker = source.substringAfter("private fun showBattleRoomPicker()")
+            .substringBefore("private fun showRoomList()")
+
+        assertTrue(picker.contains("joinSpectatorBattle(roomId)"))
+        assertTrue(source.contains("private fun joinSpectatorBattle(roomId: String)"))
     }
 
     @Test
