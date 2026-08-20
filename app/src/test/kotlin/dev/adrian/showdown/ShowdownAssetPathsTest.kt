@@ -45,6 +45,18 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun staticFallbacksTryBaseSpeciesForUnavailableForms() {
+        assertEquals(
+            listOf(
+                "sprites/dex/rotom-wash.png",
+                "sprites/dex/rotomwash.png",
+                "sprites/dex/rotom.png"
+            ),
+            ShowdownAssetPaths.staticDexSpriteCandidates("Rotom-Wash")
+        )
+    }
+
+    @Test
     fun fallsBackToTheBaseSpeciesForUnavailableFormSprites() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forOpponent("Furfrou-La Reine", BattleSession.SpriteStyle.MODERN_3D)
@@ -133,6 +145,14 @@ class ShowdownAssetPathsTest {
         val hdCandidate = candidates.first { it.endsWith("/rotom-wash.gif") }
         assertTrue(hdCandidate.startsWith("https://www.pkparaiso.com/"))
         assertTrue(candidates.indexOf(hdCandidate) < candidates.indexOf("sprites/dex/rotom-wash.png"))
+    }
+
+    @Test
+    fun dexSpriteRequestsPreserveShinyArtwork() {
+        val candidates = ShowdownAssetPaths.dexSpriteCandidates("Brambleghast", shiny = true)
+
+        assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/brambleghast-s.gif"))
+        assertTrue(candidates.contains("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT_SHINY/BRAMBLEGHAST%20shiny.gif"))
     }
 
     @Test

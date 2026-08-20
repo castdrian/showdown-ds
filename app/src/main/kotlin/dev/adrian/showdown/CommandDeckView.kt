@@ -1948,13 +1948,24 @@ class CommandDeckView(
         if (requestedTeamSprites[displayName] == request) return
         requestedTeamSprites[displayName] = request
         teamSprites.remove(displayName)
-        spriteCache.requestPokemon(request) { sprite ->
-            if (requestedTeamSprites[displayName] != request) return@requestPokemon
-            if (sprite != null) {
-                teamSprites[displayName] = sprite
-            }
-            postInvalidateOnAnimation()
+        spriteCache.requestStaticDexSprite(requestedSpecies) { sprite ->
+            acceptTeamSprite(displayName, request, sprite)
         }
+        spriteCache.requestPokemon(request) { sprite ->
+            acceptTeamSprite(displayName, request, sprite)
+        }
+    }
+
+    private fun acceptTeamSprite(
+        displayName: String,
+        request: BattleSpriteRequest,
+        sprite: ShowdownSpriteCache.SpriteAsset?
+    ) {
+        if (requestedTeamSprites[displayName] != request) return
+        if (sprite != null && (sprite.isAnimated || teamSprites[displayName]?.isAnimated != true)) {
+            teamSprites[displayName] = sprite
+        }
+        postInvalidateOnAnimation()
     }
 
     private fun drawTeamHp(canvas: Canvas, bounds: RectF, hp: String, condition: String, scale: Float) {

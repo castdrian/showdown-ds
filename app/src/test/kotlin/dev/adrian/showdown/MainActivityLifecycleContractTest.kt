@@ -130,6 +130,15 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun teamPreviewUsesSpeciesFallbackWithoutReplacingAnimatedArtwork() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("spriteCache.requestStaticDexSprite(requestedSpecies)"))
+        assertTrue(source.contains("private fun acceptTeamSprite("))
+        assertTrue(source.contains("sprite.isAnimated || teamSprites[displayName]?.isAnimated != true"))
+    }
+
+    @Test
     fun spectatorDeckKeepsBattleFeedOnTheUpperScreen() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
         val movesRenderer = source.substringAfter("private fun drawMoves(")

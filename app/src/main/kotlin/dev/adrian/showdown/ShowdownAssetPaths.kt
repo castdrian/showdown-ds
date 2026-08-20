@@ -100,9 +100,9 @@ object ShowdownAssetPaths {
     fun battleSpriteCandidates(request: BattleSpriteRequest): List<String> =
         battleSpriteResolutionPlan(request).allCandidates
 
-    fun dexSpriteResolutionPlan(species: String): ShowdownSpriteResolutionPlan {
+    fun dexSpriteResolutionPlan(species: String, shiny: Boolean = false): ShowdownSpriteResolutionPlan {
         return createResolutionPlan(
-            candidates = buildDexSpriteCandidates(species),
+            candidates = buildDexSpriteCandidates(species, shiny),
             usesModernAnimatedFallback = true
         )
     }
@@ -132,13 +132,13 @@ object ShowdownAssetPaths {
         return candidates.toList()
     }
 
-    fun dexSpriteCandidates(species: String): List<String> = dexSpriteResolutionPlan(species).allCandidates
+    fun dexSpriteCandidates(species: String, shiny: Boolean = false): List<String> = dexSpriteResolutionPlan(species, shiny).allCandidates
 
-    private fun buildDexSpriteCandidates(species: String): List<String> {
+    private fun buildDexSpriteCandidates(species: String, shiny: Boolean): List<String> {
         val speciesNames = spriteSpeciesNames(species)
         return linkedSetOf<String>().apply {
-            hdFrontSpriteCandidates(speciesNames, false).forEach { add(it) }
-            communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT, false).forEach { add(it) }
+            hdFrontSpriteCandidates(speciesNames, shiny).forEach { add(it) }
+            communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT, shiny).forEach { add(it) }
             add(dexSprite(species))
             add("sprites/dex/${animationId(species)}.png")
         }.toList()
@@ -353,10 +353,14 @@ object ShowdownAssetPaths {
 
     fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
 
-    fun staticDexSpriteCandidates(species: String): List<String> = linkedSetOf(
-        dexSprite(species),
-        "sprites/dex/${animationId(species)}.png"
-    ).toList()
+    fun staticDexSpriteCandidates(species: String): List<String> = spriteSpeciesNames(species)
+        .flatMap { name ->
+            listOf(
+                dexSprite(name),
+                "sprites/dex/${animationId(name)}.png"
+            )
+        }
+        .distinct()
 
     fun staticBackSpriteCandidates(species: String): List<String> = listOf(
         "sprites/gen5-back/${animationId(species)}.png"

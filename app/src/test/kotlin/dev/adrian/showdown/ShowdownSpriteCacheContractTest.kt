@@ -75,6 +75,16 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun dexFallbackCanResolveShinyTeamArtwork() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("fun requestDexSprite(species: String, shiny: Boolean"))
+        assertTrue(source.contains("ShowdownAssetPaths.dexSpriteResolutionPlan(species, shiny)"))
+        assertTrue(source.contains("fun requestStaticDexSprite(species: String"))
+        assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(species)"))
+    }
+
+    @Test
     fun memoizesResolvedPokemonAssetsAcrossDisplayRefreshes() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val requestSource = source.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")

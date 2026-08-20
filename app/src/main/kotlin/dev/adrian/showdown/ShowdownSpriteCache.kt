@@ -216,12 +216,20 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     fun requestDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
-        val request = BattleSpriteRequest.forOpponent(species, BattleSession.SpriteStyle.MODERN_3D)
+        requestDexSprite(species, shiny = false, receiver = receiver)
+    }
+
+    fun requestDexSprite(species: String, shiny: Boolean, receiver: (SpriteAsset?) -> Unit) {
+        val request = BattleSpriteRequest.forOpponent(species, BattleSession.SpriteStyle.MODERN_3D, shiny)
         requestResolutionPlan(
             request = request,
-            plan = ShowdownAssetPaths.dexSpriteResolutionPlan(species),
+            plan = ShowdownAssetPaths.dexSpriteResolutionPlan(species, shiny),
             receiver = receiver
         )
+    }
+
+    fun requestStaticDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
+        requestSpriteCandidates(ShowdownAssetPaths.staticDexSpriteCandidates(species), receiver)
     }
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {
