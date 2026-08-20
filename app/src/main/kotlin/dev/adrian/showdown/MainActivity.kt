@@ -1190,7 +1190,7 @@ class MainActivity : Activity() {
             addView(roomRows, -1, -2)
         }
         val dialogViewport = minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
-        val roomScrollHeight = (dialogViewport * 0.42f).toInt()
+        val roomScrollHeight = (dialogViewport * 0.36f).toInt()
         val tools = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             val tournaments = Button(this@MainActivity).apply {
@@ -1425,7 +1425,9 @@ class MainActivity : Activity() {
                 labels.toList(),
                 -1,
                 searchValues
-            ) { _, _ -> }
+            ) { _, selected ->
+                entries.getOrNull(selected)?.username?.trim()?.takeIf(String::isNotBlank)?.let(::requestUserDetails)
+            }
         }
         val dialog = builder.create()
         dialog.setOnDismissListener {

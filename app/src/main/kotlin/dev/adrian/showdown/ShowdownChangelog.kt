@@ -28,7 +28,8 @@ object ShowdownChangelog {
                 "Room and live-battle catalogs now support custom search by room, player, and format.",
                 "Tournament listings now support custom search by room, format, status, and player count.",
                 "Ladder player lists now support public guest browsing and custom search by rank, name, and rating.",
-                "Player lookup now works for guests through public Showdown profiles while private actions remain account-gated."
+                "Player lookup now works for guests through public Showdown profiles while private actions remain account-gated.",
+                "Ladder players now open their public profile on selection, and room lists keep every visible row readable above the action bar."
             )
         ),
         ShowdownChangelogEntry(

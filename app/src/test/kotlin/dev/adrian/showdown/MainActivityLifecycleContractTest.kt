@@ -374,6 +374,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(roomList.contains("roomListSearchQuery = \"\""))
         assertTrue(roomRenderer.contains("Search rooms, players, or formats"))
         assertTrue(roomRenderer.contains("ShowdownRoomQuery.matches"))
+        assertTrue(roomRenderer.contains("roomScrollHeight = (dialogViewport * 0.36f).toInt()"))
     }
 
     @Test
@@ -418,6 +419,15 @@ class MainActivityLifecycleContractTest {
         assertFalse(composer.contains("Sign in to look up another player"))
         assertTrue(request.contains("userFetcher.fetch"))
         assertTrue(request.contains("ShowdownUserDetails.queryCommand"))
+    }
+
+    @Test
+    fun ladderPlayersOpenTheirPublicProfile() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val ladder = source.substringAfter("private fun renderLadderDialog()").substringBefore("private fun requestLadder")
+
+        assertTrue(ladder.contains("entries.getOrNull(selected)"))
+        assertTrue(ladder.contains("requestUserDetails"))
     }
 
     @Test
