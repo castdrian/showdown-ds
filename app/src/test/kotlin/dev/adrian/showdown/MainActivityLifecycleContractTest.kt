@@ -369,6 +369,8 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("val details: LinearLayout"))
         assertTrue(source.contains("details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE"))
         assertTrue(source.contains("Pokémon \${editor.index + 1}"))
+        assertTrue(source.contains("resolveTeamSetForEditor"))
+        assertTrue(source.contains("moveDex.load"))
         assertTrue(source.indexOf("addView(setFields)") < source.indexOf("addView(validateButton)"))
     }
 

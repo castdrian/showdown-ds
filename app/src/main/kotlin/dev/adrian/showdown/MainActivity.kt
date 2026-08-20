@@ -4235,11 +4235,13 @@ class MainActivity : Activity() {
                 setEditors += createTeamSetEditor(
                     this,
                     index,
-                    sets.getOrNull(index) ?: ShowdownTeamSet(),
+                    resolveTeamSetForEditor(sets.getOrNull(index) ?: ShowdownTeamSet()),
                     index == firstExpandedIndex
                 )
             }
         }
+        ensureMoveDexLoaded()
+        resolveTeamEditorAbilities(setEditors)
         fun refreshTeamSetOrderControls() {
             setEditors.forEachIndexed { index, editor ->
                 editor.index = index
@@ -4931,27 +4933,42 @@ class MainActivity : Activity() {
     }
 
     private fun populateTeamSetEditor(editor: TeamSetEditor, set: ShowdownTeamSet) {
-        editor.nickname.setText(set.nickname)
-        editor.species.setText(set.species)
-        editor.item.setText(set.item)
-        editor.ability.setText(set.ability)
-        editor.moves.forEachIndexed { index, field -> field.setText(set.moves.getOrNull(index).orEmpty()) }
-        editor.nature.setText(set.nature)
-        populateTeamStatEditor(editor.evs.fields, set.evs, 0)
-        editor.gender.setText(set.gender)
-        populateTeamStatEditor(editor.ivs.fields, set.ivs, 31)
-        editor.shiny.isChecked = set.shiny
-        editor.level.setText(set.level.takeUnless { it == 100 }?.toString().orEmpty())
-        editor.happiness.setText(set.happiness.takeUnless { it == 255 }?.toString().orEmpty())
-        editor.pokeBall.setText(set.pokeBall)
-        editor.hiddenPowerType.setText(set.hiddenPowerType)
-        editor.gigantamax.isChecked = set.gigantamax
-        editor.dynamaxLevel.setText(set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty())
-        editor.teraType.setText(set.teraType)
-        val visible = set.hasAdvancedDetails()
+        val resolvedSet = resolveTeamSetForEditor(set)
+        editor.nickname.setText(resolvedSet.nickname)
+        editor.species.setText(resolvedSet.species)
+        editor.item.setText(resolvedSet.item)
+        editor.ability.setText(resolvedSet.ability)
+        editor.moves.forEachIndexed { index, field -> field.setText(resolvedSet.moves.getOrNull(index).orEmpty()) }
+        editor.nature.setText(resolvedSet.nature)
+        populateTeamStatEditor(editor.evs.fields, resolvedSet.evs, 0)
+        editor.gender.setText(resolvedSet.gender)
+        populateTeamStatEditor(editor.ivs.fields, resolvedSet.ivs, 31)
+        editor.shiny.isChecked = resolvedSet.shiny
+        editor.level.setText(resolvedSet.level.takeUnless { it == 100 }?.toString().orEmpty())
+        editor.happiness.setText(resolvedSet.happiness.takeUnless { it == 255 }?.toString().orEmpty())
+        editor.pokeBall.setText(resolvedSet.pokeBall)
+        editor.hiddenPowerType.setText(resolvedSet.hiddenPowerType)
+        editor.gigantamax.isChecked = resolvedSet.gigantamax
+        editor.dynamaxLevel.setText(resolvedSet.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty())
+        editor.teraType.setText(resolvedSet.teraType)
+        val visible = resolvedSet.hasAdvancedDetails()
         editor.advancedFields.visibility = if (visible) View.VISIBLE else View.GONE
         editor.advancedToggle.text = if (visible) "Hide advanced details" else "Show advanced details"
         updateTeamSetSummary(editor)
+    }
+
+    private fun resolveTeamSetForEditor(set: ShowdownTeamSet) = set.copy(
+        ability = moveDex.abilityFor(set.species, set.ability)
+    )
+
+    private fun resolveTeamEditorAbilities(editors: List<TeamSetEditor>) {
+        moveDex.load {
+            editors.forEach { editor ->
+                val currentAbility = editor.ability.text.toString()
+                val resolvedAbility = moveDex.abilityFor(editor.species.text.toString(), currentAbility)
+                if (resolvedAbility != currentAbility) editor.ability.setText(resolvedAbility)
+            }
+        }
     }
 
     private fun readTeamSetEditor(editor: TeamSetEditor): ShowdownTeamSet = ShowdownTeamSet(
