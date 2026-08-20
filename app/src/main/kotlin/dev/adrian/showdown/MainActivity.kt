@@ -407,6 +407,9 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         activityResumed = false
+        battleScene?.releaseRetainedResources()
+        commandDeck?.releaseRetainedResources()
+        commandDeck = null
         dismissSecondaryDisplay()
         roomListDialog?.dismiss()
         roomListDialog = null
@@ -644,6 +647,8 @@ class MainActivity : Activity() {
         secondaryPresentation = presentation
         presentation.setOnDismissListener {
             if (secondaryPresentation !== presentation) return@setOnDismissListener
+            commandDeck?.releaseRetainedResources()
+            commandDeck = null
             secondaryPresentation = null
             if (secondaryPresentationRequested && !isFinishing) scheduleSecondaryDisplayRetry()
         }
@@ -686,6 +691,8 @@ class MainActivity : Activity() {
     private fun dismissSecondaryDisplay() {
         window.decorView.removeCallbacks(secondaryDisplayRetry)
         secondaryPresentationRequested = false
+        commandDeck?.releaseRetainedResources()
+        commandDeck = null
         secondaryPresentation?.dismiss()
     }
 

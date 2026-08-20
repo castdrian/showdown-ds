@@ -78,8 +78,30 @@ class BattleSceneView(
     }
 
     fun refreshResourceRequests() {
+        if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
+            releaseRetainedResources()
+        }
         resourcesRequested = false
         invalidate()
+    }
+
+    fun releaseRetainedResources() {
+        playerSprite = null
+        opponentSprite = null
+        requestedPlayerSprite = null
+        requestedOpponentSprite = null
+        playerActiveSprites.clear()
+        opponentActiveSprites.clear()
+        requestedPlayerActiveSprites.clear()
+        requestedOpponentActiveSprites.clear()
+        itemSprites.clear()
+        requestedItemSprites.clear()
+        effectAssets.clear()
+        requestedEffects.clear()
+        backdrop = null
+        requestedBackdrop = ""
+        resourcesRequested = false
+        spriteCache.clearMemory()
     }
 
     fun resetBattleFeed() {
@@ -443,6 +465,7 @@ class BattleSceneView(
         SHOWDOWN_EFFECTS.forEach { name ->
             if (requestedEffects.add(name)) {
                 spriteCache.requestEffect(name) { asset ->
+                    if (name !in requestedEffects) return@requestEffect
                     if (asset != null) effectAssets[name] = asset
                     invalidate()
                 }
@@ -465,6 +488,7 @@ class BattleSceneView(
             val path = BattleItemPresentation.iconPath(item) ?: return@forEach
             if (!requestedItemSprites.add(path)) return@forEach
             spriteCache.requestItem(item) { asset ->
+                if (path !in requestedItemSprites) return@requestItem
                 itemSprites[path] = asset
                 invalidate()
             }

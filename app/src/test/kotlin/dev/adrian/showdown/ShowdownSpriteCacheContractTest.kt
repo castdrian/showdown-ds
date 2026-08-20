@@ -86,6 +86,29 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun boundsDecodedSpriteMemoryByPixelCost() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("object : LruCache<String, SpriteAsset>(SPRITE_MEMORY_CACHE_BYTES)"))
+        assertTrue(source.contains("override fun sizeOf(key: String, value: SpriteAsset) = value.estimatedMemoryBytes()"))
+        assertTrue(source.contains("val pixels = width.toLong() * height.toLong() * 4L"))
+        assertTrue(source.contains("const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024"))
+        assertTrue(source.contains("fun clearMemory()"))
+    }
+
+    @Test
+    fun usesBoundedPlatformAnimationDecodingOnModernAndroid() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("ImageDecoder.decodeDrawable(ImageDecoder.createSource(file))"))
+        assertTrue(source.contains("decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)"))
+        assertTrue(source.contains("decoder.setTargetSize((width * scale).toInt(), (height * scale).toInt())"))
+        assertTrue(source.contains("it is AnimatedImageDrawable"))
+        assertTrue(source.contains("const val MAX_ANIMATED_SPRITE_DIMENSION = 512"))
+        assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
+    }
+
+    @Test
     fun modernArtworkResolutionUsesAnimatedSourcesAtEveryTier() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val animatedFallbackIndex = source.indexOf(
@@ -137,14 +160,15 @@ class ShowdownSpriteCacheContractTest {
             .substringBefore("private fun requestScrapedFrontSpriteResolution")
 
         assertTrue(
-            backResolver.indexOf("requestModernLocalSpriteResolution(request, plan)") <
-                backResolver.indexOf("receiver(null)")
+            backResolver.indexOf("requestModernLocalSpriteResolution(request, plan, ::deliverAnimated)") <
+                backResolver.indexOf("requestRegularRemoteSpriteResolution(plan)")
         )
         assertTrue(
             frontResolver.indexOf("requestScavioAnimatedSprite(request)") <
                 frontResolver.indexOf("requestRegularRemoteSpriteResolution(plan)")
         )
         assertFalse(backResolver.contains("requestScavioAnimatedSprite"))
+        assertTrue(backResolver.contains("requestStaticShowdownBackFallback(request, receiver)"))
         assertFalse(source.contains("asset.mirroredForPlayer()"))
     }
 
@@ -211,7 +235,7 @@ class ShowdownSpriteCacheContractTest {
             .substringBefore("private fun requestScrapedBackSpriteResolution")
         val localResolver = source.substringAfter("private fun requestModernLocalSpriteResolution")
             .substringBefore("private fun requestRegularRemoteSpriteResolution")
-        val animatedResolution = source.indexOf("requestModernLocalSpriteResolution(request, plan)")
+        val animatedResolution = source.indexOf("requestModernLocalSpriteResolution(request, plan, ::deliverAnimated)")
         val staticFallback = source.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)")
 
         assertTrue(backResolver.contains("requestRegularRemoteSpriteResolution(plan)"))

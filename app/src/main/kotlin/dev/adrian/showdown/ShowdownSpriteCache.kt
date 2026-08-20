@@ -4,10 +4,15 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.ImageDecoder
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.drawable.Animatable
+import android.graphics.drawable.AnimatedImageDrawable
+import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
@@ -107,6 +112,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
         private val bitmap: Bitmap?,
         private val movie: Movie?,
+        private val animatedDrawable: Drawable?,
         private val width: Int,
         private val height: Int
     ) {
@@ -114,7 +120,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private var animatedFrame: Bitmap? = null
         private var animatedFrameTime = Long.MIN_VALUE
 
-        val isAnimated get() = movie != null
+        val isAnimated get() = movie != null || animatedDrawable != null
+
+        fun estimatedMemoryBytes(): Int {
+            val pixels = width.toLong() * height.toLong() * 4L
+            return pixels.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+        }
 
         fun trimHorizontalTransparentPadding(): SpriteAsset {
             val image = bitmap ?: return this
@@ -133,6 +144,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             return SpriteAsset(
                 Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
                 null,
+                null,
                 right - left + 1,
                 image.height
             )
@@ -146,6 +158,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             val top = destination.centerY() - drawHeight / 2f
             canvas.save()
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
+            val drawable = animatedDrawable
+            if (drawable != null) {
+                drawable.alpha = alpha.coerceIn(0, 255)
+                drawable.setBounds(left.toInt(), top.toInt(), (left + drawWidth).toInt(), (top + drawHeight).toInt())
+                if (drawable is Animatable && !drawable.isRunning) drawable.start()
+                drawable.draw(canvas)
+                canvas.restore()
+                return
+            }
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
             val image = bitmap ?: animatedFrameAt(elapsedMillis)
             if (image == null) {
@@ -175,16 +196,26 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         companion object {
             private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L
 
-            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
+            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, null, bitmap.width, bitmap.height)
 
-            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
+            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, null, movie.width(), movie.height())
+
+            fun fromDrawable(drawable: Drawable) = SpriteAsset(
+                null,
+                null,
+                drawable,
+                drawable.intrinsicWidth,
+                drawable.intrinsicHeight
+            )
         }
 
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val downloadExecutor = Executors.newFixedThreadPool(4)
-    private val memoryCache = LruCache<String, SpriteAsset>(16)
+    private val downloadExecutor = Executors.newFixedThreadPool(2)
+    private val memoryCache = object : LruCache<String, SpriteAsset>(SPRITE_MEMORY_CACHE_BYTES) {
+        override fun sizeOf(key: String, value: SpriteAsset) = value.estimatedMemoryBytes()
+    }
     private val resolvedPokemonCache = LruCache<BattleSpriteRequest, WeakReference<SpriteAsset>>(16)
     private val pendingSpriteReceivers = ConcurrentHashMap<String, MutableList<(SpriteAsset?) -> Unit>>()
     private val pendingFileReceivers = ConcurrentHashMap<String, MutableList<(File?) -> Unit>>()
@@ -200,7 +231,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             request = request,
             plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request),
             receiver = { asset ->
-                if (asset != null) resolvedPokemonCache.put(request, WeakReference(asset))
+                if (asset != null && (asset.isAnimated || !request.backFacing)) {
+                    resolvedPokemonCache.put(request, WeakReference(asset))
+                }
                 receiver(asset)
             }
         )
@@ -276,6 +309,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         pendingFileReceivers.clear()
     }
 
+    fun clearMemory() {
+        memoryCache.evictAll()
+        resolvedPokemonCache.evictAll()
+    }
+
     private fun requestSprite(path: String, receiver: (SpriteAsset?) -> Unit) {
         memoryCache.get(path)?.let {
             mainHandler.post { receiver(it) }
@@ -336,16 +374,16 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             requestSpriteCandidates(plan.allCandidates, receiver)
             return
         }
+        if (request.backFacing) {
+            requestBackSpriteResolution(request, plan, receiver)
+            return
+        }
         requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { asset ->
             if (asset != null) {
                 receiver(asset)
                 return@requestAnimatedSpriteCandidates
             }
-            if (request.backFacing) {
-                requestBackSpriteResolution(request, plan, receiver)
-            } else {
-                requestFrontSpriteResolution(request, plan, receiver)
-            }
+            requestFrontSpriteResolution(request, plan, receiver)
         }
     }
 
@@ -354,30 +392,42 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
+        var animatedResolved = false
+        var staticFallbackDelivered = false
+        requestStaticShowdownBackFallback(request) { staticAsset ->
+            if (staticAsset == null) return@requestStaticShowdownBackFallback
+            mainHandler.postDelayed({
+                if (!animatedResolved && !staticFallbackDelivered) {
+                    staticFallbackDelivered = true
+                    receiver(staticAsset)
+                }
+            }, STATIC_BACK_FALLBACK_DELAY_MILLIS)
+        }
+
+        fun deliverAnimated(asset: SpriteAsset?) {
+            if (asset != null) {
+                animatedResolved = true
+                receiver(asset)
+            }
+        }
+
+        requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, ::deliverAnimated)
+        requestModernLocalSpriteResolution(request, plan, ::deliverAnimated)
         requestScrapedBackSpriteResolution(request, highResolutionOnly = true) { scrapedAsset ->
             if (scrapedAsset != null) {
-                receiver(scrapedAsset)
+                deliverAnimated(scrapedAsset)
             } else {
                 requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
                     if (regularRemoteAsset != null) {
-                        receiver(regularRemoteAsset)
+                        deliverAnimated(regularRemoteAsset)
                     } else {
                         requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedRegularAsset ->
                             if (scrapedRegularAsset != null) {
-                                receiver(scrapedRegularAsset)
+                                deliverAnimated(scrapedRegularAsset)
                             } else {
                                 requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                    if (communityAsset != null) {
-                                        receiver(communityAsset)
-                                    } else {
-                                        requestModernLocalSpriteResolution(request, plan) { modernLocalAsset ->
-                                            if (modernLocalAsset != null) {
-                                                receiver(modernLocalAsset)
-                                            } else {
-                                                receiver(null)
-                                            }
-                                        }
-                                    }
+                                    if (communityAsset != null) deliverAnimated(communityAsset)
+                                    else requestStaticShowdownBackFallback(request, receiver)
                                 }
                             }
                         }
@@ -628,6 +678,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
     }
 
+    private fun requestStaticShowdownBackFallback(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestSpriteCandidates(ShowdownAssetPaths.staticBackSpriteCandidates(request.species), receiver)
+    }
+
     private fun requestStaticShowdownFallback(
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
@@ -719,13 +776,34 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         if (isAnimatedSpritePath(path) && !path.endsWith(".gif", ignoreCase = true)) return null
         return if (path.endsWith(".gif", ignoreCase = true)) {
             if (!hasMultipleGifFrames(file.readBytes())) return null
-            Movie.decodeFile(file.path)?.takeIf {
+            decodeAnimatedDrawable(file) ?: Movie.decodeFile(file.path)?.takeIf {
                 it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
             }?.let(SpriteAsset::fromMovie)
         } else {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }
+    }
+
+    private fun decodeAnimatedDrawable(file: File): SpriteAsset? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+        return runCatching {
+            val drawable = ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) { decoder, info, _ ->
+                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
+                val width = info.size.width
+                val height = info.size.height
+                val largestDimension = maxOf(width, height)
+                if (largestDimension > MAX_ANIMATED_SPRITE_DIMENSION) {
+                    val scale = MAX_ANIMATED_SPRITE_DIMENSION.toFloat() / largestDimension
+                    decoder.setTargetSize((width * scale).toInt(), (height * scale).toInt())
+                }
+            }
+            drawable.takeIf {
+                it is AnimatedImageDrawable &&
+                    it.intrinsicWidth > 0 &&
+                    it.intrinsicHeight > 0
+            }?.let(SpriteAsset::fromDrawable)
+        }.getOrNull()
     }
 
     private fun hasDistinctMovieFrames(movie: Movie): Boolean {
@@ -811,6 +889,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private companion object {
+        const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
+        const val MAX_ANIMATED_SPRITE_DIMENSION = 512
+        const val STATIC_BACK_FALLBACK_DELAY_MILLIS = 1500L
         const val MAX_FILE_BYTES = 64 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }

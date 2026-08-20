@@ -68,11 +68,24 @@ class CommandDeckView(
         }
     }
 
+    fun releaseRetainedResources() {
+        teamSprites.clear()
+        requestedTeamSprites.clear()
+        postInvalidateOnAnimation()
+    }
+
     override fun onDraw(canvas: Canvas) {
         val width = width.toFloat()
         val height = height.toFloat()
         val teamDecision = isTeamDecision()
         val decisionKind = session.decisionKind
+        val retainTeamSprites = teamDecision ||
+            (session.panel == BattleSession.Panel.TEAM && (session.isLiveBattleActive() || session.isBattleFinished()))
+        if (!retainTeamSprites &&
+            (teamSprites.isNotEmpty() || requestedTeamSprites.isNotEmpty())
+        ) {
+            releaseRetainedResources()
+        }
         if (teamDecision != lastRenderedTeamDecision || decisionKind != lastRenderedDecisionKind) {
             resetDecisionTransitionState()
         }

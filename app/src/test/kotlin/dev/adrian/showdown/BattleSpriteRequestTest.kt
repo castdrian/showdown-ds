@@ -88,6 +88,17 @@ class BattleSpriteRequestTest {
     }
 
     @Test
+    fun missingAnimatedPlayerArtworkFallsBackToARealBackSprite() {
+        assertEquals(
+            listOf("sprites/gen5-back/ironvaliant.png"),
+            ShowdownAssetPaths.staticBackSpriteCandidates("Iron Valiant")
+        )
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        assertTrue(source.contains("requestStaticShowdownBackFallback(request, receiver)"))
+        assertTrue(source.contains("ShowdownAssetPaths.staticBackSpriteCandidates(request.species)"))
+    }
+
+    @Test
     fun modernSpriteCacheNeverFallsBackToLegacyLocalSprites() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 

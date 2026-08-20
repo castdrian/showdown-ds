@@ -71,6 +71,8 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("const val NATIVE_BATTLE_LOG_BRIDGE = \"ShowdownNativeBattleLog\""))
         assertTrue(source.contains("new MutationObserver(function ()"))
         assertTrue(source.contains("chromeObserver.observe(document.getElementById('battle'), { childList: true, subtree: true });"))
+        assertTrue(source.contains("function destroyBattle()"))
+        assertTrue(source.contains("if (battle.scene) battle.scene.stopAnimation();"))
         assertTrue(source.contains(".result { display: none !important; }"))
         assertTrue(source.contains("release: function ()"))
         assertFalse(source.contains("requestAnimationFrame(keepChromeHidden)"))

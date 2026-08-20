@@ -358,6 +358,10 @@ object ShowdownAssetPaths {
         "sprites/dex/${animationId(species)}.png"
     ).toList()
 
+    fun staticBackSpriteCandidates(species: String): List<String> = listOf(
+        "sprites/gen5-back/${animationId(species)}.png"
+    )
+
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
 
     fun itemSprite(item: String): String? {

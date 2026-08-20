@@ -532,6 +532,12 @@ class ShowdownMoveEffectsView(
                             chromeObserver.observe(document.getElementById('battle'), { childList: true, subtree: true });
                             hideChrome();
                         }
+                        function destroyBattle() {
+                            if (!battle) return;
+                            if (battle.scene) battle.scene.stopAnimation();
+                            battle.destroy();
+                            battle = null;
+                        }
                         function createBattle() {
                             nativeBattleStarted();
                             installBattleLogHooks();
@@ -540,7 +546,7 @@ class ShowdownMoveEffectsView(
                                 chromeObserver.disconnect();
                                 chromeObserver = null;
                             }
-                            if (battle) battle.destroy();
+                            destroyBattle();
                             document.getElementById('battle').innerHTML = '';
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', paused: true, ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
@@ -600,10 +606,7 @@ class ShowdownMoveEffectsView(
                                     chromeObserver.disconnect();
                                     chromeObserver = null;
                                 }
-                                if (battle) {
-                                    battle.destroy();
-                                    battle = null;
-                                }
+                                destroyBattle();
                             }
                         };
                     }());
