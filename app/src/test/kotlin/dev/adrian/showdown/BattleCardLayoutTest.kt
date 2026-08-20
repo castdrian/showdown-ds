@@ -105,6 +105,16 @@ class BattleCardLayoutTest {
     }
 
     @Test
+    fun battleHeaderUsesTheProtocolTierWhenAvailable() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
+        val header = source.substringAfter("private fun drawHeader")
+            .substringBefore("private fun drawInspectSheet")
+
+        assertTrue(header.contains("session.format.takeIf"))
+        assertTrue(header.contains("ShowdownTeamLibraryQuery.displayFormat"))
+    }
+
+    @Test
     fun partyIndicatorsStayReadableOnCompactCards() {
         assertEquals(24f, BattleCardLayout.partyIndicatorSize(81f), 0.001f)
         assertEquals(32.98f, BattleCardLayout.partyIndicatorSize(194f), 0.001f)

@@ -680,7 +680,8 @@ class BattleSceneView(
         val iconGap = 16f * scale
         val headerHeight = 82f * scale
         val title = "SHOWDOWN!"
-        val format = ShowdownTeamLibraryQuery.displayFormat(session.matchFormat.id, session.availableMatchFormats())
+        val format = session.format.takeIf(String::isNotBlank)
+            ?: ShowdownTeamLibraryQuery.displayFormat(session.matchFormat.id, session.availableMatchFormats())
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textSize = 34f * scale
         val titleLeft = padding + innerInset + iconSize + iconGap
