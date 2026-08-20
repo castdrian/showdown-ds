@@ -26,6 +26,15 @@ class ShowdownTeamCodecTest {
     }
 
     @Test
+    fun preservesOfficialAbilitySlotsWhenRepacking() {
+        val team = ShowdownTeamCodec.unpack(
+            "Pikachu|Pikachu||h|thunderbolt||||||||"
+        ).single()
+
+        assertEquals("H", ShowdownTeamCodec.pack(listOf(team)).split('|').getOrNull(3))
+    }
+
+    @Test
     fun packsAndUnpacksAnEditableSet() {
         val set = ShowdownTeamSet(
             nickname = "Lead",

@@ -196,7 +196,7 @@ object ShowdownTeamCodec {
             displayName,
             species,
             packedId(set.item),
-            packedId(set.ability),
+            packedAbility(set.ability),
             set.moves.map(::packedId).filter(String::isNotBlank).take(4).joinToString(","),
             set.nature.trim(),
             packValues(set.evs, 0, 252),
@@ -451,6 +451,14 @@ object ShowdownTeamCodec {
     private fun ShowdownTeamSet.hasContent() = listOf(nickname, species, item, ability, nature, gender, pokeBall, hiddenPowerType, teraType).any(String::isNotBlank) || moves.isNotEmpty()
 
     private fun packedId(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
+
+    private fun packedAbility(value: String) = when (value.trim().lowercase()) {
+        "0" -> "0"
+        "1" -> "1"
+        "h" -> "H"
+        "s" -> "S"
+        else -> packedId(value)
+    }
 
     private fun List<String>.value(index: Int) = getOrNull(index).orEmpty()
 }
