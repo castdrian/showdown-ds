@@ -3838,8 +3838,7 @@ class MainActivity : Activity() {
         val remoteButton = styleTeamButton(Button(this)).apply {
             text = "Browse remote teams"
             setOnClickListener {
-                teamDialog?.dismiss()
-                showTeamRemoteLibrary()
+                showTeamRemoteLibrary(sourceDialog = teamDialog)
             }
         }
         val filterBar = LinearLayout(this).apply {
@@ -3892,15 +3891,20 @@ class MainActivity : Activity() {
         teamDialog?.show()
     }
 
-    private fun showTeamRemoteLibrary(initialCommand: String = ShowdownTeamRemoteState.ownTeamsCommand()) {
-        if (!authenticated || !serverUserNamed) {
-            session.setConnectionStatus("Sign in to Showdown to browse remote teams.")
+    private fun showTeamRemoteLibrary(
+        initialCommand: String = ShowdownTeamRemoteState.ownTeamsCommand(),
+        sourceDialog: ShowdownDialog? = null
+    ) {
+        val accessMessage = when {
+            !authenticated || !serverUserNamed -> "Sign in to Showdown to browse remote teams."
+            showdownConnection == null -> "Connect to Showdown before browsing remote teams."
+            else -> null
+        }
+        if (accessMessage != null) {
+            showRemoteTeamAccessDialog(accessMessage)
             return
         }
-        if (showdownConnection == null) {
-            session.setConnectionStatus("Connect to Showdown before browsing remote teams.")
-            return
-        }
+        sourceDialog?.dismiss()
         teamRemoteDialog?.dismiss()
         teamRemoteState.clear()
         val density = resources.displayMetrics.density
@@ -3959,6 +3963,14 @@ class MainActivity : Activity() {
         dialog.show()
         updateTeamRemoteDialog()
         requestTeamRemotePage(initialCommand)
+    }
+
+    private fun showRemoteTeamAccessDialog(message: String) {
+        ShowdownDialogBuilder(this)
+            .setTitle("Remote teams")
+            .setMessage(message)
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun showRemoteTeamSearch() {

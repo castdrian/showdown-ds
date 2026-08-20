@@ -314,6 +314,18 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun remoteTeamBrowseKeepsTheLibraryAvailableWhenSignInIsRequired() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val teamLibrary = source.substringAfter("private fun showTeamLibrary()").substringBefore("private fun showTeamRemoteLibrary")
+        val remoteLibrary = source.substringAfter("private fun showTeamRemoteLibrary(").substringBefore("private fun showRemoteTeamSearch")
+
+        assertTrue(teamLibrary.contains("showTeamRemoteLibrary(sourceDialog = teamDialog)"))
+        assertFalse(teamLibrary.contains("teamDialog?.dismiss()\n                showTeamRemoteLibrary()"))
+        assertTrue(remoteLibrary.contains("sourceDialog?.dismiss()"))
+        assertTrue(remoteLibrary.contains("showRemoteTeamAccessDialog"))
+    }
+
+    @Test
     fun controllerNavigationDismissesOpenCustomDialogsBeforeOpeningAnotherSurface() {
         val activitySource = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val dialogSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownDialog.kt").readText()
