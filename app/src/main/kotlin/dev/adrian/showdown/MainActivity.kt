@@ -619,7 +619,7 @@ class MainActivity : Activity() {
             }
         )
         showdownMoveEffects = effects
-        frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
+        frame.addView(effects, FrameLayout.LayoutParams(1, 1))
         effects.setPerspective(session.battlePlayerSlot())
         effects.setPlaybackSpeed(replaySpeed)
         effects.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
