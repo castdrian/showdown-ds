@@ -33,6 +33,13 @@ class BattleAnnouncerTest {
     }
 
     @Test
+    fun residualDamageDoesNotAnnounceAMoveImpact() {
+        assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p1a: Pikachu|90/100|[from] brn"))
+        assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Garchomp|90/100|[from] ability: Rough Skin"))
+        assertEquals(BattleAnnouncerCue.HIT, BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Garchomp|90/100"))
+    }
+
+    @Test
     fun assetsUseTheSelectedClipFromTheBundledSubset() {
         val path = BattleAnnouncerAssets.assetPath(BattleAnnouncerCue.BATTLE_START)
 
