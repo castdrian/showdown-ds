@@ -15,7 +15,8 @@ object ShowdownChangelog {
                 "Replays identify their format and prioritize HD-first animated sprites whenever available.",
                 "Battle animation, text pacing, and sound effects now share a synchronized 0.5×–2× speed range.",
                 "Battle controls now include a 2× speed option.",
-                "The optional PBR announcer now plays cues sequentially, follows battle speed, and pauses with the app."
+                "The optional PBR announcer now plays cues sequentially, follows battle speed, and pauses with the app.",
+                "Matchmaking now exposes an explicit Cancel search action while a queue is active."
             )
         ),
         ShowdownChangelogEntry(

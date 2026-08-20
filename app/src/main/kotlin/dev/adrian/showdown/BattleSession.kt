@@ -368,6 +368,7 @@ class BattleSession {
     private var playerSlot = "p1"
     private var localUsername: String? = null
     private var liveBattleActive = false
+    private var battleSearchActive = false
     private var replayMode = false
     private var spectatorMode = false
     private var battleParticipant = false
@@ -968,6 +969,14 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun setBattleSearchActive(value: Boolean) {
+        if (battleSearchActive == value) return
+        battleSearchActive = value
+        notifyListeners()
+    }
+
+    fun isBattleSearchActive() = battleSearchActive
+
     fun setLiveBattleActive(value: Boolean) {
         val changed = liveBattleActive != value
         liveBattleActive = value
@@ -1080,6 +1089,7 @@ class BattleSession {
     fun prepareForLobby() {
         restoredPlayerSlot = null
         battleParticipant = false
+        battleSearchActive = false
         applyInit(listOf("", "init", "battle"))
         replayMode = false
         spectatorMode = false
@@ -4164,7 +4174,7 @@ class BattleSession {
     }
 
     private fun menuAction(index: Int) = when (index) {
-        0 -> "Find a ${matchFormatDisplayLabel()}"
+        0 -> if (battleSearchActive) "Cancel battle search" else "Find a ${matchFormatDisplayLabel()}"
         1 -> "Battle format ${matchFormatMenuLabel()}"
         2 -> "Open battle chat"
         3 -> when {

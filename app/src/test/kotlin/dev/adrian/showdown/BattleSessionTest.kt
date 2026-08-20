@@ -39,6 +39,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun matchmakingMenuTurnsIntoAVisibleCancelActionWhileSearching() {
+        val session = BattleSession()
+
+        session.setBattleSearchActive(true)
+
+        assertEquals("Cancel battle search", session.menuItems()[0])
+        assertTrue(session.isBattleSearchActive())
+
+        session.setBattleSearchActive(false)
+
+        assertEquals("Find a [Gen 9] Random Battle", session.menuItems()[0])
+    }
+
+    @Test
     fun upperBattleFeedOmitsTurnMarkersWithoutChangingTheFullTranscript() {
         val session = BattleSession()
         session.appendShowdownBattleLog("Battle started!<br />Turn 1<br />Go! Pikachu!")

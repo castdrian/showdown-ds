@@ -626,7 +626,7 @@ class CommandDeckView(
                 scale,
                 "No battle in progress",
                 "Find a battle before choosing a move.",
-                "Open Menu  ·  Find battle"
+                "Open Menu  ·  ${searchActionLabel()}"
             )
             return
         }
@@ -837,7 +837,7 @@ class CommandDeckView(
         canvas.drawText(outcome, card.centerX(), card.top + 190f * scale, paint)
         paint.textSize = readableTextSize(25f, scale)
         paint.color = Color.rgb(129, 205, 236)
-        canvas.drawText("Open Menu  ·  Find battle", card.centerX(), card.top + 258f * scale, paint)
+        canvas.drawText("Open Menu  ·  ${searchActionLabel()}", card.centerX(), card.top + 258f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
     }
 
@@ -2148,7 +2148,7 @@ class CommandDeckView(
     }
 
     private fun menuLabel(index: Int, entry: String) = when (index) {
-        0 -> "Find battle"
+        0 -> if (entry == "Cancel battle search") "Cancel search" else "Find battle"
         1 -> entry.removePrefix("Battle format ").replace("Gen 7", "G7").replace("Gen 9", "G9")
         2 -> "Battle chat"
         3 -> entry
@@ -2164,6 +2164,8 @@ class CommandDeckView(
         13 -> if (entry == "Replay controls") "Replay controls" else "Battle controls"
         else -> if (entry == "Save replay") "Save replay" else "Timer: ${entry.substringAfterLast(' ')}"
     }
+
+    private fun searchActionLabel() = if (session.isBattleSearchActive()) "Cancel search" else "Find battle"
 
     private fun movePalette(type: String): MovePalette {
         val base = ShowdownTypePalette.canonical(type)

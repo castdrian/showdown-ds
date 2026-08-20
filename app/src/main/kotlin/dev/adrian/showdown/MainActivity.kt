@@ -1991,6 +1991,7 @@ class MainActivity : Activity() {
             if (lobbyState.isSearching(format)) showdownConnection?.sendGlobal(ShowdownLobbyState.cancelSearchCommand())
             lobbyState.clearSearch(format)
         }
+        session.setBattleSearchActive(false)
         activeSearchFormat = null
         pendingSearch = false
         pendingSearchTeamPacked = null
@@ -2042,6 +2043,7 @@ class MainActivity : Activity() {
         session.setLiveBattleActive(false)
         showdownConnection?.close()
         pendingSearch = lobbyCommands == null
+        session.setBattleSearchActive(pendingSearch || activeSearchFormat != null)
         pendingLobbyCommands = lobbyCommands
         pendingLobbyStatus = lobbyStatus
         reconnectLobbyCommands = lobbyCommands
@@ -2120,6 +2122,7 @@ class MainActivity : Activity() {
             ?: decodeLobbyCommands(preferences.getString("reconnect_lobby_commands", null))
         activeSearchFormat = (savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null))
             ?.let { ShowdownFormatCompatibility.canonicalId(it) }
+        session.setBattleSearchActive(pendingSearch || activeSearchFormat != null)
         activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
         val hasSavedBattleIdentity = savedInstanceState?.containsKey("battle_participant") == true || preferences.contains("battle_participant")
         battleWasRegistered = if (savedInstanceState?.containsKey("battle_registered") == true) {
@@ -2321,6 +2324,7 @@ class MainActivity : Activity() {
                                 pendingLobbyCommands = null
                                 pendingLobbyStatus = null
                                 activeSearchFormat = null
+                                session.setBattleSearchActive(false)
                                 detail.ifBlank { "Disconnected from ${serverEndpoint.displayName}." }
                             }
                         }
@@ -2428,11 +2432,13 @@ class MainActivity : Activity() {
                                             session.setConnectionStatus("Finishing sign-in as ${credentials.username}…")
                                         } else {
                                             pendingSearch = false
+                                            session.setBattleSearchActive(false)
                                             session.setConnectionStatus("Showdown sign-in could not reach the server.")
                                         }
                                     }
                                     result.onFailure { error ->
                                         pendingSearch = false
+                                        session.setBattleSearchActive(false)
                                         session.setConnectionStatus(error.message ?: "Showdown sign-in failed.")
                                     }
                                 }
@@ -2499,6 +2505,7 @@ class MainActivity : Activity() {
                             registrationInFlight = false
                             pendingRegistration = null
                             pendingSearch = false
+                            session.setBattleSearchActive(false)
                             pendingLobbyCommands = null
                             pendingLobbyStatus = null
                             reconnectLobbyCommands = null
@@ -2607,6 +2614,7 @@ class MainActivity : Activity() {
                         activeSearchFormat = null
                         reconnectLobbyCommands = null
                         if (startsBattle) battleProtocolReady = true
+                        if (startsBattle) session.setBattleSearchActive(false)
                         session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
                         if (battleIsSpectator) session.setSpectatorMode(true)
                         if (!battleIsSpectator && battleWasParticipant) session.setBattleParticipant(true)
@@ -2641,6 +2649,7 @@ class MainActivity : Activity() {
         activeSearchFormat?.let(lobbyState::clearSearch)
         activeSearchFormat = null
         pendingSearch = false
+        session.setBattleSearchActive(false)
         pendingSearchTeamPacked = null
         pendingLobbyCommands = null
         pendingLobbyStatus = null
@@ -2724,6 +2733,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus(status)
         } else if (searching) {
             activeSearchFormat = commands.first { it.startsWith("/search ") }.removePrefix("/search ")
+            session.setBattleSearchActive(true)
             session.setConnectionStatus("Searching ${readableFormatLabel(session.matchFormat.id)}…")
         } else if (rejoiningBattle) {
             session.setConnectionStatus("Rejoining battle…")
@@ -3642,6 +3652,7 @@ class MainActivity : Activity() {
         pendingLobbyStatus = null
         reconnectLobbyCommands = null
         activeSearchFormat = null
+        session.setBattleSearchActive(false)
         serverUserNamed = false
         pendingRegistration = null
         registrationInFlight = false
