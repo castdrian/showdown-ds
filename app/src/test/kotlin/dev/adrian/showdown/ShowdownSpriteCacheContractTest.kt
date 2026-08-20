@@ -131,7 +131,25 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun staticShowdownArtworkIsOnlyTheFinalFrontFacingFallback() {
+    fun neverUsesAMirroredStaticFrontSpriteAsAPlayerBackSprite() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertFalse(
+            allowsStaticShowdownFallback(
+                BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
+            )
+        )
+        assertTrue(
+            allowsStaticShowdownFallback(
+                BattleSpriteRequest.forOpponent("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
+            )
+        )
+        assertTrue(source.contains("allowsStaticShowdownFallback(request)"))
+        assertFalse(source.contains("withMirrorWhenDrawn"))
+    }
+
+    @Test
+    fun staticShowdownArtworkIsOnlyTheFinalOpponentFacingFallback() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val modernLocalIndex = source.indexOf("requestAnimatedSpriteCandidates(modernLocalCandidates)")
         val animatedIndex = source.indexOf("requestSmallSpriteResolution(request)", modernLocalIndex)
@@ -143,7 +161,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)"))
         assertTrue(source.contains(".filter { it.startsWith(\"sprites/dex/\") }"))
         assertTrue(source.contains(".filterNot(::isHighResolutionSpritePath)"))
-        assertTrue(source.contains("withMirrorWhenDrawn(request.backFacing)"))
+        assertTrue(source.contains("allowsStaticShowdownFallback(request)"))
         assertTrue(source.contains("requestAnimatedSpriteCandidates"))
     }
 
@@ -169,17 +187,20 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun staticBackFallbackKeepsAnimatedTiersAheadOfTheMirroredEmergencyAsset() {
+    fun playerBackFallbackStopsBeforeStaticFrontArtwork() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val backResolver = source.substringAfter("private fun requestBackSpriteResolution")
             .substringBefore("private fun requestScrapedBackSpriteResolution")
+        val localResolver = source.substringAfter("private fun requestModernLocalSpriteResolution")
+            .substringBefore("private fun requestRegularRemoteSpriteResolution")
         val animatedResolution = source.indexOf("requestModernLocalSpriteResolution(request, plan)")
         val staticFallback = source.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)")
 
         assertTrue(backResolver.contains("requestRegularRemoteSpriteResolution(plan)"))
         assertTrue(animatedResolution >= 0)
         assertTrue(staticFallback > animatedResolution)
-        assertTrue(source.contains("withMirrorWhenDrawn(request.backFacing)"))
+        assertTrue(localResolver.contains("else if (allowsStaticShowdownFallback(request))"))
+        assertTrue(localResolver.contains("receiver(null)"))
     }
 
     private fun testGif(frameCount: Int, identicalFrames: Boolean = false): ByteArray {

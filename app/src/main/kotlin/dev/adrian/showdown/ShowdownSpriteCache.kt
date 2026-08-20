@@ -42,6 +42,8 @@ internal fun isAnimatedSpritePath(path: String): Boolean =
 internal fun requiresAnimatedSprite(path: String, animatedOnly: Boolean): Boolean =
     animatedOnly || isAnimatedSpritePath(path)
 
+internal fun allowsStaticShowdownFallback(request: BattleSpriteRequest): Boolean = !request.backFacing
+
 internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
     if (bytes.size < 13) return false
     val signature = bytes.copyOfRange(0, 6).toString(Charsets.US_ASCII)
@@ -105,8 +107,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val bitmap: Bitmap?,
         private val movie: Movie?,
         private val width: Int,
-        private val height: Int,
-        private val mirrorWhenDrawn: Boolean = false
+        private val height: Int
     ) {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
@@ -130,14 +131,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
                 null,
                 right - left + 1,
-                image.height,
-                mirrorWhenDrawn
+                image.height
             )
         }
 
-        fun withMirrorWhenDrawn(mirror: Boolean) = SpriteAsset(bitmap, movie, width, height, mirror)
-
-        fun draw(canvas: Canvas, destination: RectF, elapsedMillis: Long, flipHorizontally: Boolean = mirrorWhenDrawn, alpha: Int = 255) {
+        fun draw(canvas: Canvas, destination: RectF, elapsedMillis: Long, flipHorizontally: Boolean = false, alpha: Int = 255) {
             val scale = min(destination.width() / width, destination.height() / height)
             val drawWidth = width * scale
             val drawHeight = height * scale
@@ -166,9 +164,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
 
         companion object {
-            fun fromBitmap(bitmap: Bitmap, mirrorWhenDrawn: Boolean = false) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height, mirrorWhenDrawn)
+            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
 
-            fun fromMovie(movie: Movie, mirrorWhenDrawn: Boolean = false) = SpriteAsset(null, movie, movie.width(), movie.height(), mirrorWhenDrawn)
+            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
         }
 
     }
@@ -545,8 +543,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 requestSmallSpriteResolution(request) { animatedAsset ->
                     if (animatedAsset != null) {
                         receiver(animatedAsset)
-                    } else {
+                    } else if (allowsStaticShowdownFallback(request)) {
                         requestStaticShowdownFallback(request, receiver)
+                    } else {
+                        receiver(null)
                     }
                 }
             }
@@ -612,7 +612,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             .filter { it.startsWith("sprites/dex/") }
             .filterNot(::isHighResolutionSpritePath)
         requestSpriteCandidates(standardCandidates) { asset ->
-            receiver(asset?.withMirrorWhenDrawn(request.backFacing))
+            receiver(asset)
         }
     }
 
