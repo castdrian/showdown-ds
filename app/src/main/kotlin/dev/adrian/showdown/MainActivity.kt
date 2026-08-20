@@ -122,6 +122,7 @@ class MainActivity : Activity() {
     private var displayedIncomingChallenge: String? = null
     private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
+    private var roomListSearchQuery = ""
     private val tournamentDirectoryState = ShowdownTournamentDirectoryState()
     private var tournamentDirectoryDialog: ShowdownDialog? = null
     private var tournamentDirectoryContentView: TextView? = null
@@ -1038,9 +1039,15 @@ class MainActivity : Activity() {
     private fun showBattleRoomPicker() {
         val battles = lobbyState.battles.entries.toList()
         val labels = listOf("Find a new battle") + battles.map { (roomId, description) -> "$description\n$roomId" }
+        val searchValues = listOf("find a new battle") + battles.map { (roomId, description) -> "$description $roomId" }
         ShowdownDialogBuilder(this)
             .setTitle("Showdown rooms")
-            .setItems(labels.toTypedArray()) { _, selected ->
+            .setSearchableSingleChoiceItems(
+                "Search live battles or players",
+                labels,
+                -1,
+                searchValues
+            ) { _, selected ->
                 if (selected == 0) {
                     beginBattleSearch()
                 } else {
@@ -1074,6 +1081,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Connect to Showdown before browsing rooms.")
             return
         }
+        roomListSearchQuery = ""
         roomListPending = true
         renderRoomListDialog()
         val sent = showdownConnection?.sendGlobal("/cmd rooms") == true && showdownConnection?.sendGlobal("/cmd roomlist") == true
@@ -1105,18 +1113,34 @@ class MainActivity : Activity() {
         val roomRows = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
-        if (selections.isEmpty()) {
-            roomRows.addView(TextView(this).apply {
-                text = "Loading public rooms…"
-                setTextSize(17f)
-                setTextColor(0xffdceff2.toInt())
-                setPadding((16f * density).toInt(), (18f * density).toInt(), (16f * density).toInt(), (18f * density).toInt())
-            }, LinearLayout.LayoutParams(-1, -2))
-        } else {
-            selections.forEach { room ->
+        fun renderRows(query: String) {
+            roomRows.removeAllViews()
+            if (selections.isEmpty()) {
+                roomRows.addView(TextView(this).apply {
+                    text = "Loading public rooms…"
+                    setTextSize(17f)
+                    setTextColor(0xffdceff2.toInt())
+                    setPadding((16f * density).toInt(), (18f * density).toInt(), (16f * density).toInt(), (18f * density).toInt())
+                }, LinearLayout.LayoutParams(-1, -2))
+                return
+            }
+            val filtered = selections.filter { room ->
+                ShowdownRoomQuery.matches(query, room.id, room.title, room.subtitle)
+            }
+            if (filtered.isEmpty()) {
+                roomRows.addView(TextView(this).apply {
+                    text = "No matching rooms"
+                    setTextSize(17f)
+                    setTextColor(0xffdceff2.toInt())
+                    setPadding((16f * density).toInt(), (18f * density).toInt(), (16f * density).toInt(), (18f * density).toInt())
+                }, LinearLayout.LayoutParams(-1, -2))
+                return
+            }
+            filtered.forEach { room ->
                 roomRows.addView(Button(this).apply {
                     text = "${room.title}\n${room.subtitle}"
                     isAllCaps = false
+                    styleDynamicDialogButton(this)
                     setOnClickListener {
                         roomListPending = false
                         roomListDialog?.dismiss()
@@ -1137,6 +1161,20 @@ class MainActivity : Activity() {
                 }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, (8f * density).toInt()) })
             }
         }
+        val search = EditText(this).apply {
+            hint = "Search rooms, players, or formats"
+            setSingleLine(true)
+            setText(roomListSearchQuery)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                    roomListSearchQuery = text?.toString().orEmpty()
+                    renderRows(roomListSearchQuery)
+                }
+                override fun afterTextChanged(editable: Editable?) = Unit
+            })
+        }
+        renderRows(roomListSearchQuery)
         val roomScroll = ScrollView(this).apply {
             addView(roomRows, -1, -2)
         }
@@ -1182,6 +1220,7 @@ class MainActivity : Activity() {
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (8f * density).toInt() })
             addView(roomScroll, LinearLayout.LayoutParams(-1, roomScrollHeight))
             addView(tools, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
         }

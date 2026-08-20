@@ -24,7 +24,8 @@ object ShowdownChangelog {
                 "Team previews keep species artwork visible while their preferred HD animation loads, including shiny variants.",
                 "Terastallization now submits the official Showdown battle command and works correctly in live battles.",
                 "Battle, ladder, and team format selectors now use searchable custom pickers for the full server catalog.",
-                "Team selection now searches saved teams by name, format, folder, Pokémon, and moves."
+                "Team selection now searches saved teams by name, format, folder, Pokémon, and moves.",
+                "Room and live-battle catalogs now support custom search by room, player, and format."
             )
         ),
         ShowdownChangelogEntry(

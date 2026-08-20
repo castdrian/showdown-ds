@@ -257,7 +257,7 @@ class ShowdownDialog(context: Context) : Dialog(context) {
                 }
                 if (list.childCount == 0) {
                     list.addView(TextView(context).apply {
-                        text = "No matching formats"
+                        text = "No matching results"
                         setTextColor(Color.rgb(175, 204, 212))
                         setTextSize(17f)
                         gravity = Gravity.CENTER

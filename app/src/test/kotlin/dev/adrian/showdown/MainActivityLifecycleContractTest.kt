@@ -363,6 +363,20 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun roomCatalogsUseSearchableCustomSurfaces() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val battlePicker = source.substringAfter("private fun showBattleRoomPicker()").substringBefore("private fun showRoomList()")
+        val roomList = source.substringAfter("private fun showRoomList()").substringBefore("private fun renderRoomListDialog()")
+        val roomRenderer = source.substringAfter("private fun renderRoomListDialog()").substringBefore("private fun showTournamentDirectory()")
+
+        assertTrue(battlePicker.contains("setSearchableSingleChoiceItems"))
+        assertTrue(battlePicker.contains("Search live battles or players"))
+        assertTrue(roomList.contains("roomListSearchQuery = \"\""))
+        assertTrue(roomRenderer.contains("Search rooms, players, or formats"))
+        assertTrue(roomRenderer.contains("ShowdownRoomQuery.matches"))
+    }
+
+    @Test
     fun closesStaleLobbyAndTeamDialogsBeforeStartingAnotherConnectionFlow() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val transition = source.substringAfter("private fun startLobbyConnection(")
