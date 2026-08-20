@@ -732,6 +732,7 @@ class MainActivity : Activity() {
         if (::battleAudio.isInitialized && ::session.isInitialized) {
             battleAudio.updateOptions(session)
         }
+        battleScene?.refreshResourceRequests()
         displayRefreshScheduler.request()
     }
 

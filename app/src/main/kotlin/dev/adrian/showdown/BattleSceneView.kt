@@ -39,6 +39,7 @@ class BattleSceneView(
     private val itemSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
     private val requestedItemSprites = mutableSetOf<String>()
     private var requestedBackdrop = ""
+    private var resourcesRequested = false
     private val effectAssets = mutableMapOf<String, Bitmap>()
     private val requestedEffects = mutableSetOf<String>()
     private var inspectedPlayer: Boolean? = null
@@ -73,6 +74,11 @@ class BattleSceneView(
 
     fun setPlaybackPaused(paused: Boolean) {
         battleFeedPresentation.setPlaybackPaused(paused, SystemClock.elapsedRealtime())
+        invalidate()
+    }
+
+    fun refreshResourceRequests() {
+        resourcesRequested = false
         invalidate()
     }
 
@@ -111,7 +117,10 @@ class BattleSceneView(
             BattleSceneTiming.summonStatusCardAlpha(session.opponentEntryAtNanos, nowNanos)
         playerInspectBounds.set(width * 0.05f, height * 0.28f, width * 0.57f, height * 0.88f)
         opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
-        requestResources()
+        if (!resourcesRequested) {
+            requestResources()
+            resourcesRequested = true
+        }
         drawBackdrop(canvas, width, height)
         if (!singles && opponentCombatants.isNotEmpty()) {
             fieldCombatants(opponentCombatants, false).forEachIndexed { index, combatant ->
