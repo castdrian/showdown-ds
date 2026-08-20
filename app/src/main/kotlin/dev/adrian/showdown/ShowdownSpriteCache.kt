@@ -15,6 +15,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -174,16 +175,24 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val downloadExecutor = Executors.newFixedThreadPool(4)
     private val memoryCache = LruCache<String, SpriteAsset>(16)
+    private val resolvedPokemonCache = LruCache<BattleSpriteRequest, WeakReference<SpriteAsset>>(16)
     private val pendingSpriteReceivers = ConcurrentHashMap<String, MutableList<(SpriteAsset?) -> Unit>>()
     private val pendingFileReceivers = ConcurrentHashMap<String, MutableList<(File?) -> Unit>>()
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
     private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        resolvedPokemonCache.get(request)?.get()?.let { asset ->
+            mainHandler.post { receiver(asset) }
+            return
+        } ?: resolvedPokemonCache.remove(request)
         requestResolutionPlan(
             request = request,
             plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request),
-            receiver = receiver
+            receiver = { asset ->
+                if (asset != null) resolvedPokemonCache.put(request, WeakReference(asset))
+                receiver(asset)
+            }
         )
     }
 
@@ -252,6 +261,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     override fun close() {
         downloadExecutor.shutdownNow()
         memoryCache.evictAll()
+        resolvedPokemonCache.evictAll()
         pendingSpriteReceivers.clear()
         pendingFileReceivers.clear()
     }

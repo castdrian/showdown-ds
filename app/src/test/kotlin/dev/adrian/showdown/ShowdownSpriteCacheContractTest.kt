@@ -73,6 +73,17 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun memoizesResolvedPokemonAssetsAcrossDisplayRefreshes() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val requestSource = source.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
+
+        assertTrue(source.contains("private val resolvedPokemonCache = LruCache<BattleSpriteRequest, WeakReference<SpriteAsset>>(16)"))
+        assertTrue(requestSource.contains("resolvedPokemonCache.get(request)"))
+        assertTrue(requestSource.contains("resolvedPokemonCache.put(request, WeakReference(asset))"))
+        assertTrue(source.contains("resolvedPokemonCache.evictAll()"))
+    }
+
+    @Test
     fun modernArtworkResolutionUsesAnimatedSourcesAtEveryTier() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val animatedFallbackIndex = source.indexOf(
