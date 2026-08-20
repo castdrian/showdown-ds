@@ -1948,12 +1948,16 @@ class CommandDeckView(
         if (requestedTeamSprites[displayName] == request) return
         requestedTeamSprites[displayName] = request
         teamSprites.remove(displayName)
-        spriteCache.requestStaticDexSprite(requestedSpecies) { sprite ->
-            acceptTeamSprite(displayName, request, sprite)
-        }
         spriteCache.requestPokemon(request) { sprite ->
             acceptTeamSprite(displayName, request, sprite)
         }
+        postDelayed({
+            if (requestedTeamSprites[displayName] == request && teamSprites[displayName] == null) {
+                spriteCache.requestStaticDexSprite(requestedSpecies) { sprite ->
+                    acceptTeamSprite(displayName, request, sprite)
+                }
+            }
+        }, TEAM_STATIC_FALLBACK_DELAY_MILLIS)
     }
 
     private fun acceptTeamSprite(
@@ -2302,6 +2306,7 @@ class CommandDeckView(
         const val MAGENTA = 0xFFFF4AB0.toInt()
         const val MUTED = 0xFF97B1D1.toInt()
         const val FAIRY_GLYPH_OPTICAL_OFFSET_PIXELS = 2f
+        const val TEAM_STATIC_FALLBACK_DELAY_MILLIS = 900L
         val BOOST_NAMES = mapOf("atk" to "Atk", "def" to "Def", "spa" to "Sp. Atk", "spd" to "Sp. Def", "spe" to "Speed", "accuracy" to "Accuracy", "evasion" to "Evasion")
     }
 }
