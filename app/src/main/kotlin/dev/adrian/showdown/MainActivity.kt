@@ -530,6 +530,7 @@ class MainActivity : Activity() {
         if (::session.isInitialized && shouldMaintainConnection) persistLobbyState(flushToDisk = true)
         if (::battleAudio.isInitialized) {
             battleAudio.pauseBattleCues()
+            battleAudio.pauseAnnouncerCues()
             battleAudio.pauseMusic()
         }
         super.onPause()
@@ -559,7 +560,10 @@ class MainActivity : Activity() {
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()
-        if (::battleAudio.isInitialized) battleAudio.resumeBattleCues()
+        if (::battleAudio.isInitialized) {
+            battleAudio.resumeBattleCues()
+            battleAudio.resumeAnnouncerCues()
+        }
         if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
     }
 

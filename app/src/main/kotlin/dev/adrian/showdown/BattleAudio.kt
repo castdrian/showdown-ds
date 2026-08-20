@@ -42,9 +42,19 @@ class BattleAudio(
         val queuedAtMillis: Long
     )
     private data class PendingAnnouncerCue(
+        val cue: BattleAnnouncerCue,
         val path: String,
         val soundId: Int,
         val startAtMillis: Long
+    )
+    private data class ScheduledAnnouncerCue(
+        val pending: PendingAnnouncerCue,
+        val scheduledAtMillis: Long,
+        var runnable: Runnable? = null
+    )
+    private data class PausedAnnouncerCue(
+        val pending: PendingAnnouncerCue,
+        val remainingDelayMillis: Long
     )
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -65,13 +75,16 @@ class BattleAudio(
     private val pendingAnnouncerCues = ArrayDeque<PendingAnnouncerCue>()
     private val scheduledBattleCues = mutableListOf<ScheduledBattleCue>()
     private val pausedBattleCues = mutableListOf<PausedBattleCue>()
-    private val scheduledAnnouncerRunnables = mutableSetOf<Runnable>()
+    private val scheduledAnnouncerCues = mutableListOf<ScheduledAnnouncerCue>()
+    private val pausedAnnouncerCues = mutableListOf<PausedAnnouncerCue>()
     private val activeAnnouncerStreamIds = mutableSetOf<Int>()
     private val diagnosticEvents = ArrayDeque<BattleAudioCueEvent>()
     private val cuePlaybackQueue = BattleAudioCuePlaybackQueue()
     private val announcerPlaybackQueue = BattleAnnouncerCuePlaybackQueue()
     private var cuePlaybackGeneration = 0L
     private var announcerPlaybackGeneration = 0L
+    private var announcerCuesPaused = false
+    private var announcerCuesPausedAtMillis = 0L
     private var notificationFile: File? = null
     private var bgmFile: File? = null
     private var bgmPlayer: MediaPlayer? = null
@@ -167,6 +180,61 @@ class BattleAudio(
         audioCueHandler.post {
             audioCueHandler.removeCallbacks(loopBoundaryRunnable)
             bgmPlayer?.pause()
+        }
+    }
+
+    fun pauseAnnouncerCues() {
+        audioCueHandler.postAtFrontOfQueue {
+            if (released.get() || announcerCuesPaused) return@postAtFrontOfQueue
+            val nowMillis = SystemClock.elapsedRealtime()
+            announcerCuesPaused = true
+            announcerCuesPausedAtMillis = nowMillis
+            scheduledAnnouncerCues
+                .sortedBy { it.scheduledAtMillis }
+                .forEach { scheduled ->
+                    scheduled.runnable?.let(audioCueHandler::removeCallbacks)
+                    pausedAnnouncerCues += PausedAnnouncerCue(
+                        scheduled.pending,
+                        (scheduled.scheduledAtMillis - nowMillis).coerceAtLeast(0L)
+                    )
+                }
+            scheduledAnnouncerCues.clear()
+            activeAnnouncerStreamIds.forEach { transientSoundPool?.pause(it) }
+        }
+    }
+
+    fun resumeAnnouncerCues() {
+        audioCueHandler.postAtFrontOfQueue {
+            if (released.get() || !announcerCuesPaused) return@postAtFrontOfQueue
+            val nowMillis = SystemClock.elapsedRealtime()
+            val pausedDurationMillis = (nowMillis - announcerCuesPausedAtMillis).coerceAtLeast(0L)
+            val shiftedPending = pendingAnnouncerCues.map { pending ->
+                pending.copy(startAtMillis = pending.startAtMillis + pausedDurationMillis)
+            }
+            pendingAnnouncerCues.clear()
+            shiftedPending.forEach(pendingAnnouncerCues::addLast)
+            val restored = pausedAnnouncerCues
+                .sortedBy { it.remainingDelayMillis }
+                .map { paused ->
+                    paused.pending.copy(startAtMillis = nowMillis + paused.remainingDelayMillis)
+                }
+            val restoredEndAtMillis = (shiftedPending + restored).maxOfOrNull { pending ->
+                pending.startAtMillis + announcerPlaybackQueue.playbackDurationMillis(pending.cue) + ANNOUNCER_CUE_GAP_MILLIS
+            } ?: nowMillis
+            announcerPlaybackQueue.reset(maxOf(nowMillis, restoredEndAtMillis))
+            pausedAnnouncerCues.clear()
+            announcerCuesPaused = false
+            announcerCuesPausedAtMillis = 0L
+            restored.forEach { pending ->
+                val soundId = transientSoundIds[pending.path]
+                if (soundId != null && soundId in loadedTransientSoundIds) {
+                    scheduleAnnouncerCue(pending.copy(soundId = soundId))
+                } else {
+                    pendingAnnouncerCues.addLast(pending)
+                }
+            }
+            activeAnnouncerStreamIds.forEach { transientSoundPool?.resume(it) }
+            flushPendingAnnouncerCues()
         }
     }
 
@@ -558,11 +626,12 @@ class BattleAudio(
         val requestedAtMillis = SystemClock.elapsedRealtime()
         val playback = announcerPlaybackQueue.enqueue(cue, requestedAtMillis)
         val pending = PendingAnnouncerCue(
+            cue,
             path,
             soundId,
             requestedAtMillis + playback.delayMillis
         )
-        if (soundId in loadedTransientSoundIds) {
+        if (!announcerCuesPaused && soundId in loadedTransientSoundIds) {
             scheduleAnnouncerCue(pending)
         } else {
             pendingAnnouncerCues.addLast(pending)
@@ -570,11 +639,20 @@ class BattleAudio(
     }
 
     private fun scheduleAnnouncerCue(pending: PendingAnnouncerCue) {
+        if (announcerCuesPaused) return
+        if (pending.soundId !in loadedTransientSoundIds) {
+            pendingAnnouncerCues.addLast(pending)
+            return
+        }
         val delayMillis = (pending.startAtMillis - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
         val generation = announcerPlaybackGeneration
+        val scheduled = ScheduledAnnouncerCue(
+            pending,
+            SystemClock.elapsedRealtime() + delayMillis
+        )
         lateinit var runnable: Runnable
         runnable = Runnable {
-            scheduledAnnouncerRunnables.remove(runnable)
+            scheduledAnnouncerCues.remove(scheduled)
             if (generation != announcerPlaybackGeneration || released.get() || !announcerEnabled || !soundEffectsEnabled.get()) return@Runnable
             val soundId = transientSoundIds[pending.path]
             if (soundId != pending.soundId || soundId !in loadedTransientSoundIds) return@Runnable
@@ -585,7 +663,8 @@ class BattleAudio(
                 if (streamId != 0) activeAnnouncerStreamIds += streamId
             }
         }
-        scheduledAnnouncerRunnables += runnable
+        scheduled.runnable = runnable
+        scheduledAnnouncerCues += scheduled
         audioCueHandler.postDelayed(runnable, delayMillis)
     }
 
@@ -594,12 +673,13 @@ class BattleAudio(
             clearAnnouncerCues()
             return
         }
+        if (announcerCuesPaused) return
         val pendingCount = pendingAnnouncerCues.size
         repeat(pendingCount) {
             val pending = pendingAnnouncerCues.removeFirst()
             val soundId = transientSoundIds[pending.path]
-            if (soundId == pending.soundId && soundId in loadedTransientSoundIds) {
-                scheduleAnnouncerCue(pending)
+            if (soundId != null && soundId in loadedTransientSoundIds) {
+                scheduleAnnouncerCue(pending.copy(soundId = soundId))
             } else {
                 pendingAnnouncerCues.addLast(pending)
             }
@@ -608,11 +688,14 @@ class BattleAudio(
 
     private fun clearAnnouncerCues() {
         pendingAnnouncerCues.clear()
-        scheduledAnnouncerRunnables.toList().forEach(audioCueHandler::removeCallbacks)
-        scheduledAnnouncerRunnables.clear()
+        scheduledAnnouncerCues.forEach { it.runnable?.let(audioCueHandler::removeCallbacks) }
+        scheduledAnnouncerCues.clear()
+        pausedAnnouncerCues.clear()
         activeAnnouncerStreamIds.forEach { transientSoundPool?.stop(it) }
         activeAnnouncerStreamIds.clear()
         announcerPlaybackGeneration += 1
+        announcerCuesPaused = false
+        announcerCuesPausedAtMillis = 0L
         announcerPlaybackQueue.reset(SystemClock.elapsedRealtime())
     }
 
@@ -722,6 +805,7 @@ class BattleAudio(
         const val MAX_TRANSIENT_SOUND_SAMPLES = 24
         const val MAX_DIAGNOSTIC_EVENTS = 24
         const val BATTLE_CUE_GAP_MILLIS = 24L
+        const val ANNOUNCER_CUE_GAP_MILLIS = 24L
         const val MUSIC_LOOP_GUARD_MILLIS = 750L
         const val MUSIC_LOOP_POLL_INTERVAL_MILLIS = 500L
     }
