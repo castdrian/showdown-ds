@@ -5290,7 +5290,12 @@ class MainActivity : Activity() {
         val selectedIndex = formats.indexOfFirst { it.id.trim().equals(initialFormat.id.trim(), true) }.coerceAtLeast(0)
         ShowdownDialogBuilder(this)
             .setTitle("Battle format")
-            .setSingleChoiceItems(formats.map { readableFormatLabel(it.id) }.toTypedArray(), selectedIndex) { _, selected ->
+            .setSearchableSingleChoiceItems(
+                "Search formats",
+                formats.map { readableFormatLabel(it.id) },
+                selectedIndex,
+                formats.map(ShowdownFormatSearch::searchText)
+            ) { _, selected ->
                 val format = ShowdownTeamLibraryQuery.matchFormat(formats[selected].id, session.availableMatchFormats())
                 onSelected(format)
             }

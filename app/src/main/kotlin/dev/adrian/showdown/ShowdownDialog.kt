@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -63,12 +65,21 @@ class ShowdownDialog(context: Context) : Dialog(context) {
     private var items: Array<out CharSequence>? = null
     private var itemListener: ((ShowdownDialog, Int) -> Unit)? = null
     private var checkedItem = -1
+    private var searchableItems: SearchableItems? = null
     private var titleView: TextView? = null
     private val buttonViews = mutableMapOf<Int, TextView>()
     private var shell: LinearLayout? = null
     private var focusedControllerActionIndex = 0
     private var controllerHorizontal = 0
     private var controllerVertical = 0
+
+    private data class SearchableItems(
+        val hint: CharSequence,
+        val values: List<CharSequence>,
+        val searchValues: List<CharSequence>,
+        val checkedItem: Int,
+        val listener: (ShowdownDialog, Int) -> Unit
+    )
 
     override fun setTitle(title: CharSequence?) {
         dialogTitle = title ?: ""
@@ -96,6 +107,17 @@ class ShowdownDialog(context: Context) : Dialog(context) {
         items = values
         checkedItem = checked
         itemListener = listener
+        return this
+    }
+
+    fun setSearchableSingleChoiceItems(
+        hint: CharSequence,
+        values: List<CharSequence>,
+        checked: Int,
+        searchValues: List<CharSequence> = values,
+        listener: (ShowdownDialog, Int) -> Unit
+    ): ShowdownDialog {
+        searchableItems = SearchableItems(hint, values.toList(), searchValues.toList(), checked, listener)
         return this
     }
 
@@ -197,6 +219,68 @@ class ShowdownDialog(context: Context) : Dialog(context) {
                 setTextSize(17f)
                 setPadding(dp(20), dp(16), dp(20), dp(16))
             }, FrameLayout.LayoutParams(-1, -2))
+        } ?: searchableItems?.let { searchable ->
+            val filter = EditText(context).apply {
+                hint = searchable.hint
+                isSingleLine = true
+                imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                setTextColor(Color.rgb(234, 245, 247))
+                setHintTextColor(Color.rgb(139, 171, 183))
+                setTextSize(17f)
+                background = surface(Color.rgb(14, 39, 56), Color.rgb(52, 113, 126), 14f)
+                setPadding(dp(16), dp(10), dp(16), dp(10))
+            }
+            val list = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            fun renderRows(query: String) {
+                list.removeAllViews()
+                val terms = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
+                searchable.values.forEachIndexed { index, value ->
+                    val normalized = listOf(value, searchable.searchValues.getOrNull(index)?.toString().orEmpty()).joinToString(" ")
+                    if (terms.isNotEmpty() && terms.any { !normalized.contains(it, ignoreCase = true) }) return@forEachIndexed
+                    val row = TextView(context).apply {
+                        text = value
+                        setTextColor(Color.rgb(223, 239, 243))
+                        setTextSize(17f)
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(dp(20), dp(14), dp(20), dp(14))
+                        background = if (index == searchable.checkedItem) surface(Color.rgb(29, 115, 123), Color.rgb(133, 214, 209), 16f) else surface(Color.rgb(18, 48, 66), Color.rgb(54, 110, 122), 16f)
+                        isClickable = true
+                        isFocusable = true
+                        setOnClickListener {
+                            dismiss()
+                            searchable.listener(this@ShowdownDialog, index)
+                        }
+                    }
+                    list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, dp(8)) })
+                }
+                if (list.childCount == 0) {
+                    list.addView(TextView(context).apply {
+                        text = "No matching formats"
+                        setTextColor(Color.rgb(175, 204, 212))
+                        setTextSize(17f)
+                        gravity = Gravity.CENTER
+                        setPadding(dp(20), dp(32), dp(20), dp(32))
+                    }, LinearLayout.LayoutParams(-1, -2))
+                }
+            }
+            filter.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = renderRows(text?.toString().orEmpty())
+                override fun afterTextChanged(editable: Editable?) = Unit
+            })
+            renderRows("")
+            val filteredContent = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(filter, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+                addView(ScrollView(context).apply {
+                    isFillViewport = true
+                    overScrollMode = View.OVER_SCROLL_NEVER
+                    addView(list, ViewGroup.LayoutParams(-1, -2))
+                }, LinearLayout.LayoutParams(-1, -2))
+            }
+            content.addView(filteredContent, FrameLayout.LayoutParams(-1, -2))
         } ?: items?.let { values ->
             val list = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -405,6 +489,14 @@ class ShowdownDialogBuilder(private val context: Context) {
     fun setItems(items: Array<out CharSequence>, listener: (ShowdownDialog, Int) -> Unit): ShowdownDialogBuilder = apply { dialog.setItems(items, listener) }
 
     fun setSingleChoiceItems(items: Array<out CharSequence>, checkedItem: Int, listener: (ShowdownDialog, Int) -> Unit): ShowdownDialogBuilder = apply { dialog.setSingleChoiceItems(items, checkedItem, listener) }
+
+    fun setSearchableSingleChoiceItems(
+        hint: CharSequence,
+        items: List<CharSequence>,
+        checkedItem: Int,
+        searchValues: List<CharSequence> = items,
+        listener: (ShowdownDialog, Int) -> Unit
+    ): ShowdownDialogBuilder = apply { dialog.setSearchableSingleChoiceItems(hint, items, checkedItem, searchValues, listener) }
 
     fun setPositiveButton(text: CharSequence, listener: ((ShowdownDialog, Int) -> Unit)?): ShowdownDialogBuilder = apply { dialog.setPositiveButton(text, listener) }
 
