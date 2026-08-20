@@ -100,42 +100,6 @@ private fun skipGifSubBlocks(bytes: ByteArray, start: Int): Int? {
     return null
 }
 
-internal class ProgressiveAssetDelivery<T>(
-    private val isAnimated: (T) -> Boolean = { false }
-) {
-    private var fallbackDelivered = false
-    private var resolutionDelivered = false
-    private var fallbackAsset: T? = null
-    private var resolutionAsset: T? = null
-    private var deliveredAsset: T? = null
-
-    @Synchronized
-    fun deliverFallback(asset: T, receiver: (T) -> Unit) {
-        fallbackDelivered = true
-        fallbackAsset = asset
-        val current = deliveredAsset
-        val canUpgradeResolution = resolutionDelivered && resolutionAsset?.let { !isAnimated(it) } == true && isAnimated(asset)
-        if ((!resolutionDelivered && (current == null || !isAnimated(current))) || canUpgradeResolution) {
-            deliveredAsset = asset
-            receiver(asset)
-        }
-    }
-
-    @Synchronized
-    fun deliverResolution(asset: T?, receiver: (T?) -> Unit) {
-        if (asset == null) {
-            if (!fallbackDelivered) receiver(null)
-            return
-        }
-        if (fallbackAsset?.let(isAnimated) == true && !isAnimated(asset)) return
-        if (deliveredAsset?.let(isAnimated) == true && !isAnimated(asset)) return
-        resolutionDelivered = true
-        resolutionAsset = asset
-        deliveredAsset = asset
-        receiver(asset)
-    }
-}
-
 class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
         private val bitmap: Bitmap?,
@@ -218,19 +182,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
-        if (request.style == BattleSession.SpriteStyle.MODERN_3D) {
-            val delivery = ProgressiveAssetDelivery<SpriteAsset>(SpriteAsset::isAnimated)
-            requestPokeApiFallbackSprite(request) { asset ->
-                asset?.let { delivery.deliverFallback(it, receiver) }
-            }
-            requestResolutionPlan(
-                request = request,
-                plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request)
-            ) { asset ->
-                delivery.deliverResolution(asset, receiver)
-            }
-            return
-        }
         requestResolutionPlan(
             request = request,
             plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request),
@@ -389,17 +340,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (scrapedAsset != null) {
                 receiver(scrapedAsset)
             } else {
-                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                    if (communityAsset != null) {
-                        receiver(communityAsset)
+                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                    if (regularRemoteAsset != null) {
+                        receiver(regularRemoteAsset)
                     } else {
-                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                            if (regularRemoteAsset != null) {
-                                receiver(regularRemoteAsset)
+                        requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedRegularAsset ->
+                            if (scrapedRegularAsset != null) {
+                                receiver(scrapedRegularAsset)
                             } else {
-                                requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedRegularAsset ->
-                                    if (scrapedRegularAsset != null) {
-                                        receiver(scrapedRegularAsset)
+                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                                    if (communityAsset != null) {
+                                        receiver(communityAsset)
                                     } else {
                                         requestModernLocalSpriteResolution(request, plan) { modernLocalAsset ->
                                             if (modernLocalAsset != null) {
@@ -489,17 +440,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (scrapedAsset != null) {
                 receiver(scrapedAsset)
             } else {
-                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                    if (communityAsset != null) {
-                        receiver(communityAsset)
+                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
+                    if (regularRemoteAsset != null) {
+                        receiver(regularRemoteAsset)
                     } else {
-                        requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                            if (regularRemoteAsset != null) {
-                                receiver(regularRemoteAsset)
+                        requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
+                            if (regularScrapedAsset != null) {
+                                receiver(regularScrapedAsset)
                             } else {
-                                requestScrapedFrontSpriteResolution(request, highResolutionOnly = false) { regularScrapedAsset ->
-                                    if (regularScrapedAsset != null) {
-                                        receiver(regularScrapedAsset)
+                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                                    if (communityAsset != null) {
+                                        receiver(communityAsset)
                                     } else {
                                         requestScavioAnimatedSprite(request) { scavioAsset ->
                                             if (scavioAsset != null) {
@@ -675,13 +626,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestPokeApiSpriteCandidates(request, { resourceNumber ->
             listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny))
         }, receiver)
-    }
-
-    private fun requestPokeApiFallbackSprite(
-        request: BattleSpriteRequest,
-        receiver: (SpriteAsset?) -> Unit
-    ) {
-        requestPokeApiAnimatedSprite(request, receiver)
     }
 
     private fun requestPokeApiSpriteCandidates(

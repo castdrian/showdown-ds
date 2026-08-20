@@ -5149,6 +5149,7 @@ class MainActivity : Activity() {
         pendingChatRoomId = null
         clearBattlePlayback()
         session.prepareForReplay()
+        ShowdownReplayImporter.matchFormat(replay, session.availableMatchFormats())?.let(session::setMatchFormat)
         replay.players.firstOrNull()?.let(session::setLocalUsername)
         session.setReplayMode(true)
         session.setLiveBattleActive(true)
@@ -5445,6 +5446,18 @@ class MainActivity : Activity() {
                     cancelChoice()
                     battleAudio.playCancel()
                 }
+
+                override fun onReplayPauseToggled() {
+                    setReplayPaused(!replayPaused)
+                }
+
+                override fun onReplaySpeedSelected(speed: Float) {
+                    setReplaySpeed(speed)
+                }
+
+                override fun isReplayPaused() = replayPaused
+
+                override fun replaySpeed() = replaySpeed
             })
             frame.addView(commandDeck, FrameLayout.LayoutParams(-1, -1))
             frame.isFocusable = true

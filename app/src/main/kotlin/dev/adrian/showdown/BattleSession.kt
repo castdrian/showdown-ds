@@ -63,7 +63,7 @@ class BattleSession {
         val displayName: String,
         val animatedCollection: String
     ) {
-        MODERN_3D("HD animated", "xyani")
+        MODERN_3D("HD-first animated", "xyani")
     }
 
     enum class FeedbackType {
@@ -4174,7 +4174,7 @@ class BattleSession {
                 }
                 8 -> {
                     spriteStyle = SpriteStyle.MODERN_3D
-                    "HD animated sprite style enabled."
+                    "HD-first animated sprite style enabled."
                 }
                 9 -> {
                     publishClientAction(ClientAction.CONFIGURE_TEAM)

@@ -307,6 +307,7 @@ class ShowdownAssetPathsTest {
         assertFalse(plan.preferredRemoteCandidates.contains(officialBack))
         assertTrue(plan.regularRemoteCandidates.contains(officialBack))
         assertTrue(plan.communityRemoteCandidates.contains(communityBack))
+        assertTrue(plan.allCandidates.indexOf(officialBack) < plan.allCandidates.indexOf(communityBack))
         assertTrue(plan.allCandidates.indexOf(communityBack) < plan.allCandidates.indexOf("sprites/xyani-back/incineroar.gif"))
     }
 

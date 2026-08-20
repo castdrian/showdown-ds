@@ -26,6 +26,7 @@ object ShowdownReplayImporter {
         "https?://(?:replay\\.pokemonshowdown\\.com/[A-Za-z0-9-]+(?:\\.json)?|pokemonshowdown\\.com/replay/[A-Za-z0-9-]+(?:\\.json)?)",
         RegexOption.IGNORE_CASE
     )
+    private val replayFormatId = Regex("gen\\d+[a-z0-9]*", RegexOption.IGNORE_CASE)
 
     fun uploadUrl(message: String): String? = replayUrl.find(message)?.value?.removeSuffix(".json")
 
@@ -63,6 +64,17 @@ object ShowdownReplayImporter {
         }.replace("\r\n", "\n")
         if (log.isBlank()) throw IllegalArgumentException("Replay log is empty")
         return ShowdownReplayPayload(id, format, players, log)
+    }
+
+    fun matchFormat(
+        replay: ShowdownReplayPayload,
+        knownFormats: Collection<BattleSession.MatchFormat>
+    ): BattleSession.MatchFormat? {
+        val readableId = ShowdownTeamRemoteState.formatIdFromLabel(replay.format)
+            .lowercase(Locale.ROOT)
+            .takeIf { replayFormatId.matches(it) }
+        val replayId = replayFormatId.find(replay.id)?.value?.lowercase(Locale.ROOT)
+        return (readableId ?: replayId)?.let { ShowdownTeamLibraryQuery.matchFormat(it, knownFormats) }
     }
 
     private fun parsePlayers(value: JSONArray) = buildList {

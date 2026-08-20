@@ -2821,14 +2821,14 @@ class BattleSessionTest {
         val session = BattleSession()
 
         session.selectPanel(BattleSession.Panel.MENU)
-        assertEquals("Sprite style HD animated", session.menuItems()[8])
+        assertEquals("Sprite style HD-first animated", session.menuItems()[8])
 
         session.selectMenuItem(8)
         session.confirmSelection()
 
         assertEquals(BattleSession.SpriteStyle.MODERN_3D, session.spriteStyle)
-        assertEquals("Sprite style HD animated", session.menuItems()[8])
-        assertEquals("HD animated sprite style enabled.", session.status)
+        assertEquals("Sprite style HD-first animated", session.menuItems()[8])
+        assertEquals("HD-first animated sprite style enabled.", session.status)
     }
 
     @Test

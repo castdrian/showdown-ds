@@ -11,6 +11,8 @@ object ShowdownChangelog {
             currentVersion,
             listOf(
                 "Finished battles keep the final Showdown result visible on the upper display.",
+                "Replay controls now stay on the lower display with pause and 0.5×–2× speed selection.",
+                "Replays identify their format and prioritize HD-first animated sprites whenever available.",
                 "Battle animation, text pacing, and sound effects now share a synchronized 0.5×–2× speed range.",
                 "Battle controls now include a 2× speed option."
             )

@@ -29,6 +29,10 @@ class CommandDeckView(
         fun onNavigation()
         fun onConfirmation()
         fun onCancelChoice()
+        fun onReplayPauseToggled()
+        fun onReplaySpeedSelected(speed: Float)
+        fun isReplayPaused(): Boolean
+        fun replaySpeed(): Float
     }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -47,6 +51,8 @@ class CommandDeckView(
     private var cancelChoiceBounds: RectF? = null
     private var shiftBounds: RectF? = null
     private var testFightBounds: RectF? = null
+    private var replayPauseBounds: RectF? = null
+    private val replaySpeedBounds = arrayOfNulls<RectF>(ReplayControlPresentation.speeds.size)
     private var zPowerSymbol: Bitmap? = null
     private var pressedMoveIndex: Int? = null
     private var pressStartedAt = 0L
@@ -143,6 +149,21 @@ class CommandDeckView(
             }
         }
         if (session.panel == BattleSession.Panel.MOVES) {
+            if (hasReplayControls()) {
+                if (replayPauseBounds?.contains(x, y) == true) {
+                    interactionListener.onReplayPauseToggled()
+                    interactionListener.onConfirmation()
+                    return true
+                }
+                replaySpeedBounds.forEachIndexed { index, bounds ->
+                    if (bounds?.contains(x, y) == true) {
+                        interactionListener.onReplaySpeedSelected(ReplayControlPresentation.speeds[index])
+                        interactionListener.onConfirmation()
+                        return true
+                    }
+                }
+                return true
+            }
             if (session.canShift() && shiftBounds?.contains(x, y) == true) {
                 session.selectShiftWithTouch()
                 interactionListener.onConfirmation()
@@ -228,6 +249,8 @@ class CommandDeckView(
         cancelChoiceBounds = null
         shiftBounds = null
         testFightBounds = null
+        replayPauseBounds = null
+        replaySpeedBounds.fill(null)
     }
 
     private fun resetDecisionTransitionState() {
@@ -282,6 +305,12 @@ class CommandDeckView(
         targetBounds.fill(null)
         shiftBounds = null
         testFightBounds = null
+        if (hasReplayControls()) {
+            layoutReplayControlTouchBounds(width, height, scale)
+            return
+        }
+        replayPauseBounds = null
+        replaySpeedBounds.fill(null)
         if (session.isSpectatorMode() && !session.isBattleFinished()) return
         if (!session.isLiveBattleActive() && !session.isBattleFinished()) return
         if (session.isBattleFinished() || session.moves().isEmpty()) return
@@ -297,6 +326,21 @@ class CommandDeckView(
             moveBounds[index] = RectF(moveLeft, top, moveRight, top + cardHeight)
         }
         layoutBattleConsoleTouchBounds(RectF(left, panelTop, consoleRight, panelTop + cardHeight * 4f + gap * 3f), scale)
+    }
+
+    private fun layoutReplayControlTouchBounds(width: Float, height: Float, scale: Float) {
+        val panel = replayControlPanelBounds(width, height, scale)
+        val horizontalInset = 34f * scale
+        val pauseTop = panel.top + 196f * scale
+        replayPauseBounds = RectF(panel.left + horizontalInset, pauseTop, panel.right - horizontalInset, pauseTop + 112f * scale)
+        val speedTop = pauseTop + 196f * scale
+        val gap = 12f * scale
+        val availableWidth = panel.width() - horizontalInset * 2f
+        val speedWidth = (availableWidth - gap * (ReplayControlPresentation.speeds.size - 1)) / ReplayControlPresentation.speeds.size
+        ReplayControlPresentation.speeds.indices.forEach { index ->
+            val left = panel.left + horizontalInset + index * (speedWidth + gap)
+            replaySpeedBounds[index] = RectF(left, speedTop, left + speedWidth, speedTop + 104f * scale)
+        }
     }
 
     private fun layoutBattleConsoleTouchBounds(bounds: RectF, scale: Float) {
@@ -521,6 +565,8 @@ class CommandDeckView(
             moveBounds.fill(null)
             gimmickBounds.fill(null)
             targetBounds.fill(null)
+            replayPauseBounds = null
+            replaySpeedBounds.fill(null)
             drawEmptyPanel(
                 canvas,
                 width,
@@ -532,6 +578,15 @@ class CommandDeckView(
             )
             return
         }
+        if (hasReplayControls()) {
+            moveBounds.fill(null)
+            gimmickBounds.fill(null)
+            targetBounds.fill(null)
+            drawReplayControls(canvas, width, height, scale)
+            return
+        }
+        replayPauseBounds = null
+        replaySpeedBounds.fill(null)
         if (session.isSpectatorMode() && !session.isBattleFinished()) {
             moveBounds.fill(null)
             gimmickBounds.fill(null)
@@ -601,6 +656,111 @@ class CommandDeckView(
             val move = moves.getOrNull(index)
             if (move == null) drawUnavailableMove(canvas, bounds, scale) else drawMoveRow(canvas, bounds, move, index == session.focusedMove, movePressProgress(index), scale)
         }
+    }
+
+    private fun hasReplayControls() = session.isReplayMode() &&
+        session.hasBattleProtocolTranscript() &&
+        !session.isBattleFinished()
+
+    private fun replayControlPanelBounds(width: Float, height: Float, scale: Float) = RectF(
+        44f * scale,
+        220f * scale,
+        width - 44f * scale,
+        height - 56f * scale
+    )
+
+    private fun drawReplayControls(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        val panel = replayControlPanelBounds(width, height, scale)
+        layoutReplayControlTouchBounds(width, height, scale)
+        val paused = interactionListener.isReplayPaused()
+        val speed = interactionListener.replaySpeed()
+        paint.style = Paint.Style.FILL
+        paint.shader = LinearGradient(
+            panel.left,
+            panel.top,
+            panel.right,
+            panel.bottom,
+            Color.rgb(25, 61, 79),
+            Color.rgb(8, 26, 43),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(panel, 28f * scale, 28f * scale, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb(180, 102, 211, 231)
+        canvas.drawRoundRect(panel, 28f * scale, 28f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(42f, scale, 32f)
+        paint.color = PAPER
+        canvas.drawText("Replay controls", panel.centerX(), panel.top + 86f * scale, paint)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = readableTextSize(28f, scale, 24f)
+        paint.color = Color.rgb(190, 218, 235)
+        canvas.drawText(ReplayControlPresentation.statusLabel(paused, speed), panel.centerX(), panel.top + 136f * scale, paint)
+        val pause = replayPauseBounds ?: return
+        drawReplayControlButton(canvas, pause, ReplayControlPresentation.pauseLabel(paused), selected = paused, primary = true, scale = scale)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(25f, scale, 21f)
+        paint.color = Color.rgb(170, 226, 230)
+        canvas.drawText("PLAYBACK SPEED", panel.centerX(), pause.bottom + 72f * scale, paint)
+        ReplayControlPresentation.speeds.forEachIndexed { index, candidate ->
+            replaySpeedBounds[index]?.let { bounds ->
+                drawReplayControlButton(
+                    canvas,
+                    bounds,
+                    ReplayControlPresentation.speedLabel(candidate),
+                    selected = BattlePlaybackSpeed.coerce(candidate) == BattlePlaybackSpeed.coerce(speed),
+                    primary = false,
+                    scale = scale
+                )
+            }
+        }
+        paint.textSize = readableTextSize(23f, scale, 19f)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.color = Color.rgb(163, 201, 220)
+        canvas.drawText("Battle actions and the log stay on the upper display.", panel.centerX(), panel.bottom - 74f * scale, paint)
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawReplayControlButton(
+        canvas: Canvas,
+        bounds: RectF,
+        label: String,
+        selected: Boolean,
+        primary: Boolean,
+        scale: Float
+    ) {
+        paint.style = Paint.Style.FILL
+        paint.shader = LinearGradient(
+            bounds.left,
+            bounds.top,
+            bounds.right,
+            bounds.bottom,
+            if (selected) Color.rgb(37, 139, 147) else if (primary) Color.rgb(24, 101, 118) else Color.rgb(22, 58, 77),
+            if (selected) Color.rgb(15, 81, 104) else if (primary) Color.rgb(10, 61, 83) else Color.rgb(8, 29, 47),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(bounds, 22f * scale, 22f * scale, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = if (selected || primary) 2.5f * scale else 1.25f * scale
+        paint.color = if (selected || primary) Color.rgb(151, 232, 227) else Color.argb(152, 130, 193, 216)
+        canvas.drawRoundRect(bounds, 22f * scale, 22f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = fittedTextSizeInRegion(
+            label,
+            bounds.width() - 28f * scale,
+            bounds.height() - 14f * scale,
+            readableTextSize(if (primary) 34f else 28f, scale, if (primary) 28f else 22f),
+            readableTextSize(18f, scale, 16f)
+        )
+        paint.color = PAPER
+        canvas.drawText(label, bounds.centerX(), centeredTextBaseline(bounds.centerY()), paint)
     }
 
     private fun drawTargets(canvas: Canvas, left: Float, right: Float, top: Float, scale: Float) {

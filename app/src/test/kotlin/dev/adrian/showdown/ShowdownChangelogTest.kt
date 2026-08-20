@@ -12,5 +12,7 @@ class ShowdownChangelogTest {
         assertEquals("v0.1.1-alpha.60", entries.first().version)
         assertTrue(entries.first().changes.any { it.contains("final Showdown result") })
         assertTrue(entries.first().changes.any { it.contains("0.5×–2×") })
+        assertTrue(entries.first().changes.any { it.contains("lower display") })
+        assertTrue(entries.first().changes.any { it.contains("HD-first") })
     }
 }

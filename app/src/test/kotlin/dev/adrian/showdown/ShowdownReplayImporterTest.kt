@@ -59,4 +59,29 @@ class ShowdownReplayImporterTest {
         assertEquals("|init|battle\n|win|Alice", replay.log)
         assertEquals("[[Gen 9] OU] Alice vs. Bob", replay.title)
     }
+
+    @Test
+    fun resolvesReplayFormatBeforePlaybackStarts() {
+        val replay = ShowdownReplayPayload(
+            "gen8randombattle-123",
+            "[Gen 8] Random Battle",
+            emptyList(),
+            "|init|battle"
+        )
+        val fallbackReplay = ShowdownReplayPayload(
+            "smogtours-gen7randombattle-123",
+            "",
+            emptyList(),
+            "|init|battle"
+        )
+
+        assertEquals(
+            BattleSession.MatchFormat.GEN8_RANDOM,
+            ShowdownReplayImporter.matchFormat(replay, BattleSession.MatchFormat.defaults)
+        )
+        assertEquals(
+            BattleSession.MatchFormat.GEN7_RANDOM,
+            ShowdownReplayImporter.matchFormat(fallbackReplay, BattleSession.MatchFormat.defaults)
+        )
+    }
 }

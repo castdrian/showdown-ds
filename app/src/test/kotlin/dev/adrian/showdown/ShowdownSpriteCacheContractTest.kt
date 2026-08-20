@@ -55,7 +55,7 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun modernRequestsStartAnAnimatedFallbackWithoutSubstitute() {
+    fun modernRequestsResolveHdArtworkBeforeShowdownFallbacks() {
         val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val requestSource = cacheSource.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
         val deckSource = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
@@ -63,58 +63,13 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(isGenericSpritePlaceholder("sprites/ani/substitute.gif"))
         assertTrue(isGenericSpritePlaceholder("sprites/ani-back/decoy.gif"))
         assertFalse(isGenericSpritePlaceholder("sprites/xyani-back/kilowattrel.gif"))
-        assertTrue(requestSource.contains("requestPokeApiFallbackSprite(request)"))
-        assertTrue(cacheSource.contains("requestPokeApiAnimatedSprite(request, receiver)"))
+        assertTrue(requestSource.contains("requestResolutionPlan("))
+        assertFalse(requestSource.contains("requestPokeApiFallbackSprite(request)"))
+        assertTrue(cacheSource.contains("requestPokeApiAnimatedSprite(request)"))
         assertFalse(cacheSource.contains("requestPokeApiHighResolutionSprite"))
         assertFalse(cacheSource.contains("pokeApiHighResolutionSprite"))
         assertFalse(cacheSource.contains("requestPokeApiStandardSprite"))
         assertFalse(deckSource.contains("requestPlaceholder"))
-    }
-
-    @Test
-    fun modernRequestsQueueTheGuaranteedFallbackBeforeRemoteResolution() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
-        val requestSource = source.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
-        val fallbackIndex = requestSource.indexOf("requestPokeApiFallbackSprite(request)")
-        val resolutionIndex = requestSource.indexOf("requestResolutionPlan(")
-
-        assertTrue(fallbackIndex >= 0)
-        assertTrue(resolutionIndex >= 0)
-        assertTrue(fallbackIndex < resolutionIndex)
-    }
-
-    @Test
-    fun hdResolutionCanReplaceFallbackButLateFallbackCannotDowngradeIt() {
-        val delivered = mutableListOf<String>()
-        val gate = ProgressiveAssetDelivery<String>()
-
-        gate.deliverFallback("regular") { delivered.add(it) }
-        gate.deliverResolution("hd") { delivered.add(it ?: "") }
-        gate.deliverFallback("late") { delivered.add(it) }
-
-        assertEquals(listOf("regular", "hd"), delivered)
-    }
-
-    @Test
-    fun staticResolutionCannotDowngradeAnAnimatedFallback() {
-        val delivered = mutableListOf<String>()
-        val gate = ProgressiveAssetDelivery<String> { it == "animated" }
-
-        gate.deliverFallback("animated") { delivered.add(it) }
-        gate.deliverResolution("static") { delivered.add(it ?: "") }
-
-        assertEquals(listOf("animated"), delivered)
-    }
-
-    @Test
-    fun lateAnimatedFallbackUpgradesAStaticResolution() {
-        val delivered = mutableListOf<String>()
-        val gate = ProgressiveAssetDelivery<String> { it == "animated" }
-
-        gate.deliverResolution("static") { delivered.add(it ?: "") }
-        gate.deliverFallback("animated") { delivered.add(it) }
-
-        assertEquals(listOf("static", "animated"), delivered)
     }
 
     @Test
@@ -139,14 +94,15 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(backRegularIndex >= 0)
         assertTrue(scrapedBackIndex >= 0)
         assertTrue(scrapedBackIndex < backRegularIndex)
-        assertTrue(scrapedBackRegularIndex > backCommunityIndex)
-        assertTrue(backCommunityIndex > scrapedBackIndex)
+        assertTrue(backRegularIndex > scrapedBackIndex)
+        assertTrue(scrapedBackRegularIndex > backRegularIndex)
+        assertTrue(backCommunityIndex > scrapedBackRegularIndex)
         assertTrue(frontHdIndex >= 0)
         assertTrue(frontAnimatedIndex > frontHdIndex)
         assertTrue(source.contains("ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls(request.shiny)"))
         assertTrue(frontCommunityIndex >= 0)
-        assertTrue(frontCommunityIndex < frontRegularIndex)
         assertTrue(frontRegularIndex < frontAnimatedIndex)
+        assertTrue(frontCommunityIndex > frontAnimatedIndex)
         assertTrue(animatedFallbackIndex > localIndex)
         assertTrue(localIndex >= 0)
         assertTrue(localIndex < animatedFallbackIndex)
