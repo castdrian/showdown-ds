@@ -389,6 +389,16 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun ladderEntriesUseAFilterableCustomSurface() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val ladder = source.substringAfter("private fun renderLadderDialog()").substringBefore("private fun requestLadder")
+
+        assertTrue(ladder.contains("Search players or rank"))
+        assertTrue(ladder.contains("setSearchableSingleChoiceItems"))
+        assertTrue(ladder.contains("ShowdownLadderQuery.searchText"))
+    }
+
+    @Test
     fun closesStaleLobbyAndTeamDialogsBeforeStartingAnotherConnectionFlow() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val transition = source.substringAfter("private fun startLobbyConnection(")

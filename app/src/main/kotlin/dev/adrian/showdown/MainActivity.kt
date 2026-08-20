@@ -1402,16 +1402,26 @@ class MainActivity : Activity() {
                 "${index + 1}. ${entry.username}\nElo ${entry.elo.toInt()} · GXE ${entry.gxe.toInt()}% · Glicko $glicko"
             }.toTypedArray()
         }
+        val searchValues = entries.mapIndexed { index, entry -> ShowdownLadderQuery.searchText(index, entry) }
         val previous = ladderDialog
         ladderDialog = null
         previous?.dismiss()
-        val dialog = ShowdownDialogBuilder(this)
+        val builder = ShowdownDialogBuilder(this)
             .setTitle("Ladder · ${readableFormatLabel(format.id)}")
-            .setItems(labels) { _, _ -> }
             .setNegativeButton("Close") { _, _ -> ladderFormatId = null }
             .setNeutralButton("Format") { _, _ -> showLadderFormatPicker() }
             .setPositiveButton("Refresh") { _, _ -> requestLadder(format) }
-            .create()
+        if (entries.isEmpty()) {
+            builder.setItems(labels) { _, _ -> }
+        } else {
+            builder.setSearchableSingleChoiceItems(
+                "Search players or rank",
+                labels.toList(),
+                -1,
+                searchValues
+            ) { _, _ -> }
+        }
+        val dialog = builder.create()
         dialog.setOnDismissListener {
             if (ladderDialog === dialog) {
                 ladderDialog = null
