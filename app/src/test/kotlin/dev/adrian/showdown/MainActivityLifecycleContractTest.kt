@@ -303,6 +303,24 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun controllerNavigationDismissesOpenCustomDialogsBeforeOpeningAnotherSurface() {
+        val activitySource = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val dialogSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownDialog.kt").readText()
+        val listener = activitySource.substringAfter("private val clientActionListener")
+            .substringBefore("private val displayListener")
+
+        val dismissIndex = listener.indexOf("ShowdownDialog.dismissOpenDialogs(this)")
+        val dispatchIndex = listener.indexOf("when (action)")
+
+        assertTrue(dismissIndex >= 0)
+        assertTrue(dismissIndex < dispatchIndex)
+        assertTrue(dialogSource.contains("private val openDialogs = linkedSetOf<ShowdownDialog>()"))
+        assertTrue(dialogSource.contains("fun dismissOpenDialogs(hostContext: Context)"))
+        assertTrue(dialogSource.contains("openDialogs += this"))
+        assertTrue(dialogSource.contains("openDialogs -= this"))
+    }
+
+    @Test
     fun keepsTeamEditorSlotsCompactAndExpandable() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 

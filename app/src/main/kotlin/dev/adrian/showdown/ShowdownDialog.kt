@@ -25,6 +25,13 @@ class ShowdownDialog(context: Context) : Dialog(context) {
         const val BUTTON_POSITIVE = -1
         const val BUTTON_NEGATIVE = -2
         const val BUTTON_NEUTRAL = -3
+        private val openDialogs = linkedSetOf<ShowdownDialog>()
+
+        fun dismissOpenDialogs(hostContext: Context) {
+            openDialogs.toList()
+                .filter { it.hostContext === hostContext && it.isShowing }
+                .forEach { it.dismiss() }
+        }
     }
 
     private data class Action(
@@ -34,6 +41,7 @@ class ShowdownDialog(context: Context) : Dialog(context) {
     )
 
     private val density = context.resources.displayMetrics.density
+    private val hostContext = context
     private val actions = linkedMapOf<Int, Action>()
     private var dialogTitle: CharSequence = ""
     private var message: CharSequence? = null
@@ -93,11 +101,17 @@ class ShowdownDialog(context: Context) : Dialog(context) {
 
     override fun onStart() {
         super.onStart()
+        openDialogs += this
         val display = context.resources.displayMetrics
         window?.setLayout((display.widthPixels * 0.84f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
         shell?.requestFocus()
         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
             ?.hideSoftInputFromWindow(shell?.windowToken, 0)
+    }
+
+    override fun onStop() {
+        openDialogs -= this
+        super.onStop()
     }
 
     private fun setAction(which: Int, text: CharSequence, listener: ((ShowdownDialog, Int) -> Unit)?, kind: Int): ShowdownDialog {

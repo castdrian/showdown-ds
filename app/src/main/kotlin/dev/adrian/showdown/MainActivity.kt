@@ -271,6 +271,7 @@ class MainActivity : Activity() {
     }
     private val clientActionListener = BattleSession.ClientActionListener { action ->
         runOnUiThread {
+            ShowdownDialog.dismissOpenDialogs(this)
             when (action) {
                 BattleSession.ClientAction.FIND_BATTLE -> findBattle()
                 BattleSession.ClientAction.CONFIGURE_SERVER -> showServerSettings()
