@@ -2155,7 +2155,7 @@ class CommandDeckView(
         4 -> "SFX: ${entry.substringAfterLast(' ')}"
         5 -> "Music: ${entry.substringAfterLast(' ')}"
         6 -> "Haptics: ${entry.substringAfterLast(' ')}"
-        7 -> "Announcer: ${entry.substringAfterLast(' ')}"
+        7 -> "PBR announcer: ${entry.substringAfterLast(' ')}"
         8 -> "Sprites: ${entry.removePrefix("Sprite style ")}"
         9 -> "Team library"
         10 -> "Rooms"

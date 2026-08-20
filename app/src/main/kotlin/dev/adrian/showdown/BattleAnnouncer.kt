@@ -1,23 +1,26 @@
 package dev.adrian.showdown
 
-enum class BattleAnnouncerCue(val assetName: String) {
-    BATTLE_START("tb_014"),
-    SWITCH("tb_142"),
-    MOVE("tb_150m"),
-    HIT("tb_100"),
-    MULTI_HIT("tb_120"),
-    MISS("tb_040"),
-    FAIL("tb_550"),
-    CANNOT_MOVE("tb_390m"),
-    FAINT("h1b_107"),
-    INTIMIDATE("cb_130"),
-    POISON("kb_020"),
-    BURN("kb_040"),
-    HAIL("cb_230"),
-    SANDSTORM("cb_240"),
-    HEAL("kb_010"),
-    ITEM("tb_675"),
-    BATTLE_END("eb_010")
+enum class BattleAnnouncerCue(
+    val assetName: String,
+    val playbackDurationMillis: Long
+) {
+    BATTLE_START("tb_014", 1_776L),
+    SWITCH("tb_142", 1_314L),
+    MOVE("tb_150m", 1_321L),
+    HIT("tb_100", 851L),
+    MULTI_HIT("tb_120", 1_424L),
+    MISS("tb_040", 1_355L),
+    FAIL("tb_550", 1_577L),
+    CANNOT_MOVE("tb_390m", 1_271L),
+    FAINT("h1b_107", 1_332L),
+    INTIMIDATE("cb_130", 1_759L),
+    POISON("kb_020", 1_480L),
+    BURN("kb_040", 1_640L),
+    HAIL("cb_230", 2_399L),
+    SANDSTORM("cb_240", 2_501L),
+    HEAL("kb_010", 3_139L),
+    ITEM("tb_675", 1_876L),
+    BATTLE_END("eb_010", 1_715L)
 }
 
 object BattleAnnouncerCueResolver {

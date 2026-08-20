@@ -4175,7 +4175,7 @@ class BattleSession {
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
         5 -> "Background music ${if (musicEnabled) "on" else "off"}"
         6 -> "Haptics ${if (hapticsEnabled) "on" else "off"}"
-        7 -> "Announcer ${if (announcerEnabled) "on" else "off"}"
+        7 -> "PBR announcer ${if (announcerEnabled) "on" else "off"}"
         8 -> "Sprite style ${spriteStyle.displayName}"
         9 -> "Team library"
         10 -> "Rooms"
@@ -4227,7 +4227,7 @@ class BattleSession {
                 }
                 7 -> {
                     announcerEnabled = !announcerEnabled
-                    "Announcer ${if (announcerEnabled) "enabled." else "disabled."}"
+                    "PBR announcer ${if (announcerEnabled) "enabled." else "disabled."}"
                 }
                 8 -> {
                     spriteStyle = SpriteStyle.MODERN_3D

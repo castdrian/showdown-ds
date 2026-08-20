@@ -2863,14 +2863,14 @@ class BattleSessionTest {
 
         session.selectPanel(BattleSession.Panel.MENU)
         assertFalse(session.announcerEnabled)
-        assertEquals("Announcer off", session.menuItems()[7])
+        assertEquals("PBR announcer off", session.menuItems()[7])
 
         session.selectMenuItem(7)
         session.confirmSelection()
 
         assertTrue(session.announcerEnabled)
-        assertEquals("Announcer on", session.menuItems()[7])
-        assertEquals("Announcer enabled.", session.status)
+        assertEquals("PBR announcer on", session.menuItems()[7])
+        assertEquals("PBR announcer enabled.", session.status)
         assertEquals(listOf(BattleSession.ClientAction.SETTINGS_CHANGED), actions)
     }
 
