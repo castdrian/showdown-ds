@@ -18,7 +18,8 @@ object ShowdownChangelog {
                 "The optional PBR announcer now plays cues sequentially, follows battle speed, and pauses with the app.",
                 "The optional PBR announcer now recognizes Gen 9 Snow weather as its winter weather callout.",
                 "Stat-reset effects now use the matching rise or drop sound in the optional audio layer.",
-                "Matchmaking now exposes an explicit Cancel search action while a queue is active."
+                "Matchmaking now exposes an explicit Cancel search action while a queue is active.",
+                "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure."
             )
         ),
         ShowdownChangelogEntry(
