@@ -78,13 +78,15 @@ class BattleAudio(
     private var selectedMusic = MUSIC[session.showdownMusicIndex()]
     private var battleCuesPaused = false
     private var battleCuesPausedAtMillis = 0L
-    private val loopCheck = object : Runnable {
+    private val loopBoundaryRunnable = object : Runnable {
         override fun run() {
             val player = bgmPlayer ?: return
-            if (musicEnabled && player.isPlaying) {
-                if (player.currentPosition >= selectedMusic.loopEnd - 750) player.seekTo(selectedMusic.loopStart)
-                audioCueHandler.postDelayed(this, 500)
+            if (!musicEnabled || !bgmPrepared || !player.isPlaying) return
+            if (player.currentPosition < selectedMusic.loopEnd - MUSIC_LOOP_GUARD_MILLIS) {
+                scheduleMusicLoop(player)
+                return
             }
+            startMusicFromLoopStart(player)
         }
     }
 
@@ -130,9 +132,10 @@ class BattleAudio(
                 startMusicIfReady()
                 if (bgmPrepared && bgmPlayer?.isPlaying == false) {
                     bgmPlayer?.start()
-                    audioCueHandler.post(loopCheck)
+                    bgmPlayer?.let(::scheduleMusicLoop)
                 }
             } else {
+                audioCueHandler.removeCallbacks(loopBoundaryRunnable)
                 bgmPlayer?.pause()
             }
         }
@@ -148,12 +151,15 @@ class BattleAudio(
     }
 
     fun pauseMusic() {
-        audioCueHandler.post { bgmPlayer?.pause() }
+        audioCueHandler.post {
+            audioCueHandler.removeCallbacks(loopBoundaryRunnable)
+            bgmPlayer?.pause()
+        }
     }
 
     fun release() {
         if (!released.compareAndSet(false, true)) return
-        audioCueHandler.removeCallbacks(loopCheck)
+        audioCueHandler.removeCallbacks(loopBoundaryRunnable)
         previewRunnables.toList().forEach(mainHandler::removeCallbacks)
         previewRunnables.clear()
         audioCueHandler.removeCallbacksAndMessages(null)
@@ -410,19 +416,11 @@ class BattleAudio(
                 }
                 bgmPrepared = true
                 if (!musicEnabled) return@setOnPreparedListener
-                runCatching {
-                    player.seekTo(selectedMusic.loopStart)
-                    player.start()
-                    audioCueHandler.post(loopCheck)
-                }.onFailure { releaseMusicPlayer(player) }
+                startMusicFromLoopStart(player)
             }
             player.setOnCompletionListener {
                 if (bgmPlayer !== player || released.get() || !musicEnabled) return@setOnCompletionListener
-                runCatching {
-                    player.seekTo(selectedMusic.loopStart)
-                    player.start()
-                    audioCueHandler.post(loopCheck)
-                }.onFailure { releaseMusicPlayer(player) }
+                startMusicFromLoopStart(player)
             }
             player.prepareAsync()
         }.onFailure {
@@ -440,13 +438,32 @@ class BattleAudio(
     }
 
     private fun selectMusic(music: Music) {
-        audioCueHandler.removeCallbacks(loopCheck)
+        audioCueHandler.removeCallbacks(loopBoundaryRunnable)
         bgmPlayer?.release()
         bgmPlayer = null
         bgmPrepared = false
         bgmFile = null
         selectedMusic = music
         requestMusic(music)
+    }
+
+    private fun scheduleMusicLoop(player: MediaPlayer) {
+        audioCueHandler.removeCallbacks(loopBoundaryRunnable)
+        val remainingMillis = battleMusicLoopDelayMillis(
+            player.currentPosition,
+            selectedMusic.loopEnd,
+            MUSIC_LOOP_GUARD_MILLIS,
+            MUSIC_LOOP_POLL_INTERVAL_MILLIS
+        )
+        audioCueHandler.postDelayed(loopBoundaryRunnable, remainingMillis)
+    }
+
+    private fun startMusicFromLoopStart(player: MediaPlayer) {
+        runCatching {
+            player.seekTo(selectedMusic.loopStart)
+            player.start()
+            scheduleMusicLoop(player)
+        }.onFailure { releaseMusicPlayer(player) }
     }
 
     private fun requestMusic(music: Music) {
@@ -620,6 +637,18 @@ class BattleAudio(
         const val MAX_TRANSIENT_SOUND_SAMPLES = 24
         const val MAX_DIAGNOSTIC_EVENTS = 24
         const val BATTLE_CUE_GAP_MILLIS = 24L
+        const val MUSIC_LOOP_GUARD_MILLIS = 750L
+        const val MUSIC_LOOP_POLL_INTERVAL_MILLIS = 500L
     }
 
+}
+
+internal fun battleMusicLoopDelayMillis(
+    currentPosition: Int,
+    loopEnd: Int,
+    guardMillis: Long,
+    pollIntervalMillis: Long = 0L
+): Long {
+    val remainingToGuard = loopEnd.toLong() - currentPosition.toLong() - guardMillis
+    return if (remainingToGuard <= 0L) 0L else remainingToGuard + pollIntervalMillis
 }

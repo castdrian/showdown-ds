@@ -185,6 +185,19 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun defersTheMoveDexUntilBattleOrTeamEditingNeedsIt() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val onCreate = source.substringAfter("override fun onCreate(savedInstanceState: Bundle?)").substringBefore("override fun onNewIntent")
+        val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
+
+        assertFalse(onCreate.contains("moveDex.load"))
+        assertTrue(source.contains("private fun bindMoveDexResolvers()"))
+        assertTrue(source.contains("private fun ensureMoveDexLoaded()"))
+        assertTrue(listener.contains("ensureMoveDexLoaded()"))
+        assertTrue(source.contains("if (details.visibility == View.VISIBLE) moveDex.load"))
+    }
+
+    @Test
     fun doesNotFeedInitialBattlePacketToFreshlySeededEffectsViewTwice() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")

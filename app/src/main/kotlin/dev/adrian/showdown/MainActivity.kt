@@ -229,6 +229,7 @@ class MainActivity : Activity() {
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread {
             if (::battleAudio.isInitialized) BattleAnnouncerCueResolver.cuesForProtocol(lines).forEach(battleAudio::playAnnouncerCue)
+            if (lines.any { it.startsWith("|init|battle") }) ensureMoveDexLoaded()
             applyBattleProtocolToEffects(lines)
         }
     }
@@ -346,16 +347,7 @@ class MainActivity : Activity() {
         session.addClientActionListener(clientActionListener)
         spriteCache = ShowdownSpriteCache(this)
         moveDex = ShowdownMoveDex(spriteCache)
-        session.setMoveTypeResolver(moveDex::typeFor)
-        session.setMoveInfoResolver(moveDex::infoFor)
-        session.setPokemonTypeResolver(moveDex::typesFor)
-        session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
-        moveDex.load {
-            session.setMoveTypeResolver(moveDex::typeFor)
-            session.setMoveInfoResolver(moveDex::infoFor)
-            session.setPokemonTypeResolver(moveDex::typesFor)
-            session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
-        }
+        bindMoveDexResolvers()
         battleAudio = BattleAudio(this, spriteCache, session)
         battleAudio.setPlaybackSpeed(replaySpeed)
         battleAudio.updateOptions(session)
@@ -741,6 +733,17 @@ class MainActivity : Activity() {
             battleAudio.updateOptions(session)
         }
         displayRefreshScheduler.request()
+    }
+
+    private fun bindMoveDexResolvers() {
+        session.setMoveTypeResolver(moveDex::typeFor)
+        session.setMoveInfoResolver(moveDex::infoFor)
+        session.setPokemonTypeResolver(moveDex::typesFor)
+        session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
+    }
+
+    private fun ensureMoveDexLoaded() {
+        moveDex.load(::bindMoveDexResolvers)
     }
 
     private fun applyBattleProtocolToEffects(lines: List<String>) {
