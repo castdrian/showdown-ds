@@ -51,6 +51,11 @@ class ShowdownLobbyState {
         activeLadder.clear()
     }
 
+    fun replaceLadder(entries: List<LadderEntry>) {
+        activeLadder.clear()
+        activeLadder += entries
+    }
+
     fun firstNewBattle(previousRoomIds: Set<String>): String? = battles.keys.firstOrNull { it !in previousRoomIds }
 
     fun battleForReconnect(activeRoomId: String?, pendingRoomId: String?, allowPendingJoinRecovery: Boolean = false): String? {
@@ -104,24 +109,7 @@ class ShowdownLobbyState {
     }
 
     private fun applyLadder(payload: String?) {
-        val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return
-        val rows = state.optJSONArray("toplist") ?: return
-        val parsed = mutableListOf<LadderEntry>()
-        for (index in 0 until rows.length()) {
-            val row = rows.optJSONObject(index) ?: continue
-            val username = row.optString("username").trim().ifBlank { row.optString("userid").trim() }
-            if (username.isBlank()) continue
-            parsed += LadderEntry(
-                username = username,
-                elo = row.optDouble("elo", 0.0),
-                gxe = row.optDouble("gxe", 0.0),
-                rpr = row.optDouble("rpr", 0.0),
-                rprd = row.optDouble("rprd", 0.0),
-                coil = row.optDouble("coil", Double.NaN).takeUnless(Double::isNaN)
-            )
-        }
-        activeLadder.clear()
-        activeLadder += parsed
+        parseLadderPayload(payload)?.let(::replaceLadder)
     }
 
     private fun appendRooms(values: org.json.JSONArray?, section: String, target: MutableList<RoomSummary>) {
@@ -202,6 +190,26 @@ class ShowdownLobbyState {
     }
 
     companion object {
+        fun parseLadderPayload(payload: String?): List<LadderEntry>? {
+            val state = runCatching { JSONObject(payload ?: "{}") }.getOrNull() ?: return null
+            val rows = state.optJSONArray("toplist") ?: return null
+            val parsed = mutableListOf<LadderEntry>()
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val username = row.optString("username").trim().ifBlank { row.optString("userid").trim() }
+                if (username.isBlank()) continue
+                parsed += LadderEntry(
+                    username = username,
+                    elo = row.optDouble("elo", 0.0),
+                    gxe = row.optDouble("gxe", 0.0),
+                    rpr = row.optDouble("rpr", 0.0),
+                    rprd = row.optDouble("rprd", 0.0),
+                    coil = row.optDouble("coil", Double.NaN).takeUnless(Double::isNaN)
+                )
+            }
+            return parsed
+        }
+
         fun noInitReason(lines: List<String>): String? = lines.firstOrNull { it.startsWith("|noinit|") }?.let { line ->
             val fields = line.split('|', limit = 4)
             val reason = fields.getOrNull(3)?.trim()?.takeIf { it.isNotBlank() }

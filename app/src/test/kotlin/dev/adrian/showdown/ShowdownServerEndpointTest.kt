@@ -39,6 +39,7 @@ class ShowdownServerEndpointTest {
         assertEquals("https://play.pokemonshowdown.com/api/register", endpoint?.registrationUrl)
         assertEquals("https://play.pokemonshowdown.com/api/changepassword", endpoint?.changePasswordUrl)
         assertEquals("https://play.pokemonshowdown.com/api/upkeep", endpoint?.upkeepUrl)
+        assertEquals("https://pokemonshowdown.com/ladder/gen9ou.json", endpoint?.ladderUrl("gen9ou"))
     }
 
     @Test
@@ -53,5 +54,12 @@ class ShowdownServerEndpointTest {
     @Test
     fun rejectsUnsupportedEndpointSchemes() {
         assertNull(ShowdownServerEndpoint.fromInput("ftp://example.test"))
+    }
+
+    @Test
+    fun buildsAConfiguredLadderApiUrlForCustomServers() {
+        val endpoint = ShowdownServerEndpoint.fromInput("http://example.test/ps/showdown/websocket")
+
+        assertEquals("http://example.test/ps/ladder/gen9ou.json", endpoint?.ladderUrl("gen9ou"))
     }
 }

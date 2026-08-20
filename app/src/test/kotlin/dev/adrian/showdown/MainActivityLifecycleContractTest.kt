@@ -399,6 +399,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun ladderDirectorySupportsGuestWebApiFallback() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val dialog = source.substringAfter("private fun showLadderDialog").substringBefore("private fun renderLadderDialog")
+        val request = source.substringAfter("private fun requestLadder").substringBefore("private fun showLadderFormatPicker")
+
+        assertFalse(dialog.contains("Sign in to view the ladder"))
+        assertTrue(request.contains("ladderFetcher.fetch"))
+        assertTrue(request.contains("/cmd laddertop"))
+    }
+
+    @Test
     fun closesStaleLobbyAndTeamDialogsBeforeStartingAnotherConnectionFlow() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val transition = source.substringAfter("private fun startLobbyConnection(")

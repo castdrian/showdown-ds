@@ -9,7 +9,7 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
   </tr>
 </table>
 
-Includes live Showdown battles, readable two-screen playback, HD-first battle and team-preview sprites with shiny front and rear variants, an optional Pokémon Battle Revolution announcer mode, searchable battle and team formats, searchable team selection, searchable rooms, tournaments, and ladders, and a team library with four move slots per Pokémon, shared team-link imports, replays, rooms, chat, and account tools.
+Includes live Showdown battles, readable two-screen playback, HD-first battle and team-preview sprites with shiny front and rear variants, an optional Pokémon Battle Revolution announcer mode, searchable battle and team formats, searchable team selection, searchable rooms, tournaments, and public ladders, and a team library with four move slots per Pokémon, shared team-link imports, replays, rooms, chat, and account tools.
 
 ## Hardware target
 

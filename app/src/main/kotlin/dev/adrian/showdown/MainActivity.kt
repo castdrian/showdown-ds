@@ -76,6 +76,7 @@ class MainActivity : Activity() {
     private lateinit var teamLibrary: ShowdownTeamLibrary
     private lateinit var teamUrlFetcher: ShowdownTeamUrlFetcher
     private lateinit var replayFetcher: ShowdownReplayFetcher
+    private lateinit var ladderFetcher: ShowdownLadderFetcher
     private var showdownConnection: ShowdownConnection? = null
     private var pendingTeamUpload: PendingTeamUpload? = null
     private var pendingTeamPrivacy: PendingTeamPrivacy? = null
@@ -132,6 +133,8 @@ class MainActivity : Activity() {
     private var tournamentDialog: ShowdownDialog? = null
     private var ladderDialog: ShowdownDialog? = null
     private var ladderFormatId: String? = null
+    private var ladderStatus: String? = null
+    private var ladderRequestToken = 0L
     private var chatRoomMessagesView: TextView? = null
     private var chatRoomInput: EditText? = null
     private var chatRoomScroll: ScrollView? = null
@@ -329,6 +332,7 @@ class MainActivity : Activity() {
         teamLibrary = ShowdownTeamLibrary(this)
         teamUrlFetcher = ShowdownTeamUrlFetcher()
         replayFetcher = ShowdownReplayFetcher()
+        ladderFetcher = ShowdownLadderFetcher()
         session = BattleSession().apply { prepareForLobby() }
         session.setMatchFormat(loadMatchFormat())
         loadUserPreferences()
@@ -501,6 +505,7 @@ class MainActivity : Activity() {
         if (::spriteCache.isInitialized) spriteCache.close()
         if (::teamUrlFetcher.isInitialized) teamUrlFetcher.close()
         if (::replayFetcher.isInitialized) replayFetcher.close()
+        if (::ladderFetcher.isInitialized) ladderFetcher.close()
         showdownMoveEffects?.release()
         showdownMoveEffects = null
         primaryFrame = null
@@ -1375,15 +1380,8 @@ class MainActivity : Activity() {
     }
 
     private fun showLadderDialog(format: BattleSession.MatchFormat = session.matchFormat) {
-        if (!authenticated || !serverUserNamed) {
-            session.setConnectionStatus("Sign in to view the ladder.")
-            return
-        }
-        if (showdownConnection == null) {
-            session.setConnectionStatus("Connect to Showdown before viewing the ladder.")
-            return
-        }
         ladderFormatId = format.id
+        ladderStatus = "Loading ${readableFormatLabel(format.id)} ladder…"
         lobbyState.clearLadder()
         renderLadderDialog()
         requestLadder(format)
@@ -1394,13 +1392,13 @@ class MainActivity : Activity() {
             ?: ladderFormatId?.let { BattleSession.MatchFormat(it, it) }
             ?: session.matchFormat
         val entries = lobbyState.ladder
-        val labels = if (entries.isEmpty()) {
-            arrayOf("Loading ${readableFormatLabel(format.id)} ladder…")
-        } else {
-            entries.mapIndexed { index, entry ->
+        val labels = when {
+            entries.isNotEmpty() -> entries.mapIndexed { index, entry ->
                 val glicko = "${entry.rpr.toInt()} ± ${entry.rprd.toInt()}"
                 "${index + 1}. ${entry.username}\nElo ${entry.elo.toInt()} · GXE ${entry.gxe.toInt()}% · Glicko $glicko"
             }.toTypedArray()
+            ladderStatus != null -> arrayOf(ladderStatus.orEmpty())
+            else -> arrayOf("No ladder entries available.")
         }
         val searchValues = entries.mapIndexed { index, entry -> ShowdownLadderQuery.searchText(index, entry) }
         val previous = ladderDialog
@@ -1408,7 +1406,11 @@ class MainActivity : Activity() {
         previous?.dismiss()
         val builder = ShowdownDialogBuilder(this)
             .setTitle("Ladder · ${readableFormatLabel(format.id)}")
-            .setNegativeButton("Close") { _, _ -> ladderFormatId = null }
+            .setNegativeButton("Close") { _, _ ->
+                ladderFormatId = null
+                ladderStatus = null
+                ladderRequestToken += 1
+            }
             .setNeutralButton("Format") { _, _ -> showLadderFormatPicker() }
             .setPositiveButton("Refresh") { _, _ -> requestLadder(format) }
         if (entries.isEmpty()) {
@@ -1426,6 +1428,8 @@ class MainActivity : Activity() {
             if (ladderDialog === dialog) {
                 ladderDialog = null
                 ladderFormatId = null
+                ladderStatus = null
+                ladderRequestToken += 1
             }
         }
         ladderDialog = dialog
@@ -1434,10 +1438,30 @@ class MainActivity : Activity() {
 
     private fun requestLadder(format: BattleSession.MatchFormat) {
         ladderFormatId = format.id
-        if (showdownConnection?.sendGlobal("/cmd laddertop ${format.id}") == true) {
-            session.setConnectionStatus("Loading ${readableFormatLabel(format.id)} ladder…")
-        } else {
-            session.setConnectionStatus("Could not request the Showdown ladder.")
+        ladderStatus = "Loading ${readableFormatLabel(format.id)} ladder…"
+        renderLadderDialog()
+        val requestToken = ++ladderRequestToken
+        ladderFetcher.fetch(serverEndpoint, format.id) { result ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (requestToken != ladderRequestToken || ladderFormatId?.equals(format.id, true) != true) return@runOnUiThread
+                result.onSuccess { entries ->
+                    lobbyState.replaceLadder(entries)
+                    ladderStatus = null
+                    renderLadderDialog()
+                    session.setConnectionStatus("Loaded ${readableFormatLabel(format.id)} ladder.")
+                }.onFailure {
+                    if (authenticated && serverUserNamed && showdownConnection?.sendGlobal("/cmd laddertop ${format.id}") == true) {
+                        ladderStatus = "Loading ${readableFormatLabel(format.id)} ladder…"
+                        renderLadderDialog()
+                        session.setConnectionStatus("Loading ${readableFormatLabel(format.id)} ladder…")
+                    } else {
+                        ladderStatus = "The ${readableFormatLabel(format.id)} ladder is unavailable right now."
+                        renderLadderDialog()
+                        session.setConnectionStatus("Could not load the Showdown ladder.")
+                    }
+                }
+            }
         }
     }
 
@@ -2641,7 +2665,10 @@ class MainActivity : Activity() {
                             }
                         }
                         if (roomListPending && lines.any { it.startsWith("|queryresponse|rooms|") || it.startsWith("|queryresponse|roomlist|") }) renderRoomListDialog()
-                        if (ladderDialog != null && lines.any { it.startsWith("|queryresponse|laddertop|") }) renderLadderDialog()
+                        if (ladderDialog != null && lines.any { it.startsWith("|queryresponse|laddertop|") }) {
+                            ladderStatus = null
+                            renderLadderDialog()
+                        }
                         if (lines.any { it.startsWith("|updatesearch|") }) {
                             lobbyState.battleForReconnect(
                                 activeBattleRoomId,

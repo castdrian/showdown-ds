@@ -1,6 +1,8 @@
 package dev.adrian.showdown
 
 import java.net.URI
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 data class ShowdownServerEndpoint(
     val displayName: String,
@@ -8,8 +10,14 @@ data class ShowdownServerEndpoint(
     val loginUrl: String = "https://play.pokemonshowdown.com/api/login",
     val registrationUrl: String = loginUrl.substringBeforeLast('/') + "/register",
     val changePasswordUrl: String = loginUrl.substringBeforeLast('/') + "/changepassword",
-    val upkeepUrl: String = loginUrl.substringBeforeLast('/') + "/upkeep"
+    val upkeepUrl: String = loginUrl.substringBeforeLast('/') + "/upkeep",
+    val ladderBaseUrl: String = "https://pokemonshowdown.com"
 ) {
+    fun ladderUrl(format: String): String {
+        val encodedFormat = URLEncoder.encode(format.trim(), StandardCharsets.UTF_8.name()).replace("+", "%20")
+        return "${ladderBaseUrl.trimEnd('/')}/ladder/$encodedFormat.json"
+    }
+
     companion object {
         val playShowdown = ShowdownServerEndpoint("Pokémon Showdown", "wss://sim3.psim.us/showdown/websocket")
         val emulatorLocal = ShowdownServerEndpoint("This Mac", "ws://10.0.2.2:8000/showdown/websocket")
@@ -42,6 +50,11 @@ data class ShowdownServerEndpoint(
                 else -> path
             }.trimEnd('/')
             val apiBase = "$loginScheme://$host$port$apiPrefix/api"
+            val ladderBaseUrl = if (isOfficialHost(host)) {
+                "https://pokemonshowdown.com"
+            } else {
+                "$loginScheme://$host$port$apiPrefix"
+            }
             val loginUrl = if (isOfficialHost(host)) {
                 "https://play.pokemonshowdown.com/api/login"
             } else {
@@ -63,7 +76,8 @@ data class ShowdownServerEndpoint(
                 loginUrl,
                 registrationUrl,
                 changePasswordUrl,
-                loginUrl.substringBeforeLast('/') + "/upkeep"
+                loginUrl.substringBeforeLast('/') + "/upkeep",
+                ladderBaseUrl
             )
         }
 

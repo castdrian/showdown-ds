@@ -170,6 +170,20 @@ class ShowdownLobbyStateTest {
     }
 
     @Test
+    fun parsesPublicLadderPayloadsWithoutAProtocolEnvelope() {
+        val entries = ShowdownLobbyState.parseLadderPayload(
+            "{" +
+                "\"formatid\":\"gen9ou\",\"toplist\":[{" +
+                "\"userid\":\"alice\",\"elo\":1823.4,\"gxe\":71.2,\"rpr\":1840,\"rprd\":55" +
+                "}]" +
+                "}"
+        )
+
+        assertEquals("alice", entries?.single()?.username)
+        assertEquals(1823.4, entries?.single()?.elo ?: 0.0, 0.01)
+    }
+
+    @Test
     fun createsPackedTeamCommandsForBuiltTeamFormats() {
         assertEquals(listOf("/utm Pikachu||lightball", "/search gen7ou"), ShowdownLobbyState.searchCommands("gen7ou", "Pikachu||lightball"))
         assertEquals(listOf("/utm null", "/search gen7randombattle"), ShowdownLobbyState.searchCommands("gen7randombattle", null))
