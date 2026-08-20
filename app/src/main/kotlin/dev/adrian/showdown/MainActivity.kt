@@ -123,6 +123,7 @@ class MainActivity : Activity() {
     private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
     private var roomListSearchQuery = ""
+    private var tournamentDirectorySearchQuery = ""
     private val tournamentDirectoryState = ShowdownTournamentDirectoryState()
     private var tournamentDirectoryDialog: ShowdownDialog? = null
     private var tournamentDirectoryContentView: TextView? = null
@@ -418,6 +419,7 @@ class MainActivity : Activity() {
         roomListDialog?.dismiss()
         roomListDialog = null
         roomListPending = false
+        tournamentDirectorySearchQuery = ""
         tournamentDirectoryDialog?.dismiss()
         tournamentDirectoryDialog = null
         tournamentDirectoryContentView = null
@@ -1249,6 +1251,7 @@ class MainActivity : Activity() {
             return
         }
         tournamentDirectoryState.clear()
+        tournamentDirectorySearchQuery = ""
         val density = resources.displayMetrics.density
         val content = TextView(this).apply {
             setTextSize(17f)
@@ -1263,11 +1266,24 @@ class MainActivity : Activity() {
             text = "Refresh"
             setOnClickListener { requestTournamentDirectory() }
         }
+        val search = EditText(this).apply {
+            hint = "Search tournaments, formats, or status"
+            setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                    tournamentDirectorySearchQuery = text?.toString().orEmpty()
+                    updateTournamentDirectoryDialog()
+                }
+                override fun afterTextChanged(editable: Editable?) = Unit
+            })
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(refresh, LinearLayout.LayoutParams(-1, -2))
-            addView(content, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(search, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
+            addView(content, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6f * density).toInt() })
         }
         tournamentDirectoryDialog?.dismiss()
         val dialog = ShowdownDialogBuilder(this)
@@ -1280,6 +1296,7 @@ class MainActivity : Activity() {
                 tournamentDirectoryDialog = null
                 tournamentDirectoryContentView = null
                 tournamentDirectoryLinks = null
+                tournamentDirectorySearchQuery = ""
                 tournamentDirectoryState.clear()
             }
         }
@@ -1303,7 +1320,18 @@ class MainActivity : Activity() {
         val links = tournamentDirectoryLinks ?: return
         links.removeAllViews()
         val density = resources.displayMetrics.density
-        snapshot.tournaments.forEach { tournament ->
+        val filtered = snapshot.tournaments.filter { tournament ->
+            ShowdownTournamentQuery.matches(tournamentDirectorySearchQuery, tournament)
+        }
+        if (snapshot.tournaments.isNotEmpty() && filtered.isEmpty()) {
+            links.addView(TextView(this).apply {
+                text = "No matching tournaments"
+                setTextSize(17f)
+                setTextColor(0xffdceff2.toInt())
+                setPadding((16f * density).toInt(), (18f * density).toInt(), (16f * density).toInt(), (18f * density).toInt())
+            }, LinearLayout.LayoutParams(-1, -2))
+        }
+        filtered.forEach { tournament ->
             val button = Button(this).apply {
                 text = buildString {
                     append(tournament.roomName)
@@ -1311,7 +1339,7 @@ class MainActivity : Activity() {
                     append(readableFormatLabel(tournament.format))
                     if (tournament.generator.isNotBlank()) append(" · ${tournament.generator}")
                     if (tournament.started) append(" · Started")
-                    tournament.playerCount?.let { append(" · $it players") }
+                    tournament.playerCount?.let { append(" · $it player${if (it == 1) "" else "s"}") }
                 }
                 isAllCaps = false
                 setOnClickListener {

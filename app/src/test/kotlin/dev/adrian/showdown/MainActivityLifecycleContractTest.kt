@@ -377,6 +377,18 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun tournamentDirectoryUsesAFilterableCustomSurface() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val directory = source.substringAfter("private fun showTournamentDirectory()").substringBefore("private fun requestTournamentDirectory()")
+        val renderer = source.substringAfter("private fun updateTournamentDirectoryDialog()").substringBefore("private fun styleDynamicDialogButton")
+
+        assertTrue(directory.contains("Search tournaments, formats, or status"))
+        assertTrue(directory.contains("tournamentDirectorySearchQuery"))
+        assertTrue(renderer.contains("ShowdownTournamentQuery.matches"))
+        assertTrue(renderer.contains("No matching tournaments"))
+    }
+
+    @Test
     fun closesStaleLobbyAndTeamDialogsBeforeStartingAnotherConnectionFlow() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val transition = source.substringAfter("private fun startLobbyConnection(")

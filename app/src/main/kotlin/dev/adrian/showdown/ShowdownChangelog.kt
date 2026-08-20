@@ -25,7 +25,8 @@ object ShowdownChangelog {
                 "Terastallization now submits the official Showdown battle command and works correctly in live battles.",
                 "Battle, ladder, and team format selectors now use searchable custom pickers for the full server catalog.",
                 "Team selection now searches saved teams by name, format, folder, Pokémon, and moves.",
-                "Room and live-battle catalogs now support custom search by room, player, and format."
+                "Room and live-battle catalogs now support custom search by room, player, and format.",
+                "Tournament listings now support custom search by room, format, status, and player count."
             )
         ),
         ShowdownChangelogEntry(
