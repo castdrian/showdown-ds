@@ -3066,6 +3066,18 @@ class BattleSessionTest {
     }
 
     @Test
+    fun restoredSideDoesNotMakeAReadOnlySpectatorACombatant() {
+        val session = BattleSession()
+
+        session.restoreBattlePlayerSlot("p2")
+        session.setLiveBattleActive(true)
+        session.setSpectatorMode(true)
+
+        assertFalse(session.isBattleParticipant())
+        assertEquals("Leave battle", session.menuItems()[3])
+    }
+
+    @Test
     fun spectatorModeClearsRequestsThatArriveWhileWatching() {
         val session = BattleSession()
 

@@ -995,9 +995,9 @@ class BattleSession {
 
     fun hasBattleProtocolTranscript() = hasBattleProtocolTranscript
 
-    fun isBattleParticipant() = restoredPlayerSlot != null || localUsername?.takeIf(String::isNotBlank)?.let { username ->
+    fun isBattleParticipant() = !spectatorMode && (restoredPlayerSlot != null || localUsername?.takeIf(String::isNotBlank)?.let { username ->
         sideNames.values.any { it.equals(username, true) }
-    } == true
+    } == true)
 
     fun setReplayMode(value: Boolean) {
         replayMode = value
