@@ -597,7 +597,7 @@ class CommandDeckView(
                 height,
                 scale,
                 "Watching battle",
-                session.latestBattleFeedEntry()?.takeIf(String::isNotBlank) ?: session.status,
+                "Battle action appears on the upper screen.",
                 "Spectators cannot choose moves"
             )
             return

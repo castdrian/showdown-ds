@@ -130,6 +130,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun spectatorDeckKeepsBattleFeedOnTheUpperScreen() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+        val movesRenderer = source.substringAfter("private fun drawMoves(")
+        val spectatorPanel = movesRenderer.substringAfter("if (session.isSpectatorMode() && !session.isBattleFinished())")
+            .substringBefore("if (!session.isLiveBattleActive()")
+
+        assertFalse(spectatorPanel.contains("session.latestBattleFeedEntry()"))
+        assertTrue(spectatorPanel.contains("Battle action appears on the upper screen."))
+    }
+
+    @Test
     fun visibleTeamSpritesKeepAnimatedArtworkRepainting() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
 
