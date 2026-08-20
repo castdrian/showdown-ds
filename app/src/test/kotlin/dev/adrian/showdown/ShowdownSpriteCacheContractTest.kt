@@ -112,7 +112,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(scrapedBackRegularIndex > backRegularIndex)
         assertTrue(backCommunityIndex > scrapedBackRegularIndex)
         assertTrue(frontHdIndex >= 0)
-        assertTrue(scavioIndex < frontHdIndex)
+        assertTrue(frontHdIndex < scavioIndex)
         assertTrue(scavioIndex < frontRegularIndex)
         assertTrue(frontAnimatedIndex > frontHdIndex)
         assertTrue(frontAnimatedIndex > scavioIndex)

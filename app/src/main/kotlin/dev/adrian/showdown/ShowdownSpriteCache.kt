@@ -454,13 +454,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestScavioAnimatedSprite(request) { scavioAsset ->
-            if (scavioAsset != null) {
-                receiver(scavioAsset)
+        requestScrapedFrontSpriteResolution(request, highResolutionOnly = true) { scrapedAsset ->
+            if (scrapedAsset != null) {
+                receiver(scrapedAsset)
             } else {
-                requestScrapedFrontSpriteResolution(request, highResolutionOnly = true) { scrapedAsset ->
-                    if (scrapedAsset != null) {
-                        receiver(scrapedAsset)
+                requestScavioAnimatedSprite(request) { scavioAsset ->
+                    if (scavioAsset != null) {
+                        receiver(scavioAsset)
                     } else {
                         requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
                             if (regularRemoteAsset != null) {

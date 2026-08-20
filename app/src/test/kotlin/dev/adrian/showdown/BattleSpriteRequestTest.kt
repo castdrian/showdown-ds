@@ -118,7 +118,7 @@ class BattleSpriteRequestTest {
         assertTrue(scrapedBackRegularIndex > backRegularIndex)
         assertTrue(backCommunityIndex > scrapedBackRegularIndex)
         assertTrue(frontHdIndex >= 0)
-        assertTrue(scavioIndex < frontHdIndex)
+        assertTrue(frontHdIndex < scavioIndex)
         assertTrue(scavioIndex < regularIndex)
         assertTrue(frontAnimatedIndex > frontHdIndex)
         assertTrue(communityIndex >= 0)
