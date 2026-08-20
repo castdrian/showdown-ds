@@ -1953,7 +1953,7 @@ class CommandDeckView(
         }
         postDelayed({
             if (requestedTeamSprites[displayName] == request && teamSprites[displayName] == null) {
-                spriteCache.requestStaticDexSprite(requestedSpecies) { sprite ->
+                spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny) { sprite ->
                     acceptTeamSprite(displayName, request, sprite)
                 }
             }

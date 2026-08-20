@@ -81,7 +81,8 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("fun requestDexSprite(species: String, shiny: Boolean"))
         assertTrue(source.contains("ShowdownAssetPaths.dexSpriteResolutionPlan(species, shiny)"))
         assertTrue(source.contains("fun requestStaticDexSprite(species: String"))
-        assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(species)"))
+        assertTrue(source.contains("fun requestStaticDexSprite(species: String, shiny: Boolean"))
+        assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(species, shiny)"))
     }
 
     @Test
@@ -209,8 +210,8 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(modernLocalIndex >= 0)
         assertTrue(animatedIndex > modernLocalIndex)
         assertTrue(staticIndex > animatedIndex)
-        assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)"))
-        assertTrue(source.contains(".filter { it.startsWith(\"sprites/dex/\") }"))
+        assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(request.species, request.shiny)"))
+        assertTrue(source.contains("it.startsWith(\"sprites/dex/\") || it.startsWith(\"sprites/dex-shiny/\")"))
         assertTrue(source.contains(".filterNot(::isHighResolutionSpritePath)"))
         assertTrue(source.contains("allowsStaticShowdownFallback(request)"))
         assertTrue(source.contains("requestAnimatedSpriteCandidates"))
@@ -245,7 +246,7 @@ class ShowdownSpriteCacheContractTest {
         val localResolver = source.substringAfter("private fun requestModernLocalSpriteResolution")
             .substringBefore("private fun requestRegularRemoteSpriteResolution")
         val animatedResolution = source.indexOf("requestModernLocalSpriteResolution(request, plan, ::deliverAnimated)")
-        val staticFallback = source.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates(request.species)")
+        val staticFallback = source.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates(request.species, request.shiny)")
 
         assertTrue(backResolver.contains("requestRegularRemoteSpriteResolution(plan)"))
         assertTrue(animatedResolution >= 0)

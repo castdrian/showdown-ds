@@ -153,6 +153,19 @@ class ShowdownAssetPathsTest {
 
         assertTrue(candidates.contains("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/brambleghast-s.gif"))
         assertTrue(candidates.contains("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT_SHINY/BRAMBLEGHAST%20shiny.gif"))
+        assertTrue(candidates.contains("sprites/dex-shiny/brambleghast.png"))
+    }
+
+    @Test
+    fun staticFallbacksPreserveShinyArtworkAndForms() {
+        assertEquals(
+            listOf(
+                "sprites/dex-shiny/rotom-wash.png",
+                "sprites/dex-shiny/rotomwash.png",
+                "sprites/dex-shiny/rotom.png"
+            ),
+            ShowdownAssetPaths.staticDexSpriteCandidates("Rotom-Wash", shiny = true)
+        )
     }
 
     @Test

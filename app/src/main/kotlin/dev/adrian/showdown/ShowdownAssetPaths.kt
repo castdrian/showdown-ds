@@ -139,8 +139,7 @@ object ShowdownAssetPaths {
         return linkedSetOf<String>().apply {
             hdFrontSpriteCandidates(speciesNames, shiny).forEach { add(it) }
             communityAnimatedSpriteCandidates(speciesNames, BattleSpriteSide.OPPONENT, shiny).forEach { add(it) }
-            add(dexSprite(species))
-            add("sprites/dex/${animationId(species)}.png")
+            staticDexSpriteCandidates(species, shiny).forEach(::add)
         }.toList()
     }
 
@@ -351,13 +350,16 @@ object ShowdownAssetPaths {
         ).toList()
     }
 
-    fun dexSprite(species: String) = "sprites/dex/${dexId(species)}.png"
+    fun dexSprite(species: String, shiny: Boolean = false): String {
+        val collection = if (shiny) "dex-shiny" else "dex"
+        return "sprites/$collection/${dexId(species)}.png"
+    }
 
-    fun staticDexSpriteCandidates(species: String): List<String> = spriteSpeciesNames(species)
+    fun staticDexSpriteCandidates(species: String, shiny: Boolean = false): List<String> = spriteSpeciesNames(species)
         .flatMap { name ->
             listOf(
-                dexSprite(name),
-                "sprites/dex/${animationId(name)}.png"
+                dexSprite(name, shiny),
+                "sprites/${if (shiny) "dex-shiny" else "dex"}/${animationId(name)}.png"
             )
         }
         .distinct()

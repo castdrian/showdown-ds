@@ -17,6 +17,6 @@ class ShowdownChangelogTest {
         assertTrue(entries.first().changes.any { it.contains("Cancel search") })
         assertTrue(entries.first().changes.any { it.contains("memory pressure") })
         assertTrue(entries.first().changes.any { it.contains("custom dialogs") })
-        assertTrue(entries.first().changes.any { it.contains("Team previews") })
+        assertTrue(entries.first().changes.any { it.contains("Team previews") && it.contains("shiny") })
     }
 }

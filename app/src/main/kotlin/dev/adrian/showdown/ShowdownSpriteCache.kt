@@ -229,7 +229,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     fun requestStaticDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(ShowdownAssetPaths.staticDexSpriteCandidates(species), receiver)
+        requestStaticDexSprite(species, shiny = false, receiver = receiver)
+    }
+
+    fun requestStaticDexSprite(species: String, shiny: Boolean, receiver: (SpriteAsset?) -> Unit) {
+        requestSpriteCandidates(ShowdownAssetPaths.staticDexSpriteCandidates(species, shiny), receiver)
     }
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {
@@ -673,8 +677,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        val standardCandidates = ShowdownAssetPaths.staticDexSpriteCandidates(request.species)
-            .filter { it.startsWith("sprites/dex/") }
+        val standardCandidates = ShowdownAssetPaths.staticDexSpriteCandidates(request.species, request.shiny)
+            .filter { it.startsWith("sprites/dex/") || it.startsWith("sprites/dex-shiny/") }
             .filterNot(::isHighResolutionSpritePath)
         requestSpriteCandidates(standardCandidates) { asset ->
             receiver(asset)

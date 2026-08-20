@@ -133,9 +133,9 @@ class MainActivityLifecycleContractTest {
     fun teamPreviewUsesSpeciesFallbackWithoutReplacingAnimatedArtwork() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
 
-        assertTrue(source.contains("spriteCache.requestStaticDexSprite(requestedSpecies)"))
+        assertTrue(source.contains("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
         assertTrue(source.contains("TEAM_STATIC_FALLBACK_DELAY_MILLIS"))
-        assertTrue(source.indexOf("spriteCache.requestPokemon(request)") < source.indexOf("spriteCache.requestStaticDexSprite(requestedSpecies)"))
+        assertTrue(source.indexOf("spriteCache.requestPokemon(request)") < source.indexOf("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
         assertTrue(source.contains("private fun acceptTeamSprite("))
         assertTrue(source.contains("sprite.isAnimated || teamSprites[displayName]?.isAnimated != true"))
     }
