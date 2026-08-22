@@ -56,10 +56,27 @@ internal fun boundedAnimatedFrameSize(sourceWidth: Int, sourceHeight: Int, maxDi
         )
 }
 
-internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
-    if (bytes.size < 13) return false
+internal fun gifCanvasSize(bytes: ByteArray): Pair<Int, Int>? {
+    if (bytes.size < 13) return null
     val signature = bytes.copyOfRange(0, 6).toString(Charsets.US_ASCII)
-    if (signature != "GIF87a" && signature != "GIF89a") return false
+    if (signature != "GIF87a" && signature != "GIF89a") return null
+    val width = (bytes[6].toInt() and 0xff) or ((bytes[7].toInt() and 0xff) shl 8)
+    val height = (bytes[8].toInt() and 0xff) or ((bytes[9].toInt() and 0xff) shl 8)
+    return width to height
+}
+
+internal fun animatedGifFitsDecodeBudget(
+    sourceWidth: Int,
+    sourceHeight: Int,
+    maxDimension: Int,
+    maxPixels: Long
+): Boolean = sourceWidth > 0 &&
+    sourceHeight > 0 &&
+    maxOf(sourceWidth, sourceHeight) <= maxDimension &&
+    sourceWidth.toLong() * sourceHeight.toLong() <= maxPixels
+
+internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
+    gifCanvasSize(bytes) ?: return false
     var offset = 13
     val screenPacked = bytes[10].toInt() and 0xff
     if (screenPacked and 0x80 != 0) {
@@ -216,6 +233,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val downloadExecutor = Executors.newFixedThreadPool(2)
+    private val decodeExecutor = Executors.newSingleThreadExecutor()
     private val memoryCache = object : LruCache<String, SpriteAsset>(SPRITE_MEMORY_CACHE_BYTES) {
         override fun sizeOf(key: String, value: SpriteAsset) = value.estimatedMemoryBytes()
     }
@@ -318,6 +336,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     override fun close() {
         downloadExecutor.shutdownNow()
+        decodeExecutor.shutdownNow()
         memoryCache.evictAll()
         resolvedPokemonCache.evictAll()
         pendingSpriteReceivers.clear()
@@ -345,11 +364,26 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         } ?: return
         if (!shouldStart) return
         downloadExecutor.execute {
-            val asset = loadBytes(path)?.let { decodeSprite(it, path) }
-            if (asset != null) memoryCache.put(path, asset)
-            val receivers = pendingSpriteReceivers.remove(path).orEmpty()
-            mainHandler.post { receivers.forEach { it(asset) } }
+            val file = loadBytes(path)
+            if (file == null) {
+                finishSpriteRequest(path, null)
+                return@execute
+            }
+            runCatching {
+                decodeExecutor.execute {
+                    val asset = runCatching { decodeSprite(file, path) }.getOrNull()
+                    finishSpriteRequest(path, asset)
+                }
+            }.onFailure {
+                finishSpriteRequest(path, null)
+            }
         }
+    }
+
+    private fun finishSpriteRequest(path: String, asset: SpriteAsset?) {
+        if (asset != null) memoryCache.put(path, asset)
+        val receivers = pendingSpriteReceivers.remove(path).orEmpty()
+        mainHandler.post { receivers.forEach { it(asset) } }
     }
 
     private fun requestSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
@@ -771,6 +805,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private fun decodeSprite(file: File, path: String): SpriteAsset? {
         if (isAnimatedSpritePath(path) && !path.endsWith(".gif", ignoreCase = true)) return null
         return if (path.endsWith(".gif", ignoreCase = true)) {
+            val canvasSize = readGifCanvasSize(file) ?: return null
+            if (!animatedGifFitsDecodeBudget(
+                    sourceWidth = canvasSize.first,
+                    sourceHeight = canvasSize.second,
+                    maxDimension = MAX_ANIMATED_SOURCE_DIMENSION,
+                    maxPixels = MAX_ANIMATED_SOURCE_PIXELS
+                )
+            ) return null
+            if (file.length() > MAX_ANIMATED_FILE_BYTES) return null
             if (!hasMultipleGifFrames(file.readBytes())) return null
             Movie.decodeFile(file.path)?.takeIf {
                 it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
@@ -779,6 +822,21 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }
+    }
+
+    private fun readGifCanvasSize(file: File): Pair<Int, Int>? {
+        return runCatching {
+            file.inputStream().use { input ->
+                val header = ByteArray(13)
+                var offset = 0
+                while (offset < header.size) {
+                    val count = input.read(header, offset, header.size - offset)
+                    if (count <= 0) return@use null
+                    offset += count
+                }
+                gifCanvasSize(header)
+            }
+        }.getOrNull()
     }
 
     private fun hasDistinctMovieFrames(movie: Movie): Boolean {
@@ -866,6 +924,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private companion object {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
         const val MAX_ANIMATED_FRAME_DIMENSION = 512
+        const val MAX_ANIMATED_SOURCE_DIMENSION = 576
+        const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L
+        const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L
         const val MOVIE_MEMORY_MULTIPLIER = 4L
         const val MAX_FILE_BYTES = 64 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L

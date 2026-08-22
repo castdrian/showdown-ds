@@ -37,6 +37,15 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun rejectsAnimatedSourcesThatWouldCreateOversizedNativeMovies() {
+        assertEquals(1024 to 512, gifCanvasSize(gifWithCanvas(1024, 512)))
+        assertTrue(animatedGifFitsDecodeBudget(576, 576, 576, 576L * 576L))
+        assertFalse(animatedGifFitsDecodeBudget(577, 512, 576, 576L * 576L))
+        assertFalse(animatedGifFitsDecodeBudget(576, 577, 576, 576L * 576L))
+        assertFalse(animatedGifFitsDecodeBudget(576, 576, 576, 576L * 576L - 1L))
+    }
+
+    @Test
     fun highResolutionArtworkMustRemainAnimated() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
@@ -122,12 +131,16 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("private fun animatedFrameAt(elapsedMillis: Long)"))
         assertTrue(source.contains("private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L"))
         assertTrue(source.contains("const val MAX_ANIMATED_FRAME_DIMENSION = 512"))
+        assertTrue(source.contains("const val MAX_ANIMATED_SOURCE_DIMENSION = 576"))
+        assertTrue(source.contains("const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L"))
+        assertTrue(source.contains("const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L"))
         assertTrue(source.contains("val sourcePixels = if (movie == null) 0L"))
         assertTrue(source.contains("MOVIE_MEMORY_MULTIPLIER"))
         assertTrue(source.contains("boundedAnimatedFrameSize"))
         assertFalse(source.contains("AnimatedImageDrawable"))
         assertFalse(source.contains("ImageDecoder.decodeDrawable"))
         assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
+        assertTrue(source.contains("Executors.newSingleThreadExecutor()"))
     }
 
     @Test
@@ -287,5 +300,19 @@ class ShowdownSpriteCacheContractTest {
             }
         }.toByteArray()
         return header + screen + frames + byteArrayOf(0x3b)
+    }
+
+    private fun gifWithCanvas(width: Int, height: Int): ByteArray {
+        val header = "GIF89a".toByteArray(Charsets.US_ASCII)
+        val screen = byteArrayOf(
+            (width and 0xff).toByte(),
+            ((width shr 8) and 0xff).toByte(),
+            (height and 0xff).toByte(),
+            ((height shr 8) and 0xff).toByte(),
+            0,
+            0,
+            0
+        )
+        return header + screen
     }
 }

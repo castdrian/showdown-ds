@@ -22,6 +22,7 @@ object ShowdownChangelog {
                 "Matchmaking now exposes an explicit Cancel search action while a queue is active.",
                 "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure.",
                 "Animated HD sprite frames now use bounded display buffers to reduce Thor memory pressure.",
+                "Sprite loading now serializes native GIF decoding and falls back from oversized HD files before they can pressure Thor memory.",
                 "The team editor now shows the live EV budget and perfect-IV count while you edit a set.",
                 "Official No Item exports now round-trip without creating a fake item.",
                 "Controller navigation now stays inside custom dialogs instead of triggering the battle menu underneath.",
