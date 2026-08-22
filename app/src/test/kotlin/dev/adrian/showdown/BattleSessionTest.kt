@@ -249,6 +249,27 @@ class BattleSessionTest {
     }
 
     @Test
+    fun nativeBattleFeedUsesTheSameUserFacingFilterAsMarkupUpdates() {
+        val session = BattleSession()
+        session.appendShowdownBattleLog(
+            "<div>Battle started!</div>" +
+                "<div><small>[12:35] internal timestamp</small></div>" +
+                "<div>Register an account to protect your ladder rating!<button>Register</button></div>" +
+                "<div>Error parsing: internal parser failure</div>" +
+                "<div>Gholdengo used Make It Rain!</div>"
+        )
+
+        assertEquals(
+            listOf("Battle started!", "Gholdengo used Make It Rain!"),
+            session.showdownBattleLog()
+        )
+        assertEquals(
+            listOf("Battle started!", "Gholdengo used Make It Rain!"),
+            session.activityMessages().takeLast(2)
+        )
+    }
+
+    @Test
     fun fallsBackToProtocolBattleEventsWhileNativeTranscriptIsBehind() {
         val session = BattleSession()
         session.applyProtocolLine("|init|battle")

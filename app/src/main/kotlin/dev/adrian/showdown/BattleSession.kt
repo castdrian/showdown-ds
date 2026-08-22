@@ -728,12 +728,7 @@ class BattleSession {
 
     fun appendShowdownBattleLog(value: String, generation: Long = battleLogGeneration) {
         if (generation != battleLogGeneration) return
-        val entries = value
-            .replace(SHOWDOWN_LOG_BREAK_TAG, "\n")
-            .split('\n')
-            .map { it.replace("**", "").trim() }
-            .mapNotNull(::sanitizeShowdownMarkup)
-            .filter(String::isNotBlank)
+        val entries = normalizedShowdownEntries(value)
         if (entries.isEmpty()) return
         showdownBattleLogEntries += entries
         while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
@@ -754,9 +749,7 @@ class BattleSession {
             return
         }
         val previous = showdownBattleMarkupEntries.remove(normalizedKey).orEmpty()
-        val entries = ShowdownBattleLogFilter.visibleEntries(value)
-            .mapNotNull(::sanitizeShowdownMarkup)
-            .filter(String::isNotBlank)
+        val entries = normalizedShowdownEntries(value)
         if (previous == entries) return
         battleFeedEntriesCache.clear()
         previous.forEach { entry ->
@@ -4132,6 +4125,10 @@ class BattleSession {
         return message.takeIf { it.isNotBlank() }
     }
 
+    private fun normalizedShowdownEntries(value: String): List<String> = ShowdownBattleLogFilter
+        .visibleEntries(value.replace("**", ""))
+        .mapNotNull(::sanitizeShowdownMarkup)
+
     private fun moveMoveFocus(horizontal: Int, vertical: Int) {
         if (moves.isEmpty()) return
         val direction = if (vertical != 0) vertical else horizontal
@@ -4875,9 +4872,6 @@ class BattleSession {
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
         private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
             "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|Format: .+|Rule: .+|.+ team size: \\d+|Rated battle\\.)$"
-        )
-        private val SHOWDOWN_LOG_BREAK_TAG = Regex(
-            "(?i)<br(?:\\s+[^>]*)?\\s*/?>|</?(?:address|article|aside|blockquote|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)(?:\\s+[^>]*)?\\s*/?>"
         )
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
 
