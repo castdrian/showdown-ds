@@ -18,7 +18,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("hasMultipleGifFrames(file.readBytes())"))
         assertTrue(source.contains("hasDistinctMovieFrames(it)"))
         assertTrue(source.contains("it.duration() > 0"))
-        assertTrue(source.contains("val isAnimated get() = movie != null"))
+        assertTrue(source.contains("val isAnimated get() = movie != null || animatedDrawable != null"))
     }
 
     @Test
@@ -43,6 +43,17 @@ class ShowdownSpriteCacheContractTest {
         assertFalse(animatedGifFitsDecodeBudget(577, 512, 576, 576L * 576L))
         assertFalse(animatedGifFitsDecodeBudget(576, 577, 576, 576L * 576L))
         assertFalse(animatedGifFitsDecodeBudget(576, 576, 576, 576L * 576L - 1L))
+    }
+
+    @Test
+    fun admitsOversizedHdSourcesOnlyForTheBoundedDecoderPath() {
+        val giantHdRoot = "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/"
+
+        assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 4_288_859L))
+        assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}wailord.gif", 742, 437, 12_480_351L))
+        assertFalse(shouldUseBoundedAnimatedDecoder("https://www.pkparaiso.com/imagenes/xy/sprites/animados/charizard.gif", 791, 831, 4_288_859L))
+        assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 2049, 831, 4_288_859L))
+        assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 17L * 1024L * 1024L))
     }
 
     @Test
@@ -122,6 +133,8 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("val pixels = width.toLong() * height.toLong() * 4L"))
         assertTrue(source.contains("const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024"))
         assertTrue(source.contains("fun clearMemory()"))
+        assertTrue(source.contains("fun stopAnimation()"))
+        assertTrue(source.contains("override fun entryRemoved("))
     }
 
     @Test
@@ -134,11 +147,15 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("const val MAX_ANIMATED_SOURCE_DIMENSION = 576"))
         assertTrue(source.contains("const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L"))
         assertTrue(source.contains("const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L"))
-        assertTrue(source.contains("val sourcePixels = if (movie == null) 0L"))
+        assertTrue(source.contains("val sourcePixels = when"))
         assertTrue(source.contains("MOVIE_MEMORY_MULTIPLIER"))
+        assertTrue(source.contains("BOUNDED_ANIMATED_MEMORY_MULTIPLIER"))
         assertTrue(source.contains("boundedAnimatedFrameSize"))
-        assertFalse(source.contains("AnimatedImageDrawable"))
-        assertFalse(source.contains("ImageDecoder.decodeDrawable"))
+        assertTrue(source.contains("AnimatedImageDrawable"))
+        assertTrue(source.contains("ImageDecoder.decodeDrawable"))
+        assertTrue(source.contains("decoder.setTargetSize"))
+        assertTrue(source.contains("decoder.setMemorySizePolicy(ImageDecoder.MEMORY_POLICY_LOW_RAM)"))
+        assertTrue(source.contains("shouldUseBoundedAnimatedDecoder"))
         assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
         assertTrue(source.contains("Executors.newSingleThreadExecutor()"))
     }

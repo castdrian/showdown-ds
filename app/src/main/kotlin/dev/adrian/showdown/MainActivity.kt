@@ -547,6 +547,8 @@ class MainActivity : Activity() {
     override fun onPause() {
         activityResumed = false
         battleScene?.setPlaybackPaused(true)
+        commandDeck?.setAnimationsPaused(true)
+        pokedexSprite?.setAnimationsPaused(true)
         pauseReplayForLifecycle()
         pauseLivePlaybackForLifecycle()
         if (::session.isInitialized && shouldMaintainConnection) persistLobbyState(flushToDisk = true)
@@ -579,6 +581,8 @@ class MainActivity : Activity() {
         configureWindow()
         showSecondaryDisplay()
         battleScene?.setPlaybackPaused(false)
+        commandDeck?.setAnimationsPaused(false)
+        pokedexSprite?.setAnimationsPaused(false)
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()
@@ -3554,6 +3558,7 @@ class MainActivity : Activity() {
                 pokedexSearchInput = null
                 pokedexResults = null
                 pokedexDetails = null
+                sprite.setSprite(null)
                 pokedexSprite = null
                 selectedPokedexEntry = null
             }

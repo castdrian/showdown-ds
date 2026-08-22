@@ -60,6 +60,7 @@ class CommandDeckView(
     private var releaseStartedAt = 0L
     private var lastRenderedTeamDecision = false
     private var lastRenderedDecisionKind: BattleSession.DecisionKind? = null
+    private var animationsPaused = false
 
     init {
         spriteCache.requestEffect("z-symbol.png") { asset ->
@@ -69,8 +70,19 @@ class CommandDeckView(
     }
 
     fun releaseRetainedResources() {
+        stopRetainedAnimations()
         teamSprites.clear()
         requestedTeamSprites.clear()
+        postInvalidateOnAnimation()
+    }
+
+    fun stopRetainedAnimations() {
+        teamSprites.values.forEach { it.stopAnimation() }
+    }
+
+    fun setAnimationsPaused(paused: Boolean) {
+        animationsPaused = paused
+        if (paused) stopRetainedAnimations()
         postInvalidateOnAnimation()
     }
 
@@ -109,7 +121,7 @@ class CommandDeckView(
         lastRenderedTeamDecision = teamDecision
         lastRenderedDecisionKind = decisionKind
         val visibleAnimatedTeamSprite = (teamDecision || session.panel == BattleSession.Panel.TEAM) &&
-            teamSprites.values.any { it.isAnimated }
+            teamSprites.values.any { it.isAnimated } && !animationsPaused
         if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null || visibleAnimatedTeamSprite) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         } else if (session.battleClockSeconds() != null) {
@@ -1857,7 +1869,12 @@ class CommandDeckView(
                 content.sprite.right,
                 content.sprite.bottom
             )
-            teamSprites[pokemon]?.draw(canvas, spriteBounds, SystemClock.elapsedRealtime())
+            teamSprites[pokemon]?.draw(
+                canvas,
+                spriteBounds,
+                SystemClock.elapsedRealtime(),
+                animate = !animationsPaused
+            )
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val displayPokemon = BattleSession.displayPokemonName(pokemon, details.species)
             val headerHeight = content.header.bottom - content.header.top
@@ -1947,7 +1964,7 @@ class CommandDeckView(
         val request = BattleSpriteRequest.forOpponent(requestedSpecies, session.spriteStyle, shiny)
         if (requestedTeamSprites[displayName] == request) return
         requestedTeamSprites[displayName] = request
-        teamSprites.remove(displayName)
+        teamSprites.remove(displayName)?.stopAnimation()
         spriteCache.requestPokemon(request) { sprite ->
             acceptTeamSprite(displayName, request, sprite)
         }
@@ -1965,8 +1982,12 @@ class CommandDeckView(
         request: BattleSpriteRequest,
         sprite: ShowdownSpriteCache.SpriteAsset?
     ) {
-        if (requestedTeamSprites[displayName] != request) return
+        if (requestedTeamSprites[displayName] != request) {
+            sprite?.stopAnimation()
+            return
+        }
         if (sprite != null && (sprite.isAnimated || teamSprites[displayName]?.isAnimated != true)) {
+            teamSprites[displayName]?.takeUnless { it === sprite }?.stopAnimation()
             teamSprites[displayName] = sprite
         }
         postInvalidateOnAnimation()

@@ -58,6 +58,7 @@ class BattleSceneView(
     private var battleFeedTouchLastY = 0f
     private var battleFeedTouchActive = false
     private var battleFeedTouchMoved = false
+    private var animationsPaused = false
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -73,8 +74,18 @@ class BattleSceneView(
     }
 
     fun setPlaybackPaused(paused: Boolean) {
+        animationsPaused = paused
         battleFeedPresentation.setPlaybackPaused(paused, SystemClock.elapsedRealtime())
+        if (paused) stopRetainedAnimations()
         invalidate()
+    }
+
+    fun stopRetainedAnimations() {
+        playerSprite?.stopAnimation()
+        opponentSprite?.stopAnimation()
+        playerActiveSprites.values.forEach { it?.stopAnimation() }
+        opponentActiveSprites.values.forEach { it?.stopAnimation() }
+        itemSprites.values.forEach { it?.stopAnimation() }
     }
 
     fun refreshResourceRequests() {
@@ -86,6 +97,7 @@ class BattleSceneView(
     }
 
     fun releaseRetainedResources() {
+        stopRetainedAnimations()
         playerSprite = null
         opponentSprite = null
         requestedPlayerSprite = null
@@ -259,6 +271,7 @@ class BattleSceneView(
         }
         drawInspectSheet(canvas, width, height, scale)
         if (
+            (
             playerCombatants.any { isFainting(it.name, it.condition) } ||
             opponentCombatants.any { isFainting(it.name, it.condition) } ||
             BattleSceneTiming.summonProgress(session.playerEntryAtNanos, nowNanos) < 1f ||
@@ -267,6 +280,7 @@ class BattleSceneView(
             opponentSprite?.isAnimated == true ||
             playerCombatants.any { playerActiveSprites[it.slot]?.isAnimated == true } ||
             opponentCombatants.any { opponentActiveSprites[it.slot]?.isAnimated == true }
+            ) && !animationsPaused
         ) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         }
@@ -412,16 +426,18 @@ class BattleSceneView(
             val playerRequest = BattleSpriteRequests.single(playerSpecies, BattleSpriteSide.PLAYER, session.spriteStyle, playerCombatant?.shiny == true)
             if (playerRequest != requestedPlayerSprite) {
                 requestedPlayerSprite = playerRequest
+                playerSprite?.stopAnimation()
                 playerSprite = null
                 spriteCache.requestPokemon(playerRequest) { asset ->
                     if (playerRequest == requestedPlayerSprite) {
                         playerSprite = asset
                         invalidate()
-                    }
+                    } else asset?.stopAnimation()
                 }
             }
         } else {
             requestedPlayerSprite = null
+            playerSprite?.stopAnimation()
             playerSprite = null
         }
         if (session.isSinglesBattle() || opponentActiveCombatants.isEmpty()) {
@@ -432,21 +448,25 @@ class BattleSceneView(
             val opponentRequest = BattleSpriteRequests.single(opponentSpecies, BattleSpriteSide.OPPONENT, session.spriteStyle, opponentCombatant?.shiny == true)
             if (opponentRequest != requestedOpponentSprite) {
                 requestedOpponentSprite = opponentRequest
+                opponentSprite?.stopAnimation()
                 opponentSprite = null
                 spriteCache.requestPokemon(opponentRequest) { asset ->
                     if (opponentRequest == requestedOpponentSprite) {
                         opponentSprite = asset
                         invalidate()
-                    }
+                    } else asset?.stopAnimation()
                 }
             }
         } else {
             requestedOpponentSprite = null
+            opponentSprite?.stopAnimation()
             opponentSprite = null
         }
         if (session.isSinglesBattle()) {
             requestedPlayerActiveSprites.clear()
             requestedOpponentActiveSprites.clear()
+            playerActiveSprites.values.forEach { it?.stopAnimation() }
+            opponentActiveSprites.values.forEach { it?.stopAnimation() }
             playerActiveSprites.clear()
             opponentActiveSprites.clear()
         } else {
@@ -488,7 +508,11 @@ class BattleSceneView(
             val path = BattleItemPresentation.iconPath(item) ?: return@forEach
             if (!requestedItemSprites.add(path)) return@forEach
             spriteCache.requestItem(item) { asset ->
-                if (path !in requestedItemSprites) return@requestItem
+                if (path !in requestedItemSprites) {
+                    asset?.stopAnimation()
+                    return@requestItem
+                }
+                itemSprites[path]?.stopAnimation()
                 itemSprites[path] = asset
                 invalidate()
             }
@@ -503,19 +527,20 @@ class BattleSceneView(
         val activeSlots = plannedRequests.map { it.slot }.toSet()
         requests.keys.filterNot(activeSlots::contains).toList().forEach {
             requests.remove(it)
-            assets.remove(it)
+            assets.remove(it)?.stopAnimation()
         }
         plannedRequests.forEach { plannedRequest ->
             val slot = plannedRequest.slot
             val request = plannedRequest.request
             if (requests[slot] == request) return@forEach
             requests[slot] = request
+            assets[slot]?.stopAnimation()
             assets[slot] = null
             spriteCache.requestPokemon(request) { asset ->
                 if (requests[slot] == request) {
                     assets[slot] = asset
                     invalidate()
-                }
+                } else asset?.stopAnimation()
             }
         }
     }
@@ -669,7 +694,8 @@ class BattleSceneView(
                 imageCenterY + spriteHeight / 2f - 240f * scale * easedFaint
             ),
             SystemClock.elapsedRealtime(),
-            alpha = ((1f - easedFaint) * summonAlpha * 255f).toInt()
+            alpha = ((1f - easedFaint) * summonAlpha * 255f).toInt(),
+            animate = !animationsPaused
         )
     }
 
@@ -836,7 +862,8 @@ class BattleSceneView(
                     right,
                     row + itemIconSize * 0.22f
                 ),
-                SystemClock.elapsedRealtime()
+                SystemClock.elapsedRealtime(),
+                animate = !animationsPaused
             )
         }
         paint.textAlign = Paint.Align.LEFT
@@ -1023,7 +1050,8 @@ class BattleSceneView(
                     textRight - levelWidth - itemGap,
                     titleBaseline + itemIconSize * 0.18f
                 ),
-                SystemClock.elapsedRealtime()
+                SystemClock.elapsedRealtime(),
+                animate = !animationsPaused
             )
         }
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)

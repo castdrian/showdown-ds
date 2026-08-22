@@ -10,9 +10,18 @@ import android.view.View
 class ShowdownPokedexSpriteView(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var sprite: ShowdownSpriteCache.SpriteAsset? = null
+    private var animationsPaused = false
 
     fun setSprite(value: ShowdownSpriteCache.SpriteAsset?) {
+        if (sprite !== value) sprite?.stopAnimation()
         sprite = value
+        if (animationsPaused) sprite?.stopAnimation()
+        invalidate()
+    }
+
+    fun setAnimationsPaused(paused: Boolean) {
+        animationsPaused = paused
+        if (paused) sprite?.stopAnimation()
         invalidate()
     }
 
@@ -23,8 +32,9 @@ class ShowdownPokedexSpriteView(context: Context) : View(context) {
         sprite?.draw(
             canvas,
             RectF(12f, 8f, width.toFloat() - 12f, height.toFloat() - 8f),
-            System.currentTimeMillis()
+            System.currentTimeMillis(),
+            animate = !animationsPaused
         )
-        if (sprite?.isAnimated == true) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
+        if (sprite?.isAnimated == true && !animationsPaused) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
     }
 }
