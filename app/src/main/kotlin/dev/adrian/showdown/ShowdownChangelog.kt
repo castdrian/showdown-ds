@@ -21,6 +21,7 @@ object ShowdownChangelog {
                 "Stat-reset effects now use the matching rise or drop sound in the optional audio layer.",
                 "Matchmaking now exposes an explicit Cancel search action while a queue is active.",
                 "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure.",
+                "Animated HD sprite frames now use bounded display buffers to reduce Thor memory pressure.",
                 "Controller navigation now stays inside custom dialogs instead of triggering the battle menu underneath.",
                 "Team previews keep species artwork visible while their preferred HD animation loads, including shiny variants.",
                 "Terastallization now submits the official Showdown battle command and works correctly in live battles.",

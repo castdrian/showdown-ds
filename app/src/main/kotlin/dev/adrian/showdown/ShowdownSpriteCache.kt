@@ -23,6 +23,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.min
+import kotlin.math.roundToInt
 import org.json.JSONObject
 
 internal fun isGenericSpritePlaceholder(path: String): Boolean {
@@ -44,6 +45,16 @@ internal fun requiresAnimatedSprite(path: String, animatedOnly: Boolean): Boolea
     animatedOnly || isAnimatedSpritePath(path)
 
 internal fun allowsStaticShowdownFallback(request: BattleSpriteRequest): Boolean = !request.backFacing
+
+internal fun boundedAnimatedFrameSize(sourceWidth: Int, sourceHeight: Int, maxDimension: Int): Pair<Int, Int> {
+    if (sourceWidth <= 0 || sourceHeight <= 0) return 1 to 1
+    val dimension = maxDimension.coerceAtLeast(1)
+    val scale = min(1f, dimension.toFloat() / maxOf(sourceWidth, sourceHeight).toFloat())
+    return (
+        (sourceWidth * scale).roundToInt().coerceAtLeast(1) to
+            (sourceHeight * scale).roundToInt().coerceAtLeast(1)
+        )
+}
 
 internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
     if (bytes.size < 13) return false
@@ -108,7 +119,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val bitmap: Bitmap?,
         private val movie: Movie?,
         private val width: Int,
-        private val height: Int
+        private val height: Int,
+        private val sourceWidth: Int = width,
+        private val sourceHeight: Int = height
     ) {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         private var animatedFrame: Bitmap? = null
@@ -118,7 +131,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
         fun estimatedMemoryBytes(): Int {
             val pixels = width.toLong() * height.toLong() * 4L
-            return pixels.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+            val sourcePixels = if (movie == null) 0L else sourceWidth.toLong() * sourceHeight.toLong() * 4L
+            return pixels
+                .plus(sourcePixels * MOVIE_MEMORY_MULTIPLIER)
+                .coerceIn(1L, Int.MAX_VALUE.toLong())
+                .toInt()
         }
 
         fun trimHorizontalTransparentPadding(): SpriteAsset {
@@ -171,7 +188,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             val frame = animatedFrame ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             frame.eraseColor(0)
             source.setTime(frameTime.toInt())
-            source.draw(Canvas(frame), 0f, 0f)
+            Canvas(frame).apply {
+                scale(width / source.width().coerceAtLeast(1).toFloat(), height / source.height().coerceAtLeast(1).toFloat())
+                source.draw(this, 0f, 0f)
+            }
             animatedFrame = frame
             animatedFrameTime = frameTime
             return frame
@@ -182,7 +202,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
             fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
 
-            fun fromMovie(movie: Movie) = SpriteAsset(null, movie, movie.width(), movie.height())
+            fun fromMovie(movie: Movie): SpriteAsset {
+                val (frameWidth, frameHeight) = boundedAnimatedFrameSize(
+                    movie.width(),
+                    movie.height(),
+                    MAX_ANIMATED_FRAME_DIMENSION
+                )
+                return SpriteAsset(null, movie, frameWidth, frameHeight, movie.width(), movie.height())
+            }
         }
 
     }
@@ -838,6 +865,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private companion object {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
+        const val MAX_ANIMATED_FRAME_DIMENSION = 512
+        const val MOVIE_MEMORY_MULTIPLIER = 4L
         const val MAX_FILE_BYTES = 64 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }

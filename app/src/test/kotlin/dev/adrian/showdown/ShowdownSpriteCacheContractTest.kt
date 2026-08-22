@@ -29,6 +29,14 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun boundsAnimatedFramesWithoutChangingTheirAspectRatio() {
+        assertEquals(512 to 256, boundedAnimatedFrameSize(1024, 512, 512))
+        assertEquals(256 to 512, boundedAnimatedFrameSize(512, 1024, 512))
+        assertEquals(320 to 240, boundedAnimatedFrameSize(320, 240, 512))
+        assertEquals(1 to 1, boundedAnimatedFrameSize(0, 240, 512))
+    }
+
+    @Test
     fun highResolutionArtworkMustRemainAnimated() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
@@ -113,6 +121,10 @@ class ShowdownSpriteCacheContractTest {
 
         assertTrue(source.contains("private fun animatedFrameAt(elapsedMillis: Long)"))
         assertTrue(source.contains("private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L"))
+        assertTrue(source.contains("const val MAX_ANIMATED_FRAME_DIMENSION = 512"))
+        assertTrue(source.contains("val sourcePixels = if (movie == null) 0L"))
+        assertTrue(source.contains("MOVIE_MEMORY_MULTIPLIER"))
+        assertTrue(source.contains("boundedAnimatedFrameSize"))
         assertFalse(source.contains("AnimatedImageDrawable"))
         assertFalse(source.contains("ImageDecoder.decodeDrawable"))
         assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
