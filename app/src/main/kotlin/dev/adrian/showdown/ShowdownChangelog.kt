@@ -22,6 +22,8 @@ object ShowdownChangelog {
                 "Matchmaking now exposes an explicit Cancel search action while a queue is active.",
                 "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure.",
                 "Animated HD sprite frames now use bounded display buffers to reduce Thor memory pressure.",
+                "The team editor now shows the live EV budget and perfect-IV count while you edit a set.",
+                "Official No Item exports now round-trip without creating a fake item.",
                 "Controller navigation now stays inside custom dialogs instead of triggering the battle menu underneath.",
                 "Team previews keep species artwork visible while their preferred HD animation loads, including shiny variants.",
                 "Terastallization now submits the official Showdown battle command and works correctly in live battles.",
