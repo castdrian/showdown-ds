@@ -216,6 +216,28 @@ class BattleSession {
         val shiny: Boolean = false
     )
 
+    private class ActiveCombatantMap(
+        private val onChanged: () -> Unit
+    ) : LinkedHashMap<String, ActiveCombatant>() {
+        override fun put(key: String, value: ActiveCombatant): ActiveCombatant? {
+            val previous = super.put(key, value)
+            if (previous != value) onChanged()
+            return previous
+        }
+
+        override fun remove(key: String): ActiveCombatant? {
+            val previous = super.remove(key)
+            if (previous != null) onChanged()
+            return previous
+        }
+
+        override fun clear() {
+            if (isEmpty()) return
+            super.clear()
+            onChanged()
+        }
+    }
+
     data class BattleInfo(
         val weather: String,
         val terrain: String,
@@ -336,8 +358,12 @@ class BattleSession {
         "HP 70 · SpA 95 · Spe 130"
     )
     private val opponentTeamDetails = mutableListOf(opponentDetails)
-    private val playerActiveCombatants = linkedMapOf<String, ActiveCombatant>()
-    private val opponentActiveCombatants = linkedMapOf<String, ActiveCombatant>()
+    private var playerActiveCombatantsViewDirty = true
+    private var opponentActiveCombatantsViewDirty = true
+    private var playerActiveCombatantsView: List<ActiveCombatant> = emptyList()
+    private var opponentActiveCombatantsView: List<ActiveCombatant> = emptyList()
+    private val playerActiveCombatants = ActiveCombatantMap { playerActiveCombatantsViewDirty = true }
+    private val opponentActiveCombatants = ActiveCombatantMap { opponentActiveCombatantsViewDirty = true }
     private val playerPartyIdentifiers = mutableListOf<String>()
     private val playerActivePartyIndices = mutableMapOf<String, Int>()
     private val opponentPartyIdentifiers = mutableMapOf<String, Int>()
@@ -791,9 +817,21 @@ class BattleSession {
 
     fun opponentPartyDetails() = opponentTeamDetails.toList()
 
-    fun playerActiveCombatants() = playerActiveCombatants.values.sortedBy { it.slot }
+    fun playerActiveCombatants(): List<ActiveCombatant> {
+        if (playerActiveCombatantsViewDirty) {
+            playerActiveCombatantsView = playerActiveCombatants.values.sortedBy { it.slot }
+            playerActiveCombatantsViewDirty = false
+        }
+        return playerActiveCombatantsView
+    }
 
-    fun opponentActiveCombatants() = opponentActiveCombatants.values.sortedBy { it.slot }
+    fun opponentActiveCombatants(): List<ActiveCombatant> {
+        if (opponentActiveCombatantsViewDirty) {
+            opponentActiveCombatantsView = opponentActiveCombatants.values.sortedBy { it.slot }
+            opponentActiveCombatantsViewDirty = false
+        }
+        return opponentActiveCombatantsView
+    }
 
     fun detailsForActiveCombatant(playerSide: Boolean, slot: String): PokemonDetails? {
         val combatant = (if (playerSide) playerActiveCombatants else opponentActiveCombatants)[slot] ?: return null
@@ -4773,7 +4811,7 @@ class BattleSession {
 
     private fun condition(hp: String) = hp.substringAfter(' ', "READY").uppercase()
 
-    private fun isBattleFeedTurnMarker(value: String) = value.trim().matches(Regex("^Turn\\s+\\d+\\.?$", RegexOption.IGNORE_CASE))
+    private fun isBattleFeedTurnMarker(value: String) = BATTLE_FEED_TURN_MARKER.matches(value.trim())
 
     private fun isBattleFeedEntry(value: String): Boolean {
         val normalized = value.trim()
@@ -4870,6 +4908,7 @@ class BattleSession {
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
         private const val BATTLE_HISTORY_LIMIT = 1024
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
+        private val BATTLE_FEED_TURN_MARKER = Regex("^Turn\\s+\\d+\\.?$", RegexOption.IGNORE_CASE)
         private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
             "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|Format: .+|Rule: .+|.+ team size: \\d+|Rated battle\\.)$"
         )
