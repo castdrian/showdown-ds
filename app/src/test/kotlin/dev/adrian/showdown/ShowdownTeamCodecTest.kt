@@ -57,7 +57,7 @@ class ShowdownTeamCodecTest {
 
         val packed = ShowdownTeamCodec.pack(listOf(set))
         assertEquals(
-            "Lead|Gholdengo|leftovers|goodasgold|makeitrain,shadowball,recover,nastyplot|Timid|4,,,252,,252||,,,0,,|S|50|200,Ice,premierball,G,8,Steel",
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain,shadowball,recover,nastyplot|Timid|4,,,252,,252||,,,0,,|S|50|200,premierball,Ice,G,8,Steel",
             packed
         )
         assertEquals(
@@ -120,7 +120,7 @@ Ability: Static
     }
 
     @Test
-    fun unpacksTeamsSavedWithThePreviousAdvancedFieldOrder() {
+    fun unpacksOfficialAdvancedFieldOrder() {
         val team = ShowdownTeamCodec.unpack(
             "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,premierball,Ice,G,8,Steel"
         ).single()
@@ -130,6 +130,39 @@ Ability: Static
         assertTrue(team.gigantamax)
         assertEquals(8, team.dynamaxLevel)
         assertEquals("Steel", team.teraType)
+    }
+
+    @Test
+    fun unpacksTeamsSavedWithThePreviousAdvancedFieldOrder() {
+        val team = ShowdownTeamCodec.unpack(
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,Ice,premierball,G,8,Steel"
+        ).single()
+
+        assertEquals("premierball", team.pokeBall)
+        assertEquals("Ice", team.hiddenPowerType)
+        assertTrue(team.gigantamax)
+        assertEquals(8, team.dynamaxLevel)
+        assertEquals("Steel", team.teraType)
+    }
+
+    @Test
+    fun keepsLegacyPackedTeamsWithAnEmptyHiddenPowerFieldReadable() {
+        val team = ShowdownTeamCodec.unpack(
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,,premierball,G,8,Steel"
+        ).single()
+
+        assertEquals("premierball", team.pokeBall)
+        assertEquals("", team.hiddenPowerType)
+    }
+
+    @Test
+    fun keepsLegacyPackedTeamsWithAnUnknownBallAndEmptyHiddenPowerReadable() {
+        val team = ShowdownTeamCodec.unpack(
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,,customball,G,8,Steel"
+        ).single()
+
+        assertEquals("customball", team.pokeBall)
+        assertEquals("", team.hiddenPowerType)
     }
 
     @Test

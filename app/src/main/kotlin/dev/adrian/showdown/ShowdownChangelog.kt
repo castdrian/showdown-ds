@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Team exports now use Showdown's official packed advanced-field order, while older local exports remain readable.",
                 "Finished battles keep the final Showdown result visible on the upper display.",
                 "Replay controls now stay on the lower display with pause and 0.5×–2× speed selection.",
                 "Replays identify their format and prioritize HD-first animated sprites whenever available.",

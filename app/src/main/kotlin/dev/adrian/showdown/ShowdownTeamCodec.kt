@@ -166,8 +166,8 @@ object ShowdownTeamCodec {
         if (value.isBlank()) return PackedAdvanced()
         val values = value.split(',', limit = 6)
         val legacyOrder = isLegacyAdvancedOrder(values)
-        val pokeBallIndex = if (legacyOrder) 1 else 2
-        val hiddenPowerIndex = if (legacyOrder) 2 else 1
+        val pokeBallIndex = if (legacyOrder) 2 else 1
+        val hiddenPowerIndex = if (legacyOrder) 1 else 2
         return PackedAdvanced(
             happiness = values.value(0).toIntOrNull()?.coerceIn(0, 255) ?: 255,
             pokeBall = values.value(pokeBallIndex),
@@ -179,12 +179,16 @@ object ShowdownTeamCodec {
     }
 
     private fun isLegacyAdvancedOrder(values: List<String>): Boolean {
-        val pokeBall = values.value(1).lowercase()
-        val hiddenPowerType = values.value(2).lowercase()
+        val firstAdvancedValue = values.value(1).lowercase()
+        val secondAdvancedValue = values.value(2).lowercase()
         return when {
-            pokeBall.isBlank() -> hiddenPowerType in hiddenPowerTypeIds
-            hiddenPowerType.isBlank() -> pokeBall in pokeBallIds
-            else -> pokeBall !in hiddenPowerTypeIds && hiddenPowerType in hiddenPowerTypeIds
+            firstAdvancedValue in hiddenPowerTypeIds ->
+                secondAdvancedValue.isBlank() || secondAdvancedValue in pokeBallIds
+            firstAdvancedValue.isBlank() ->
+                secondAdvancedValue.isNotBlank() && secondAdvancedValue !in hiddenPowerTypeIds
+            secondAdvancedValue in hiddenPowerTypeIds -> false
+            secondAdvancedValue in pokeBallIds -> true
+            else -> false
         }
     }
 
@@ -212,8 +216,8 @@ object ShowdownTeamCodec {
     private fun packAdvanced(set: ShowdownTeamSet): String {
         val values = listOf(
             set.happiness.coerceIn(0, 255).takeUnless { it == 255 }?.toString().orEmpty(),
-            set.hiddenPowerType.trim(),
             packedId(set.pokeBall),
+            set.hiddenPowerType.trim(),
             if (set.gigantamax) "G" else "",
             set.dynamaxLevel.coerceIn(0, 10).takeUnless { it == 10 }?.toString().orEmpty(),
             set.teraType.trim()
