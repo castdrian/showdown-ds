@@ -438,15 +438,7 @@ class ShowdownMoveEffectsView(
                         function installAudioHooks() {
                             if (BattleScene.prototype.__showdownNativeAudioHooked) return;
                             function moveCanDamage(move) {
-                                if (!move) return false;
-                                var category = String(move.category || '').toLowerCase();
-                                if (category === 'status') return false;
-                                var dexMove = window.BattleMovedex && window.BattleMovedex[move.id];
-                                if (dexMove) {
-                                    var dexCategory = String(dexMove.category || '').toLowerCase();
-                                    if (dexCategory) category = dexCategory;
-                                }
-                                return category === 'physical' || category === 'special';
+                                return !!move;
                             }
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {
