@@ -19,6 +19,17 @@ class BattleAnnouncerTest {
     }
 
     @Test
+    fun animationBridgeValuesResolveToTheRelevantAnnouncerCues() {
+        assertEquals(BattleAnnouncerCue.BATTLE_START, BattleAnnouncerCueResolver.cueForNativeValue("battle_start"))
+        assertEquals(BattleAnnouncerCue.MOVE, BattleAnnouncerCueResolver.cueForNativeValue("move"))
+        assertEquals(BattleAnnouncerCue.HIT, BattleAnnouncerCueResolver.cueForNativeValue("hit"))
+        assertEquals(BattleAnnouncerCue.MULTI_HIT, BattleAnnouncerCueResolver.cueForNativeValue("multi_hit"))
+        assertEquals(BattleAnnouncerCue.BURN, BattleAnnouncerCueResolver.cueForNativeValue("burn"))
+        assertEquals(BattleAnnouncerCue.SANDSTORM, BattleAnnouncerCueResolver.cueForNativeValue("sandstorm"))
+        assertNull(BattleAnnouncerCueResolver.cueForNativeValue("generic_damage"))
+    }
+
+    @Test
     fun nonAnnouncerProtocolEventsRemainSilent() {
         assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-boost|p1a: Pikachu|atk|1"))
         assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|chat|ADRIAN|Good luck!"))

@@ -238,7 +238,6 @@ class MainActivity : Activity() {
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread {
-            if (::battleAudio.isInitialized) BattleAnnouncerCueResolver.cuesForProtocol(lines).forEach(battleAudio::playAnnouncerCue)
             if (lines.any { it.startsWith("|init|battle") }) ensureMoveDexLoaded()
             applyBattleProtocolToEffects(lines)
         }
@@ -636,6 +635,8 @@ class MainActivity : Activity() {
             battleAudio::resetBattleCues,
             protocolHistoryProvider = { session.protocolHistory() },
             audioMoveResetter = battleAudio::beginBattleMove,
+            announcerCueListener = battleAudio::playAnnouncerCue,
+            announcerCueResetter = battleAudio::resetAnnouncerCues,
             battleLogListener = { value, generation ->
                 runOnUiThread { session.appendShowdownBattleLog(value, generation) }
             },

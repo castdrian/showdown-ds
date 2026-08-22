@@ -24,6 +24,27 @@ enum class BattleAnnouncerCue(
 }
 
 object BattleAnnouncerCueResolver {
+    fun cueForNativeValue(value: String): BattleAnnouncerCue? = when (value) {
+        "battle_start" -> BattleAnnouncerCue.BATTLE_START
+        "switch" -> BattleAnnouncerCue.SWITCH
+        "move" -> BattleAnnouncerCue.MOVE
+        "hit" -> BattleAnnouncerCue.HIT
+        "multi_hit" -> BattleAnnouncerCue.MULTI_HIT
+        "miss" -> BattleAnnouncerCue.MISS
+        "fail" -> BattleAnnouncerCue.FAIL
+        "cannot_move" -> BattleAnnouncerCue.CANNOT_MOVE
+        "faint" -> BattleAnnouncerCue.FAINT
+        "intimidate" -> BattleAnnouncerCue.INTIMIDATE
+        "poison" -> BattleAnnouncerCue.POISON
+        "burn" -> BattleAnnouncerCue.BURN
+        "hail" -> BattleAnnouncerCue.HAIL
+        "sandstorm" -> BattleAnnouncerCue.SANDSTORM
+        "heal" -> BattleAnnouncerCue.HEAL
+        "item" -> BattleAnnouncerCue.ITEM
+        "battle_end" -> BattleAnnouncerCue.BATTLE_END
+        else -> null
+    }
+
     fun cuesForProtocol(lines: List<String>): List<BattleAnnouncerCue> {
         val cues = mutableListOf<BattleAnnouncerCue>()
         var moveDamageCueStart = -1

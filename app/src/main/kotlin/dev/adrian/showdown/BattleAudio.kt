@@ -478,6 +478,12 @@ class BattleAudio(
         }
     }
 
+    fun resetAnnouncerCues() {
+        audioCueHandler.postAtFrontOfQueue {
+            if (!released.get()) clearAnnouncerCues()
+        }
+    }
+
     private fun startMusicIfReady() {
         if (!musicEnabled || bgmPlayer != null) return
         val file = bgmFile ?: return

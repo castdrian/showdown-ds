@@ -14,6 +14,7 @@ class ShowdownChangelogTest {
         assertTrue(entries.first().changes.any { it.contains("0.5×–2×") })
         assertTrue(entries.first().changes.any { it.contains("lower display") })
         assertTrue(entries.first().changes.any { it.contains("HD-first") })
+        assertTrue(entries.first().changes.any { it.contains("native battle animation timeline") })
         assertTrue(entries.first().changes.any { it.contains("Cancel search") })
         assertTrue(entries.first().changes.any { it.contains("memory pressure") })
         assertTrue(entries.first().changes.any { it.contains("custom dialogs") })

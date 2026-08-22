@@ -196,6 +196,16 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun announcerCuesComeFromTheAnimationBridge() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
+
+        assertFalse(listener.contains("BattleAnnouncerCueResolver.cuesForProtocol"))
+        assertTrue(source.contains("announcerCueListener = battleAudio::playAnnouncerCue"))
+        assertTrue(source.contains("announcerCueResetter = battleAudio::resetAnnouncerCues"))
+    }
+
+    @Test
     fun releasesTheAnimationWebViewAfterFinishedPlaybackDrains() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val playback = source.substringAfter("private val playbackAdvanceRunnable").substringBefore("private var shouldMaintainConnection")

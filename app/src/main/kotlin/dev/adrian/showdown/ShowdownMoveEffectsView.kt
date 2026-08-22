@@ -20,6 +20,8 @@ class ShowdownMoveEffectsView(
     private val audioCueResetter: () -> Unit = {},
     private val protocolHistoryProvider: () -> List<String>,
     private val audioMoveResetter: () -> Unit = {},
+    private val announcerCueListener: (BattleAnnouncerCue) -> Unit = {},
+    private val announcerCueResetter: () -> Unit = {},
     private val battleLogListener: (String, Long) -> Unit = { _, _ -> },
     private val battleMarkupListener: (String, String, Long) -> Unit = { _, _, _ -> },
     private val battleLogSyncListener: (Long) -> Unit = {}
@@ -36,7 +38,13 @@ class ShowdownMoveEffectsView(
             runJavascript("window.ShowdownNativeEffects.pauseWhenIdle();")
         }
     }
-    private val nativeAudioBridge = NativeAudioBridge(audioCueListener, audioCueResetter, audioMoveResetter)
+    private val nativeAudioBridge = NativeAudioBridge(
+        audioCueListener,
+        audioCueResetter,
+        audioMoveResetter,
+        announcerCueListener,
+        announcerCueResetter
+    )
     private val nativeBattleLogBridge = NativeBattleLogBridge(battleLogListener, battleMarkupListener, battleLogSyncListener)
 
     init {
@@ -232,18 +240,29 @@ class ShowdownMoveEffectsView(
                         function nativeCue(value) {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.cue(value);
                         }
+                        function nativeAnnouncerCue(value) {
+                            if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.announcer(value);
+                        }
                         function nativeMoveStarted() {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.moveStarted();
                         }
                         function nativeBattleStarted() {
                             if (window.ShowdownNativeAudio) window.ShowdownNativeAudio.battleStarted();
                         }
-                        function clearNativeCueTimers(scene) {
-                            if (!scene || !scene.__showdownNativeCueTimers) return;
-                            scene.__showdownNativeCueTimers.forEach(function (timer) {
-                                clearTimeout(timer);
-                            });
-                            scene.__showdownNativeCueTimers = [];
+                        function clearNativeCueTimers(scene, clearAnnouncer) {
+                            if (!scene) return;
+                            if (scene.__showdownNativeCueTimers) {
+                                scene.__showdownNativeCueTimers.forEach(function (timer) {
+                                    clearTimeout(timer);
+                                });
+                                scene.__showdownNativeCueTimers = [];
+                            }
+                            if (clearAnnouncer !== false && scene.__showdownNativeAnnouncerTimers) {
+                                scene.__showdownNativeAnnouncerTimers.forEach(function (timer) {
+                                    clearTimeout(timer);
+                                });
+                                scene.__showdownNativeAnnouncerTimers = [];
+                            }
                         }
                         function scheduleNativeCue(scene, value) {
                             if (!scene || !scene.animating || scene.__showdownNativeAudioSilent) return;
@@ -256,6 +275,18 @@ class ShowdownMoveEffectsView(
                                 if (scene.animating && !scene.__showdownNativeAudioSilent) nativeCue(value);
                             }, delay);
                             scene.__showdownNativeCueTimers.push(timer);
+                        }
+                        function scheduleNativeAnnouncerCue(scene, value) {
+                            if (!scene || !scene.animating || scene.__showdownNativeAudioSilent) return;
+                            if (!scene.__showdownNativeAnnouncerTimers) scene.__showdownNativeAnnouncerTimers = [];
+                            var delay = Math.max(0, Number(scene.timeOffset) || 0);
+                            var timer = setTimeout(function () {
+                                var timers = scene.__showdownNativeAnnouncerTimers || [];
+                                var timerIndex = timers.indexOf(timer);
+                                if (timerIndex >= 0) timers.splice(timerIndex, 1);
+                                if (scene.animating && !scene.__showdownNativeAudioSilent) nativeAnnouncerCue(value);
+                            }, delay);
+                            scene.__showdownNativeAnnouncerTimers.push(timer);
                         }
                         var nativeBattleLogGeneration = 0;
                         var nativeBattleLogMarkupActive = false;
@@ -421,11 +452,17 @@ class ShowdownMoveEffectsView(
                             Battle.prototype.useMove = function (pokemon, move) {
                                 clearNativeCueTimers(this.scene);
                                 nativeMoveStarted();
+                                if (this.scene.animating && !this.scene.__showdownNativeAudioSilent) {
+                                    scheduleNativeAnnouncerCue(this.scene, 'move');
+                                }
                                 this.scene.__showdownNativeDamageArmed = moveCanDamage(move);
                                 this.scene.__showdownNativeDamageWindow = this.scene.__showdownNativeDamageArmed;
                                 this.scene.__showdownNativeDamagePlayed = false;
+                                this.scene.__showdownNativeAnnouncerDamagePlayed = false;
+                                this.scene.__showdownNativeAnnouncerMultiHit = !!(move && move.multihit);
                                 this.scene.__showdownNativeHealthEvents = [];
                                 this.scene.__showdownNativeResultCues = [];
+                                this.scene.__showdownNativeAnnouncerResultCues = [];
                                 return originalUseMove.apply(this, arguments);
                             };
                             var originalRunMajor = Battle.prototype.runMajor;
@@ -434,11 +471,21 @@ class ShowdownMoveEffectsView(
                                     this.scene.__showdownNativeDamageArmed = false;
                                     this.scene.__showdownNativeDamageWindow = false;
                                 }
+                                var announcerCue = null;
+                                if (args) {
+                                    if (args[0] === 'switch' || args[0] === 'drag' || args[0] === 'replace') announcerCue = 'switch';
+                                    if (args[0] === 'faint') announcerCue = 'faint';
+                                    if (args[0] === 'cant') announcerCue = 'cannot_move';
+                                    if (args[0] === 'win' || args[0] === 'tie' || args[0] === 'draw' || args[0] === 'prematureend') announcerCue = 'battle_end';
+                                }
+                                if (announcerCue && this.scene.animating && !this.scene.__showdownNativeAudioSilent) {
+                                    scheduleNativeAnnouncerCue(this.scene, announcerCue);
+                                }
                                 return originalRunMajor.apply(this, arguments);
                             };
                             var originalStopAnimation = BattleScene.prototype.stopAnimation;
                             BattleScene.prototype.stopAnimation = function () {
-                                clearNativeCueTimers(this);
+                                clearNativeCueTimers(this, !(this.battle && this.battle.paused));
                                 return originalStopAnimation.apply(this, arguments);
                             };
                             var originalResultAnim = BattleScene.prototype.resultAnim;
@@ -447,15 +494,24 @@ class ShowdownMoveEffectsView(
                                 if (resultCue && this.animating && !this.__showdownNativeAudioSilent) {
                                     scheduleNativeCue(this, resultCue);
                                 }
+                                var announcerCue = this.__showdownNativeAnnouncerResultCues && this.__showdownNativeAnnouncerResultCues.length ? this.__showdownNativeAnnouncerResultCues.shift() : null;
+                                if (announcerCue && this.animating && !this.__showdownNativeAudioSilent) {
+                                    scheduleNativeAnnouncerCue(this, announcerCue);
+                                }
                                 return originalResultAnim.apply(this, arguments);
                             };
                             var originalDamageAnim = BattleScene.prototype.damageAnim;
                             BattleScene.prototype.damageAnim = function () {
                                 var healthEvent = takeNativeHealthEvent(this, arguments[0]);
                                 var shouldCueDamage = healthEvent === 'damage' && this.animating && !this.__showdownNativeAudioSilent && this.__showdownNativeDamageArmed && !this.__showdownNativeDamagePlayed;
+                                var shouldAnnounceHit = shouldCueDamage && !this.__showdownNativeAnnouncerDamagePlayed && !this.__showdownNativeAnnouncerMultiHit;
                                 if (shouldCueDamage) {
                                     this.__showdownNativeDamagePlayed = true;
                                     scheduleNativeCue(this, 'generic_damage');
+                                }
+                                if (shouldAnnounceHit) {
+                                    this.__showdownNativeAnnouncerDamagePlayed = true;
+                                    scheduleNativeAnnouncerCue(this, 'hit');
                                 }
                                 return originalDamageAnim.apply(this, arguments);
                             };
@@ -508,6 +564,7 @@ class ShowdownMoveEffectsView(
                                 }
                                 this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;
                                 if (!this.scene.__showdownNativeResultCues) this.scene.__showdownNativeResultCues = [];
+                                if (!this.scene.__showdownNativeAnnouncerResultCues) this.scene.__showdownNativeAnnouncerResultCues = [];
                                 var healthEventAllowed = !kwArgs.silent;
                                 if (healthEventAllowed && !this.scene.__showdownNativeHealthEvents) this.scene.__showdownNativeHealthEvents = [];
                                 if (healthEventAllowed && args[0] === '-damage') {
@@ -537,6 +594,21 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-clearpositiveboost' || args[0] === '-clearboost' || args[0] === '-clearallboost') resultCue = 'stat_drop';
                                     if (args[0] === '-clearnegativeboost' || args[0] === '-restoreboost') resultCue = 'stat_boost';
                                     if (resultCue) this.scene.__showdownNativeResultCues.push(resultCue);
+                                    var announcerResultCue = null;
+                                    if (args[0] === '-miss') announcerResultCue = 'miss';
+                                    if (args[0] === '-fail' || args[0] === '-block' || args[0] === '-notarget') announcerResultCue = 'fail';
+                                    if (args[0] === '-status' && (args[2] === 'psn' || args[2] === 'tox')) announcerResultCue = 'poison';
+                                    if (args[0] === '-status' && args[2] === 'brn') announcerResultCue = 'burn';
+                                    if (args[0] === '-weather' && String(args[1] || '').toLowerCase() === 'snow') announcerResultCue = 'hail';
+                                    if (args[0] === '-weather' && String(args[1] || '').toLowerCase() === 'hail') announcerResultCue = 'hail';
+                                    if (args[0] === '-weather' && String(args[1] || '').toLowerCase() === 'sandstorm') announcerResultCue = 'sandstorm';
+                                    if (args[0] === '-heal') announcerResultCue = 'heal';
+                                    if (args[0] === '-item' || args[0] === '-eat') announcerResultCue = 'item';
+                                    if (args[0] === '-ability' && String(args[2] || '').toLowerCase() === 'intimidate') announcerResultCue = 'intimidate';
+                                    if (announcerResultCue) this.scene.__showdownNativeAnnouncerResultCues.push(announcerResultCue);
+                                    if (args[0] === '-hitcount' && this.scene.animating && !this.scene.__showdownNativeAudioSilent) {
+                                        scheduleNativeAnnouncerCue(this.scene, 'multi_hit');
+                                    }
                                 }
                                 var result = originalRunMinor.apply(this, arguments);
                                 this.scene.__showdownNativeAudioSilent = previousAudioSilent;
@@ -572,7 +644,10 @@ class ShowdownMoveEffectsView(
                         function destroyBattle() {
                             clearNativeIdlePauseTimer();
                             if (!battle) return;
-                            if (battle.scene) battle.scene.stopAnimation();
+                            if (battle.scene) {
+                                battle.scene.stopAnimation();
+                                clearNativeCueTimers(battle.scene);
+                            }
                             battle.destroy();
                             battle = null;
                         }
@@ -664,7 +739,9 @@ class ShowdownMoveEffectsView(
     private class NativeAudioBridge(
         callback: (BattleAudioCue) -> Unit,
         private val resetAudio: () -> Unit,
-        private val resetMoveAudio: () -> Unit
+        private val resetMoveAudio: () -> Unit,
+        private val announcerCallback: (BattleAnnouncerCue) -> Unit,
+        private val resetAnnouncer: () -> Unit
     ) {
         private val cueSequencer = BattleAudioCueSequencer(callback)
 
@@ -672,6 +749,8 @@ class ShowdownMoveEffectsView(
         fun battleStarted() {
             cueSequencer.reset()
             resetAudio()
+            resetAnnouncer()
+            announcerCallback(BattleAnnouncerCue.BATTLE_START)
         }
 
         @JavascriptInterface
@@ -685,6 +764,11 @@ class ShowdownMoveEffectsView(
             BattleAudioCueResolver.cueForNativeValue(value)?.let { cue ->
                 cueSequencer.receive(cue)
             }
+        }
+
+        @JavascriptInterface
+        fun announcer(value: String) {
+            BattleAnnouncerCueResolver.cueForNativeValue(value)?.let(announcerCallback)
         }
 
     }
