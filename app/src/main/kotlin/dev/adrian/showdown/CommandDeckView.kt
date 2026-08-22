@@ -648,7 +648,7 @@ class CommandDeckView(
                 scale,
                 "Battle starting",
                 session.status,
-                "Battle controls will appear here"
+                "Waiting for battle data"
             )
             return
         }

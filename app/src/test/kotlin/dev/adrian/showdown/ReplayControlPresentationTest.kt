@@ -20,7 +20,7 @@ class ReplayControlPresentationTest {
     }
 
     @Test
-    fun replayFightPanelUsesPlaybackControlsBeforeTheLiveBattleWaitingPlaceholder() {
+    fun replayFightPanelUsesPlaybackControlsBeforeTheLiveBattleWaitingState() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
         val drawMoves = source.substringAfter("private fun drawMoves")
             .substringBefore("private fun hasReplayControls")
@@ -28,7 +28,7 @@ class ReplayControlPresentationTest {
         assertTrue(drawMoves.contains("drawReplayControls(canvas, width, height, scale)"))
         assertTrue(
             drawMoves.indexOf("drawReplayControls(canvas, width, height, scale)") <
-                drawMoves.indexOf("\"Battle controls will appear here\"")
+                drawMoves.indexOf("\"Waiting for battle data\"")
         )
     }
 }
