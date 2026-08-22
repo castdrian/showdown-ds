@@ -380,49 +380,30 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        var animatedResolved = false
-        var staticFallbackDelivered = false
-        requestStaticShowdownBackFallback(request) { staticAsset ->
-            if (staticAsset == null) return@requestStaticShowdownBackFallback
-            mainHandler.postDelayed({
-                if (!animatedResolved && !staticFallbackDelivered) {
-                    staticFallbackDelivered = true
-                    receiver(staticAsset)
-                }
-            }, STATIC_BACK_FALLBACK_DELAY_MILLIS)
-        }
+        val animatedTiers: List<((SpriteAsset?) -> Unit) -> Unit> = listOf(
+            { callback -> requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, callback) },
+            { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) },
+            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates, callback) },
+            { callback -> requestRegularRemoteSpriteResolution(plan, callback) },
+            { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback) },
+            { callback -> requestModernLocalSpriteResolution(request, plan, callback) }
+        )
 
-        fun deliverAnimated(asset: SpriteAsset?) {
-            if (asset != null) {
-                animatedResolved = true
-                receiver(asset)
+        fun requestTier(index: Int) {
+            if (index >= animatedTiers.size) {
+                requestStaticShowdownBackFallback(request, receiver)
+                return
             }
-        }
-
-        requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, ::deliverAnimated)
-        requestModernLocalSpriteResolution(request, plan, ::deliverAnimated)
-        requestScrapedBackSpriteResolution(request, highResolutionOnly = true) { scrapedAsset ->
-            if (scrapedAsset != null) {
-                deliverAnimated(scrapedAsset)
-            } else {
-                requestRegularRemoteSpriteResolution(plan) { regularRemoteAsset ->
-                    if (regularRemoteAsset != null) {
-                        deliverAnimated(regularRemoteAsset)
-                    } else {
-                        requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedRegularAsset ->
-                            if (scrapedRegularAsset != null) {
-                                deliverAnimated(scrapedRegularAsset)
-                            } else {
-                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                    if (communityAsset != null) deliverAnimated(communityAsset)
-                                    else requestStaticShowdownBackFallback(request, receiver)
-                                }
-                            }
-                        }
-                    }
+            animatedTiers[index] { asset ->
+                if (asset != null) {
+                    receiver(asset)
+                } else {
+                    requestTier(index + 1)
                 }
             }
         }
+
+        requestTier(0)
     }
 
     private fun requestScrapedBackSpriteResolution(
@@ -857,7 +838,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private companion object {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
-        const val STATIC_BACK_FALLBACK_DELAY_MILLIS = 1500L
         const val MAX_FILE_BYTES = 64 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }
