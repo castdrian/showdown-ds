@@ -543,4 +543,16 @@ class MainActivityLifecycleContractTest {
         assertTrue(replay.contains("session.setConnectionStatus(\"Loading replay…\")"))
         assertTrue(replay.contains("listOf(\"|init|battle\") + lines"))
     }
+
+    @Test
+    fun exposesReplaySearchFromResourcesAndBattleActions() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("text = \"Search replays\""))
+        assertTrue(source.contains("showReplaySearchDialog()"))
+        assertTrue(source.contains("ShowdownReplaySearchQuery("))
+        assertTrue(source.contains("replayFetcher.search(normalized)"))
+        assertTrue(source.contains("entry.format.trim().ifBlank"))
+        assertTrue(source.contains("https://replay.pokemonshowdown.com/\${entry.id}"))
+    }
 }

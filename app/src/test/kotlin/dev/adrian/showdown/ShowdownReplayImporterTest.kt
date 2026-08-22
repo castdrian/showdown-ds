@@ -2,6 +2,8 @@ package dev.adrian.showdown
 
 import android.content.Intent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -83,5 +85,42 @@ class ShowdownReplayImporterTest {
             BattleSession.MatchFormat.GEN7_RANDOM,
             ShowdownReplayImporter.matchFormat(fallbackReplay, BattleSession.MatchFormat.defaults)
         )
+    }
+
+    @Test
+    fun buildsOfficialReplaySearchUrlsFromNormalizedFilters() {
+        assertEquals(
+            "https://replay.pokemonshowdown.com/search.json?user=Alice&user2=Bob&format=gen9ou&before=1700000000",
+            ShowdownReplaySearch.url(
+                ShowdownReplaySearchQuery(" Alice ", " Bob ", " GEN9OU ", 1_700_000_000L)
+            )
+        )
+    }
+
+    @Test
+    fun parsesReplaySearchPagesAndUsesTheExtraResultForPagination() {
+        val entries = (1..51).joinToString(",") { index ->
+            "{\"id\":\"gen9ou-$index\",\"format\":\"gen9ou\",\"players\":[\"Alice\",\"Bob\"],\"uploadtime\":${2_000_000_000L - index}}"
+        }
+
+        val page = ShowdownReplaySearch.page("[$entries]")
+
+        assertEquals(50, page.entries.size)
+        assertEquals("gen9ou-1", page.entries.first().id)
+        assertEquals("Alice vs. Bob", page.entries.first().title)
+        assertTrue(page.hasMore)
+        assertEquals(1_999_999_949L, page.nextBefore)
+    }
+
+    @Test
+    fun acceptsObjectWrappedSearchResultsAndStopsAtTheLastPage() {
+        val page = ShowdownReplaySearch.page(
+            "{\"replays\":[{\"id\":\"gen9ou-1\",\"format\":\"[Gen 9] OU\",\"players\":[\"Alice\",\"Bob\"],\"uploadtime\":1700000000,\"rating\":1542}]}"
+        )
+
+        assertEquals(1, page.entries.size)
+        assertEquals(1542, page.entries.single().rating)
+        assertFalse(page.hasMore)
+        assertNull(page.nextBefore)
     }
 }

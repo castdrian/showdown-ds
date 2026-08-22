@@ -219,6 +219,8 @@ class MainActivity : Activity() {
     private var restoredReplaySpeed = DEFAULT_BATTLE_SPEED
     private var activeReplayLink: String? = null
     private var replayLoadRequest: String? = null
+    private var replaySearchDialog: ShowdownDialog? = null
+    private var replaySearchRequestToken = 0L
     private var playbackScheduledPauseMillis = 0L
     private var playbackScheduledAtMillis = 0L
     private var playbackScheduledSpeed = 1f
@@ -3424,12 +3426,17 @@ class MainActivity : Activity() {
             text = "What's new"
             styleDynamicDialogButton(this)
         }
+        val replaySearchButton = Button(this).apply {
+            text = "Search replays"
+            styleDynamicDialogButton(this)
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(ScrollView(this@MainActivity).apply { addView(resources, -1, -2) }, LinearLayout.LayoutParams(-1, 0, 1f))
             addView(changelogButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(sponsorButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
             addView(pokedexButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
+            addView(replaySearchButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8f * density).toInt() })
         }
         val dialog = ShowdownDialogBuilder(this)
             .setTitle("Info & resources")
@@ -3443,6 +3450,10 @@ class MainActivity : Activity() {
         changelogButton.setOnClickListener {
             dialog.dismiss()
             showChangelogDialog()
+        }
+        replaySearchButton.setOnClickListener {
+            dialog.dismiss()
+            showReplaySearchDialog()
         }
         dialog.show()
         sponsorButton.setOnClickListener {
@@ -5237,11 +5248,160 @@ class MainActivity : Activity() {
     private fun showReplayActions() {
         ShowdownDialogBuilder(this)
             .setTitle("Battle replay")
-            .setItems(arrayOf("Copy transcript", "Load replay URL")) { _, selected ->
-                if (selected == 0) copyBattleTranscript() else showReplayUrlDialog()
+            .setItems(arrayOf("Copy transcript", "Load replay URL", "Search replays")) { _, selected ->
+                when (selected) {
+                    0 -> copyBattleTranscript()
+                    1 -> showReplayUrlDialog()
+                    else -> showReplaySearchDialog()
+                }
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    private fun showReplaySearchDialog() {
+        if (replaySearchDialog?.isShowing == true) return
+        val density = resources.displayMetrics.density
+        val user = EditText(this).apply {
+            hint = "Player (optional)"
+            setSingleLine(true)
+            setText(session.localUsername().takeUnless { it.startsWith("Guest", ignoreCase = true) })
+        }
+        val opponent = EditText(this).apply {
+            hint = "Opponent (optional)"
+            setSingleLine(true)
+        }
+        val format = EditText(this).apply {
+            hint = "Format ID (optional), for example gen9ou"
+            setSingleLine(true)
+        }
+        val status = TextView(this).apply {
+            setTextSize(16f)
+            setTextColor(0xffa9e8e2.toInt())
+            setPadding(0, (10f * density).toInt(), 0, (10f * density).toInt())
+        }
+        val results = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val searchButton = Button(this).apply {
+            text = "Search replays"
+            styleDynamicDialogButton(this)
+        }
+        val nextButton = Button(this).apply {
+            text = "Next page"
+            styleDynamicDialogButton(this)
+            isEnabled = false
+        }
+        var currentQuery = ShowdownReplaySearchQuery()
+        var currentPage = ShowdownReplaySearchPage(emptyList(), false, null)
+        var dialog: ShowdownDialog? = null
+
+        fun renderPage(page: ShowdownReplaySearchPage) {
+            currentPage = page
+            results.removeAllViews()
+            if (page.entries.isEmpty()) {
+                results.addView(TextView(this).apply {
+                    text = "No replays found."
+                    setTextSize(17f)
+                    setTextColor(0xffdceff2.toInt())
+                    setPadding((12f * density).toInt(), (16f * density).toInt(), (12f * density).toInt(), (16f * density).toInt())
+                })
+            } else {
+                page.entries.forEach { entry ->
+                    results.addView(Button(this).apply {
+                        text = buildString {
+                            append(entry.title)
+                            append("\n")
+                            append(entry.format.trim().ifBlank { entry.id.substringBefore('-') })
+                            entry.rating?.let { append(" · Rating $it") }
+                        }
+                        gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                        styleDynamicDialogButton(this)
+                        setOnClickListener {
+                            val replayUrl = ShowdownReplayImporter.normalize(
+                                "https://replay.pokemonshowdown.com/${entry.id}"
+                            )
+                            if (replayUrl == null) {
+                                session.setConnectionStatus("That replay result has an invalid ID.")
+                            } else {
+                                dialog?.dismiss()
+                                loadReplay(replayUrl)
+                            }
+                        }
+                    }, LinearLayout.LayoutParams(-1, -2).apply {
+                        topMargin = (8f * density).toInt()
+                    })
+                }
+            }
+            nextButton.isEnabled = page.hasMore && page.nextBefore != null
+            status.text = when {
+                page.entries.isEmpty() -> "No matching replays"
+                page.hasMore -> "Showing ${page.entries.size} replays · more available"
+                else -> "Showing ${page.entries.size} replays"
+            }
+        }
+
+        fun search(query: ShowdownReplaySearchQuery) {
+            val normalized = query.normalized()
+            currentQuery = normalized
+            val requestToken = ++replaySearchRequestToken
+            searchButton.isEnabled = false
+            nextButton.isEnabled = false
+            status.text = "Searching Showdown replays…"
+            results.removeAllViews()
+            replayFetcher.search(normalized) { result ->
+                runOnUiThread {
+                    if (requestToken != replaySearchRequestToken || replaySearchDialog !== dialog) return@runOnUiThread
+                    searchButton.isEnabled = true
+                    result.onSuccess(::renderPage).onFailure {
+                        status.text = "Replay search failed. Check your connection and try again."
+                    }
+                }
+            }
+        }
+
+        searchButton.setOnClickListener {
+            search(
+                ShowdownReplaySearchQuery(
+                    user = user.text.toString(),
+                    opponent = opponent.text.toString(),
+                    format = format.text.toString()
+                )
+            )
+        }
+        nextButton.setOnClickListener {
+            currentPage.nextBefore?.let { before -> search(currentQuery.copy(before = before)) }
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(user)
+            addView(opponent)
+            addView(format)
+            addView(searchButton, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = (8f * density).toInt()
+            })
+            addView(status, LinearLayout.LayoutParams(-1, -2))
+            addView(results, LinearLayout.LayoutParams(-1, -2))
+            addView(nextButton, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = (8f * density).toInt()
+            })
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, LinearLayout.LayoutParams(-1, -2))
+        }
+        val createdDialog = ShowdownDialogBuilder(this)
+            .setTitle("Search Showdown replays")
+            .setView(scroll)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog = createdDialog
+        replaySearchDialog = createdDialog
+        createdDialog.setOnDismissListener {
+            replaySearchRequestToken += 1
+            if (replaySearchDialog === createdDialog) replaySearchDialog = null
+        }
+        createdDialog.show()
     }
 
     private fun saveBattleReplay() {
