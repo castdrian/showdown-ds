@@ -82,4 +82,17 @@ class ShowdownBackSpriteIndexTest {
             ShowdownBackSpriteIndex.highResolutionCandidates(html, listOf("Alcremie"))
         )
     }
+
+    @Test
+    fun recognizesTheUltraSunUltraMoonGiantBackRootWhenPublished() {
+        val html = """
+            <a href="/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/decidueye-back.gif">
+            <img src="/imagenes/ultra_sol_ultra_luna/sprites/animados-espalda/decidueye.gif">
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/decidueye-back.gif"),
+            ShowdownBackSpriteIndex.highResolutionCandidates(html, listOf("Decidueye"))
+        )
+    }
 }

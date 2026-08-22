@@ -2,7 +2,7 @@ package dev.adrian.showdown
 
 object ShowdownBackSpriteIndex {
     private val imagePathPattern = Regex(
-        """(?:href|src)=[\"']([^\"']*/sprites/(?:animados-gigante|animados-espalda-shiny|animados-espalda|animados)/[^\"']+\.gif)[\"']""",
+        """(?:href|src)=[\"']([^\"']*/sprites/(?:animados-gigante|animados-sinbordes-gigante|animados-espalda-shiny|animados-espalda|animados)/[^\"']+\.gif)[\"']""",
         RegexOption.IGNORE_CASE
     )
 
@@ -24,7 +24,9 @@ object ShowdownBackSpriteIndex {
     }
 
     fun highResolutionCandidates(html: String, speciesNames: List<String>, shiny: Boolean = false): List<String> =
-        candidates(html, speciesNames, shiny).filter { it.contains("/animados-gigante/") }
+        candidates(html, speciesNames, shiny).filter {
+            it.contains("/animados-gigante/") || it.contains("/animados-sinbordes-gigante/")
+        }
 
     private fun normalizedNames(value: String): List<String> = listOf(value, value.replace('-', ' ')).map(::normalize).distinct()
 
