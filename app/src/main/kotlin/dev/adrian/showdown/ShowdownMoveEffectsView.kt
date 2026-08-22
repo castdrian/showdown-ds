@@ -442,7 +442,7 @@ class ShowdownMoveEffectsView(
                                 var category = String(move.category || '').toLowerCase();
                                 if (category !== 'status') return true;
                                 var basePower = Number(move.basePower);
-                                return (isFinite(basePower) && basePower > 0) || typeof move.damage === 'function' || typeof move.damage === 'number';
+                                return (isFinite(basePower) && basePower > 0) || typeof move.damage === 'function' || typeof move.damage === 'number' || move.damage === 'level' || typeof move.damageCallback === 'function';
                             }
                             var originalUseMove = Battle.prototype.useMove;
                             Battle.prototype.useMove = function (pokemon, move) {

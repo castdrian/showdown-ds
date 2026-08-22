@@ -48,7 +48,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("if (!move) return false;"))
         assertTrue(source.contains("var category = String(move.category || '').toLowerCase();"))
         assertTrue(source.contains("if (category !== 'status') return true;"))
-        assertTrue(source.contains("typeof move.damage === 'function' || typeof move.damage === 'number'"))
+        assertTrue(source.contains("typeof move.damage === 'function' || typeof move.damage === 'number' || move.damage === 'level' || typeof move.damageCallback === 'function'"))
         assertTrue(source.contains("return originalUseMove.apply(this, arguments);"))
         assertTrue(source.contains("nativeBattleStarted();"))
         assertTrue(source.contains("function installBattleLogHooks()"))
