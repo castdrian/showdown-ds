@@ -4732,7 +4732,9 @@ class MainActivity : Activity() {
 
     private data class TeamStatEditor(
         val container: LinearLayout,
-        val fields: List<EditText>
+        val fields: List<EditText>,
+        val summary: TextView,
+        val defaultValue: Int
     )
 
     private data class TeamSetEditor(
@@ -4957,6 +4959,8 @@ class MainActivity : Activity() {
                     override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
                         updateTeamSetSummary(editor)
+                        if (field in editor.evs.fields) updateTeamStatSummary(editor.evs)
+                        if (field in editor.ivs.fields) updateTeamStatSummary(editor.ivs)
                         if (field === editor.species && editor.details.visibility == View.VISIBLE) {
                             updateTeamEditorSuggestions(editor)
                         }
@@ -4966,6 +4970,8 @@ class MainActivity : Activity() {
             }
         shiny.setOnCheckedChangeListener { _, _ -> updateTeamSetSummary(editor) }
         gigantamax.setOnCheckedChangeListener { _, _ -> updateTeamSetSummary(editor) }
+        updateTeamStatSummary(editor.evs)
+        updateTeamStatSummary(editor.ivs)
         updateTeamSetSummary(editor)
         parent.addView(editor.section, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (10f * density).toInt() })
         return editor
@@ -5014,6 +5020,12 @@ class MainActivity : Activity() {
             setTextColor(0xffa9e8e2.toInt())
             setPadding((2f * density).toInt(), 0, 0, (6f * density).toInt())
         }, LinearLayout.LayoutParams(-1, -2))
+        val summary = TextView(this).apply {
+            setTextSize(14f)
+            setTextColor(0xff8fbfc7.toInt())
+            setPadding((2f * density).toInt(), 0, 0, (6f * density).toInt())
+        }
+        container.addView(summary, LinearLayout.LayoutParams(-1, -2))
         val fields = mutableListOf<EditText>()
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         listOf(0 until 3, 3 until 6).forEach { rowRange ->
@@ -5062,7 +5074,16 @@ class MainActivity : Activity() {
             })
         }
         container.addView(grid, LinearLayout.LayoutParams(-1, -2))
-        return TeamStatEditor(container, fields)
+        return TeamStatEditor(container, fields, summary, default)
+    }
+
+    private fun updateTeamStatSummary(editor: TeamStatEditor) {
+        val values = editor.fields.map { it.text.toString().trim().toIntOrNull() ?: editor.defaultValue }
+        editor.summary.text = if (editor.defaultValue == 0) {
+            ShowdownTeamStatSummary.evs(values)
+        } else {
+            ShowdownTeamStatSummary.ivs(values)
+        }
     }
 
     private fun teamAutocompleteField(hint: String, value: String, suggestions: List<String>): AutoCompleteTextView = AutoCompleteTextView(this).apply {
