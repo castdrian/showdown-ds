@@ -108,6 +108,18 @@ Ability: Thick Fat
     }
 
     @Test
+    fun treatsNoItemAsAnEmptyOfficialItem() {
+        val set = ShowdownTeamCodec.parse(
+            """Pikachu @ No Item
+Ability: Static
+- Thunderbolt"""
+        ).single()
+
+        assertEquals("", set.item)
+        assertEquals("Pikachu\nAbility: Static\n- Thunderbolt", ShowdownTeamCodec.toText(listOf(set)))
+    }
+
+    @Test
     fun unpacksTeamsSavedWithThePreviousAdvancedFieldOrder() {
         val team = ShowdownTeamCodec.unpack(
             "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,premierball,Ice,G,8,Steel"

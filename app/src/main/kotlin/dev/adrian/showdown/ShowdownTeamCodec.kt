@@ -367,6 +367,7 @@ object ShowdownTeamCodec {
             }
         }
         if (!happinessSpecified && moves.any { ShowdownMoveDex.moveId(it) == "frustration" }) happiness = 0
+        item = item.takeUnless { it.equals("No Item", true) }.orEmpty()
         return ShowdownTeamSet(
             nickname = nickname,
             species = species,
