@@ -1100,7 +1100,7 @@ class CommandDeckView(
             12f * scale
         )
         paint.textSize = labelSize
-        paint.color = Color.rgb(184, 238, 235)
+        paint.color = Color.rgb(216, 227, 232)
         canvas.drawText(label, labelArea.centerX(), centeredTextBaseline(labelArea.centerY()), paint)
 
         paint.textAlign = Paint.Align.CENTER
@@ -1146,10 +1146,6 @@ class CommandDeckView(
     private fun drawCompactMetricLine(canvas: Canvas, bounds: RectF, text: String, scale: Float) {
         paint.style = Paint.Style.FILL
         paint.color = Color.argb(168, 2, 13, 22)
-        canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.25f * scale
-        paint.color = Color.argb(130, 141, 196, 211)
         canvas.drawRoundRect(bounds, 14f * scale, 14f * scale, paint)
         paint.style = Paint.Style.FILL
         paint.textAlign = Paint.Align.CENTER
