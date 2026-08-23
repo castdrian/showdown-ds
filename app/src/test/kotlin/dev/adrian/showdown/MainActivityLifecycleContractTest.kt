@@ -235,6 +235,19 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun lowMemoryPlaybackKeepsEffectivenessCuesAcrossSplitDamagePackets() {
+        val activitySource = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val sceneSource = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
+
+        assertTrue(activitySource.contains("lateListener = battleAudio::playBattleCue"))
+        assertTrue(sceneSource.contains("lightweightLateImpactSoundCue"))
+        assertTrue(sceneSource.contains("lightweightLateImpactSoundListener"))
+        assertTrue(sceneSource.contains("\"-supereffective\", \"-resisted\""))
+        assertTrue(sceneSource.contains("if (lightweightImpactSoundPending)"))
+        assertTrue(sceneSource.contains("lightweightLateImpactSoundListener?.invoke(cue)"))
+    }
+
+    @Test
     fun releasesTheAnimationWebViewAfterFinishedPlaybackDrains() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val playback = source.substringAfter("private val playbackAdvanceRunnable").substringBefore("private var shouldMaintainConnection")

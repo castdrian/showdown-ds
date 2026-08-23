@@ -660,10 +660,13 @@ class MainActivity : Activity() {
         val frame = FrameLayout(this).also { primaryFrame = it }
         battleScene = BattleSceneView(this, session, spriteCache)
         battleScene?.setPlaybackSpeed(replaySpeed)
-        battleScene?.setLightweightImpactSoundListener { impactCue ->
-            battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)
-            impactCue?.let(battleAudio::playBattleCue)
-        }
+        battleScene?.setLightweightImpactSoundListener(
+            listener = { impactCue ->
+                battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)
+                impactCue?.let(battleAudio::playBattleCue)
+            },
+            lateListener = battleAudio::playBattleCue
+        )
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
         return frame
     }

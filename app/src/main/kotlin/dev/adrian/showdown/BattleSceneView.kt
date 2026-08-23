@@ -78,6 +78,8 @@ class BattleSceneView(
     private var lightweightImpactSoundPending = false
     private var lightweightImpactSoundCue: BattleAudioCue? = null
     private var lightweightImpactSoundListener: ((BattleAudioCue?) -> Unit)? = null
+    private var lightweightLateImpactSoundCue: BattleAudioCue? = null
+    private var lightweightLateImpactSoundListener: ((BattleAudioCue) -> Unit)? = null
     private var lightweightPausedAtNanos = 0L
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
@@ -165,12 +167,17 @@ class BattleSceneView(
         lightweightStatDirection = 0
         lightweightImpactSoundPending = false
         lightweightImpactSoundCue = null
+        lightweightLateImpactSoundCue = null
         lightweightPausedAtNanos = 0L
         invalidate()
     }
 
-    fun setLightweightImpactSoundListener(listener: ((BattleAudioCue?) -> Unit)?) {
+    fun setLightweightImpactSoundListener(
+        listener: ((BattleAudioCue?) -> Unit)?,
+        lateListener: ((BattleAudioCue) -> Unit)? = null
+    ) {
         lightweightImpactSoundListener = listener
+        lightweightLateImpactSoundListener = lateListener
     }
 
     fun applyLightweightBattleProtocol(
@@ -192,6 +199,7 @@ class BattleSceneView(
                     lightweightImpactTargets = emptyList()
                     lightweightImpactSoundPending = false
                     lightweightImpactSoundCue = null
+                    lightweightLateImpactSoundCue = null
                     lightweightMoveName = fields.getOrNull(3).orEmpty()
                     lightweightMoveType = session.moveTypeFor(lightweightMoveName)?.uppercase() ?: inferMoveType(lightweightMoveName)
                     lightweightMoveCategory = session.moveInfoFor(lightweightMoveName)?.category?.uppercase()
@@ -210,6 +218,7 @@ class BattleSceneView(
                         }
                         ?.target
                     if (target != null) {
+                        lightweightLateImpactSoundCue = null
                         lightweightImpactTargets = if (lightweightImpactSoundPending && lightweightImpactAtNanos > nowNanos) {
                             (lightweightImpactTargets + directTargets).distinctBy(BattleDamageCueResolver::targetKey)
                         } else {
@@ -223,6 +232,15 @@ class BattleSceneView(
                         lightweightImpactSoundCue = impactCueByLine[lineIndex]
                         changed = true
                     }
+                }
+                "-supereffective", "-resisted" -> {
+                    val cue = BattleAudioCueResolver.cueForProtocolLine(line) ?: return@forEachIndexed
+                    if (lightweightImpactSoundPending) {
+                        lightweightImpactSoundCue = cue
+                    } else {
+                        lightweightLateImpactSoundCue = cue
+                    }
+                    changed = true
                 }
                 "-boost", "-unboost", "-setboost" -> {
                     lightweightMoveCategory = "STATUS"
@@ -341,6 +359,12 @@ class BattleSceneView(
             lightweightImpactSoundPending = false
             lightweightImpactSoundListener?.invoke(lightweightImpactSoundCue)
             lightweightImpactSoundCue = null
+        }
+        if (!animationsPaused && !lightweightImpactSoundPending) {
+            lightweightLateImpactSoundCue?.let { cue ->
+                lightweightLateImpactSoundCue = null
+                lightweightLateImpactSoundListener?.invoke(cue)
+            }
         }
         drawLightweightMoveEffect(canvas, width, height, scale, nowNanos)
         drawHeader(canvas, width, scale)
