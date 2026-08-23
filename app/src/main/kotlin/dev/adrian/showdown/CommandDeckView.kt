@@ -1073,10 +1073,6 @@ class CommandDeckView(
         )
         canvas.drawRoundRect(inner, radius, radius, paint)
         paint.shader = null
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.75f * scale
-        paint.color = Color.argb(194, 128, 218, 222)
-        canvas.drawRoundRect(inner, radius, radius, paint)
 
         val horizontalPadding = 24f * scale
         val verticalPadding = 16f * scale
