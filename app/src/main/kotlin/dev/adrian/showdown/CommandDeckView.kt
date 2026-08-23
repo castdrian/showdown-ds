@@ -951,7 +951,6 @@ class CommandDeckView(
             drawUtilityMessage(canvas, bounds, scale)
             return
         }
-        val palette = movePalette(move.type)
         val compact = bounds.height() < 520f * scale
         val veryCompact = bounds.height() < 400f * scale
         val detailPadding = if (compact) 20f * scale else 24f * scale
@@ -962,10 +961,6 @@ class CommandDeckView(
             bounds.bottom - detailPadding
         )
         paint.color = Color.argb(178, 3, 14, 24)
-        canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.25f * scale
-        paint.color = Color.argb(150, Color.red(palette.edge), Color.green(palette.edge), Color.blue(palette.edge))
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
         paint.style = Paint.Style.FILL
         if (veryCompact) {
@@ -1060,7 +1055,7 @@ class CommandDeckView(
 
     private fun drawMoveInfoCell(canvas: Canvas, bounds: RectF, label: String, value: String, scale: Float) {
         val radius = 18f * scale
-        val inner = RectF(bounds).apply { inset(2f * scale, 2f * scale) }
+        val inner = RectF(bounds)
         paint.style = Paint.Style.FILL
         paint.shader = LinearGradient(
             inner.left,
