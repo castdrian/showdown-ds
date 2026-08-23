@@ -1001,6 +1001,8 @@ class BattleSession {
 
     fun battlePlayerSlot() = playerSlot
 
+    fun isLocalBattleSide(side: String): Boolean = isPlayerSide(side.substringBefore(':').trim())
+
     fun restoreBattlePlayerSlot(slot: String?) {
         val value = slot?.takeIf { it.matches(Regex("p[1-4]")) } ?: return
         restoredPlayerSlot = value

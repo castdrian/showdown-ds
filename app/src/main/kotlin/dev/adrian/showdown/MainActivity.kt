@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.Presentation
 import android.content.Context
 import android.content.Intent
@@ -53,6 +54,11 @@ class MainActivity : Activity() {
         val confirmation: String,
         val captcha: String
     )
+    private data class LightweightMoveCue(
+        val target: String,
+        var damagePlayed: Boolean = false,
+        var impactCue: BattleAudioCue? = null
+    )
 
     private var displayManager: DisplayManager? = null
     private var secondaryPresentation: ThorPresentation? = null
@@ -64,6 +70,8 @@ class MainActivity : Activity() {
     private var battleScene: BattleSceneView? = null
     private var primaryFrame: FrameLayout? = null
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
+    private var lightweightBattlePlayback = false
+    private val lightweightMoveCues = mutableListOf<LightweightMoveCue>()
     private var commandDeck: CommandDeckView? = null
     private lateinit var session: BattleSession
     private lateinit var battleAudio: BattleAudio
@@ -241,7 +249,11 @@ class MainActivity : Activity() {
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread {
             if (lines.any { it.startsWith("|init|battle") }) ensureMoveDexLoaded()
-            applyBattleProtocolToEffects(lines)
+            if (lightweightBattlePlayback) {
+                applyLightweightBattleProtocol(lines)
+            } else {
+                applyBattleProtocolToEffects(lines)
+            }
         }
     }
     private val decisionListener = BattleSession.DecisionListener { command ->
@@ -325,6 +337,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureWindow()
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        lightweightBattlePlayback = activityManager?.isLowRamDevice == true || activityManager?.memoryClass?.let { it <= 256 } == true
         serverEndpoint = loadServerEndpoint()
         credentialsStore = ShowdownCredentialsStore(this)
         sessionStore = ShowdownSessionStore(this)
@@ -627,6 +641,7 @@ class MainActivity : Activity() {
     }
 
     private fun ensureShowdownMoveEffects(): ShowdownMoveEffectsView? {
+        if (lightweightBattlePlayback) return null
         showdownMoveEffects?.let { return it }
         val frame = primaryFrame ?: return null
         val effects = ShowdownMoveEffectsView(
@@ -795,6 +810,54 @@ class MainActivity : Activity() {
         if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return
         showdownMoveEffects?.setPerspective(session.battlePlayerSlot())
         showdownMoveEffects?.applyProtocol(lines, session.battleLogGeneration())
+    }
+
+    private fun applyLightweightBattleProtocol(lines: List<String>) {
+        if (lines.any { it.startsWith("|init|battle") }) {
+            battleScene?.resetBattleFeed()
+            lightweightMoveCues.clear()
+        }
+        lines.forEach { line ->
+            val fields = line.split('|')
+            when {
+                fields.getOrNull(1) == "move" -> {
+                    battleAudio.beginBattleMove()
+                    lightweightMoveCues += LightweightMoveCue(
+                        target = fields.getOrNull(4).orEmpty()
+                    )
+                }
+                isDirectMoveDamage(fields) -> playLightweightDamageCue(fields)
+                fields.getOrNull(1) == "turn" -> {
+                    lightweightMoveCues.clear()
+                }
+                else -> BattleAudioCueResolver.cueForProtocolLine(line)?.let { cue ->
+                    if (cue == BattleAudioCue.SUPER_EFFECTIVE || cue == BattleAudioCue.NOT_VERY_EFFECTIVE) {
+                        val move = lightweightMoveCues.lastOrNull { !it.damagePlayed }
+                        if (move != null) move.impactCue = cue else battleAudio.playBattleCue(cue)
+                    } else {
+                        battleAudio.playBattleCue(cue)
+                    }
+                }
+            }
+        }
+        battleScene?.applyLightweightBattleProtocol(lines)
+    }
+
+    private fun playLightweightDamageCue(fields: List<String>) {
+        val target = fields.getOrNull(2).orEmpty().substringBefore(':')
+        val move = lightweightMoveCues.firstOrNull { cue ->
+            !cue.damagePlayed && (cue.target.isBlank() || cue.target.substringBefore(':').equals(target, true))
+        } ?: lightweightMoveCues.firstOrNull { !it.damagePlayed }
+        if (move == null) return
+        battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)
+        move.damagePlayed = true
+        move.impactCue?.let(battleAudio::playBattleCue)
+        move.impactCue = null
+    }
+
+    private fun isDirectMoveDamage(fields: List<String>): Boolean {
+        if (fields.getOrNull(1) != "-damage" && fields.getOrNull(1) != "-sethp") return false
+        return fields.drop(4).any { it.trim().startsWith("[from] move:", true) }
     }
 
     private fun flushBattlePlayback() {

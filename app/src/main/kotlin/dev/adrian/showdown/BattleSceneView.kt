@@ -62,6 +62,11 @@ class BattleSceneView(
     private var battleFeedTouchActive = false
     private var battleFeedTouchMoved = false
     private var animationsPaused = false
+    private var lightweightMoveStartedAtNanos = 0L
+    private var lightweightMoveActorPlayer = true
+    private var lightweightMoveTargetPlayer: Boolean? = null
+    private var lightweightImpactAtNanos = 0L
+    private var lightweightImpactTargetPlayer: Boolean? = null
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -125,7 +130,37 @@ class BattleSceneView(
     fun resetBattleFeed() {
         battleFeedPresentation.reset()
         battleFeedBounds.setEmpty()
+        lightweightMoveStartedAtNanos = 0L
+        lightweightMoveActorPlayer = true
+        lightweightMoveTargetPlayer = null
+        lightweightImpactAtNanos = 0L
+        lightweightImpactTargetPlayer = null
         invalidate()
+    }
+
+    fun applyLightweightBattleProtocol(lines: List<String>) {
+        val nowNanos = System.nanoTime()
+        var changed = false
+        lines.forEach { line ->
+            val fields = line.split('|')
+            when (fields.getOrNull(1)) {
+                "move" -> {
+                    val actor = fields.getOrNull(2).orEmpty()
+                    lightweightMoveStartedAtNanos = nowNanos
+                    lightweightMoveActorPlayer = session.isLocalBattleSide(actor)
+                    lightweightMoveTargetPlayer = fields.getOrNull(4)?.let(session::isLocalBattleSide)
+                    lightweightImpactAtNanos = 0L
+                    lightweightImpactTargetPlayer = null
+                    changed = true
+                }
+                "-damage", "-sethp" -> if (isDirectMoveDamage(fields)) {
+                    lightweightImpactAtNanos = nowNanos
+                    lightweightImpactTargetPlayer = fields.getOrNull(2)?.let(session::isLocalBattleSide)
+                    changed = true
+                }
+            }
+        }
+        if (changed) invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -218,6 +253,7 @@ class BattleSceneView(
                 showdownPlacement = singles
             )
         }
+        drawLightweightMoveEffect(canvas, width, height, scale, nowNanos)
         drawHeader(canvas, width, scale)
         drawBattleClock(canvas, width, scale)
         if ((inspectedPlayer == true && !session.hasActivePlayerCombatant()) ||
@@ -286,7 +322,8 @@ class BattleSceneView(
             playerSprite?.isAnimated == true ||
             opponentSprite?.isAnimated == true ||
             playerCombatants.any { playerActiveSprites[it.slot]?.isAnimated == true } ||
-            opponentCombatants.any { opponentActiveSprites[it.slot]?.isAnimated == true }
+            opponentCombatants.any { opponentActiveSprites[it.slot]?.isAnimated == true } ||
+            lightweightMoveEffectActive(nowNanos)
             ) && !animationsPaused
         ) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
@@ -498,6 +535,65 @@ class BattleSceneView(
                     invalidate()
                 }
             }
+        }
+    }
+
+    private fun isDirectMoveDamage(fields: List<String>): Boolean {
+        if (fields.getOrNull(1) != "-damage" && fields.getOrNull(1) != "-sethp") return false
+        return fields.drop(4).any { it.trim().startsWith("[from] move:", true) }
+    }
+
+    private fun lightweightMoveEffectActive(nowNanos: Long): Boolean {
+        val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < 1_200_000_000L
+        val impactActive = lightweightImpactAtNanos > 0L && nowNanos - lightweightImpactAtNanos < 700_000_000L
+        return moveActive || impactActive
+    }
+
+    private fun drawLightweightMoveEffect(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        nowNanos: Long
+    ) {
+        if (!lightweightMoveEffectActive(nowNanos)) return
+        val singles = session.isSinglesBattle()
+        val playerX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.PLAYER_X) else width * 0.30f
+        val playerY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.PLAYER_Y) else height * 0.67f
+        val opponentX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.OPPONENT_X) else width * 0.73f
+        val opponentY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.OPPONENT_Y) else height * 0.42f
+        val actorX = if (lightweightMoveActorPlayer) playerX else opponentX
+        val actorY = if (lightweightMoveActorPlayer) playerY else opponentY
+        val impactAt = lightweightImpactAtNanos
+        val targetPlayer = if (impactAt > 0L) {
+            lightweightImpactTargetPlayer ?: lightweightMoveTargetPlayer ?: !lightweightMoveActorPlayer
+        } else {
+            lightweightMoveTargetPlayer ?: !lightweightMoveActorPlayer
+        }
+        val targetX = if (targetPlayer) playerX else opponentX
+        val targetY = if (targetPlayer) playerY else opponentY
+        if (impactAt > 0L && nowNanos >= impactAt) {
+            val progress = ((nowNanos - impactAt).toFloat() / 700_000_000f).coerceIn(0f, 1f)
+            val radius = (42f + progress * 170f) * scale
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = (12f - progress * 8f) * scale
+            paint.color = Color.argb(((1f - progress) * 220f).toInt(), 245, 252, 255)
+            canvas.drawCircle(targetX, targetY - 38f * scale, radius, paint)
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb(((1f - progress) * 80f).toInt(), 255, 244, 196)
+            canvas.drawCircle(targetX, targetY - 38f * scale, radius * 0.42f, paint)
+        } else {
+            val progress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / 1_200_000_000f).coerceIn(0f, 1f)
+            val eased = progress * progress * (3f - 2f * progress)
+            val endX = actorX + (targetX - actorX) * eased
+            val endY = actorY + (targetY - actorY) * eased
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 14f * scale
+            paint.strokeCap = Paint.Cap.ROUND
+            paint.color = Color.argb(((1f - progress) * 190f).toInt(), 178, 242, 255)
+            canvas.drawLine(actorX, actorY - 42f * scale, endX, endY - 42f * scale, paint)
+            paint.strokeCap = Paint.Cap.BUTT
+            paint.style = Paint.Style.FILL
         }
     }
 
