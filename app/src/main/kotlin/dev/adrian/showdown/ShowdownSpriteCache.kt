@@ -530,7 +530,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         receiver: (SpriteAsset?) -> Unit
     ) {
         if (memoryConstrained && plan.usesModernAnimatedFallback) {
-            requestModernLocalSpriteResolution(request, plan, receiver)
+            requestConstrainedSpriteResolution(request, plan, receiver)
             return
         }
         if (!plan.usesModernAnimatedFallback) {
@@ -547,6 +547,20 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 return@requestAnimatedSpriteCandidates
             }
             requestFrontSpriteResolution(request, plan, receiver)
+        }
+    }
+
+    private fun requestConstrainedSpriteResolution(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestModernLocalSpriteResolution(request, plan) { asset ->
+            if (asset != null || !request.backFacing) {
+                receiver(asset)
+            } else {
+                requestStaticShowdownBackFallback(request, receiver)
+            }
         }
     }
 
