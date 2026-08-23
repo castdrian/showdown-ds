@@ -22,6 +22,16 @@ class ShowdownDecisionDeliveryTest {
     }
 
     @Test
+    fun ignoresAStaleSentChoiceAcknowledgement() {
+        assertFalse(
+            ShowdownDecisionDelivery.shouldClearPendingCommand(
+                "/choose move 1|17",
+                listOf("|sentchoice|switch 2|16")
+            )
+        )
+    }
+
+    @Test
     fun clearsWhenTheServerMovesToAnotherRequest() {
         assertFalse(
             ShowdownDecisionDelivery.shouldClearPendingCommand(
