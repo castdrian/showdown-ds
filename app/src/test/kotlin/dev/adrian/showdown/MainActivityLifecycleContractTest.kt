@@ -228,6 +228,10 @@ class MainActivityLifecycleContractTest {
         assertTrue(lightweight.contains("BattleAnnouncerCueResolver.cuesForProtocol("))
         assertTrue(lightweight.contains("directDamageTargetsByLine.keys"))
         assertTrue(lightweight.contains("battleAudio::playAnnouncerCue"))
+        assertTrue(lightweight.contains("impactCueByLine"))
+        assertTrue(lightweight.contains("latestDamageLineIndex"))
+        assertTrue(source.contains("setLightweightImpactSoundListener"))
+        assertTrue(source.contains("battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)"))
     }
 
     @Test

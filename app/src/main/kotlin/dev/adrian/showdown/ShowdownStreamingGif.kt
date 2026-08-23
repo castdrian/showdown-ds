@@ -1,9 +1,6 @@
 package dev.adrian.showdown
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Rect
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -16,10 +13,7 @@ internal class ShowdownStreamingGif private constructor(
     private val outputHeight: Int,
     private val frames: List<Frame>,
     private val canvasPixels: IntArray,
-    private val sourceBitmap: Bitmap,
     private val outputBitmap: Bitmap,
-    private val outputCanvas: Canvas,
-    private val outputPaint: Paint,
     private val memoryBytes: Int
 ) {
     private var currentFrameIndex = -1
@@ -47,7 +41,6 @@ internal class ShowdownStreamingGif private constructor(
     fun release() {
         if (released) return
         released = true
-        sourceBitmap.recycle()
         outputBitmap.recycle()
         savedCanvas = null
         currentFrameIndex = -1
@@ -88,12 +81,12 @@ internal class ShowdownStreamingGif private constructor(
     }
 
     private fun clearFrame(frame: Frame) {
-        val left = frame.left.coerceAtLeast(0)
-        val top = frame.top.coerceAtLeast(0)
-        val right = (frame.left + frame.width).coerceAtMost(width)
-        val bottom = (frame.top + frame.height).coerceAtMost(height)
+        val left = (frame.left * outputWidth / width).coerceIn(0, outputWidth)
+        val top = (frame.top * outputHeight / height).coerceIn(0, outputHeight)
+        val right = ((frame.left + frame.width) * outputWidth / width).coerceIn(left, outputWidth)
+        val bottom = ((frame.top + frame.height) * outputHeight / height).coerceIn(top, outputHeight)
         for (y in top until bottom) {
-            Arrays.fill(canvasPixels, y * width + left, y * width + right, 0)
+            Arrays.fill(canvasPixels, y * outputWidth + left, y * outputWidth + right, 0)
         }
     }
 
@@ -107,20 +100,16 @@ internal class ShowdownStreamingGif private constructor(
             val x = frame.left + column
             val y = frame.top + row
             if (x in 0 until width && y in 0 until height && colorIndex != frame.transparentIndex) {
-                canvasPixels[y * width + x] = frame.palette.getOrElse(colorIndex) { 0 }
+                val outputX = (x * outputWidth / width).coerceIn(0, outputWidth - 1)
+                val outputY = (y * outputHeight / height).coerceIn(0, outputHeight - 1)
+                canvasPixels[outputY * outputWidth + outputX] = frame.palette.getOrElse(colorIndex) { 0 }
             }
             pixelIndex += 1
         }
     }
 
     private fun publishFrame() {
-        sourceBitmap.setPixels(canvasPixels, 0, width, 0, 0, width, height)
-        outputCanvas.drawBitmap(
-            sourceBitmap,
-            Rect(0, 0, width, height),
-            Rect(0, 0, outputWidth, outputHeight),
-            outputPaint
-        )
+        outputBitmap.setPixels(canvasPixels, 0, outputWidth, 0, 0, outputWidth, outputHeight)
     }
 
     private fun decodeLzw(frame: Frame, emit: (Int) -> Unit) {
@@ -367,20 +356,15 @@ internal class ShowdownStreamingGif private constructor(
             }
             if (frames.size < 2 || !hasDistinctFrames(frames)) return null
             val (outputWidth, outputHeight) = boundedAnimatedFrameSize(width, height, maxFrameDimension)
-            val canvasPixels = IntArray(width * height)
-            val sourceBitmap = runCatching {
-                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            }.getOrNull() ?: return null
+            val canvasPixels = IntArray(outputWidth * outputHeight)
             val outputBitmap = runCatching {
                 Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
             }.getOrElse {
-                sourceBitmap.recycle()
                 return null
             }
             val memoryBytes = frames.sumOf { it.imageData.size }
                 .toLong()
                 .plus(canvasPixels.size.toLong() * 4L)
-                .plus(sourceBitmap.allocationByteCount.toLong())
                 .plus(outputBitmap.allocationByteCount.toLong())
                 .coerceIn(1L, Int.MAX_VALUE.toLong())
                 .toInt()
@@ -392,14 +376,10 @@ internal class ShowdownStreamingGif private constructor(
                     outputHeight,
                     frames,
                     canvasPixels,
-                    sourceBitmap,
                     outputBitmap,
-                    Canvas(outputBitmap),
-                    Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),
                     memoryBytes
                 )
             }.getOrElse {
-                sourceBitmap.recycle()
                 outputBitmap.recycle()
                 null
             }

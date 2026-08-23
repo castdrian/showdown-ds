@@ -30,4 +30,16 @@ class BattleSceneTimingTest {
         assertEquals(1f, BattleSceneTiming.summonSpriteAlpha(summonAtNanos, summonAtNanos + BattleSceneTiming.summonBallDurationNanos + BattleSceneTiming.summonDropDurationNanos), 0.001f)
         assertEquals(1f, BattleSceneTiming.summonProgress(summonAtNanos, summonAtNanos + BattleSceneTiming.summonDurationNanos), 0.001f)
     }
+
+    @Test
+    fun lightweightImpactTimingSlowsWithHumanPlaybackSpeed() {
+        assertEquals(
+            BattleSceneTiming.lightweightImpactDelayNanos,
+            BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightImpactDelayNanos, 1f)
+        )
+        assertEquals(
+            866_666_667L,
+            BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightImpactDelayNanos, 0.75f)
+        )
+    }
 }

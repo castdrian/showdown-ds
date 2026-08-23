@@ -28,6 +28,19 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun normalAnimatedSourcesPreferTheBoundedStreamingDecoder() {
+        val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val gifSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownStreamingGif.kt").readText()
+
+        assertTrue(cacheSource.contains("return decodeStreamedGif(file) ?: decodeMovie(file)"))
+        assertTrue(cacheSource.contains("private fun decodeStreamedGif(file: File): SpriteAsset?"))
+        assertTrue(cacheSource.contains("if (memoryConstrained && plan.usesModernAnimatedFallback)"))
+        assertTrue(cacheSource.contains("totalMem < 2L * 1024L * 1024L * 1024L"))
+        assertTrue(gifSource.contains("val canvasPixels = IntArray(outputWidth * outputHeight)"))
+        assertFalse(gifSource.contains("val sourceBitmap"))
+    }
+
+    @Test
     fun rejectsOneFrameGifArtwork() {
         assertFalse(hasMultipleGifFrames(testGif(1)))
         assertFalse(hasMultipleGifFrames(testGif(2, identicalFrames = true)))

@@ -64,6 +64,7 @@ class BattleSceneView(
     private var battleFeedTouchActive = false
     private var battleFeedTouchMoved = false
     private var animationsPaused = false
+    private var playbackSpeed = 1f
     private var lightweightMoveStartedAtNanos = 0L
     private var lightweightMoveActorPlayer = true
     private var lightweightMoveTargetPlayer: Boolean? = null
@@ -74,6 +75,10 @@ class BattleSceneView(
     private var lightweightMoveCategory = "PHYSICAL"
     private var lightweightStatEffectAtNanos = 0L
     private var lightweightStatDirection = 0
+    private var lightweightImpactSoundPending = false
+    private var lightweightImpactSoundCue: BattleAudioCue? = null
+    private var lightweightImpactSoundListener: ((BattleAudioCue?) -> Unit)? = null
+    private var lightweightPausedAtNanos = 0L
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -86,11 +91,22 @@ class BattleSceneView(
     }
 
     fun setPlaybackSpeed(speed: Float) {
+        playbackSpeed = BattlePlaybackSpeed.coerce(speed)
         battleFeedPresentation.setPlaybackSpeed(speed)
         invalidate()
     }
 
     fun setPlaybackPaused(paused: Boolean) {
+        if (animationsPaused == paused) return
+        if (paused) {
+            lightweightPausedAtNanos = System.nanoTime()
+        } else if (lightweightPausedAtNanos > 0L) {
+            val pausedDuration = (System.nanoTime() - lightweightPausedAtNanos).coerceAtLeast(0L)
+            lightweightMoveStartedAtNanos = shiftTimestamp(lightweightMoveStartedAtNanos, pausedDuration)
+            lightweightImpactAtNanos = shiftTimestamp(lightweightImpactAtNanos, pausedDuration)
+            lightweightStatEffectAtNanos = shiftTimestamp(lightweightStatEffectAtNanos, pausedDuration)
+            lightweightPausedAtNanos = 0L
+        }
         animationsPaused = paused
         battleFeedPresentation.setPlaybackPaused(paused, SystemClock.elapsedRealtime())
         if (paused) stopRetainedAnimations()
@@ -147,12 +163,20 @@ class BattleSceneView(
         lightweightMoveCategory = "PHYSICAL"
         lightweightStatEffectAtNanos = 0L
         lightweightStatDirection = 0
+        lightweightImpactSoundPending = false
+        lightweightImpactSoundCue = null
+        lightweightPausedAtNanos = 0L
         invalidate()
+    }
+
+    fun setLightweightImpactSoundListener(listener: ((BattleAudioCue?) -> Unit)?) {
+        lightweightImpactSoundListener = listener
     }
 
     fun applyLightweightBattleProtocol(
         lines: List<String>,
-        directDamageTargetsByLine: Map<Int, Set<String>> = emptyMap()
+        directDamageTargetsByLine: Map<Int, Set<String>> = emptyMap(),
+        impactCueByLine: Map<Int, BattleAudioCue?> = emptyMap()
     ) {
         val nowNanos = System.nanoTime()
         var changed = false
@@ -166,6 +190,8 @@ class BattleSceneView(
                     lightweightMoveTargetPlayer = fields.getOrNull(4)?.let(session::isLocalBattleSide)
                     lightweightImpactAtNanos = 0L
                     lightweightImpactTargets = emptyList()
+                    lightweightImpactSoundPending = false
+                    lightweightImpactSoundCue = null
                     lightweightMoveName = fields.getOrNull(3).orEmpty()
                     lightweightMoveType = session.moveTypeFor(lightweightMoveName)?.uppercase() ?: inferMoveType(lightweightMoveName)
                     lightweightMoveCategory = session.moveInfoFor(lightweightMoveName)?.category?.uppercase()
@@ -184,12 +210,17 @@ class BattleSceneView(
                         }
                         ?.target
                     if (target != null) {
-                        lightweightImpactTargets = if (lightweightImpactAtNanos == nowNanos) {
+                        lightweightImpactTargets = if (lightweightImpactSoundPending && lightweightImpactAtNanos > nowNanos) {
                             (lightweightImpactTargets + directTargets).distinctBy(BattleDamageCueResolver::targetKey)
                         } else {
                             directTargets.toList()
                         }
-                        lightweightImpactAtNanos = nowNanos
+                        lightweightImpactAtNanos = nowNanos + BattleSceneTiming.scaledDurationNanos(
+                            BattleSceneTiming.lightweightImpactDelayNanos,
+                            playbackSpeed
+                        )
+                        lightweightImpactSoundPending = true
+                        lightweightImpactSoundCue = impactCueByLine[lineIndex]
                         changed = true
                     }
                 }
@@ -305,6 +336,11 @@ class BattleSceneView(
                 playerSprite,
                 showdownPlacement = singles
             )
+        }
+        if (!animationsPaused && lightweightImpactSoundPending && lightweightImpactAtNanos > 0L && nowNanos >= lightweightImpactAtNanos) {
+            lightweightImpactSoundPending = false
+            lightweightImpactSoundListener?.invoke(lightweightImpactSoundCue)
+            lightweightImpactSoundCue = null
         }
         drawLightweightMoveEffect(canvas, width, height, scale, nowNanos)
         drawHeader(canvas, width, scale)
@@ -592,9 +628,9 @@ class BattleSceneView(
     }
 
     private fun lightweightMoveEffectActive(nowNanos: Long): Boolean {
-        val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < 1_200_000_000L
-        val impactActive = lightweightImpactAtNanos > 0L && nowNanos - lightweightImpactAtNanos < 700_000_000L
-        val statActive = lightweightStatEffectAtNanos > 0L && nowNanos - lightweightStatEffectAtNanos < 1_100_000_000L
+        val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < scaledLightweightMoveDurationNanos()
+        val impactActive = lightweightImpactAtNanos > 0L && nowNanos - lightweightImpactAtNanos < scaledLightweightImpactDurationNanos()
+        val statActive = lightweightStatEffectAtNanos > 0L && nowNanos - lightweightStatEffectAtNanos < scaledLightweightStatDurationNanos()
         return moveActive || impactActive || statActive
     }
 
@@ -661,9 +697,9 @@ class BattleSceneView(
         nowNanos: Long,
         palette: MoveEffectPalette
     ) {
-        val moveProgress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / 1_200_000_000f).coerceIn(0f, 1f)
+        val moveProgress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / scaledLightweightMoveDurationNanos()).coerceIn(0f, 1f)
         if (impactAt > 0L && nowNanos >= impactAt) {
-            val progress = ((nowNanos - impactAt).toFloat() / 700_000_000f).coerceIn(0f, 1f)
+            val progress = ((nowNanos - impactAt).toFloat() / scaledLightweightImpactDurationNanos()).coerceIn(0f, 1f)
             val radius = (42f + progress * 170f) * scale
             val impactTargets = lightweightImpactTargets.ifEmpty { listOf(if (targetPlayer) "p1a" else "p2a") }
             impactTargets.forEach { target ->
@@ -713,7 +749,7 @@ class BattleSceneView(
         nowNanos: Long,
         palette: MoveEffectPalette
     ) {
-        val progress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / 1_200_000_000f).coerceIn(0f, 1f)
+        val progress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / scaledLightweightMoveDurationNanos()).coerceIn(0f, 1f)
         val centerY = targetY - 42f * scale
         val pulse = (sin(progress * Math.PI * 2.0).toFloat() + 1f) * 0.5f
         paint.style = Paint.Style.STROKE
@@ -746,7 +782,7 @@ class BattleSceneView(
         palette: MoveEffectPalette
     ) {
         if (lightweightStatEffectAtNanos <= 0L) return
-        val progress = ((nowNanos - lightweightStatEffectAtNanos).toFloat() / 1_100_000_000f).coerceIn(0f, 1f)
+        val progress = ((nowNanos - lightweightStatEffectAtNanos).toFloat() / scaledLightweightStatDurationNanos()).coerceIn(0f, 1f)
         if (progress >= 1f) return
         val centerY = targetY - 56f * scale
         val direction = lightweightStatDirection.toFloat()
@@ -850,6 +886,18 @@ class BattleSceneView(
         this > 0 -> 1
         else -> 0
     }
+
+    private fun scaledLightweightMoveDurationNanos() =
+        BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightMoveDurationNanos, playbackSpeed).toFloat()
+
+    private fun scaledLightweightImpactDurationNanos() =
+        BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightImpactDurationNanos, playbackSpeed).toFloat()
+
+    private fun scaledLightweightStatDurationNanos() =
+        BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightStatDurationNanos, playbackSpeed).toFloat()
+
+    private fun shiftTimestamp(timestamp: Long, duration: Long): Long =
+        timestamp.takeIf { it > 0L }?.plus(duration) ?: 0L
 
     private fun lightweightTargetCenter(
         width: Float,

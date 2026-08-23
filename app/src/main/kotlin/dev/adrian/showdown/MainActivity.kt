@@ -84,6 +84,14 @@ class MainActivity : Activity() {
         "-miss",
         "-immune",
         "-nothing",
+        "-boost",
+        "-unboost",
+        "-setboost",
+        "-clearboost",
+        "-clearallboost",
+        "-clearpositiveboost",
+        "-clearnegativeboost",
+        "-restoreboost",
         "cant"
     )
     private var commandDeck: CommandDeckView? = null
@@ -652,6 +660,10 @@ class MainActivity : Activity() {
         val frame = FrameLayout(this).also { primaryFrame = it }
         battleScene = BattleSceneView(this, session, spriteCache)
         battleScene?.setPlaybackSpeed(replaySpeed)
+        battleScene?.setLightweightImpactSoundListener { impactCue ->
+            battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)
+            impactCue?.let(battleAudio::playBattleCue)
+        }
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
         return frame
     }
@@ -835,6 +847,8 @@ class MainActivity : Activity() {
             lightweightHealthByTarget.clear()
         }
         val directDamageTargetsByLine = mutableMapOf<Int, Set<String>>()
+        val impactCueByLine = mutableMapOf<Int, BattleAudioCue?>()
+        var latestDamageLineIndex: Int? = null
         lines.forEachIndexed { lineIndex, line ->
             val fields = line.split('|')
             val directDamageTargets = BattleDamageCueResolver.directDamageTargets(
@@ -846,10 +860,12 @@ class MainActivity : Activity() {
             )
             if (directDamageTargets.isNotEmpty()) {
                 directDamageTargetsByLine[lineIndex] = directDamageTargets.toSet()
-                playLightweightDamageCue(directDamageTargets.first())
+                impactCueByLine[lineIndex] = playLightweightDamageCue(directDamageTargets.first())
+                latestDamageLineIndex = lineIndex
             }
             when {
                 fields.getOrNull(1) == "move" -> {
+                    latestDamageLineIndex = null
                     lightweightMoveCues.removeAll { it.damagePlayed || !it.acceptsUnannotatedDamage }
                     battleAudio.beginBattleMove()
                     lightweightMoveCues += LightweightMoveCue(
@@ -862,7 +878,11 @@ class MainActivity : Activity() {
                 else -> BattleAudioCueResolver.cueForProtocolLine(line)?.let { cue ->
                     if (cue == BattleAudioCue.SUPER_EFFECTIVE || cue == BattleAudioCue.NOT_VERY_EFFECTIVE) {
                         val move = lightweightMoveCues.lastOrNull { !it.damagePlayed }
-                        if (move != null) move.impactCue = cue else battleAudio.playBattleCue(cue)
+                        if (move != null) {
+                            move.impactCue = cue
+                        } else {
+                            latestDamageLineIndex?.let { impactCueByLine[it] = cue }
+                        }
                     } else {
                         battleAudio.playBattleCue(cue)
                     }
@@ -883,20 +903,20 @@ class MainActivity : Activity() {
                 directDamageTargetsByLine.keys
             ).forEach(battleAudio::playAnnouncerCue)
         }
-        battleScene?.applyLightweightBattleProtocol(lines, directDamageTargetsByLine)
+        battleScene?.applyLightweightBattleProtocol(lines, directDamageTargetsByLine, impactCueByLine)
     }
 
-    private fun playLightweightDamageCue(targetValue: String) {
+    private fun playLightweightDamageCue(targetValue: String): BattleAudioCue? {
         val target = targetValue.substringBefore(':')
         val move = lightweightMoveCues.firstOrNull { cue ->
             !cue.damagePlayed && cue.acceptsUnannotatedDamage &&
                 (cue.target.isBlank() || cue.target.substringBefore(':').equals(target, true))
         } ?: lightweightMoveCues.firstOrNull { !it.damagePlayed && it.acceptsUnannotatedDamage }
-        if (move == null) return
-        battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)
+        if (move == null) return null
         move.damagePlayed = true
-        move.impactCue?.let(battleAudio::playBattleCue)
+        val impactCue = move.impactCue
         move.impactCue = null
+        return impactCue
     }
 
     private fun flushBattlePlayback() {

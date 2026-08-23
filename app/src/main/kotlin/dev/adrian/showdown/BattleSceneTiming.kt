@@ -1,5 +1,7 @@
 package dev.adrian.showdown
 
+import kotlin.math.roundToLong
+
 object BattleSceneTiming {
     const val faintDurationNanos = 520_000_000L
     const val statusFadeDurationNanos = 300_000_000L
@@ -7,6 +9,10 @@ object BattleSceneTiming {
     const val summonDropDurationNanos = 400_000_000L
     const val summonSettleDurationNanos = 300_000_000L
     const val summonDurationNanos = summonBallDurationNanos + summonDropDurationNanos + summonSettleDurationNanos
+    const val lightweightMoveDurationNanos = 1_200_000_000L
+    const val lightweightImpactDelayNanos = 650_000_000L
+    const val lightweightImpactDurationNanos = 700_000_000L
+    const val lightweightStatDurationNanos = 1_100_000_000L
 
     fun faintProgress(pokemon: String, condition: String, latestFaintedPokemon: String, faintAtNanos: Long, nowNanos: Long): Float {
         if (!condition.contains("FNT", true)) return 0f
@@ -53,4 +59,7 @@ object BattleSceneTiming {
         val elapsed = (nowNanos - summonAtNanos).coerceAtLeast(0L)
         return ((elapsed - summonBallDurationNanos).toFloat() / summonDropDurationNanos).coerceIn(0f, 1f)
     }
+
+    fun scaledDurationNanos(durationNanos: Long, speed: Float): Long =
+        (durationNanos.toDouble() / BattlePlaybackSpeed.coerce(speed).toDouble()).roundToLong().coerceAtLeast(1L)
 }

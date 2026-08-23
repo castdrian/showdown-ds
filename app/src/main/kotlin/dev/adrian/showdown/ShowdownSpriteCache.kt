@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -330,6 +331,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val downloadExecutor = Executors.newFixedThreadPool(2)
     private val decodeExecutor = Executors.newSingleThreadExecutor()
+    private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
+        ?.let { manager -> ActivityManager.MemoryInfo().also(manager::getMemoryInfo).totalMem < 2L * 1024L * 1024L * 1024L }
+        ?: false
     private val memoryCache = object : LruCache<String, SpriteAsset>(SPRITE_MEMORY_CACHE_BYTES) {
         override fun sizeOf(key: String, value: SpriteAsset) = value.estimatedMemoryBytes()
 
@@ -525,6 +529,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
+        if (memoryConstrained && plan.usesModernAnimatedFallback) {
+            requestModernLocalSpriteResolution(request, plan, receiver)
+            return
+        }
         if (!plan.usesModernAnimatedFallback) {
             requestSpriteCandidates(plan.allCandidates, receiver)
             return
@@ -938,7 +946,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             ) && fileBytes in 1L..MAX_ANIMATED_FILE_BYTES
             if (fitsMovieBudget) {
                 if (!hasAnimatedGifFrameBudget(file, MAX_ANIMATED_FRAME_COUNT)) return null
-                return decodeMovie(file)
+                return decodeStreamedGif(file) ?: decodeMovie(file)
             }
             if (!isHighResolutionSpritePath(path)) return null
             decodeStreamedHdGif(file, canvasSize)
@@ -952,6 +960,18 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         return Movie.decodeFile(file.path)?.takeIf {
             it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
         }?.let(SpriteAsset::fromMovie)
+    }
+
+    private fun decodeStreamedGif(file: File): SpriteAsset? {
+        val gif = ShowdownStreamingGif.fromFile(
+            file = file,
+            maxFrameDimension = MAX_ANIMATED_FRAME_DIMENSION,
+            maxSourceDimension = MAX_ANIMATED_SOURCE_DIMENSION,
+            maxSourcePixels = MAX_ANIMATED_SOURCE_PIXELS,
+            maxFileBytes = MAX_ANIMATED_FILE_BYTES,
+            maxFrames = MAX_ANIMATED_FRAME_COUNT
+        )
+        return gif?.let(SpriteAsset::fromStreamingGif)
     }
 
     private fun decodeStreamedHdGif(file: File, canvasSize: Pair<Int, Int>): SpriteAsset? {
