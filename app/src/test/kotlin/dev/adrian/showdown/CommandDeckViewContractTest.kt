@@ -22,13 +22,17 @@ class CommandDeckViewContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
         val detailCell = source.substringAfter("private fun drawMoveInfoCell")
             .substringBefore("private fun moveCategoryLabel")
+        val battleConsole = source.substringAfter("private fun drawBattleConsole")
+            .substringBefore("private fun drawTestFightButton")
         val compactMetrics = source.substringAfter("private fun drawCompactMetricLine")
             .substringBefore("private fun drawEffectSummary")
 
         assertFalse(detailCell.contains("Paint.Style.STROKE"))
+        assertFalse(battleConsole.contains("Paint.Style.STROKE"))
         assertFalse(compactMetrics.contains("Paint.Style.STROKE"))
-        assertTrue(detailCell.contains("Color.argb(236, 24, 31, 38)"))
-        assertTrue(detailCell.contains("Color.argb(88, 166, 174, 180)"))
+        assertTrue(detailCell.contains("paint.shader = null"))
+        assertTrue(detailCell.contains("Color.rgb(24, 31, 38)"))
+        assertTrue(detailCell.contains("Color.argb(72, 172, 180, 186)"))
         assertTrue(detailCell.contains("Color.rgb(216, 227, 232)"))
     }
 }

@@ -862,10 +862,6 @@ class CommandDeckView(
         paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.rgb(17, 47, 63), Color.rgb(6, 21, 34), Shader.TileMode.CLAMP)
         canvas.drawRoundRect(bounds, 25f * scale, 25f * scale, paint)
         paint.shader = null
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.5f * scale
-        paint.color = Color.argb(174, 117, 187, 211)
-        canvas.drawRoundRect(bounds, 25f * scale, 25f * scale, paint)
         paint.style = Paint.Style.FILL
         targetBounds.fill(null)
         gimmickBounds.fill(null)
@@ -1062,17 +1058,9 @@ class CommandDeckView(
         val radius = 18f * scale
         val inner = RectF(bounds)
         paint.style = Paint.Style.FILL
-        paint.shader = LinearGradient(
-            inner.left,
-            inner.top,
-            inner.right,
-            inner.bottom,
-            Color.argb(236, 24, 31, 38),
-            Color.argb(220, 8, 16, 23),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawRoundRect(inner, radius, radius, paint)
         paint.shader = null
+        paint.color = Color.rgb(24, 31, 38)
+        canvas.drawRoundRect(inner, radius, radius, paint)
 
         val horizontalPadding = 24f * scale
         val verticalPadding = 16f * scale
@@ -1094,7 +1082,7 @@ class CommandDeckView(
         )
         val valueArea = RectF(content.left, divider.bottom + 8f * scale, content.right, content.bottom)
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(88, 166, 174, 180)
+        paint.color = Color.argb(72, 172, 180, 186)
         canvas.drawRoundRect(divider, 1f * scale, 1f * scale, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
