@@ -1087,16 +1087,19 @@ class CommandDeckView(
             inner.bottom - verticalPadding
         )
         val labelHeight = 28f * scale
-        val dividerY = content.top + labelHeight + 8f * scale
-        val valueArea = RectF(content.left, dividerY + 8f * scale, content.right, content.bottom)
+        val labelArea = RectF(content.left, content.top, content.right, content.top + labelHeight)
+        val dividerWidth = (content.width() * 0.68f).coerceAtLeast(96f * scale)
+        val dividerY = labelArea.bottom + 8f * scale
+        val divider = RectF(
+            content.centerX() - dividerWidth / 2f,
+            dividerY,
+            content.centerX() + dividerWidth / 2f,
+            dividerY + 1.5f * scale
+        )
+        val valueArea = RectF(content.left, divider.bottom + 8f * scale, content.right, content.bottom)
         paint.style = Paint.Style.FILL
         paint.color = Color.argb(108, 145, 230, 226)
-        canvas.drawRoundRect(
-            RectF(content.left, dividerY, content.right, dividerY + 1.5f * scale),
-            1f * scale,
-            1f * scale,
-            paint
-        )
+        canvas.drawRoundRect(divider, 1f * scale, 1f * scale, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
         val labelSize = fittedTextSize(
@@ -1107,7 +1110,7 @@ class CommandDeckView(
         )
         paint.textSize = labelSize
         paint.color = Color.rgb(184, 238, 235)
-        canvas.drawText(label, content.centerX(), centeredTextBaseline(content.top + labelHeight / 2f), paint)
+        canvas.drawText(label, labelArea.centerX(), centeredTextBaseline(labelArea.centerY()), paint)
 
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
