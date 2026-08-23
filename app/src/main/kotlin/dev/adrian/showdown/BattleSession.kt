@@ -310,6 +310,7 @@ class BattleSession {
     private val protocolListeners = mutableListOf<ProtocolListener>()
     private val battleEventListeners = mutableListOf<BattleEventListener>()
     private var protocolEventCollector: MutableList<String>? = null
+    private var protocolLogSuppressed = false
     private val protocolHistory = mutableListOf<String>()
     private val showdownBattleLogEntries = mutableListOf<String>()
     private val showdownBattleMarkupEntries = mutableMapOf<String, List<String>>()
@@ -1525,12 +1526,14 @@ class BattleSession {
         protocolEventCollector = events
         try {
             packet.forEach { line ->
+                protocolLogSuppressed = false
                 val fields = line.split('|')
                 if (fields.size < 2) return@forEach
                 if (line == "|") {
                     battleFeedVisible = false
                     return@forEach
                 }
+                protocolLogSuppressed = isSilent(fields)
                 when (fields[1]) {
                     "j", "join", "l", "leave" -> battleRoomRenameFallback = null
                     "n", "name" -> Unit
@@ -1721,6 +1724,7 @@ class BattleSession {
             }
         } finally {
             protocolEventCollector = null
+            protocolLogSuppressed = false
         }
         protocolListeners.toList().forEach { it.onProtocol(packet) }
         if (events.isNotEmpty()) {
@@ -4192,6 +4196,7 @@ class BattleSession {
     }
 
     private fun appendLog(entry: String) {
+        if (protocolLogSuppressed) return
         if (battleLog.lastOrNull() == entry) return
         battleFeedVisible = true
         battleLog += entry

@@ -211,6 +211,27 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun keepsSilentProtocolStateUpdatesOutOfTheUserFacingBattleFeed() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|-status|p1a: Pikachu|psn|[silent]",
+                "|-boost|p1a: Pikachu|atk|1|[silent]",
+                "|-fail|p1a: Pikachu|move: Protect|[silent]"
+            )
+        )
+
+        assertEquals("PSN", session.playerDetails().condition)
+        assertFalse(session.battleLog().any { it.contains("status", true) })
+        assertFalse(session.battleLog().any { it.contains("rose", true) })
+        assertFalse(session.battleLog().any { it.contains("failed", true) })
+    }
+
+    @Test
     fun formatsFailureEventsWithoutAnOptionalEffectName() {
         val session = BattleSession()
 

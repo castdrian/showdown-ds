@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "The upper battle feed now hides silent protocol events while keeping their state changes applied.",
                 "Low-memory battle playback now keeps effectiveness cues attached to split damage packets after the generic impact sound.",
                 "Thor now keeps indexed HD-first back-sprite lookup enabled on constrained devices before using pixel fallbacks.",
                 "The optional PBR announcer now uses generic healing language and stays silent for unsupported item events.",
