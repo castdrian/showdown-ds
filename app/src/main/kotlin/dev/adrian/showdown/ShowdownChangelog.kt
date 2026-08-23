@@ -15,6 +15,7 @@ object ShowdownChangelog {
                 "Replay controls now stay on the lower display with pause and 0.5×–2× speed selection.",
                 "Replays identify their format and prioritize HD-first animated sprites whenever available.",
                 "Search Showdown replays by player, opponent, or format and load a result directly into playback.",
+                "Replay pagination now stays available below the result list while browsing.",
                 "Battle animation, text pacing, and sound effects now share a synchronized 0.5×–2× speed range.",
                 "Battle controls now include a 2× speed option.",
                 "The optional PBR announcer now plays cues sequentially, follows battle speed, and pauses with the app.",

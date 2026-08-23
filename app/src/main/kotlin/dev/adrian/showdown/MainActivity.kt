@@ -5300,6 +5300,7 @@ class MainActivity : Activity() {
         var currentQuery = ShowdownReplaySearchQuery()
         var currentPage = ShowdownReplaySearchPage(emptyList(), false, null)
         var dialog: ShowdownDialog? = null
+        var resultsScroll: ScrollView? = null
 
         fun renderPage(page: ShowdownReplaySearchPage) {
             currentPage = page
@@ -5339,6 +5340,7 @@ class MainActivity : Activity() {
                 }
             }
             nextButton.isEnabled = page.hasMore && page.nextBefore != null
+            resultsScroll?.post { resultsScroll?.scrollTo(0, 0) }
             status.text = when {
                 page.entries.isEmpty() -> "No matching replays"
                 page.hasMore -> "Showing ${page.entries.size} replays · more available"
@@ -5377,7 +5379,7 @@ class MainActivity : Activity() {
         nextButton.setOnClickListener {
             currentPage.nextBefore?.let { before -> search(currentQuery.copy(before = before)) }
         }
-        val root = LinearLayout(this).apply {
+        val searchContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(user)
             addView(opponent)
@@ -5387,17 +5389,22 @@ class MainActivity : Activity() {
             })
             addView(status, LinearLayout.LayoutParams(-1, -2))
             addView(results, LinearLayout.LayoutParams(-1, -2))
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(searchContent, LinearLayout.LayoutParams(-1, -2))
+        }
+        resultsScroll = scroll
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(scroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.52f).toInt()))
             addView(nextButton, LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = (8f * density).toInt()
             })
         }
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            addView(root, LinearLayout.LayoutParams(-1, -2))
-        }
         val createdDialog = ShowdownDialogBuilder(this)
             .setTitle("Search Showdown replays")
-            .setView(scroll)
+            .setView(content)
             .setNegativeButton("Close", null)
             .create()
         dialog = createdDialog
