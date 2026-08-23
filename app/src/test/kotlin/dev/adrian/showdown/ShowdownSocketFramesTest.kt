@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,5 +33,8 @@ class ShowdownSocketFramesTest {
     fun decodesSocketClosuresAndPreservesRawFallbacks() {
         assertEquals(ShowdownSocketFrame.Closed(3000, "goodbye"), ShowdownSocketFrames.decode("c[3000,\"goodbye\"]"))
         assertEquals(ShowdownSocketFrame.Raw("not-a-sockjs-frame"), ShowdownSocketFrames.decode("not-a-sockjs-frame"))
+        assertTrue(ShowdownSocketFrames.isNativeShowdownMessage(">lobby\n|updateuser| Guest"))
+        assertTrue(ShowdownSocketFrames.isNativeShowdownMessage("|challstr|1|token"))
+        assertFalse(ShowdownSocketFrames.isNativeShowdownMessage("not-a-sockjs-frame"))
     }
 }

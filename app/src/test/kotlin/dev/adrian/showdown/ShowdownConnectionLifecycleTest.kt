@@ -255,6 +255,31 @@ class ShowdownConnectionLifecycleTest {
         }
     }
 
+    @Test
+    fun ignoresUnrelatedNativeWebSocketTextUntilShowdownProtocolArrives() {
+        val server = LoopbackWebSocketServer()
+        val listener = RecordingListener()
+        val httpClient = testHttpClient()
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            httpClient,
+            transportReadyTimeoutMillis = 100
+        )
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+            server.sendText(socket, "not-a-showdown-frame")
+
+            assertTrue(listener.failed.await(2, TimeUnit.SECONDS))
+            assertTrue(listener.states.none { it.first == ShowdownConnection.State.CONNECTED })
+            assertFalse(connection.sendGlobal("/search gen9randombattle"))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
     private fun testHttpClient() = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(2, TimeUnit.SECONDS)

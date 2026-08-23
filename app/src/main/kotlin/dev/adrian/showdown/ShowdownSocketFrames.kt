@@ -12,6 +12,8 @@ sealed interface ShowdownSocketFrame {
 object ShowdownSocketFrames {
     fun encode(message: String, sockJs: Boolean) = if (sockJs) JSONArray().put(message).toString() else message
 
+    fun isNativeShowdownMessage(frame: String): Boolean = frame.startsWith(">") || frame.startsWith("|")
+
     fun decode(frame: String): ShowdownSocketFrame = when {
         frame == "o" -> ShowdownSocketFrame.Open
         frame.startsWith("a") -> decodeMessages(frame)

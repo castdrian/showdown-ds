@@ -261,6 +261,7 @@ class ShowdownConnection(
                     if (markDisconnected(webSocket, generation, frame.reason)) webSocket.close(1000, frame.reason.ifBlank { "Server closed" })
                 }
                 is ShowdownSocketFrame.Raw -> {
+                    if (!ShowdownSocketFrames.isNativeShowdownMessage(frame.value)) return
                     when (markTransportReady(webSocket, generation, sockJs = false)) {
                         TransportReadyResult.READY, TransportReadyResult.ALREADY_READY -> dispatchProtocol(webSocket, generation, frame.value)
                         else -> Unit
