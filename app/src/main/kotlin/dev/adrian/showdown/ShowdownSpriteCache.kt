@@ -905,9 +905,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 decodeAnimatedDrawable(file, canvasSize)?.let { return it }
             }
-            if (!fitsMovieBudget) {
-                return decodeBoundedAnimatedSprite(file, canvasSize)
-            }
+            if (!fitsMovieBudget) return null
             Movie.decodeFile(file.path)?.takeIf {
                 it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
             }?.let(SpriteAsset::fromMovie)
@@ -915,11 +913,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }
-    }
-
-    private fun decodeBoundedAnimatedSprite(file: File, canvasSize: Pair<Int, Int>): SpriteAsset? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
-        return decodeAnimatedDrawable(file, canvasSize)
     }
 
     @android.annotation.TargetApi(Build.VERSION_CODES.P)
