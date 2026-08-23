@@ -1067,8 +1067,8 @@ class CommandDeckView(
             inner.top,
             inner.right,
             inner.bottom,
-            Color.argb(226, 22, 63, 78),
-            Color.argb(204, 4, 24, 38),
+            Color.argb(236, 24, 31, 38),
+            Color.argb(220, 8, 16, 23),
             Shader.TileMode.CLAMP
         )
         canvas.drawRoundRect(inner, radius, radius, paint)
@@ -1094,7 +1094,7 @@ class CommandDeckView(
         )
         val valueArea = RectF(content.left, divider.bottom + 8f * scale, content.right, content.bottom)
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(92, 184, 199, 204)
+        paint.color = Color.argb(88, 166, 174, 180)
         canvas.drawRoundRect(divider, 1f * scale, 1f * scale, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)

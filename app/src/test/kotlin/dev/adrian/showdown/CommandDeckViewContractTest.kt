@@ -27,6 +27,8 @@ class CommandDeckViewContractTest {
 
         assertFalse(detailCell.contains("Paint.Style.STROKE"))
         assertFalse(compactMetrics.contains("Paint.Style.STROKE"))
+        assertTrue(detailCell.contains("Color.argb(236, 24, 31, 38)"))
+        assertTrue(detailCell.contains("Color.argb(88, 166, 174, 180)"))
         assertTrue(detailCell.contains("Color.rgb(216, 227, 232)"))
     }
 }
