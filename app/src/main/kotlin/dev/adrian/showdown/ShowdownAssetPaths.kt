@@ -167,9 +167,7 @@ object ShowdownAssetPaths {
 
     private fun isRegularAnimatedCandidate(path: String) =
         path.contains("/sprites/animados/") ||
-            path.contains("/sprites/animados-espalda/") ||
-            path.contains("/sprites/animados-shiny/") ||
-            path.contains("/sprites/animados-espalda-shiny/")
+            path.contains("/sprites/animados-shiny/")
 
     fun pokeApiLookupNames(species: String): List<String> = spriteSpeciesNames(species).map { pokeApiSlug(it) }
 

@@ -330,15 +330,15 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun keepsOfficialBackSourcesInTheRegularRemoteTier() {
+    fun keepsOfficialBackSourcesInThePreferredRemoteTier() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forPlayer("Incineroar", BattleSession.SpriteStyle.MODERN_3D)
         )
         val officialBack = "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/incineroar.gif"
         val communityBack = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/INCINEROAR.gif"
 
-        assertFalse(plan.preferredRemoteCandidates.contains(officialBack))
-        assertTrue(plan.regularRemoteCandidates.contains(officialBack))
+        assertTrue(plan.preferredRemoteCandidates.contains(officialBack))
+        assertFalse(plan.regularRemoteCandidates.contains(officialBack))
         assertTrue(plan.communityRemoteCandidates.contains(communityBack))
         assertTrue(plan.allCandidates.indexOf(officialBack) < plan.allCandidates.indexOf(communityBack))
         assertTrue(plan.allCandidates.indexOf(communityBack) < plan.allCandidates.indexOf("sprites/xyani-back/incineroar.gif"))
@@ -351,8 +351,20 @@ class ShowdownAssetPathsTest {
         )
         val orasBack = "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda/altaria-mega.gif"
 
-        assertTrue(plan.regularRemoteCandidates.contains(orasBack))
+        assertTrue(plan.preferredRemoteCandidates.contains(orasBack))
+        assertFalse(plan.regularRemoteCandidates.contains(orasBack))
         assertTrue(plan.allCandidates.indexOf(orasBack) < plan.allCandidates.indexOf("sprites/xyani-back/altariamega.gif"))
+    }
+
+    @Test
+    fun prioritizesDocumentedGenSixBackArtBeforeIndexedAndLocalFallbacks() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forPlayer("Flareon", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val xyBack = "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/flareon.gif"
+
+        assertTrue(plan.preferredRemoteCandidates.contains(xyBack))
+        assertTrue(plan.allCandidates.indexOf(xyBack) < plan.allCandidates.indexOf("sprites/xyani-back/flareon.gif"))
     }
 
     @Test
