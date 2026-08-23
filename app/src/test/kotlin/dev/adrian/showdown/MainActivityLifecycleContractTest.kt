@@ -199,7 +199,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(screenFactory.contains("primaryFrame = it"))
         assertTrue(source.contains("private fun ensureShowdownMoveEffects(): ShowdownMoveEffectsView?"))
         assertTrue(source.contains("if (lines.any { it.startsWith(\"|init|battle\") }) ensureShowdownMoveEffects()"))
-        assertTrue(source.contains("frame.addView(effects, FrameLayout.LayoutParams(1, 1))"))
+        assertTrue(source.contains("frame.addView(effects, FrameLayout.LayoutParams(-1, -1))"))
         assertTrue(screenFactory.contains("frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))"))
         assertFalse(screenFactory.contains("ShowdownMoveEffectsView("))
     }
