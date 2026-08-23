@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Thor now keeps indexed HD-first back-sprite lookup enabled on constrained devices before using pixel fallbacks.",
                 "The optional PBR announcer now uses generic healing language and stays silent for unsupported item events.",
                 "The optional PBR announcer now uses a proper send-out cue when Pokémon switch in.",
                 "Animated sprite decoding now enforces a low-memory frame budget so live battles remain stable on Thor.",

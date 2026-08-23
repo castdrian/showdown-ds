@@ -62,6 +62,20 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun constrainedPlayerBackSpritesKeepTheIndexedHdResolutionOrder() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val constrainedResolver = source.substringAfter("private fun requestConstrainedSpriteResolution")
+            .substringBefore("private fun requestBackSpriteResolution")
+
+        assertTrue(constrainedResolver.contains("if (request.backFacing)"))
+        assertTrue(constrainedResolver.contains("requestBackSpriteResolution(request, plan, receiver)"))
+        assertTrue(
+            constrainedResolver.indexOf("requestBackSpriteResolution(request, plan, receiver)") <
+                constrainedResolver.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates)")
+        )
+    }
+
+    @Test
     fun rejectsOneFrameGifArtwork() {
         assertFalse(hasMultipleGifFrames(testGif(1)))
         assertFalse(hasMultipleGifFrames(testGif(2, identicalFrames = true)))

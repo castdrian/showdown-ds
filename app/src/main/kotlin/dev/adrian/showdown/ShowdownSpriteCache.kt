@@ -555,6 +555,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
+        if (request.backFacing) {
+            requestBackSpriteResolution(request, plan, receiver)
+            return
+        }
         requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->
             if (hdAsset != null) {
                 receiver(hdAsset)
