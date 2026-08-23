@@ -36,6 +36,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(cacheSource.contains("private fun decodeStreamedGif(file: File): SpriteAsset?"))
         assertTrue(cacheSource.contains("if (memoryConstrained && plan.usesModernAnimatedFallback)"))
         assertTrue(cacheSource.contains("private fun requestConstrainedSpriteResolution("))
+        assertTrue(cacheSource.contains("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->"))
         assertTrue(cacheSource.contains("if (asset != null || !request.backFacing)"))
         assertTrue(cacheSource.contains("requestStaticShowdownBackFallback(request, receiver)"))
         assertTrue(cacheSource.contains("totalMem < 2L * 1024L * 1024L * 1024L"))
