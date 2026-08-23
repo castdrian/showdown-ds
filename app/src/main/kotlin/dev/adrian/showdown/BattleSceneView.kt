@@ -17,6 +17,7 @@ import dev.adrian.showdown.R
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 
 class BattleSceneView(
     context: Context,
@@ -42,6 +43,8 @@ class BattleSceneView(
     private var resourcesRequested = false
     private val effectAssets = mutableMapOf<String, Bitmap>()
     private val requestedEffects = mutableSetOf<String>()
+    private val partyBallBitmaps = mutableMapOf<PartyBallBitmapKey, Bitmap>()
+    private val partyBallPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private var inspectedPlayer: Boolean? = null
     private var inspectedSlot: String? = null
     private val playerInspectBounds = RectF()
@@ -63,6 +66,8 @@ class BattleSceneView(
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
     private data class HpColors(val fill: Int, val highlight: Int, val shadow: Int)
+
+    private data class PartyBallBitmapKey(val size: Int, val state: PartyBallState)
 
     init {
         setWillNotDraw(false)
@@ -110,6 +115,7 @@ class BattleSceneView(
         requestedItemSprites.clear()
         effectAssets.clear()
         requestedEffects.clear()
+        partyBallBitmaps.clear()
         backdrop = null
         requestedBackdrop = ""
         resourcesRequested = false
@@ -1130,7 +1136,18 @@ class BattleSceneView(
         paint.alpha = 255
         paint.shader = null
         paint.style = Paint.Style.FILL
-        drawFallbackPartyBall(canvas, left, top, size, state)
+        val pixelSize = size.roundToInt().coerceAtLeast(1)
+        val key = PartyBallBitmapKey(pixelSize, state)
+        val bitmap = partyBallBitmaps[key] ?: Bitmap.createBitmap(
+            pixelSize,
+            pixelSize,
+            Bitmap.Config.ARGB_8888
+        ).also { rendered ->
+            drawFallbackPartyBall(Canvas(rendered), 0f, 0f, pixelSize.toFloat(), state)
+            partyBallBitmaps[key] = rendered
+        }
+        destination.set(left, top, left + size, top + size)
+        canvas.drawBitmap(bitmap, null, destination, partyBallPaint)
     }
 
     private fun drawFallbackPartyBall(canvas: Canvas, left: Float, top: Float, size: Float, state: PartyBallState) {

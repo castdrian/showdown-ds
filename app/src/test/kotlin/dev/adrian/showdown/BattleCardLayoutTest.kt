@@ -92,7 +92,7 @@ class BattleCardLayoutTest {
         assertTrue(!source.contains("drawPartyBallFromSheet"))
         assertTrue(source.contains("LinearGradient(bounds.left, bounds.top"))
         assertTrue(source.contains("canvas.drawArc(bounds, 180f, 180f, true, paint)"))
-        assertTrue(source.contains("drawFallbackPartyBall(canvas, left, top, size, state)"))
+        assertTrue(source.contains("drawFallbackPartyBall(Canvas(rendered), 0f, 0f, pixelSize.toFloat(), state)"))
     }
 
     @Test
