@@ -529,9 +529,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         val animatedTiers: List<((SpriteAsset?) -> Unit) -> Unit> = listOf(
             { callback -> requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, callback) },
             { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) },
-            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates, callback) },
             { callback -> requestRegularRemoteSpriteResolution(plan, callback) },
             { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback) },
+            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates, callback) },
             { callback -> requestModernLocalSpriteResolution(request, plan, callback) }
         )
 
