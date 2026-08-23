@@ -55,7 +55,7 @@ private const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L
 private const val MAX_ANIMATED_FRAME_COUNT = 24
 private const val MAX_STREAMED_HD_SOURCE_DIMENSION = 1024
 private const val MAX_STREAMED_HD_SOURCE_PIXELS = 1024L * 1024L
-private const val MAX_STREAMED_HD_FILE_BYTES = 8L * 1024L * 1024L
+private const val MAX_STREAMED_HD_FILE_BYTES = 16L * 1024L * 1024L
 private const val MAX_STREAMED_HD_FRAME_COUNT = 96
 private const val MOVIE_MEMORY_MULTIPLIER = 4L
 

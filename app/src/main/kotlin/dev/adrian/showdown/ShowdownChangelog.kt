@@ -43,6 +43,7 @@ object ShowdownChangelog {
                 "Animated HD sprite frames now use bounded display buffers to reduce Thor memory pressure.",
                 "Sprite loading now keeps larger genuine HD animations while bounding their rendered frames and native decode budget.",
                 "Large animated HD back sprites now remain eligible without increasing the rendered frame budget.",
+                "Large animated HD front sprites now remain eligible instead of falling back to pixel artwork.",
                 "Constrained devices now try bounded remote animated sprites before using pixel fallbacks.",
                 "The team editor now shows the live EV budget and perfect-IV count while you edit a set.",
                 "Official No Item exports now round-trip without creating a fake item.",

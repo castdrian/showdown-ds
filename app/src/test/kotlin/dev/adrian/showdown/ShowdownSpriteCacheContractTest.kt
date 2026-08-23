@@ -252,7 +252,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("const val MAX_ANIMATED_FRAME_COUNT = 24"))
         assertTrue(source.contains("const val MAX_STREAMED_HD_SOURCE_DIMENSION = 1024"))
         assertTrue(source.contains("const val MAX_STREAMED_HD_SOURCE_PIXELS = 1024L * 1024L"))
-        assertTrue(source.contains("const val MAX_STREAMED_HD_FILE_BYTES = 8L * 1024L * 1024L"))
+        assertTrue(source.contains("const val MAX_STREAMED_HD_FILE_BYTES = 16L * 1024L * 1024L"))
         assertTrue(source.contains("const val MAX_STREAMED_HD_FRAME_COUNT = 96"))
         assertTrue(source.contains("val sourcePixels = if (movie != null)"))
         assertTrue(source.contains("MOVIE_MEMORY_MULTIPLIER"))
