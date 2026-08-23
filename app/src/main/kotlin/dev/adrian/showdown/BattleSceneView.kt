@@ -213,6 +213,7 @@ class BattleSceneView(
             )
         }
         drawHeader(canvas, width, scale)
+        drawBattleClock(canvas, width, scale)
         if ((inspectedPlayer == true && !session.hasActivePlayerCombatant()) ||
             (inspectedPlayer == false && !session.hasActiveOpponentCombatant())
         ) {
@@ -284,6 +285,7 @@ class BattleSceneView(
         ) {
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         }
+        if (session.battleClockSeconds() != null && !animationsPaused) postInvalidateDelayed(1_000L)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -766,6 +768,36 @@ class BattleSceneView(
         paint.textSize = 18f * scale
         paint.color = CYAN
         canvas.drawText(displayedFormat, titleLeft + scale, padding + 68f * scale, paint)
+    }
+
+    private fun drawBattleClock(canvas: Canvas, width: Float, scale: Float) {
+        val seconds = session.battleClockSeconds() ?: return
+        val label = BattleClockPresentation.timeLabel(seconds)
+        val clockTextSize = readableTextSize(30f, scale, 15f)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = clockTextSize
+        val pillHeight = 66f * scale
+        val pillWidth = maxOf(150f * scale, paint.measureText(label) + 72f * scale)
+        val centerX = width / 2f
+        val top = 30f * scale
+        val bounds = RectF(centerX - pillWidth / 2f, top, centerX + pillWidth / 2f, top + pillHeight)
+        val color = when (BattleClockPresentation.urgency(seconds)) {
+            BattleClockUrgency.NORMAL -> Color.rgb(62, 186, 211)
+            BattleClockUrgency.WARNING -> Color.rgb(244, 189, 61)
+            BattleClockUrgency.CRITICAL -> Color.rgb(245, 91, 86)
+        }
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(218, 5, 17, 29)
+        canvas.drawRoundRect(bounds, 24f * scale, 24f * scale, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        paint.color = Color.argb(235, Color.red(color), Color.green(color), Color.blue(color))
+        canvas.drawRoundRect(bounds, 24f * scale, 24f * scale, paint)
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.color = INK
+        canvas.drawText(label, centerX, top + 44f * scale, paint)
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawInspectSheet(canvas: Canvas, width: Float, height: Float, scale: Float) {
