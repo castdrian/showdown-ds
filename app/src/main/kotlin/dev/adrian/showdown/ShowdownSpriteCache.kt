@@ -4,15 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.ImageDecoder
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.Animatable
-import android.graphics.drawable.AnimatedImageDrawable
-import android.graphics.drawable.Drawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
@@ -58,11 +53,8 @@ private const val MAX_ANIMATED_FRAME_DIMENSION = 512
 private const val MAX_ANIMATED_SOURCE_DIMENSION = 576
 private const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L
 private const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L
-private const val MAX_BOUNDED_HD_SOURCE_DIMENSION = 2048
-private const val MAX_BOUNDED_HD_SOURCE_PIXELS = 2048L * 2048L
-private const val MAX_BOUNDED_HD_FILE_BYTES = 32L * 1024L * 1024L
+private const val MAX_ANIMATED_FRAME_COUNT = 24
 private const val MOVIE_MEMORY_MULTIPLIER = 4L
-private const val BOUNDED_ANIMATED_MEMORY_MULTIPLIER = 2L
 
 internal fun boundedAnimatedFrameSize(sourceWidth: Int, sourceHeight: Int, maxDimension: Int): Pair<Int, Int> {
     if (sourceWidth <= 0 || sourceHeight <= 0) return 1 to 1
@@ -93,37 +85,20 @@ internal fun animatedGifFitsDecodeBudget(
     maxOf(sourceWidth, sourceHeight) <= maxDimension &&
     sourceWidth.toLong() * sourceHeight.toLong() <= maxPixels
 
-internal fun shouldUseBoundedAnimatedDecoder(
-    path: String,
-    sourceWidth: Int,
-    sourceHeight: Int,
-    fileBytes: Long
-): Boolean {
-    if (!isHighResolutionSpritePath(path)) return false
-    val fitsMovieBudget = animatedGifFitsDecodeBudget(
-        sourceWidth,
-        sourceHeight,
-        MAX_ANIMATED_SOURCE_DIMENSION,
-        MAX_ANIMATED_SOURCE_PIXELS
-    ) && fileBytes in 1L..MAX_ANIMATED_FILE_BYTES
-    val fitsBoundedSource = animatedGifFitsDecodeBudget(
-        sourceWidth,
-        sourceHeight,
-        MAX_BOUNDED_HD_SOURCE_DIMENSION,
-        MAX_BOUNDED_HD_SOURCE_PIXELS
-    ) && fileBytes in 1L..MAX_BOUNDED_HD_FILE_BYTES
-    return !fitsMovieBudget && fitsBoundedSource
-}
-
 internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean =
     ByteArrayInputStream(bytes).use(::hasMultipleGifFrames)
 
 internal fun hasMultipleGifFrames(file: File): Boolean =
     runCatching {
-        BufferedInputStream(FileInputStream(file)).use(::hasMultipleGifFrames)
+        BufferedInputStream(FileInputStream(file)).use { input -> hasMultipleGifFrames(input) }
     }.getOrDefault(false)
 
-private fun hasMultipleGifFrames(input: InputStream): Boolean {
+internal fun hasAnimatedGifFrameBudget(file: File, maxFrames: Int): Boolean =
+    runCatching {
+        BufferedInputStream(FileInputStream(file)).use { input -> hasMultipleGifFrames(input, maxFrames) }
+    }.getOrDefault(false)
+
+private fun hasMultipleGifFrames(input: InputStream, maxFrames: Int? = null): Boolean {
     val header = ByteArray(6)
     if (!readGifBytes(input, header)) return false
     val signature = header.toString(Charsets.US_ASCII)
@@ -165,6 +140,7 @@ private fun hasMultipleGifFrames(input: InputStream): Boolean {
                     hasDistinctFrame = true
                 }
                 frameCount += 1
+                if (maxFrames != null && frameCount > maxFrames) return false
             }
             0x3b -> return frameCount > 1 && hasDistinctFrame
             -1 -> return false
@@ -224,7 +200,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
         private val bitmap: Bitmap?,
         private val movie: Movie?,
-        private val animatedDrawable: Drawable?,
         private val width: Int,
         private val height: Int,
         private val sourceWidth: Int = width,
@@ -234,22 +209,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private var animatedFrame: Bitmap? = null
         private var animatedFrameTime = Long.MIN_VALUE
 
-        val isAnimated get() = movie != null || animatedDrawable != null
+        val isAnimated get() = movie != null
 
-        fun stopAnimation() {
-            (animatedDrawable as? Animatable)?.stop()
-        }
+        fun stopAnimation() = Unit
 
         fun estimatedMemoryBytes(): Int {
             val pixels = width.toLong() * height.toLong() * 4L
-            val sourcePixels = when {
-                movie != null -> sourceWidth.toLong() * sourceHeight.toLong() * 4L
-                animatedDrawable != null -> pixels
-                else -> 0L
-            }
-            val sourceMultiplier = if (movie != null) MOVIE_MEMORY_MULTIPLIER else BOUNDED_ANIMATED_MEMORY_MULTIPLIER
+            val sourcePixels = if (movie != null) sourceWidth.toLong() * sourceHeight.toLong() * 4L else 0L
             return pixels
-                .plus(sourcePixels * sourceMultiplier)
+                .plus(sourcePixels * MOVIE_MEMORY_MULTIPLIER)
                 .coerceIn(1L, Int.MAX_VALUE.toLong())
                 .toInt()
         }
@@ -270,7 +238,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (left == 0 && right == image.width - 1) return this
             return SpriteAsset(
                 Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
-                null,
                 null,
                 right - left + 1,
                 image.height
@@ -293,19 +260,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             canvas.save()
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
-            val drawable = animatedDrawable
-            if (drawable != null) {
-                val animatable = drawable as? Animatable
-                if (animatable != null) {
-                    if (animate && !animatable.isRunning) animatable.start()
-                    if (!animate && animatable.isRunning) animatable.stop()
-                }
-                drawable.setBounds(left.toInt(), top.toInt(), (left + drawWidth).toInt(), (top + drawHeight).toInt())
-                drawable.draw(canvas)
-                if (alpha < 255) canvas.restore()
-                canvas.restore()
-                return
-            }
             val image = bitmap ?: animatedFrameAt(elapsedMillis)
             if (image == null) {
                 if (alpha < 255) canvas.restore()
@@ -337,7 +291,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         companion object {
             private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L
 
-            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, null, bitmap.width, bitmap.height)
+            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
 
             fun fromMovie(movie: Movie): SpriteAsset {
                 val (frameWidth, frameHeight) = boundedAnimatedFrameSize(
@@ -345,14 +299,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     movie.height(),
                     MAX_ANIMATED_FRAME_DIMENSION
                 )
-                return SpriteAsset(null, movie, null, frameWidth, frameHeight, movie.width(), movie.height())
-            }
-
-            fun fromAnimatedDrawable(drawable: Drawable): SpriteAsset? {
-                val width = drawable.intrinsicWidth
-                val height = drawable.intrinsicHeight
-                if (width <= 0 || height <= 0) return null
-                return SpriteAsset(null, null, drawable, width, height, width, height)
+                return SpriteAsset(null, movie, frameWidth, frameHeight, movie.width(), movie.height())
             }
         }
 
@@ -967,41 +914,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 maxDimension = MAX_ANIMATED_SOURCE_DIMENSION,
                 maxPixels = MAX_ANIMATED_SOURCE_PIXELS
             ) && fileBytes in 1L..MAX_ANIMATED_FILE_BYTES
-            val boundedDecoderEligible = shouldUseBoundedAnimatedDecoder(
-                path,
-                canvasSize.first,
-                canvasSize.second,
-                fileBytes
-            )
-            if (!fitsMovieBudget &&
-                (Build.VERSION.SDK_INT < Build.VERSION_CODES.P || !boundedDecoderEligible)
-            ) return null
-            if (!hasMultipleGifFrames(file)) return null
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                decodeAnimatedDrawable(file, canvasSize)?.let { return it }
-            }
             if (!fitsMovieBudget) return null
-            Movie.decodeFile(file.path)?.takeIf {
-                it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
-            }?.let(SpriteAsset::fromMovie)
+            if (!hasAnimatedGifFrameBudget(file, MAX_ANIMATED_FRAME_COUNT)) return null
+            decodeMovie(file)
         } else {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }
     }
 
-    @android.annotation.TargetApi(Build.VERSION_CODES.P)
-    private fun decodeAnimatedDrawable(file: File, canvasSize: Pair<Int, Int>): SpriteAsset? {
-        return runCatching {
-            val targetSize = boundedAnimatedFrameSize(canvasSize.first, canvasSize.second, MAX_ANIMATED_FRAME_DIMENSION)
-            val drawable = ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) { decoder, _, _ ->
-                decoder.setTargetSize(targetSize.first, targetSize.second)
-                decoder.setMemorySizePolicy(ImageDecoder.MEMORY_POLICY_LOW_RAM)
-            }
-            val animated = drawable as? AnimatedImageDrawable ?: return@runCatching null
-            animated.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
-            SpriteAsset.fromAnimatedDrawable(animated)
-        }.getOrNull()
+    private fun decodeMovie(file: File): SpriteAsset? {
+        return Movie.decodeFile(file.path)?.takeIf {
+            it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
+        }?.let(SpriteAsset::fromMovie)
     }
 
     private fun readGifCanvasSize(file: File): Pair<Int, Int>? {

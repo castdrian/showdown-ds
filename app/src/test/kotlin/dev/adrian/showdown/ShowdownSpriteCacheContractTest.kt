@@ -16,11 +16,14 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("source.setTime(frameTime.toInt())"))
         assertTrue(source.contains("frame.eraseColor(0)"))
         assertFalse(source.contains("hasMultipleGifFrames(file.readBytes())"))
-        assertTrue(source.contains("hasMultipleGifFrames(file)"))
+        assertTrue(source.contains("hasAnimatedGifFrameBudget(file, MAX_ANIMATED_FRAME_COUNT)"))
         assertTrue(source.contains("hasDistinctMovieFrames(it)"))
         assertTrue(source.contains("it.duration() > 0"))
-        assertTrue(source.contains("val isAnimated get() = movie != null || animatedDrawable != null"))
-        assertTrue(source.indexOf("decodeAnimatedDrawable(file, canvasSize)") < source.indexOf("Movie.decodeFile(file.path)"))
+        assertTrue(source.contains("val isAnimated get() = movie != null"))
+        assertTrue(source.contains("private fun decodeMovie(file: File): SpriteAsset?"))
+        assertTrue(source.contains("if (!fitsMovieBudget) return null"))
+        assertFalse(source.contains("ImageDecoder"))
+        assertTrue(source.contains("private fun decodeMovie(file: File): SpriteAsset?"))
     }
 
     @Test
@@ -36,6 +39,18 @@ class ShowdownSpriteCacheContractTest {
         try {
             file.writeBytes(testGif(2))
             assertTrue(hasMultipleGifFrames(file))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun rejectsAnimatedSourcesWithTooManyFrames() {
+        val file = File.createTempFile("showdown-sprite", ".gif")
+        try {
+            file.writeBytes(testGif(3))
+            assertTrue(hasAnimatedGifFrameBudget(file, 3))
+            assertFalse(hasAnimatedGifFrameBudget(file, 2))
         } finally {
             file.delete()
         }
@@ -59,15 +74,9 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun admitsOversizedHdSourcesOnlyForTheBoundedDecoderPath() {
-        val giantHdRoot = "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/"
-
-        assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 4_288_859L))
-        assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}wailord.gif", 742, 437, 12_480_351L))
-        assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}alcremie-back.gif", 1024, 1024, 26L * 1024L * 1024L))
-        assertTrue(shouldUseBoundedAnimatedDecoder("https://www.pkparaiso.com/imagenes/xy/sprites/animados/charizard.gif", 791, 831, 4_288_859L))
-        assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 2049, 831, 4_288_859L))
-        assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 33L * 1024L * 1024L))
+    fun rejectsAnimatedSourcesOutsideTheSingleFrameBudget() {
+        assertFalse(animatedGifFitsDecodeBudget(791, 831, 576, 576L * 576L))
+        assertTrue(animatedGifFitsDecodeBudget(576, 576, 576, 576L * 576L))
     }
 
     @Test
@@ -177,15 +186,12 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("const val MAX_ANIMATED_SOURCE_DIMENSION = 576"))
         assertTrue(source.contains("const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L"))
         assertTrue(source.contains("const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L"))
-        assertTrue(source.contains("val sourcePixels = when"))
+        assertTrue(source.contains("const val MAX_ANIMATED_FRAME_COUNT = 24"))
+        assertTrue(source.contains("val sourcePixels = if (movie != null)"))
         assertTrue(source.contains("MOVIE_MEMORY_MULTIPLIER"))
-        assertTrue(source.contains("BOUNDED_ANIMATED_MEMORY_MULTIPLIER"))
         assertTrue(source.contains("boundedAnimatedFrameSize"))
-        assertTrue(source.contains("AnimatedImageDrawable"))
-        assertTrue(source.contains("ImageDecoder.decodeDrawable"))
-        assertTrue(source.contains("decoder.setTargetSize"))
-        assertTrue(source.contains("decoder.setMemorySizePolicy(ImageDecoder.MEMORY_POLICY_LOW_RAM)"))
-        assertTrue(source.contains("shouldUseBoundedAnimatedDecoder"))
+        assertTrue(source.contains("private fun decodeMovie(file: File): SpriteAsset?"))
+        assertTrue(source.contains("if (!fitsMovieBudget) return null"))
         assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
         assertTrue(source.contains("Executors.newSingleThreadExecutor()"))
     }
