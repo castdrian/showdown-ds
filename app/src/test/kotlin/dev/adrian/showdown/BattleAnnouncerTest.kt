@@ -10,6 +10,7 @@ class BattleAnnouncerTest {
     @Test
     fun protocolEventsResolveToTheRelevantAnnouncerCues() {
         assertEquals(BattleAnnouncerCue.BATTLE_START, BattleAnnouncerCueResolver.cueForProtocolLine("|init|battle"))
+        assertEquals(BattleAnnouncerCue.SWITCH, BattleAnnouncerCueResolver.cueForProtocolLine("|switch|p1a: Pikachu|Pikachu"))
         assertEquals(BattleAnnouncerCue.MOVE, BattleAnnouncerCueResolver.cueForProtocolLine("|move|p1a: Pikachu|Thunderbolt|p2a: Gengar"))
         assertEquals(BattleAnnouncerCue.HIT, BattleAnnouncerCueResolver.cueForProtocolLine("|-damage|p2a: Gengar|0 fnt"))
         assertEquals(BattleAnnouncerCue.BURN, BattleAnnouncerCueResolver.cueForProtocolLine("|-status|p2a: Gengar|brn"))
@@ -104,6 +105,7 @@ class BattleAnnouncerTest {
         val path = BattleAnnouncerAssets.assetPath(BattleAnnouncerCue.BATTLE_START)
 
         assertEquals("announcer/tb_014.wav", path)
+        assertEquals("announcer/cb_310.wav", BattleAnnouncerAssets.assetPath(BattleAnnouncerCue.SWITCH))
         BattleAnnouncerCue.values().forEach { cue ->
             assertTrue(File("src/main/assets/${BattleAnnouncerAssets.assetPath(cue)}").isFile)
         }

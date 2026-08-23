@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "The optional PBR announcer now uses a proper send-out cue when Pokémon switch in.",
                 "Animated sprite decoding now enforces a low-memory frame budget so live battles remain stable on Thor.",
                 "Gen 6–8 animated front and back sprite indexes now participate in the HD tier before Showdown fallbacks.",
                 "Resource-constrained battle playback now shows type-colored attacks, status effects, and stat changes without opening a WebView.",

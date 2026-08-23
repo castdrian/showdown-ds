@@ -5,7 +5,7 @@ enum class BattleAnnouncerCue(
     val playbackDurationMillis: Long
 ) {
     BATTLE_START("tb_014", 1_776L),
-    SWITCH("tb_142", 1_314L),
+    SWITCH("cb_310", 1_188L),
     MOVE("tb_150m", 1_321L),
     HIT("tb_100", 851L),
     MULTI_HIT("tb_120", 1_424L),
