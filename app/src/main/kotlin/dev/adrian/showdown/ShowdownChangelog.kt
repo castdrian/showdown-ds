@@ -31,6 +31,7 @@ object ShowdownChangelog {
                 "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure.",
                 "Animated HD sprite frames now use bounded display buffers to reduce Thor memory pressure.",
                 "Sprite loading now keeps larger genuine HD animations while bounding their rendered frames and native decode budget.",
+                "Large animated HD back sprites now remain eligible without increasing the rendered frame budget.",
                 "The team editor now shows the live EV budget and perfect-IV count while you edit a set.",
                 "Official No Item exports now round-trip without creating a fake item.",
                 "Controller navigation now stays inside custom dialogs instead of triggering the battle menu underneath.",

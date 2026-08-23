@@ -52,9 +52,10 @@ class ShowdownSpriteCacheContractTest {
 
         assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 4_288_859L))
         assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}wailord.gif", 742, 437, 12_480_351L))
+        assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}alcremie-back.gif", 1024, 1024, 26L * 1024L * 1024L))
         assertFalse(shouldUseBoundedAnimatedDecoder("https://www.pkparaiso.com/imagenes/xy/sprites/animados/charizard.gif", 791, 831, 4_288_859L))
         assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 2049, 831, 4_288_859L))
-        assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 17L * 1024L * 1024L))
+        assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 33L * 1024L * 1024L))
     }
 
     @Test
