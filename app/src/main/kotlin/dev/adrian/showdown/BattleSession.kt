@@ -1396,7 +1396,6 @@ class BattleSession {
                 val selectedChoices = if (activeRequests.size > 1) activeChoices.joinToString(", ") else selectedChoice
                 val choice = "/choose $selectedChoices${requestId?.let { "|$it" } ?: ""}"
                 status = "Move sent: ${gimmickLabel?.plus(" ") ?: ""}${move.name}"
-                appendLog("${displayPokemonName(playerPokemon)} chose ${gimmickLabel?.plus(" ") ?: ""}${move.name}.")
                 chatMessages += "[You] $choice"
                 decisionAvailable = false
                 choiceCanBeCancelled = !requestNoCancel && !choiceMayNotBeCancelled

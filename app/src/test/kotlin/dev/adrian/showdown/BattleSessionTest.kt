@@ -1348,13 +1348,18 @@ class BattleSessionTest {
     }
 
     @Test
-    fun touchSelectsAndSendsAMoveOnTheFirstTap() {
+    fun touchSelectsAndSendsAMoveWithoutAddingAnOptimisticBattleLogEntry() {
         val session = BattleSession()
 
         session.selectMoveWithTouch(2)
         assertTrue(session.chatMessages().last().contains("/choose move 3"))
-        assertEquals("Incineroar chose Darkest Lariat.", session.latestBattleEvent)
         assertEquals("Move sent: Darkest Lariat", session.status)
+        assertFalse(session.battleLog().any { it.contains("chose Darkest Lariat") })
+
+        session.applyProtocolLine("|move|p1a: Incineroar|Darkest Lariat|p2a: Tapu Koko")
+
+        assertEquals("Incineroar used Darkest Lariat!", session.latestBattleEvent)
+        assertEquals("Incineroar used Darkest Lariat!", session.battleLog().last())
     }
 
     @Test
@@ -2189,8 +2194,12 @@ class BattleSessionTest {
         session.applyProtocolLine("|switch|p1a: Alcremie-Caramel-Swirl|Alcremie-Caramel-Swirl, L50|100/100")
         session.selectMoveWithTouch(0)
 
-        assertEquals("Alcremie chose Fake Out.", session.latestBattleEvent)
-        assertEquals("Alcremie chose Fake Out.", session.battleLog().last())
+        assertFalse(session.battleLog().any { it.contains("chose Fake Out") })
+
+        session.applyProtocolLine("|move|p1a: Alcremie-Caramel-Swirl|Fake Out|p2a: Tapu Koko")
+
+        assertEquals("Alcremie used Fake Out!", session.latestBattleEvent)
+        assertEquals("Alcremie used Fake Out!", session.battleLog().last())
     }
 
     @Test
