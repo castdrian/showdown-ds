@@ -22,7 +22,7 @@ class BattleAnnouncerCuePlaybackQueueTest {
         queue.setPlaybackSpeed(2f)
 
         assertTrue(queue.playbackDurationMillis(BattleAnnouncerCue.HEAL) < BattleAnnouncerCue.HEAL.playbackDurationMillis)
-        assertEquals(1_570L, queue.playbackDurationMillis(BattleAnnouncerCue.HEAL))
+        assertEquals(1_044L, queue.playbackDurationMillis(BattleAnnouncerCue.HEAL))
     }
 
     @Test

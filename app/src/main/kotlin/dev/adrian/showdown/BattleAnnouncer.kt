@@ -18,8 +18,7 @@ enum class BattleAnnouncerCue(
     BURN("kb_040", 1_640L),
     HAIL("cb_230", 2_399L),
     SANDSTORM("cb_240", 2_501L),
-    HEAL("kb_010", 3_139L),
-    ITEM("tb_675", 1_876L),
+    HEAL("cb_171", 2_088L),
     BATTLE_END("eb_010", 1_715L)
 }
 
@@ -40,7 +39,6 @@ object BattleAnnouncerCueResolver {
         "hail" -> BattleAnnouncerCue.HAIL
         "sandstorm" -> BattleAnnouncerCue.SANDSTORM
         "heal" -> BattleAnnouncerCue.HEAL
-        "item" -> BattleAnnouncerCue.ITEM
         "battle_end" -> BattleAnnouncerCue.BATTLE_END
         else -> null
     }
@@ -106,7 +104,6 @@ object BattleAnnouncerCueResolver {
                 else -> null
             }
             "-heal" -> BattleAnnouncerCue.HEAL
-            "-item", "-eat" -> BattleAnnouncerCue.ITEM
             else -> null
         }
     }

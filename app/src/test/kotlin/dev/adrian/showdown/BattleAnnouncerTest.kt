@@ -16,6 +16,8 @@ class BattleAnnouncerTest {
         assertEquals(BattleAnnouncerCue.BURN, BattleAnnouncerCueResolver.cueForProtocolLine("|-status|p2a: Gengar|brn"))
         assertEquals(BattleAnnouncerCue.SANDSTORM, BattleAnnouncerCueResolver.cueForProtocolLine("|-weather|Sandstorm|[from] ability: Sand Stream"))
         assertEquals(BattleAnnouncerCue.HAIL, BattleAnnouncerCueResolver.cueForProtocolLine("|-weather|Snow|[from] ability: Snow Warning"))
+        assertEquals(BattleAnnouncerCue.HEAL, BattleAnnouncerCueResolver.cueForProtocolLine("|-heal|p1a: Pikachu|100/100"))
+        assertNull(BattleAnnouncerCueResolver.cueForProtocolLine("|-item|p1a: Pikachu|Leftovers"))
         assertEquals(BattleAnnouncerCue.BATTLE_END, BattleAnnouncerCueResolver.cueForProtocolLine("|win|ADRIAN"))
     }
 
@@ -27,6 +29,7 @@ class BattleAnnouncerTest {
         assertEquals(BattleAnnouncerCue.MULTI_HIT, BattleAnnouncerCueResolver.cueForNativeValue("multi_hit"))
         assertEquals(BattleAnnouncerCue.BURN, BattleAnnouncerCueResolver.cueForNativeValue("burn"))
         assertEquals(BattleAnnouncerCue.SANDSTORM, BattleAnnouncerCueResolver.cueForNativeValue("sandstorm"))
+        assertNull(BattleAnnouncerCueResolver.cueForNativeValue("item"))
         assertNull(BattleAnnouncerCueResolver.cueForNativeValue("generic_damage"))
     }
 
@@ -106,6 +109,7 @@ class BattleAnnouncerTest {
 
         assertEquals("announcer/tb_014.wav", path)
         assertEquals("announcer/cb_310.wav", BattleAnnouncerAssets.assetPath(BattleAnnouncerCue.SWITCH))
+        assertEquals("announcer/cb_171.wav", BattleAnnouncerAssets.assetPath(BattleAnnouncerCue.HEAL))
         BattleAnnouncerCue.values().forEach { cue ->
             assertTrue(File("src/main/assets/${BattleAnnouncerAssets.assetPath(cue)}").isFile)
         }

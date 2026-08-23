@@ -112,6 +112,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("scheduleNativeCue(this, 'generic_damage');"))
         assertTrue(source.contains("if (resultCue && this.animating && !this.__showdownNativeAudioSilent)"))
         assertTrue(source.contains("var originalHealAnim = BattleScene.prototype.healAnim;"))
+        assertFalse(source.contains("args[0] === '-item' || args[0] === '-eat'"))
         assertTrue(source.contains("function setHpValue(pokemon, health)"))
         assertTrue(source.contains("function isDirectMoveDamage(source)"))
         assertTrue(source.contains("return !normalized || /^move\\s*:/i.test(normalized);"))

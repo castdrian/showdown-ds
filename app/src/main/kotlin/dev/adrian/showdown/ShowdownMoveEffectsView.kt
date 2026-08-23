@@ -630,7 +630,6 @@ class ShowdownMoveEffectsView(
                                     if (args[0] === '-weather' && String(args[1] || '').toLowerCase() === 'hail') announcerResultCue = 'hail';
                                     if (args[0] === '-weather' && String(args[1] || '').toLowerCase() === 'sandstorm') announcerResultCue = 'sandstorm';
                                     if (args[0] === '-heal') announcerResultCue = 'heal';
-                                    if (args[0] === '-item' || args[0] === '-eat') announcerResultCue = 'item';
                                     if (args[0] === '-ability' && String(args[2] || '').toLowerCase() === 'intimidate') announcerResultCue = 'intimidate';
                                     if (announcerResultCue) this.scene.__showdownNativeAnnouncerResultCues.push(announcerResultCue);
                                     if (args[0] === '-hitcount' && this.scene.animating && !this.scene.__showdownNativeAudioSilent) {
