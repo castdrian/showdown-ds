@@ -115,6 +115,21 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun staticTeamArtworkUsesShowdownBeforePokeApiFallback() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val staticResolver = source.substringAfter("fun requestStaticDexSprite(species: String, shiny: Boolean")
+            .substringBefore("fun requestTrainer")
+
+        assertTrue(staticResolver.contains("requestPokeApiStaticSprite(species, shiny)"))
+        assertTrue(source.contains("private fun requestPokeApiStaticSprite("))
+        assertTrue(source.contains("requestPokeApiSpriteCandidates(species, animatedOnly = false"))
+        assertTrue(source.contains("if (shiny) {"))
+        assertTrue(source.contains("pokemon/shiny/${'$'}resourceNumber.png"))
+        assertTrue(source.contains("pokemon/${'$'}resourceNumber.png"))
+        assertTrue(staticResolver.indexOf("requestPokeApiStaticSprite") < staticResolver.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates"))
+    }
+
+    @Test
     fun memoizesResolvedPokemonAssetsAcrossDisplayRefreshes() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val requestSource = source.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")
@@ -281,9 +296,10 @@ class ShowdownSpriteCacheContractTest {
     fun formFallbacksUseThePokeApiResourceId() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
-        assertTrue(source.contains("requestPokeApiSpriteCandidates(request, { resourceNumber ->"))
+        assertTrue(source.contains("requestPokeApiSpriteCandidates(request.species, animatedOnly = true"))
         assertTrue(source.contains("pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny)"))
         assertTrue(source.contains("candidates(resourceNumber)"))
+        assertTrue(source.contains("requestSpriteCandidates(candidates(resourceNumber), animatedOnly)"))
     }
 
     @Test

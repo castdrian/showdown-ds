@@ -357,7 +357,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     fun requestStaticDexSprite(species: String, shiny: Boolean, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(ShowdownAssetPaths.staticDexSpriteCandidates(species, shiny), receiver)
+        requestPokeApiStaticSprite(species, shiny) { asset ->
+            if (asset != null) {
+                receiver(asset)
+            } else {
+                requestSpriteCandidates(ShowdownAssetPaths.staticDexSpriteCandidates(species, shiny), receiver)
+            }
+        }
     }
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {
@@ -723,7 +729,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     if (animatedAsset != null) {
                         receiver(animatedAsset)
                     } else if (allowsStaticShowdownFallback(request)) {
-                        requestStaticShowdownFallback(request, receiver)
+                        requestPokeApiStaticSprite(request.species, request.shiny) { staticAsset ->
+                            if (staticAsset != null) receiver(staticAsset) else requestStaticShowdownFallback(request, receiver)
+                        }
                     } else {
                         receiver(null)
                     }
@@ -813,18 +821,33 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestPokeApiSpriteCandidates(request, { resourceNumber ->
+        requestPokeApiSpriteCandidates(request.species, animatedOnly = true, { resourceNumber ->
             listOf(ShowdownAssetPaths.pokeApiAnimatedSprite(resourceNumber, request.side, request.shiny))
         }, receiver)
     }
 
+    private fun requestPokeApiStaticSprite(
+        species: String,
+        shiny: Boolean,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestPokeApiSpriteCandidates(species, animatedOnly = false, { resourceNumber ->
+            if (shiny) {
+                listOf("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/$resourceNumber.png")
+            } else {
+                listOf("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$resourceNumber.png")
+            }
+        }, receiver)
+    }
+
     private fun requestPokeApiSpriteCandidates(
-        request: BattleSpriteRequest,
+        species: String,
+        animatedOnly: Boolean,
         candidates: (Int) -> List<String>,
         receiver: (SpriteAsset?) -> Unit
     ) {
         fun requestLookup(index: Int) {
-            val names = ShowdownAssetPaths.pokeApiLookupNames(request.species)
+            val names = ShowdownAssetPaths.pokeApiLookupNames(species)
             if (index >= names.size) {
                 receiver(null)
                 return
@@ -839,7 +862,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     requestLookup(index + 1)
                     return@requestBytes
                 }
-                requestAnimatedSpriteCandidates(candidates(resourceNumber)) { asset ->
+                requestSpriteCandidates(candidates(resourceNumber), animatedOnly) { asset ->
                     if (asset != null) receiver(asset) else requestLookup(index + 1)
                 }
             }
