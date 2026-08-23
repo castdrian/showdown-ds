@@ -270,7 +270,7 @@ class MainActivity : Activity() {
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread {
-            if (lines.any { it.startsWith("|init|battle") }) ensureMoveDexLoaded()
+            if (lines.any { it.startsWith("|init|battle") }) ensureBattleMoveInfoLoaded()
             if (lightweightBattlePlayback) {
                 applyLightweightBattleProtocol(lines)
             } else {
@@ -833,6 +833,10 @@ class MainActivity : Activity() {
     private fun ensureMoveDexLoaded() {
         moveDex.loadMoveInfo(::bindMoveDexResolvers)
         moveDex.load(::bindMoveDexResolvers)
+    }
+
+    private fun ensureBattleMoveInfoLoaded() {
+        moveDex.loadMoveInfo(::bindMoveDexResolvers)
     }
 
     private fun applyBattleProtocolToEffects(lines: List<String>) {

@@ -12,7 +12,8 @@ object ShowdownChangelog {
             listOf(
                 "The upper battle feed now hides silent protocol events while keeping their state changes applied.",
                 "Low-memory battle playback now keeps effectiveness cues attached to split damage packets after the generic impact sound.",
-                "Thor now keeps indexed HD-first back-sprite lookup enabled on constrained devices before using pixel fallbacks.",
+                "Constrained devices now keep direct HD back-sprites first without crawling large sprite indexes.",
+                "Battle startup now loads move data without parsing the full team-building datasets.",
                 "The optional PBR announcer now uses generic healing language and stays silent for unsupported item events.",
                 "The optional PBR announcer now uses a proper send-out cue when Pokémon switch in.",
                 "Animated sprite decoding now enforces a low-memory frame budget so live battles remain stable on Thor.",
