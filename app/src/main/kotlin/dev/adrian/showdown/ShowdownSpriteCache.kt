@@ -17,9 +17,13 @@ import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import java.io.ByteArrayOutputStream
+import java.io.BufferedInputStream
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
@@ -112,34 +116,49 @@ internal fun shouldUseBoundedAnimatedDecoder(
     return !fitsMovieBudget && fitsBoundedSource
 }
 
-internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
-    gifCanvasSize(bytes) ?: return false
-    var offset = 13
-    val screenPacked = bytes[10].toInt() and 0xff
-    if (screenPacked and 0x80 != 0) {
-        offset += 3 * (1 shl ((screenPacked and 0x07) + 1))
-    }
-    if (offset > bytes.size) return false
+internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean =
+    ByteArrayInputStream(bytes).use(::hasMultipleGifFrames)
+
+internal fun hasMultipleGifFrames(file: File): Boolean =
+    runCatching {
+        BufferedInputStream(FileInputStream(file)).use(::hasMultipleGifFrames)
+    }.getOrDefault(false)
+
+private fun hasMultipleGifFrames(input: InputStream): Boolean {
+    val header = ByteArray(6)
+    if (!readGifBytes(input, header)) return false
+    val signature = header.toString(Charsets.US_ASCII)
+    if (signature != "GIF87a" && signature != "GIF89a") return false
+    val screen = ByteArray(7)
+    if (!readGifBytes(input, screen)) return false
+    val screenPacked = screen[4].toInt() and 0xff
+    if (screenPacked and 0x80 != 0 && !skipGifBytes(input, 3 * (1 shl ((screenPacked and 0x07) + 1)))) return false
     var frameCount = 0
     var firstFrameSignature: ByteArray? = null
     var hasDistinctFrame = false
-    while (offset < bytes.size) {
-        when (bytes[offset].toInt() and 0xff) {
+    while (true) {
+        when (val marker = input.read()) {
             0x21 -> {
-                if (offset + 2 > bytes.size) return false
-                offset = skipGifSubBlocks(bytes, offset + 2) ?: return false
+                if (input.read() < 0 || !consumeGifSubBlocks(input)) return false
             }
             0x2c -> {
-                if (offset + 10 > bytes.size) return false
-                val frameStart = offset
-                val imagePacked = bytes[offset + 9].toInt() and 0xff
-                offset += 10
-                if (imagePacked and 0x80 != 0) {
-                    offset += 3 * (1 shl ((imagePacked and 0x07) + 1))
-                }
-                if (offset >= bytes.size) return false
-                val frameEnd = skipGifSubBlocks(bytes, offset + 1) ?: return false
-                val frameSignature = bytes.copyOfRange(frameStart, frameEnd)
+                val frameDigest = MessageDigest.getInstance("SHA-256")
+                frameDigest.update(marker.toByte())
+                val descriptor = ByteArray(9)
+                if (!readGifBytes(input, descriptor)) return false
+                frameDigest.update(descriptor)
+                val imagePacked = descriptor[8].toInt() and 0xff
+                if (imagePacked and 0x80 != 0 && !readAndDigestGifBytes(
+                        input,
+                        3 * (1 shl ((imagePacked and 0x07) + 1)),
+                        frameDigest
+                    )
+                ) return false
+                val lzwMinimumCodeSize = input.read()
+                if (lzwMinimumCodeSize < 0) return false
+                frameDigest.update(lzwMinimumCodeSize.toByte())
+                if (!consumeGifSubBlocks(input, frameDigest)) return false
+                val frameSignature = frameDigest.digest()
                 val firstSignature = firstFrameSignature
                 if (firstSignature == null) {
                     firstFrameSignature = frameSignature
@@ -147,25 +166,59 @@ internal fun hasMultipleGifFrames(bytes: ByteArray): Boolean {
                     hasDistinctFrame = true
                 }
                 frameCount += 1
-                offset = frameEnd
             }
-            0x3b -> break
+            0x3b -> return frameCount > 1 && hasDistinctFrame
+            -1 -> return false
             else -> return false
         }
     }
-    return frameCount > 1 && hasDistinctFrame
 }
 
-private fun skipGifSubBlocks(bytes: ByteArray, start: Int): Int? {
-    var offset = start
+private fun readGifBytes(input: InputStream, bytes: ByteArray): Boolean {
+    var offset = 0
     while (offset < bytes.size) {
-        val length = bytes[offset].toInt() and 0xff
-        offset += 1
-        if (length == 0) return offset
-        if (offset + length > bytes.size) return null
-        offset += length
+        val count = input.read(bytes, offset, bytes.size - offset)
+        if (count <= 0) return false
+        offset += count
     }
-    return null
+    return true
+}
+
+private fun skipGifBytes(input: InputStream, byteCount: Int): Boolean {
+    var remaining = byteCount
+    val buffer = ByteArray(4096)
+    while (remaining > 0) {
+        val count = input.read(buffer, 0, minOf(buffer.size, remaining))
+        if (count <= 0) return false
+        remaining -= count
+    }
+    return true
+}
+
+private fun readAndDigestGifBytes(input: InputStream, byteCount: Int, digest: MessageDigest): Boolean {
+    var remaining = byteCount
+    val buffer = ByteArray(4096)
+    while (remaining > 0) {
+        val count = input.read(buffer, 0, minOf(buffer.size, remaining))
+        if (count <= 0) return false
+        digest.update(buffer, 0, count)
+        remaining -= count
+    }
+    return true
+}
+
+private fun consumeGifSubBlocks(input: InputStream, digest: MessageDigest? = null): Boolean {
+    while (true) {
+        val length = input.read()
+        if (length < 0) return false
+        digest?.update(length.toByte())
+        if (length == 0) return true
+        if (digest == null) {
+            if (!skipGifBytes(input, length)) return false
+        } else if (!readAndDigestGifBytes(input, length, digest)) {
+            return false
+        }
+    }
 }
 
 class ShowdownSpriteCache(context: Context) : AutoCloseable {
@@ -924,7 +977,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (!fitsMovieBudget &&
                 (Build.VERSION.SDK_INT < Build.VERSION_CODES.P || !boundedDecoderEligible)
             ) return null
-            if (!hasMultipleGifFrames(file.readBytes())) return null
+            if (!hasMultipleGifFrames(file)) return null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 decodeAnimatedDrawable(file, canvasSize)?.let { return it }
             }

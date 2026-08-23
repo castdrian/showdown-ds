@@ -15,7 +15,8 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("private fun animatedFrameAt(elapsedMillis: Long)"))
         assertTrue(source.contains("source.setTime(frameTime.toInt())"))
         assertTrue(source.contains("frame.eraseColor(0)"))
-        assertTrue(source.contains("hasMultipleGifFrames(file.readBytes())"))
+        assertFalse(source.contains("hasMultipleGifFrames(file.readBytes())"))
+        assertTrue(source.contains("hasMultipleGifFrames(file)"))
         assertTrue(source.contains("hasDistinctMovieFrames(it)"))
         assertTrue(source.contains("it.duration() > 0"))
         assertTrue(source.contains("val isAnimated get() = movie != null || animatedDrawable != null"))
@@ -27,6 +28,17 @@ class ShowdownSpriteCacheContractTest {
         assertFalse(hasMultipleGifFrames(testGif(1)))
         assertFalse(hasMultipleGifFrames(testGif(2, identicalFrames = true)))
         assertTrue(hasMultipleGifFrames(testGif(2)))
+    }
+
+    @Test
+    fun validatesGifFramesFromDiskWithoutReadingTheWholeFileIntoMemory() {
+        val file = File.createTempFile("showdown-sprite", ".gif")
+        try {
+            file.writeBytes(testGif(2))
+            assertTrue(hasMultipleGifFrames(file))
+        } finally {
+            file.delete()
+        }
     }
 
     @Test
