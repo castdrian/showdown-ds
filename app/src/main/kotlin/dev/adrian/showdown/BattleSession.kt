@@ -3954,8 +3954,8 @@ class BattleSession {
     }
 
     private fun updateAvailableGimmicks(active: JSONObject) {
-        activeGMaxAvailable = active.optBoolean("gigantamax") ||
-            active.optJSONObject("maxMoves")?.optBoolean("gigantamax") == true
+        activeGMaxAvailable = hasProtocolFlag(active, "gigantamax") ||
+            active.optJSONObject("maxMoves")?.let { hasProtocolFlag(it, "gigantamax") } == true
         availableTeraType = when (val value = active.opt("canTerastallize")) {
             is String -> value.trim().takeUnless { it.equals("false", true) }.orEmpty()
             else -> ""

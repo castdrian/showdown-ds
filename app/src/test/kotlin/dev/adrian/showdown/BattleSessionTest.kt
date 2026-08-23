@@ -1683,6 +1683,16 @@ class BattleSessionTest {
     }
 
     @Test
+    fun stringGigantamaxRequestsUseTheOfficialGimmickLabel() {
+        val session = BattleSession()
+        session.applyProtocolLine(
+            "|request|{\"active\":[{\"canDynamax\":true,\"maxMoves\":{\"gigantamax\":\"G-Max Drum Solo\",\"maxMoves\":[{\"move\":\"G-Max Drum Solo\"}]},\"moves\":[{\"move\":\"Drum Beating\",\"pp\":10}]}]}"
+        )
+
+        assertEquals("Gigantamax", session.gimmickLabel(BattleSession.BattleGimmick.DYNAMAX))
+    }
+
+    @Test
     fun anyTargetMovesExposeOpponentsAndAlliesInMultiBattles() {
         val session = BattleSession()
         session.applyProtocolPacket(
