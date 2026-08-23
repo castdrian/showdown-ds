@@ -19,9 +19,10 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("hasAnimatedGifFrameBudget(file, MAX_ANIMATED_FRAME_COUNT)"))
         assertTrue(source.contains("hasDistinctMovieFrames(it)"))
         assertTrue(source.contains("it.duration() > 0"))
-        assertTrue(source.contains("val isAnimated get() = movie != null"))
+        assertTrue(source.contains("val isAnimated get() = movie != null || streamingGif?.isAnimated == true"))
         assertTrue(source.contains("private fun decodeMovie(file: File): SpriteAsset?"))
-        assertTrue(source.contains("if (!fitsMovieBudget) return null"))
+        assertTrue(source.contains("private fun decodeStreamedHdGif(file: File, canvasSize: Pair<Int, Int>): SpriteAsset?"))
+        assertTrue(source.contains("if (fitsMovieBudget)"))
         assertFalse(source.contains("ImageDecoder"))
         assertTrue(source.contains("private fun decodeMovie(file: File): SpriteAsset?"))
     }
@@ -177,6 +178,17 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun resourceDownloadsStreamToDiskWithinTheFileBudget() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("private fun downloadTo(file: File, path: String): Boolean"))
+        assertTrue(source.contains("FileOutputStream(temporary)"))
+        assertTrue(source.contains("if (total > MAX_FILE_BYTES)"))
+        assertTrue(source.contains("const val MAX_FILE_BYTES = 16 * 1024 * 1024"))
+        assertFalse(source.contains("ByteArrayOutputStream"))
+    }
+
+    @Test
     fun usesManuallyPacedAnimationDecoding() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
@@ -187,11 +199,16 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L"))
         assertTrue(source.contains("const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L"))
         assertTrue(source.contains("const val MAX_ANIMATED_FRAME_COUNT = 24"))
+        assertTrue(source.contains("const val MAX_STREAMED_HD_SOURCE_DIMENSION = 1024"))
+        assertTrue(source.contains("const val MAX_STREAMED_HD_SOURCE_PIXELS = 1024L * 1024L"))
+        assertTrue(source.contains("const val MAX_STREAMED_HD_FILE_BYTES = 8L * 1024L * 1024L"))
+        assertTrue(source.contains("const val MAX_STREAMED_HD_FRAME_COUNT = 96"))
         assertTrue(source.contains("val sourcePixels = if (movie != null)"))
         assertTrue(source.contains("MOVIE_MEMORY_MULTIPLIER"))
         assertTrue(source.contains("boundedAnimatedFrameSize"))
         assertTrue(source.contains("private fun decodeMovie(file: File): SpriteAsset?"))
-        assertTrue(source.contains("if (!fitsMovieBudget) return null"))
+        assertTrue(source.contains("ShowdownStreamingGif.fromFile("))
+        assertTrue(source.contains("streamingGif?.frameAt"))
         assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
         assertTrue(source.contains("Executors.newSingleThreadExecutor()"))
     }

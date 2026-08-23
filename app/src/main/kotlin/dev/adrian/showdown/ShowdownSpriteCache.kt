@@ -11,13 +11,11 @@ import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
-import java.io.ByteArrayOutputStream
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.IOException
 import java.io.InputStream
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
@@ -54,6 +52,10 @@ private const val MAX_ANIMATED_SOURCE_DIMENSION = 576
 private const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L
 private const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L
 private const val MAX_ANIMATED_FRAME_COUNT = 24
+private const val MAX_STREAMED_HD_SOURCE_DIMENSION = 1024
+private const val MAX_STREAMED_HD_SOURCE_PIXELS = 1024L * 1024L
+private const val MAX_STREAMED_HD_FILE_BYTES = 8L * 1024L * 1024L
+private const val MAX_STREAMED_HD_FRAME_COUNT = 96
 private const val MOVIE_MEMORY_MULTIPLIER = 4L
 
 internal fun boundedAnimatedFrameSize(sourceWidth: Int, sourceHeight: Int, maxDimension: Int): Pair<Int, Int> {
@@ -200,6 +202,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     class SpriteAsset private constructor(
         private val bitmap: Bitmap?,
         private val movie: Movie?,
+        private val streamingGif: ShowdownStreamingGif?,
         private val width: Int,
         private val height: Int,
         private val sourceWidth: Int = width,
@@ -209,12 +212,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private var animatedFrame: Bitmap? = null
         private var animatedFrameTime = Long.MIN_VALUE
 
-        val isAnimated get() = movie != null
+        val isAnimated get() = movie != null || streamingGif?.isAnimated == true
 
         fun stopAnimation() = Unit
 
         fun estimatedMemoryBytes(): Int {
             val pixels = width.toLong() * height.toLong() * 4L
+            val streamedMemory = streamingGif?.estimatedMemoryBytes
+            if (streamedMemory != null) return streamedMemory
             val sourcePixels = if (movie != null) sourceWidth.toLong() * sourceHeight.toLong() * 4L else 0L
             return pixels
                 .plus(sourcePixels * MOVIE_MEMORY_MULTIPLIER)
@@ -239,6 +244,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             return SpriteAsset(
                 Bitmap.createBitmap(image, left, 0, right - left + 1, image.height),
                 null,
+                null,
                 right - left + 1,
                 image.height
             )
@@ -260,7 +266,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             canvas.save()
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
-            val image = bitmap ?: animatedFrameAt(elapsedMillis)
+            val image = bitmap ?: streamingGif?.frameAt(if (animate) elapsedMillis else 0L) ?: animatedFrameAt(elapsedMillis)
             if (image == null) {
                 if (alpha < 255) canvas.restore()
                 canvas.restore()
@@ -291,7 +297,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         companion object {
             private const val ANIMATED_FRAME_INTERVAL_MILLIS = 48L
 
-            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, bitmap.width, bitmap.height)
+            fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, null, bitmap.width, bitmap.height)
 
             fun fromMovie(movie: Movie): SpriteAsset {
                 val (frameWidth, frameHeight) = boundedAnimatedFrameSize(
@@ -299,7 +305,23 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     movie.height(),
                     MAX_ANIMATED_FRAME_DIMENSION
                 )
-                return SpriteAsset(null, movie, frameWidth, frameHeight, movie.width(), movie.height())
+                return SpriteAsset(null, movie, null, frameWidth, frameHeight, movie.width(), movie.height())
+            }
+
+            internal fun fromStreamingGif(gif: ShowdownStreamingGif): SpriteAsset? {
+                if (!gif.isAnimated) {
+                    gif.release()
+                    return null
+                }
+                return SpriteAsset(
+                    null,
+                    null,
+                    gif,
+                    gif.frameWidth,
+                    gif.frameHeight,
+                    gif.sourceWidth,
+                    gif.sourceHeight
+                )
             }
         }
 
@@ -896,7 +918,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         val extension = showdownCacheExtension(path)
         val file = File(diskCache, "${digest(path)}.$extension")
         return runCatching {
-            if (!file.isFile) write(file, download(path) ?: return null)
+            if (!file.isFile && !downloadTo(file, path)) return null
             file.setLastModified(System.currentTimeMillis())
             trimDiskCache()
             file
@@ -914,9 +936,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 maxDimension = MAX_ANIMATED_SOURCE_DIMENSION,
                 maxPixels = MAX_ANIMATED_SOURCE_PIXELS
             ) && fileBytes in 1L..MAX_ANIMATED_FILE_BYTES
-            if (!fitsMovieBudget) return null
-            if (!hasAnimatedGifFrameBudget(file, MAX_ANIMATED_FRAME_COUNT)) return null
-            decodeMovie(file)
+            if (fitsMovieBudget) {
+                if (!hasAnimatedGifFrameBudget(file, MAX_ANIMATED_FRAME_COUNT)) return null
+                return decodeMovie(file)
+            }
+            if (!isHighResolutionSpritePath(path)) return null
+            decodeStreamedHdGif(file, canvasSize)
         } else {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
@@ -927,6 +952,25 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         return Movie.decodeFile(file.path)?.takeIf {
             it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
         }?.let(SpriteAsset::fromMovie)
+    }
+
+    private fun decodeStreamedHdGif(file: File, canvasSize: Pair<Int, Int>): SpriteAsset? {
+        if (!animatedGifFitsDecodeBudget(
+                sourceWidth = canvasSize.first,
+                sourceHeight = canvasSize.second,
+                maxDimension = MAX_STREAMED_HD_SOURCE_DIMENSION,
+                maxPixels = MAX_STREAMED_HD_SOURCE_PIXELS
+            ) || file.length() !in 1L..MAX_STREAMED_HD_FILE_BYTES
+        ) return null
+        val gif = ShowdownStreamingGif.fromFile(
+            file = file,
+            maxFrameDimension = MAX_ANIMATED_FRAME_DIMENSION,
+            maxSourceDimension = MAX_STREAMED_HD_SOURCE_DIMENSION,
+            maxSourcePixels = MAX_STREAMED_HD_SOURCE_PIXELS,
+            maxFileBytes = MAX_STREAMED_HD_FILE_BYTES,
+            maxFrames = MAX_STREAMED_HD_FRAME_COUNT
+        )
+        return gif?.let(SpriteAsset::fromStreamingGif)
     }
 
     private fun readGifCanvasSize(file: File): Pair<Int, Int>? {
@@ -977,7 +1021,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
     }
 
-    private fun download(path: String): ByteArray? {
+    private fun downloadTo(file: File, path: String): Boolean {
         val url = if (path.startsWith("https://")) path else "https://play.pokemonshowdown.com/$path"
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
@@ -985,31 +1029,35 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "Showdown-Android/0.1")
         }
+        val temporary = File(file.parentFile, "${file.name}.part")
+        temporary.delete()
         return try {
-            if (connection.responseCode != HttpURLConnection.HTTP_OK || connection.contentLength > MAX_FILE_BYTES) return null
+            if (connection.responseCode != HttpURLConnection.HTTP_OK || connection.contentLength > MAX_FILE_BYTES) return false
             connection.inputStream.use { input ->
-                ByteArrayOutputStream().use { output ->
+                FileOutputStream(temporary).use { output ->
                     val buffer = ByteArray(8192)
-                    var total = 0
+                    var total = 0L
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
-                        total += count
-                        if (total > MAX_FILE_BYTES) return null
+                        total += count.toLong()
+                        if (total > MAX_FILE_BYTES) {
+                            temporary.delete()
+                            return false
+                        }
                         output.write(buffer, 0, count)
                     }
-                    output.toByteArray()
                 }
+            }
+            if (!temporary.renameTo(file)) {
+                temporary.delete()
+                false
+            } else {
+                true
             }
         } finally {
             connection.disconnect()
         }
-    }
-
-    private fun write(file: File, bytes: ByteArray) {
-        val temporary = File(file.parentFile, "${file.name}.part")
-        FileOutputStream(temporary).use { it.write(bytes) }
-        if (!temporary.renameTo(file)) throw IOException("Unable to cache Showdown resource")
     }
 
     private fun trimDiskCache() {
@@ -1028,7 +1076,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private companion object {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
-        const val MAX_FILE_BYTES = 64 * 1024 * 1024
+        const val MAX_FILE_BYTES = 16 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }
 }
