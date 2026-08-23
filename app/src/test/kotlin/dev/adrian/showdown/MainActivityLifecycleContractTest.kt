@@ -20,12 +20,21 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(true)"))
         assertTrue(source.contains("showdownMoveEffects?.setPlaybackPaused(false)"))
         assertTrue(source.contains("battleScene?.setPlaybackPaused(true)"))
-        assertTrue(source.contains("battleScene?.setPlaybackPaused(false)"))
+        assertTrue(source.contains("battleScene?.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)"))
         assertTrue(source.contains("displayRefreshScheduler.cancel()"))
         assertTrue(source.contains("battleAudio.pauseBattleCues()"))
         assertTrue(source.contains("battleAudio.resumeBattleCues()"))
         assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::pause)"))
         assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::resume)"))
+    }
+
+    @Test
+    fun keepsTheUpperBattleFeedPausedWhenAReplayWasManuallyPaused() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
+
+        assertTrue(resume.indexOf("resumeReplayForLifecycle()") < resume.indexOf("battleScene?.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)"))
+        assertFalse(resume.contains("battleScene?.setPlaybackPaused(false)"))
     }
 
     @Test

@@ -580,12 +580,12 @@ class MainActivity : Activity() {
         activityResumed = true
         configureWindow()
         showSecondaryDisplay()
-        battleScene?.setPlaybackPaused(false)
         commandDeck?.setAnimationsPaused(false)
         pokedexSprite?.setAnimationsPaused(false)
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()
+        battleScene?.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
         if (::battleAudio.isInitialized) {
             battleAudio.resumeBattleCues()
             battleAudio.resumeAnnouncerCues()
