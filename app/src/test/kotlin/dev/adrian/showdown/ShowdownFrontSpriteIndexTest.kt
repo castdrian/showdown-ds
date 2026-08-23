@@ -40,15 +40,34 @@ class ShowdownFrontSpriteIndexTest {
     }
 
     @Test
-    fun separatesGiantAssetsFromRegularAnimatedFallbacks() {
+    fun keepsGiantAssetsAheadOfOtherAnimatedHdSources() {
         val html = """
             <img src="/imagenes/xy/sprites/animados/masquerain.gif">
             <img src="/imagenes/espada_escudo/sprites/animados-gigante/masquerain.gif">
         """.trimIndent()
 
         assertEquals(
-            listOf("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/masquerain.gif"),
+            listOf(
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/masquerain.gif",
+                "https://www.pkparaiso.com/imagenes/xy/sprites/animados/masquerain.gif"
+            ),
             ShowdownFrontSpriteIndex.highResolutionCandidates(html, listOf("Masquerain"))
+        )
+    }
+
+    @Test
+    fun recognizesUltraSunUltraMoonBorderlessAnimatedSources() {
+        val html = """
+            <img src="/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/decidueye.gif">
+            <img src="/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes/decidueye.gif">
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/decidueye.gif",
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes/decidueye.gif"
+            ),
+            ShowdownFrontSpriteIndex.highResolutionCandidates(html, listOf("Decidueye"))
         )
     }
 }

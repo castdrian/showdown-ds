@@ -129,7 +129,7 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun keepsRegularPkParaisoArtworkOutOfTheHdResolutionTier() {
+    fun keepsNonGiantPkParaisoArtworkBehindIndexedHdArtwork() {
         val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
             BattleSpriteRequest.forOpponent("Rotom-Wash", BattleSession.SpriteStyle.MODERN_3D)
         )
@@ -337,8 +337,8 @@ class ShowdownAssetPathsTest {
         val officialBack = "https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/incineroar.gif"
         val communityBack = "https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/BACK/INCINEROAR.gif"
 
-        assertTrue(plan.preferredRemoteCandidates.contains(officialBack))
-        assertFalse(plan.regularRemoteCandidates.contains(officialBack))
+        assertFalse(plan.preferredRemoteCandidates.contains(officialBack))
+        assertTrue(plan.regularRemoteCandidates.contains(officialBack))
         assertTrue(plan.communityRemoteCandidates.contains(communityBack))
         assertTrue(plan.allCandidates.indexOf(officialBack) < plan.allCandidates.indexOf(communityBack))
         assertTrue(plan.allCandidates.indexOf(communityBack) < plan.allCandidates.indexOf("sprites/xyani-back/incineroar.gif"))
@@ -351,8 +351,8 @@ class ShowdownAssetPathsTest {
         )
         val orasBack = "https://www.pkparaiso.com/imagenes/rubi-omega-zafiro-alfa/sprites/animados-espalda/altaria-mega.gif"
 
-        assertTrue(plan.preferredRemoteCandidates.contains(orasBack))
-        assertFalse(plan.regularRemoteCandidates.contains(orasBack))
+        assertFalse(plan.preferredRemoteCandidates.contains(orasBack))
+        assertTrue(plan.regularRemoteCandidates.contains(orasBack))
         assertTrue(plan.allCandidates.indexOf(orasBack) < plan.allCandidates.indexOf("sprites/xyani-back/altariamega.gif"))
     }
 
@@ -363,7 +363,7 @@ class ShowdownAssetPathsTest {
         )
         val xyBack = "https://www.pkparaiso.com/imagenes/xy/sprites/animados-espalda/flareon.gif"
 
-        assertTrue(plan.preferredRemoteCandidates.contains(xyBack))
+        assertTrue(plan.regularRemoteCandidates.contains(xyBack))
         assertTrue(plan.allCandidates.indexOf(xyBack) < plan.allCandidates.indexOf("sprites/xyani-back/flareon.gif"))
     }
 
@@ -433,17 +433,22 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun limitsHighResolutionCrawlsToGiantSpriteIndexPages() {
+    fun highResolutionCrawlsEveryDocumentedAnimatedSpriteIndexPage() {
         assertEquals(
-            listOf("https://www.pkparaiso.com/espada_escudo/sprites_pokemon_espalda.php"),
+            ShowdownAssetPaths.backSpriteIndexUrls(),
             ShowdownAssetPaths.highResolutionBackSpriteIndexUrls()
         )
         assertEquals(
-            listOf(
-                "https://www.pkparaiso.com/espada_escudo/sprites_pokemon.php",
-                "https://www.pkparaiso.com/ultra-sol-ultra-luna/sprites_pokemon_sin_bordes.php"
-            ),
+            ShowdownAssetPaths.frontSpriteIndexUrls(),
             ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls()
+        )
+        assertEquals(
+            ShowdownAssetPaths.backSpriteIndexUrls(shiny = true),
+            ShowdownAssetPaths.highResolutionBackSpriteIndexUrls(shiny = true)
+        )
+        assertEquals(
+            ShowdownAssetPaths.frontSpriteIndexUrls(shiny = true),
+            ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls(shiny = true)
         )
     }
 

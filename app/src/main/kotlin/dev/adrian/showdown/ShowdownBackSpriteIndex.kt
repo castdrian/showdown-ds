@@ -2,7 +2,7 @@ package dev.adrian.showdown
 
 object ShowdownBackSpriteIndex {
     private val imagePathPattern = Regex(
-        """(?:href|src)=[\"']([^\"']*/sprites/(?:animados-gigante|animados-sinbordes-gigante|animados-espalda-shiny|animados-espalda|animados)/[^\"']+\.gif)[\"']""",
+        """(?:href|src)=[\"']([^\"']*/sprites/(?:animados-gigante|animados-sinbordes-gigante|animados-sinbordes|animados-espalda-shiny|animados-espalda|animados)/[^\"']+\.gif)[\"']""",
         RegexOption.IGNORE_CASE
     )
 
@@ -20,13 +20,17 @@ object ShowdownBackSpriteIndex {
             if (!isBack) return@mapNotNull null
             val spriteName = nonShinyStem.removeSuffix("-back")
             if (requestedNames.contains(normalize(spriteName))) absoluteUrl(path) else null
-        }.distinct().sortedWith(compareBy { path -> if (path.contains("/animados-gigante/")) 0 else 1 }).toList()
+        }.distinct().sortedWith(compareBy { path -> if (isGiant(path)) 0 else 1 }).toList()
     }
 
     fun highResolutionCandidates(html: String, speciesNames: List<String>, shiny: Boolean = false): List<String> =
-        candidates(html, speciesNames, shiny).filter {
-            it.contains("/animados-gigante/") || it.contains("/animados-sinbordes-gigante/")
-        }
+        candidates(html, speciesNames, shiny).filter(::isHighResolution)
+
+    private fun isGiant(path: String) =
+        path.contains("/animados-gigante/") || path.contains("/animados-sinbordes-gigante/")
+
+    private fun isHighResolution(path: String) =
+        path.contains("/sprites/animados", ignoreCase = true)
 
     private fun normalizedNames(value: String): List<String> = listOf(value, value.replace('-', ' ')).map(::normalize).distinct()
 
@@ -34,6 +38,7 @@ object ShowdownBackSpriteIndex {
 
     private fun absoluteUrl(path: String): String = when {
         path.startsWith("https://", ignoreCase = true) -> path
+        path.startsWith("http://", ignoreCase = true) -> path.replaceFirst("http://", "https://", ignoreCase = true)
         path.startsWith("//") -> "https:$path"
         path.startsWith('/') -> "https://www.pkparaiso.com$path"
         else -> "https://www.pkparaiso.com/$path"

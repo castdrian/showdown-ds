@@ -38,4 +38,19 @@ class ShowdownSpriteIndexGroupsTest {
             )
         )
     }
+
+    @Test
+    fun acceptsUltraSunUltraMoonBorderlessIndexLinks() {
+        val html = """
+            <a href="sprites_pokemon_sin_bordes.php?cid=3#group3">group</a>
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://www.pkparaiso.com/ultra-sol-ultra-luna/sprites_pokemon_sin_bordes.php?cid=3&order=#sprites"),
+            ShowdownSpriteIndexGroups.pageUrls(
+                html,
+                "https://www.pkparaiso.com/ultra-sol-ultra-luna/sprites_pokemon_sin_bordes.php"
+            )
+        )
+    }
 }

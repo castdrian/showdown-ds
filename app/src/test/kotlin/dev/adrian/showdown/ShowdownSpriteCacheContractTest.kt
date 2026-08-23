@@ -65,7 +65,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 4_288_859L))
         assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}wailord.gif", 742, 437, 12_480_351L))
         assertTrue(shouldUseBoundedAnimatedDecoder("${giantHdRoot}alcremie-back.gif", 1024, 1024, 26L * 1024L * 1024L))
-        assertFalse(shouldUseBoundedAnimatedDecoder("https://www.pkparaiso.com/imagenes/xy/sprites/animados/charizard.gif", 791, 831, 4_288_859L))
+        assertTrue(shouldUseBoundedAnimatedDecoder("https://www.pkparaiso.com/imagenes/xy/sprites/animados/charizard.gif", 791, 831, 4_288_859L))
         assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 2049, 831, 4_288_859L))
         assertFalse(shouldUseBoundedAnimatedDecoder("${giantHdRoot}charizard.gif", 791, 831, 33L * 1024L * 1024L))
     }
@@ -76,7 +76,8 @@ class ShowdownSpriteCacheContractTest {
 
         assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/mabosstiff.gif"))
         assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/azelf.png"))
-        assertFalse(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/xy/sprites/animados/azelf.gif"))
+        assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/xy/sprites/animados/azelf.gif"))
+        assertTrue(isHighResolutionSpritePath("https://www.pkparaiso.com/imagenes/sol-luna/sprites/animados-espalda/azelf.gif"))
         assertTrue(isAnimatedSpritePath("https://www.pkparaiso.com/imagenes/xy/sprites/animados/azelf.gif"))
         assertTrue(isAnimatedSpritePath("sprites/xyani/azelf.gif"))
         assertTrue(isAnimatedSpritePath("https://raw.githubusercontent.com/Ghasty001/Animated_sprites_by_Ghasty001/main/FRONT/Azelf.gif"))

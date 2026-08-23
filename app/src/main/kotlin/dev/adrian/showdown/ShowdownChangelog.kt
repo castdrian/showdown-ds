@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Gen 6–8 animated front and back sprite indexes now participate in the HD tier before Showdown fallbacks.",
                 "Resource-constrained battle playback now shows type-colored attacks, status effects, and stat changes without opening a WebView.",
                 "Battle sound effects now pause, resume, and retire cleanly with the battle timeline.",
                 "Gigantamax requests now honor Showdown's string capability flags.",

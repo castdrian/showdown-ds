@@ -41,8 +41,7 @@ internal fun isGenericSpritePlaceholder(path: String): Boolean {
 }
 
 internal fun isHighResolutionSpritePath(path: String): Boolean =
-    path.contains("/animados-gigante/", ignoreCase = true) ||
-        path.contains("/animados-sinbordes-gigante/", ignoreCase = true)
+    path.contains("/sprites/animados", ignoreCase = true)
 
 internal fun isAnimatedSpritePath(path: String): Boolean =
     path.contains("/sprites/animados", ignoreCase = true) ||

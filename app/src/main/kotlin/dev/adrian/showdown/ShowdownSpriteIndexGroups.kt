@@ -2,7 +2,7 @@ package dev.adrian.showdown
 
 object ShowdownSpriteIndexGroups {
     private val groupLinkPattern = Regex(
-        """href=[\"'](?:[^\"']*/)?sprites_pokemon(?:_variocolores)?(?:_espalda)?\.php\?cid=(\d+)[^\"']*[\"']""",
+        """href=[\"'](?:[^\"']*/)?sprites_pokemon(?:_variocolores)?(?:_espalda)?(?:_sin_bordes)?\.php\?cid=(\d+)[^\"']*[\"']""",
         RegexOption.IGNORE_CASE
     )
 

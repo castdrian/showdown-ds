@@ -2,7 +2,7 @@ package dev.adrian.showdown
 
 object ShowdownFrontSpriteIndex {
     private val imagePathPattern = Regex(
-        """(?:(?:https?:)?//www\.pkparaiso\.com)?/?imagenes/[^"']*/sprites/(?:animados-gigante|animados-sinbordes-gigante|animados-shiny|animados)/[^"']+\.gif""",
+        """(?:(?:https?:)?//www\.pkparaiso\.com)?/?imagenes/[^"']*/sprites/(?:animados-gigante|animados-sinbordes-gigante|animados-sinbordes|animados-shiny|animados)/[^"']+\.gif""",
         RegexOption.IGNORE_CASE
     )
 
@@ -34,7 +34,7 @@ object ShowdownFrontSpriteIndex {
     private fun normalize(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
 
     private fun isHighResolution(path: String) =
-        path.contains("/animados-gigante/") || path.contains("/animados-sinbordes-gigante/")
+        path.contains("/sprites/animados", ignoreCase = true)
 
     private fun absoluteUrl(path: String): String = when {
         path.startsWith("https://", ignoreCase = true) -> path
