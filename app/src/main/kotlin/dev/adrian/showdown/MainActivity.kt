@@ -57,7 +57,8 @@ class MainActivity : Activity() {
     private data class LightweightMoveCue(
         val target: String,
         var damagePlayed: Boolean = false,
-        var impactCue: BattleAudioCue? = null
+        var impactCue: BattleAudioCue? = null,
+        var acceptsUnannotatedDamage: Boolean = true
     )
 
     private var displayManager: DisplayManager? = null
@@ -72,6 +73,19 @@ class MainActivity : Activity() {
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
     private var lightweightBattlePlayback = false
     private val lightweightMoveCues = mutableListOf<LightweightMoveCue>()
+    private val lightweightHealthByTarget = mutableMapOf<String, Float>()
+    private val nonDamagingMoveEvents = setOf(
+        "-status",
+        "-curestatus",
+        "-heal",
+        "-fail",
+        "-block",
+        "-notarget",
+        "-miss",
+        "-immune",
+        "-nothing",
+        "cant"
+    )
     private var commandDeck: CommandDeckView? = null
     private lateinit var session: BattleSession
     private lateinit var battleAudio: BattleAudio
@@ -816,20 +830,30 @@ class MainActivity : Activity() {
         if (lines.any { it.startsWith("|init|battle") }) {
             battleScene?.resetBattleFeed()
             lightweightMoveCues.clear()
+            lightweightHealthByTarget.clear()
         }
-        if (session.announcerEnabled) {
-            BattleAnnouncerCueResolver.cuesForProtocol(lines).forEach(battleAudio::playAnnouncerCue)
-        }
-        lines.forEach { line ->
+        val directDamageTargetsByLine = mutableMapOf<Int, Set<String>>()
+        lines.forEachIndexed { lineIndex, line ->
             val fields = line.split('|')
+            val directDamageTargets = BattleDamageCueResolver.directDamageTargets(
+                fields,
+                lightweightMoveCues
+                    .filter { !it.damagePlayed && it.acceptsUnannotatedDamage }
+                    .map(LightweightMoveCue::target),
+                lightweightHealthByTarget
+            )
+            if (directDamageTargets.isNotEmpty()) {
+                directDamageTargetsByLine[lineIndex] = directDamageTargets.toSet()
+                playLightweightDamageCue(directDamageTargets.first())
+            }
             when {
                 fields.getOrNull(1) == "move" -> {
+                    lightweightMoveCues.removeAll { it.damagePlayed || !it.acceptsUnannotatedDamage }
                     battleAudio.beginBattleMove()
                     lightweightMoveCues += LightweightMoveCue(
                         target = fields.getOrNull(4).orEmpty()
                     )
                 }
-                isDirectMoveDamage(fields) -> playLightweightDamageCue(fields)
                 fields.getOrNull(1) == "turn" -> {
                     lightweightMoveCues.clear()
                 }
@@ -842,25 +866,35 @@ class MainActivity : Activity() {
                     }
                 }
             }
+            if (directDamageTargets.isEmpty() && fields.getOrNull(1) in nonDamagingMoveEvents) {
+                lightweightMoveCues
+                    .filterNot(LightweightMoveCue::damagePlayed)
+                    .forEach { it.acceptsUnannotatedDamage = false }
+            }
+            BattleDamageCueResolver.healthUpdates(fields).forEach { update ->
+                lightweightHealthByTarget[BattleDamageCueResolver.targetKey(update.target)] = update.health
+            }
         }
-        battleScene?.applyLightweightBattleProtocol(lines)
+        if (session.announcerEnabled) {
+            BattleAnnouncerCueResolver.cuesForProtocol(
+                lines,
+                directDamageTargetsByLine.keys
+            ).forEach(battleAudio::playAnnouncerCue)
+        }
+        battleScene?.applyLightweightBattleProtocol(lines, directDamageTargetsByLine)
     }
 
-    private fun playLightweightDamageCue(fields: List<String>) {
-        val target = fields.getOrNull(2).orEmpty().substringBefore(':')
+    private fun playLightweightDamageCue(targetValue: String) {
+        val target = targetValue.substringBefore(':')
         val move = lightweightMoveCues.firstOrNull { cue ->
-            !cue.damagePlayed && (cue.target.isBlank() || cue.target.substringBefore(':').equals(target, true))
-        } ?: lightweightMoveCues.firstOrNull { !it.damagePlayed }
+            !cue.damagePlayed && cue.acceptsUnannotatedDamage &&
+                (cue.target.isBlank() || cue.target.substringBefore(':').equals(target, true))
+        } ?: lightweightMoveCues.firstOrNull { !it.damagePlayed && it.acceptsUnannotatedDamage }
         if (move == null) return
         battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)
         move.damagePlayed = true
         move.impactCue?.let(battleAudio::playBattleCue)
         move.impactCue = null
-    }
-
-    private fun isDirectMoveDamage(fields: List<String>): Boolean {
-        if (fields.getOrNull(1) != "-damage" && fields.getOrNull(1) != "-sethp") return false
-        return fields.drop(4).any { it.trim().startsWith("[from] move:", true) }
     }
 
     private fun flushBattlePlayback() {
@@ -967,6 +1001,8 @@ class MainActivity : Activity() {
         displayRefreshScheduler.cancel()
         pendingBattlePackets.clear()
         battlePacketPlaybackScheduled = false
+        lightweightMoveCues.clear()
+        lightweightHealthByTarget.clear()
         replayPaused = false
         replayPausedForLifecycle = false
         livePlaybackPausedRemainingMillis = null

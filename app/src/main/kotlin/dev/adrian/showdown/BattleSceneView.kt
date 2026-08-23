@@ -66,7 +66,7 @@ class BattleSceneView(
     private var lightweightMoveActorPlayer = true
     private var lightweightMoveTargetPlayer: Boolean? = null
     private var lightweightImpactAtNanos = 0L
-    private var lightweightImpactTargetPlayer: Boolean? = null
+    private var lightweightImpactTargets = emptyList<String>()
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -134,14 +134,17 @@ class BattleSceneView(
         lightweightMoveActorPlayer = true
         lightweightMoveTargetPlayer = null
         lightweightImpactAtNanos = 0L
-        lightweightImpactTargetPlayer = null
+        lightweightImpactTargets = emptyList()
         invalidate()
     }
 
-    fun applyLightweightBattleProtocol(lines: List<String>) {
+    fun applyLightweightBattleProtocol(
+        lines: List<String>,
+        directDamageTargetsByLine: Map<Int, Set<String>> = emptyMap()
+    ) {
         val nowNanos = System.nanoTime()
         var changed = false
-        lines.forEach { line ->
+        lines.forEachIndexed { lineIndex, line ->
             val fields = line.split('|')
             when (fields.getOrNull(1)) {
                 "move" -> {
@@ -150,13 +153,27 @@ class BattleSceneView(
                     lightweightMoveActorPlayer = session.isLocalBattleSide(actor)
                     lightweightMoveTargetPlayer = fields.getOrNull(4)?.let(session::isLocalBattleSide)
                     lightweightImpactAtNanos = 0L
-                    lightweightImpactTargetPlayer = null
+                    lightweightImpactTargets = emptyList()
                     changed = true
                 }
-                "-damage", "-sethp" -> if (isDirectMoveDamage(fields)) {
-                    lightweightImpactAtNanos = nowNanos
-                    lightweightImpactTargetPlayer = fields.getOrNull(2)?.let(session::isLocalBattleSide)
-                    changed = true
+                "-damage", "-sethp" -> {
+                    val directTargets = directDamageTargetsByLine[lineIndex].orEmpty()
+                    val target = BattleDamageCueResolver.healthUpdates(fields)
+                        .firstOrNull { update ->
+                            directTargets.any { target ->
+                                BattleDamageCueResolver.targetKey(target) == BattleDamageCueResolver.targetKey(update.target)
+                            }
+                        }
+                        ?.target
+                    if (target != null) {
+                        lightweightImpactTargets = if (lightweightImpactAtNanos == nowNanos) {
+                            (lightweightImpactTargets + directTargets).distinctBy(BattleDamageCueResolver::targetKey)
+                        } else {
+                            directTargets.toList()
+                        }
+                        lightweightImpactAtNanos = nowNanos
+                        changed = true
+                    }
                 }
             }
         }
@@ -538,11 +555,6 @@ class BattleSceneView(
         }
     }
 
-    private fun isDirectMoveDamage(fields: List<String>): Boolean {
-        if (fields.getOrNull(1) != "-damage" && fields.getOrNull(1) != "-sethp") return false
-        return fields.drop(4).any { it.trim().startsWith("[from] move:", true) }
-    }
-
     private fun lightweightMoveEffectActive(nowNanos: Long): Boolean {
         val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < 1_200_000_000L
         val impactActive = lightweightImpactAtNanos > 0L && nowNanos - lightweightImpactAtNanos < 700_000_000L
@@ -565,23 +577,23 @@ class BattleSceneView(
         val actorX = if (lightweightMoveActorPlayer) playerX else opponentX
         val actorY = if (lightweightMoveActorPlayer) playerY else opponentY
         val impactAt = lightweightImpactAtNanos
-        val targetPlayer = if (impactAt > 0L) {
-            lightweightImpactTargetPlayer ?: lightweightMoveTargetPlayer ?: !lightweightMoveActorPlayer
-        } else {
-            lightweightMoveTargetPlayer ?: !lightweightMoveActorPlayer
-        }
+        val targetPlayer = lightweightMoveTargetPlayer ?: !lightweightMoveActorPlayer
         val targetX = if (targetPlayer) playerX else opponentX
         val targetY = if (targetPlayer) playerY else opponentY
         if (impactAt > 0L && nowNanos >= impactAt) {
             val progress = ((nowNanos - impactAt).toFloat() / 700_000_000f).coerceIn(0f, 1f)
             val radius = (42f + progress * 170f) * scale
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = (12f - progress * 8f) * scale
-            paint.color = Color.argb(((1f - progress) * 220f).toInt(), 245, 252, 255)
-            canvas.drawCircle(targetX, targetY - 38f * scale, radius, paint)
-            paint.style = Paint.Style.FILL
-            paint.color = Color.argb(((1f - progress) * 80f).toInt(), 255, 244, 196)
-            canvas.drawCircle(targetX, targetY - 38f * scale, radius * 0.42f, paint)
+            val impactTargets = lightweightImpactTargets.ifEmpty { listOf(if (targetPlayer) "p1a" else "p2a") }
+            impactTargets.forEach { target ->
+                val center = lightweightTargetCenter(width, height, target, playerX, playerY, opponentX, opponentY)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = (12f - progress * 8f) * scale
+                paint.color = Color.argb(((1f - progress) * 220f).toInt(), 245, 252, 255)
+                canvas.drawCircle(center.first, center.second - 38f * scale, radius, paint)
+                paint.style = Paint.Style.FILL
+                paint.color = Color.argb(((1f - progress) * 80f).toInt(), 255, 244, 196)
+                canvas.drawCircle(center.first, center.second - 38f * scale, radius * 0.42f, paint)
+            }
         } else {
             val progress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / 1_200_000_000f).coerceIn(0f, 1f)
             val eased = progress * progress * (3f - 2f * progress)
@@ -595,6 +607,25 @@ class BattleSceneView(
             paint.strokeCap = Paint.Cap.BUTT
             paint.style = Paint.Style.FILL
         }
+    }
+
+    private fun lightweightTargetCenter(
+        width: Float,
+        height: Float,
+        target: String,
+        playerX: Float,
+        playerY: Float,
+        opponentX: Float,
+        opponentY: Float
+    ): Pair<Float, Float> {
+        val player = session.isLocalBattleSide(target)
+        if (session.isSinglesBattle()) return if (player) playerX to playerY else opponentX to opponentY
+        val combatants = if (player) fieldCombatants(session.playerActiveCombatants(), true) else fieldCombatants(session.opponentActiveCombatants(), false)
+        val index = combatants.indexOfFirst { combatant ->
+            BattleDamageCueResolver.targetKey(combatant.slot) == BattleDamageCueResolver.targetKey(target)
+        }
+        if (index < 0) return if (player) playerX to playerY else opponentX to opponentY
+        return multiCombatantX(width, player, index, combatants.size) to if (player) height * 0.67f else height * 0.42f
     }
 
     private fun requestHeldItemSprites() {

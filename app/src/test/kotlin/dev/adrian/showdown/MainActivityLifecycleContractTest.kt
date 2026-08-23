@@ -225,7 +225,8 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val lightweight = source.substringAfter("private fun applyLightweightBattleProtocol").substringBefore("private fun playLightweightDamageCue")
 
-        assertTrue(lightweight.contains("BattleAnnouncerCueResolver.cuesForProtocol(lines)"))
+        assertTrue(lightweight.contains("BattleAnnouncerCueResolver.cuesForProtocol("))
+        assertTrue(lightweight.contains("directDamageTargetsByLine.keys"))
         assertTrue(lightweight.contains("battleAudio::playAnnouncerCue"))
     }
 

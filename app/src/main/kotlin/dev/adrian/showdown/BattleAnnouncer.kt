@@ -45,11 +45,19 @@ object BattleAnnouncerCueResolver {
         else -> null
     }
 
-    fun cuesForProtocol(lines: List<String>): List<BattleAnnouncerCue> {
+    fun cuesForProtocol(lines: List<String>, directDamageLineIndexes: Set<Int>? = null): List<BattleAnnouncerCue> {
         val cues = mutableListOf<BattleAnnouncerCue>()
         var moveDamageCueStart = -1
-        lines.forEach { line ->
-            when (val cue = cueForProtocolLine(line)) {
+        lines.forEachIndexed { index, line ->
+            val event = line.split('|').getOrNull(1)
+            val isDamageEvent = event == "-damage" || event == "-sethp"
+            if (directDamageLineIndexes != null && isDamageEvent && index !in directDamageLineIndexes) return@forEachIndexed
+            val allowUnannotatedDamage = directDamageLineIndexes == null || index in directDamageLineIndexes
+            when (val cue = cueForProtocolLine(
+                line,
+                allowUnannotatedDamage = allowUnannotatedDamage,
+                allowUnannotatedSetHpDamage = allowUnannotatedDamage
+            )) {
                 BattleAnnouncerCue.MOVE -> {
                     cues += cue
                     moveDamageCueStart = cues.size
@@ -68,14 +76,18 @@ object BattleAnnouncerCueResolver {
         return cues
     }
 
-    fun cueForProtocolLine(line: String): BattleAnnouncerCue? {
+    fun cueForProtocolLine(
+        line: String,
+        allowUnannotatedDamage: Boolean = true,
+        allowUnannotatedSetHpDamage: Boolean = false
+    ): BattleAnnouncerCue? {
         val fields = line.split('|')
         return when (fields.getOrNull(1)) {
             "init" -> BattleAnnouncerCue.BATTLE_START.takeIf { fields.getOrNull(2) == "battle" }
             "switch", "drag", "replace" -> BattleAnnouncerCue.SWITCH
             "move" -> BattleAnnouncerCue.MOVE
-            "-damage" -> BattleAnnouncerCue.HIT.takeIf { isDirectMoveDamage(fields, allowUnannotated = true) }
-            "-sethp" -> BattleAnnouncerCue.HIT.takeIf { isDirectMoveDamage(fields, allowUnannotated = false) }
+            "-damage" -> BattleAnnouncerCue.HIT.takeIf { isDirectMoveDamage(fields, allowUnannotated = allowUnannotatedDamage) }
+            "-sethp" -> BattleAnnouncerCue.HIT.takeIf { isDirectMoveDamage(fields, allowUnannotated = allowUnannotatedSetHpDamage) }
             "-hitcount" -> BattleAnnouncerCue.MULTI_HIT
             "-miss" -> BattleAnnouncerCue.MISS
             "-fail", "-block", "-notarget" -> BattleAnnouncerCue.FAIL
@@ -100,10 +112,8 @@ object BattleAnnouncerCueResolver {
     }
 
     private fun isDirectMoveDamage(fields: List<String>, allowUnannotated: Boolean): Boolean {
-        val source = fields.drop(4)
-            .firstOrNull { it.trim().startsWith("[from]", true) }
-            ?.trim()
-        return source?.startsWith("[from] move:", true) ?: allowUnannotated
+        if (BattleDamageCueResolver.hasNonMoveSource(fields)) return false
+        return BattleDamageCueResolver.hasMoveSource(fields) || allowUnannotated
     }
 }
 

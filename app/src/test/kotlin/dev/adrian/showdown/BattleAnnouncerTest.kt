@@ -61,6 +61,30 @@ class BattleAnnouncerTest {
     }
 
     @Test
+    fun filteredProtocolCuesStaySilentForHealingAndUnresolvedResidualDamage() {
+        assertEquals(
+            listOf(BattleAnnouncerCue.MOVE),
+            BattleAnnouncerCueResolver.cuesForProtocol(
+                listOf(
+                    "|move|p1a: Pikachu|Pain Split|p2a: Garchomp",
+                    "|-sethp|p1a: Pikachu|100/100|p2a: Garchomp|100/100|[from] move: Pain Split"
+                ),
+                emptySet()
+            )
+        )
+        assertEquals(
+            listOf(BattleAnnouncerCue.MOVE, BattleAnnouncerCue.HIT),
+            BattleAnnouncerCueResolver.cuesForProtocol(
+                listOf(
+                    "|move|p1a: Pikachu|Thunderbolt|p2a: Garchomp",
+                    "|-damage|p2a: Garchomp|40/100"
+                ),
+                setOf(1)
+            )
+        )
+    }
+
+    @Test
     fun multiHitPacketsAnnounceTheHitCountInsteadOfEveryIndividualImpact() {
         assertEquals(
             listOf(BattleAnnouncerCue.MOVE, BattleAnnouncerCue.MULTI_HIT),

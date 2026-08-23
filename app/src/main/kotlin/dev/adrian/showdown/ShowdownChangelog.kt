@@ -27,6 +27,7 @@ object ShowdownChangelog {
                 "The optional PBR announcer now recognizes Gen 9 Snow weather as its winter weather callout.",
                 "Stat-reset effects now use the matching rise or drop sound in the optional audio layer.",
                 "Damage sound effects now follow observed HP damage and stay disarmed for non-damaging status moves.",
+                "Native battle playback now recognizes ordinary unannotated move damage while keeping residual damage silent.",
                 "Matchmaking now exposes an explicit Cancel search action while a queue is active.",
                 "Battle animation uses less CPU, and finished battles release their hidden animation layer to reduce memory pressure.",
                 "Animated HD sprite frames now use bounded display buffers to reduce Thor memory pressure.",
