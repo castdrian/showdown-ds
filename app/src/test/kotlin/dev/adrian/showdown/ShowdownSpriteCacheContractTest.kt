@@ -37,6 +37,23 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(cacheSource.contains("if (memoryConstrained && plan.usesModernAnimatedFallback)"))
         assertTrue(cacheSource.contains("private fun requestConstrainedSpriteResolution("))
         assertTrue(cacheSource.contains("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->"))
+        val constrainedIndex = cacheSource.indexOf("private fun requestConstrainedSpriteResolution")
+        val constrainedRegularIndex = cacheSource.indexOf(
+            "requestAnimatedSpriteCandidates(plan.regularRemoteCandidates)",
+            constrainedIndex
+        )
+        val constrainedCommunityIndex = cacheSource.indexOf(
+            "requestAnimatedSpriteCandidates(plan.communityRemoteCandidates)",
+            constrainedIndex
+        )
+        val constrainedLocalIndex = cacheSource.indexOf(
+            "requestModernLocalSpriteResolution(request, plan)",
+            constrainedIndex
+        )
+        assertTrue(constrainedIndex >= 0)
+        assertTrue(constrainedRegularIndex > constrainedIndex)
+        assertTrue(constrainedCommunityIndex > constrainedRegularIndex)
+        assertTrue(constrainedLocalIndex > constrainedCommunityIndex)
         assertTrue(cacheSource.contains("if (asset != null || !request.backFacing)"))
         assertTrue(cacheSource.contains("requestStaticShowdownBackFallback(request, receiver)"))
         assertTrue(cacheSource.contains("totalMem < 2L * 1024L * 1024L * 1024L"))

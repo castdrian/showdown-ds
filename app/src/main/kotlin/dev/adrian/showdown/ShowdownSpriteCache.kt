@@ -559,11 +559,23 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (hdAsset != null) {
                 receiver(hdAsset)
             } else {
-                requestModernLocalSpriteResolution(request, plan) { asset ->
-                    if (asset != null || !request.backFacing) {
-                        receiver(asset)
+                requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->
+                    if (regularAsset != null) {
+                        receiver(regularAsset)
                     } else {
-                        requestStaticShowdownBackFallback(request, receiver)
+                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
+                            if (communityAsset != null) {
+                                receiver(communityAsset)
+                            } else {
+                                requestModernLocalSpriteResolution(request, plan) { asset ->
+                                    if (asset != null || !request.backFacing) {
+                                        receiver(asset)
+                                    } else {
+                                        requestStaticShowdownBackFallback(request, receiver)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
