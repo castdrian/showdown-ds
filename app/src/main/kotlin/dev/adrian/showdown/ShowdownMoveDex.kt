@@ -20,8 +20,11 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val itemNames = mutableListOf<String>()
     private val abilityNames = mutableListOf<String>()
     private val listeners = mutableListOf<() -> Unit>()
+    private val moveInfoListeners = mutableListOf<() -> Unit>()
     private var loading = false
     private var loaded = false
+    private var moveInfoLoading = false
+    private var moveInfoLoaded = false
 
     fun typeFor(move: String) = moveTypes[moveId(move)]
 
@@ -61,6 +64,37 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     fun natureNames() = NATURE_NAMES
 
+    fun loadMoveInfo(listener: () -> Unit) {
+        if (moveInfoLoaded) {
+            mainHandler.post(listener)
+            return
+        }
+        moveInfoListeners += listener
+        if (moveInfoLoading) return
+        moveInfoLoading = true
+        resourceCache.requestMoveDex { file ->
+            if (executor.isShutdown) return@requestMoveDex
+            executor.execute {
+                val moveContents = file?.readText().orEmpty()
+                val loadedMoveTypes = parseMoveTypes(moveContents)
+                val loadedMoveInfo = parseMoveInfo(moveContents)
+                val loadedMoveNames = parseMoveNames(moveContents)
+                mainHandler.post {
+                    if (executor.isShutdown) return@post
+                    moveInfoLoading = false
+                    moveInfoLoaded = true
+                    moveTypes.putAll(loadedMoveTypes)
+                    moveInfo.putAll(loadedMoveInfo)
+                    moveNames.clear()
+                    moveNames += loadedMoveNames
+                    val callbacks = moveInfoListeners.toList()
+                    moveInfoListeners.clear()
+                    callbacks.forEach { it() }
+                }
+            }
+        }
+    }
+
     fun load(listener: () -> Unit) {
         if (loaded) {
             listener()
@@ -69,8 +103,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
         listeners += listener
         if (loading) return
         loading = true
-        resourceCache.requestMoveDex { file ->
-            if (executor.isShutdown) return@requestMoveDex
+        loadMoveInfo {
             resourceCache.requestPokedex { pokedexFile ->
                 if (executor.isShutdown) return@requestPokedex
                 resourceCache.requestItems { itemsFile ->
@@ -80,32 +113,25 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                         resourceCache.requestLearnsets { learnsetsFile ->
                             if (executor.isShutdown) return@requestLearnsets
                             executor.execute {
-                                val moveContents = file?.readText().orEmpty()
                                 val pokemonContents = pokedexFile?.readText().orEmpty()
                                 val itemContents = itemsFile?.readText().orEmpty()
                                 val abilityContents = abilitiesFile?.readText().orEmpty()
                                 val learnsetsContents = learnsetsFile?.readText().orEmpty()
-                                val loadedMoveTypes = parseMoveTypes(moveContents)
-                                val loadedMoveInfo = parseMoveInfo(moveContents)
                                 val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
                                 val loadedPokemonAbilities = parsePokemonAbilities(pokemonContents)
                                 val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
                                 val loadedPokemonMoves = parseLearnsets(learnsetsContents)
-                                val loadedMoveNames = parseMoveNames(moveContents)
                                 val loadedPokemonNames = parsePokemonNames(pokemonContents)
                                 val loadedItemNames = parseScriptNames(itemContents)
                                 val loadedAbilityNames = parseScriptNames(abilityContents)
                                 mainHandler.post {
+                                    if (executor.isShutdown) return@post
                                     loading = false
                                     loaded = true
-                                    moveTypes.putAll(loadedMoveTypes)
-                                    moveInfo.putAll(loadedMoveInfo)
                                     pokemonTypes.putAll(loadedPokemonTypes)
                                     pokemonAbilities.putAll(loadedPokemonAbilities)
                                     pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
                                     pokemonMoves.putAll(loadedPokemonMoves)
-                                    moveNames.clear()
-                                    moveNames += loadedMoveNames
                                     pokemonNames.clear()
                                     pokemonNames += loadedPokemonNames
                                     itemNames.clear()
@@ -127,6 +153,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     override fun close() {
         executor.shutdownNow()
         listeners.clear()
+        moveInfoListeners.clear()
     }
 
     companion object {

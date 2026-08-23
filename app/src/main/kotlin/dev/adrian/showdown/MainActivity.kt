@@ -828,6 +828,7 @@ class MainActivity : Activity() {
     }
 
     private fun ensureMoveDexLoaded() {
+        moveDex.loadMoveInfo(::bindMoveDexResolvers)
         moveDex.load(::bindMoveDexResolvers)
     }
 

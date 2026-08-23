@@ -270,6 +270,7 @@ class MainActivityLifecycleContractTest {
         assertFalse(onCreate.contains("moveDex.load"))
         assertTrue(source.contains("private fun bindMoveDexResolvers()"))
         assertTrue(source.contains("private fun ensureMoveDexLoaded()"))
+        assertTrue(source.contains("moveDex.loadMoveInfo(::bindMoveDexResolvers)"))
         assertTrue(listener.contains("ensureMoveDexLoaded()"))
         assertFalse(teamEditor.contains("moveDex.load"))
         assertTrue(source.contains("private fun ensureTeamEditorSuggestions(editor: TeamSetEditor)"))
