@@ -56,6 +56,12 @@ class BattleAudio(
         val pending: PendingAnnouncerCue,
         val remainingDelayMillis: Long
     )
+    private data class ActiveAudioStream(
+        val streamId: Int,
+        var remainingMillis: Long,
+        var scheduledAtMillis: Long,
+        val cleanup: Runnable
+    )
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioCueThread = HandlerThread("showdown-audio").also { it.start() }
@@ -69,7 +75,7 @@ class BattleAudio(
     private val transientSoundPathsById = mutableMapOf<Int, String>()
     private val announcerFiles = mutableMapOf<BattleAnnouncerCue, File?>()
     private val loadedTransientSoundIds = mutableSetOf<Int>()
-    private val activeBattleStreamIds = mutableSetOf<Int>()
+    private val activeBattleStreams = mutableMapOf<Int, ActiveAudioStream>()
     private val pendingBattleCues = ArrayDeque<PendingBattleCue>()
     private val pendingTransientSounds = ArrayDeque<PendingTransientSound>()
     private val pendingAnnouncerCues = ArrayDeque<PendingAnnouncerCue>()
@@ -77,7 +83,7 @@ class BattleAudio(
     private val pausedBattleCues = mutableListOf<PausedBattleCue>()
     private val scheduledAnnouncerCues = mutableListOf<ScheduledAnnouncerCue>()
     private val pausedAnnouncerCues = mutableListOf<PausedAnnouncerCue>()
-    private val activeAnnouncerStreamIds = mutableSetOf<Int>()
+    private val activeAnnouncerStreams = mutableMapOf<Int, ActiveAudioStream>()
     private val diagnosticEvents = ArrayDeque<BattleAudioCueEvent>()
     private val cuePlaybackQueue = BattleAudioCuePlaybackQueue()
     private val announcerPlaybackQueue = BattleAnnouncerCuePlaybackQueue()
@@ -199,7 +205,7 @@ class BattleAudio(
                     )
                 }
             scheduledAnnouncerCues.clear()
-            activeAnnouncerStreamIds.forEach { transientSoundPool?.pause(it) }
+            transientSoundPool?.let { pauseActiveStreams(it, activeAnnouncerStreams) }
         }
     }
 
@@ -233,7 +239,7 @@ class BattleAudio(
                     pendingAnnouncerCues.addLast(pending)
                 }
             }
-            activeAnnouncerStreamIds.forEach { transientSoundPool?.resume(it) }
+            transientSoundPool?.let { resumeActiveStreams(it, activeAnnouncerStreams) }
             flushPendingAnnouncerCues()
         }
     }
@@ -336,7 +342,7 @@ class BattleAudio(
                     )
                 }
             scheduledBattleCues.clear()
-            activeBattleStreamIds.forEach(battleSoundPool::pause)
+            pauseActiveStreams(battleSoundPool, activeBattleStreams)
         }
     }
 
@@ -365,7 +371,7 @@ class BattleAudio(
                     paused.remainingDelayMillis
                 )
             }
-            activeBattleStreamIds.forEach(battleSoundPool::resume)
+            resumeActiveStreams(battleSoundPool, activeBattleStreams)
             flushPendingBattleCues()
         }
     }
@@ -437,8 +443,53 @@ class BattleAudio(
     }
 
     private fun stopActiveBattleStreams() {
-        activeBattleStreamIds.forEach(battleSoundPool::stop)
-        activeBattleStreamIds.clear()
+        stopActiveStreams(battleSoundPool, activeBattleStreams)
+    }
+
+    private fun trackActiveStream(
+        pool: SoundPool,
+        streams: MutableMap<Int, ActiveAudioStream>,
+        streamId: Int,
+        durationMillis: Long
+    ) {
+        streams.remove(streamId)?.let { previous ->
+            audioCueHandler.removeCallbacks(previous.cleanup)
+            pool.stop(previous.streamId)
+        }
+        val nowMillis = SystemClock.elapsedRealtime()
+        lateinit var tracked: ActiveAudioStream
+        val cleanup = Runnable {
+            if (streams[streamId] === tracked) streams.remove(streamId)
+        }
+        tracked = ActiveAudioStream(streamId, durationMillis.coerceAtLeast(1L), nowMillis, cleanup)
+        streams[streamId] = tracked
+        audioCueHandler.postDelayed(cleanup, tracked.remainingMillis)
+    }
+
+    private fun pauseActiveStreams(pool: SoundPool, streams: MutableMap<Int, ActiveAudioStream>) {
+        val nowMillis = SystemClock.elapsedRealtime()
+        streams.values.forEach { stream ->
+            stream.remainingMillis = (stream.remainingMillis - (nowMillis - stream.scheduledAtMillis)).coerceAtLeast(0L)
+            audioCueHandler.removeCallbacks(stream.cleanup)
+            pool.pause(stream.streamId)
+        }
+    }
+
+    private fun resumeActiveStreams(pool: SoundPool, streams: MutableMap<Int, ActiveAudioStream>) {
+        val nowMillis = SystemClock.elapsedRealtime()
+        streams.values.forEach { stream ->
+            stream.scheduledAtMillis = nowMillis
+            pool.resume(stream.streamId)
+            audioCueHandler.postDelayed(stream.cleanup, stream.remainingMillis)
+        }
+    }
+
+    private fun stopActiveStreams(pool: SoundPool, streams: MutableMap<Int, ActiveAudioStream>) {
+        streams.values.forEach { stream ->
+            audioCueHandler.removeCallbacks(stream.cleanup)
+            pool.stop(stream.streamId)
+        }
+        streams.clear()
     }
 
     private fun playBattleCueNow(cue: BattleAudioCue, soundId: Int, queuedAtMillis: Long, plannedDelayMillis: Long) {
@@ -447,7 +498,14 @@ class BattleAudio(
             battleSoundPool.play(soundId, 0.72f, 0.72f, 1, 0, battlePlaybackSpeed)
         }.getOrDefault(0)
         val playbackAccepted = streamId != 0
-        if (playbackAccepted) activeBattleStreamIds += streamId
+        if (playbackAccepted) {
+            trackActiveStream(
+                battleSoundPool,
+                activeBattleStreams,
+                streamId,
+                cuePlaybackQueue.playbackDurationMillis(cue) + BATTLE_CUE_GAP_MILLIS
+            )
+        }
         val actualDelayMillis = (SystemClock.elapsedRealtime() - queuedAtMillis).coerceAtLeast(0L)
         synchronized(diagnosticEvents) {
             if (diagnosticEvents.size >= MAX_DIAGNOSTIC_EVENTS) diagnosticEvents.removeFirst()
@@ -666,7 +724,14 @@ class BattleAudio(
                 val streamId = runCatching {
                     pool.play(soundId, 0.64f, 0.64f, 1, 0, battlePlaybackSpeed)
                 }.getOrDefault(0)
-                if (streamId != 0) activeAnnouncerStreamIds += streamId
+                if (streamId != 0) {
+                    trackActiveStream(
+                        pool,
+                        activeAnnouncerStreams,
+                        streamId,
+                        announcerPlaybackQueue.playbackDurationMillis(pending.cue) + ANNOUNCER_CUE_GAP_MILLIS
+                    )
+                }
             }
         }
         scheduled.runnable = runnable
@@ -697,8 +762,7 @@ class BattleAudio(
         scheduledAnnouncerCues.forEach { it.runnable?.let(audioCueHandler::removeCallbacks) }
         scheduledAnnouncerCues.clear()
         pausedAnnouncerCues.clear()
-        activeAnnouncerStreamIds.forEach { transientSoundPool?.stop(it) }
-        activeAnnouncerStreamIds.clear()
+        transientSoundPool?.let { stopActiveStreams(it, activeAnnouncerStreams) }
         announcerPlaybackGeneration += 1
         announcerCuesPaused = false
         announcerCuesPausedAtMillis = 0L

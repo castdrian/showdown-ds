@@ -30,8 +30,8 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("displayRefreshScheduler.cancel()"))
         assertTrue(source.contains("battleAudio.pauseBattleCues()"))
         assertTrue(source.contains("battleAudio.resumeBattleCues()"))
-        assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::pause)"))
-        assertTrue(audioSource.contains("activeBattleStreamIds.forEach(battleSoundPool::resume)"))
+        assertTrue(audioSource.contains("pauseActiveStreams(battleSoundPool, activeBattleStreams)"))
+        assertTrue(audioSource.contains("resumeActiveStreams(battleSoundPool, activeBattleStreams)"))
     }
 
     @Test
