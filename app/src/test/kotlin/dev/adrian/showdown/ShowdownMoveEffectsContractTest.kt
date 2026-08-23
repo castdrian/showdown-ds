@@ -55,6 +55,8 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("var originalAdd = BattleLog.prototype.add;"))
         assertTrue(source.contains("BattleLog.prototype.add = function (args, kwArgs)"))
         assertTrue(source.contains("nativeJoinLeaveMarkup(this);"))
+        assertTrue(source.contains("function nativeUpdateJoinLeaveUser(instance, previous, next)"))
+        assertTrue(source.contains("nativeUpdateJoinLeaveUser(this, args[2], args[1]);"))
         assertTrue(source.contains("' renamed from '"))
         assertTrue(source.contains("var nativeJoinLeaveKey = null;"))
         assertTrue(source.contains("var nativeRenameKey = null;"))

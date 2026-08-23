@@ -264,6 +264,20 @@ class BattleSession {
 
     private data class ParsedMoveMetric(val value: String, val fromRequest: Boolean)
 
+    private data class BattleRoomPresenceLog(
+        val joins: MutableList<BattleRoomUser> = mutableListOf(),
+        val leaves: MutableList<BattleRoomUser> = mutableListOf(),
+        var fallbackEntry: String? = null
+    )
+
+    private data class BattleRoomUser(val group: String, val name: String) {
+        val formatted: String
+            get() = group + name
+
+        val id: String
+            get() = name.filter(Char::isLetterOrDigit).lowercase()
+    }
+
     private data class MoveResolutionSources(
         val typeFromRequest: Boolean = false,
         val powerFromRequest: Boolean = false,
@@ -299,6 +313,8 @@ class BattleSession {
     private val protocolHistory = mutableListOf<String>()
     private val showdownBattleLogEntries = mutableListOf<String>()
     private val showdownBattleMarkupEntries = mutableMapOf<String, List<String>>()
+    private var battleRoomPresenceLog: BattleRoomPresenceLog? = null
+    private var battleRoomRenameFallback: String? = null
     private var battleLogGeneration = 0L
     private var nativeBattleLogGeneration = -1L
     private var nativeBattleLogPending = false
@@ -1128,6 +1144,8 @@ class BattleSession {
         battleLog.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
+        battleRoomPresenceLog = null
+        battleRoomRenameFallback = null
         battleFeedEntriesCache.clear()
         battleLog += "No battle in progress."
         chatMessages.clear()
@@ -1508,6 +1526,15 @@ class BattleSession {
                     return@forEach
                 }
                 when (fields[1]) {
+                    "j", "join", "l", "leave" -> battleRoomRenameFallback = null
+                    "n", "name" -> Unit
+                    "request" -> Unit
+                    else -> {
+                        battleRoomPresenceLog = null
+                        battleRoomRenameFallback = null
+                    }
+                }
+                when (fields[1]) {
                     "init" -> applyInit(fields)
                     "player" -> applyPlayer(fields)
                     "gametype" -> applyGameType(fields)
@@ -1643,6 +1670,9 @@ class BattleSession {
                     "sentchoice" -> applySentChoice(fields)
                     "win" -> applyWin(fields)
                     "tie", "draw", "prematureend" -> applyTie(fields)
+                    "j", "join" -> applyBattleRoomPresence(fields, joining = true)
+                    "l", "leave" -> applyBattleRoomPresence(fields, joining = false)
+                    "n", "name" -> applyBattleRoomRename(fields)
                     "bigerror" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.takeIf { it.isNotBlank() }?.let { appendLog("Warning: $it") }
                     "error" -> applyBattleError(fields)
                     "c", "c:" -> applyChat(fields)
@@ -1740,6 +1770,8 @@ class BattleSession {
         battleLog.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
+        battleRoomPresenceLog = null
+        battleRoomRenameFallback = null
         battleFeedEntriesCache.clear()
         battleLogGeneration += 1L
         nativeBattleLogGeneration = -1L
@@ -4056,6 +4088,101 @@ class BattleSession {
         val targetPosition = (targetSide - 1) / 2 + 1
         val location = if (sourceHalf == targetHalf) -targetPosition else targetPosition
         return if (location > 0) "+$location" else location.toString()
+    }
+
+    private fun applyBattleRoomPresence(fields: List<String>, joining: Boolean) {
+        val user = parseBattleRoomUser(fields.getOrNull(2).orEmpty())
+        if (user.name.isBlank()) return
+        val presence = battleRoomPresenceLog ?: BattleRoomPresenceLog().also { battleRoomPresenceLog = it }
+        val target = if (joining) presence.joins else presence.leaves
+        val opposite = if (joining) presence.leaves else presence.joins
+        if (joining && opposite.removeAll { it.id == user.id }) {
+            refreshBattleRoomPresenceFallback(presence)
+            return
+        }
+        target.removeAll { it.id == user.id }
+        target += user
+        refreshBattleRoomPresenceFallback(presence)
+    }
+
+    private fun applyBattleRoomRename(fields: List<String>) {
+        val nextUser = parseBattleRoomUser(fields.getOrNull(2).orEmpty())
+        val previousRaw = fields.getOrNull(3).orEmpty().trim()
+        if (nextUser.name.isBlank() || previousRaw.isBlank()) return
+        val previousUser = parseBattleRoomUser(previousRaw)
+        if (nextUser.id == previousUser.id) return
+        battleRoomPresenceLog?.let { presence ->
+            if (renameBattleRoomPresenceUser(presence, previousUser.id, nextUser)) refreshBattleRoomPresenceFallback(presence)
+        }
+        removeBattleRoomFallback(battleRoomRenameFallback)
+        battleRoomRenameFallback = "${nextUser.formatted} renamed from $previousRaw."
+        battleRoomRenameFallback?.let(::appendLog)
+    }
+
+    private fun parseBattleRoomUser(raw: String): BattleRoomUser {
+        val value = raw.trim()
+        val group = value.firstOrNull()
+            ?.takeUnless(Char::isLetterOrDigit)
+            ?.toString()
+            .orEmpty()
+        val name = value.removePrefix(group).substringBefore('@')
+        return BattleRoomUser(group, name)
+    }
+
+    private fun renameBattleRoomPresenceUser(
+        presence: BattleRoomPresenceLog,
+        previousId: String,
+        nextUser: BattleRoomUser
+    ): Boolean {
+        var changed = false
+        listOf(presence.joins, presence.leaves).forEach { users ->
+            users.indices.forEach { index ->
+                if (users[index].id == previousId && users[index] != nextUser) {
+                    users[index] = nextUser
+                    changed = true
+                }
+            }
+        }
+        return changed
+    }
+
+    private fun refreshBattleRoomPresenceFallback(presence: BattleRoomPresenceLog) {
+        val nextEntry = buildBattleRoomPresenceEntry(presence)
+        if (nextEntry == presence.fallbackEntry) return
+        removeBattleRoomFallback(presence.fallbackEntry)
+        presence.fallbackEntry = nextEntry.takeIf(String::isNotBlank)
+        presence.fallbackEntry?.let(::appendLog)
+    }
+
+    private fun buildBattleRoomPresenceEntry(presence: BattleRoomPresenceLog): String = buildList {
+        if (presence.joins.isNotEmpty()) add("${battleRoomUserList(presence.joins)} joined")
+        if (presence.leaves.isNotEmpty()) add("${battleRoomUserList(presence.leaves)} left")
+    }.joinToString("; ")
+
+    private fun battleRoomUserList(users: List<BattleRoomUser>): String {
+        val uniqueUsers = users.map(BattleRoomUser::formatted).distinct()
+        return when {
+            uniqueUsers.size == 1 -> uniqueUsers.first()
+            uniqueUsers.size == 2 -> uniqueUsers.joinToString(" and ")
+            uniqueUsers.size <= 6 -> uniqueUsers.dropLast(1).joinToString(", ") + ", and ${uniqueUsers.last()}"
+            else -> uniqueUsers.take(5).joinToString(", ") + ", and ${uniqueUsers.size - 5} others"
+        }
+    }
+
+    private fun removeBattleRoomFallback(entry: String?) {
+        if (entry == null) return
+        battleLog.indexOfLast { it == entry }
+            .takeIf { it >= 0 }
+            ?.let(battleLog::removeAt)
+        activityMessages.indices.reversed().firstOrNull { index ->
+            activityOrigins[index] == ActivityOrigin.PROTOCOL &&
+                BattleFeedMessageIdentity.matches(activityMessages[index], entry)
+        }?.let(::removeActivityAt)
+        val collectedEvents = protocolEventCollector
+        collectedEvents?.indices?.reversed()?.firstOrNull { index ->
+            BattleFeedMessageIdentity.matches(collectedEvents[index], entry)
+        }?.let(collectedEvents::removeAt)
+        battleFeedEntriesCache.clear()
     }
 
     private fun appendLog(entry: String) {

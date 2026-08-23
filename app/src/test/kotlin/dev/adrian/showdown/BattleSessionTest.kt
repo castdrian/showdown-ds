@@ -209,6 +209,79 @@ class BattleSessionTest {
     }
 
     @Test
+    fun battleRoomPresenceEventsUseShowdownGroupingAndReplaceTheirFallback() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|j|+Alice",
+                "|j|Bob",
+                "|l|+Alice",
+                "|n|Bobby|Bob"
+            )
+        )
+
+        assertFalse(session.battleLog().contains("+Alice joined"))
+        assertFalse(session.activityMessages().contains("+Alice joined"))
+        assertTrue(session.battleLog().contains("+Alice and Bobby joined; +Alice left"))
+        assertTrue(session.activityMessages().contains("Bobby renamed from Bob."))
+    }
+
+    @Test
+    fun battleRoomPresenceGroupingEndsWhenTheNextBattleCommandArrives() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(listOf("|j|Alice", "|request|{\"wait\":true}", "|j|Bob"))
+
+        assertTrue(session.battleLog().contains("Alice and Bob joined"))
+
+        session.applyProtocolLine("|move|p1a: Pikachu|Tackle|p2a: Eevee")
+        session.applyProtocolLine("|j|Cara")
+
+        assertTrue(session.battleLog().contains("Alice and Bob joined"))
+        assertTrue(session.battleLog().contains("Cara joined"))
+        assertFalse(session.battleLog().contains("Alice and Bob and Cara joined"))
+    }
+
+    @Test
+    fun battleRoomJoinCancelsAnUncommittedLeaveWithoutDuplicatingTheJoin() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(listOf("|j|Alice", "|l|Alice", "|j|Alice"))
+
+        assertEquals(1, session.battleLog().count { it == "Alice joined" })
+        assertFalse(session.battleLog().contains("Alice joined; Alice left"))
+    }
+
+    @Test
+    fun battleRoomRenamesUpdatePresenceIdentityAndReplaceConsecutiveRenameFallbacks() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|j|Alice",
+                "|n|Alicia|Alice",
+                "|n|Ally|Alicia",
+                "|l|Ally"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Ally joined; Ally left"))
+        assertFalse(session.battleLog().contains("Alice joined; Alicia left"))
+        assertFalse(session.battleLog().contains("Alicia renamed from Alice."))
+        assertTrue(session.battleLog().contains("Ally renamed from Alicia."))
+    }
+
+    @Test
+    fun battleRoomRenameWithTheSameUserIdIsNotDisplayed() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|n|Alice@!|Alice")
+
+        assertFalse(session.battleLog().any { it.contains("renamed from") })
+    }
+
+    @Test
     fun activityRemovesConsecutiveIdenticalBattleMessages() {
         val session = BattleSession()
         session.appendShowdownBattleLog("<div>It had no effect.</div><div>It had no effect.</div>")

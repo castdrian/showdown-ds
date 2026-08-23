@@ -356,6 +356,29 @@ class ShowdownMoveEffectsView(
                                 var parsed = nativeUser(value);
                                 return parsed.group + parsed.name;
                             }
+                            function nativeUserId(value) {
+                                var parsed = nativeUser(value);
+                                return typeof toID === 'function' ? toID(parsed.name) : parsed.name.toLowerCase();
+                            }
+                            function nativeUpdateJoinLeaveUser(instance, previous, next) {
+                                if (!nativeJoinLeave) return;
+                                var previousId = nativeUserId(previous);
+                                var nextFormatted = nativeFormattedUser(next);
+                                if (!previousId || !nextFormatted) return;
+                                var changed = false;
+                                ['joins', 'leaves'].forEach(function (kind) {
+                                    var users = nativeJoinLeave[kind];
+                                    for (var index = 0; index < users.length; index++) {
+                                        if (nativeUserId(users[index]) !== previousId || users[index] === nextFormatted) continue;
+                                        users[index] = nextFormatted;
+                                        changed = true;
+                                    }
+                                    nativeJoinLeave[kind] = users.filter(function (value, index, all) {
+                                        return all.indexOf(value) === index;
+                                    });
+                                });
+                                if (changed) nativeJoinLeaveMarkup(instance);
+                            }
                             function nativeJoinLeaveMarkup(instance) {
                                 var parts = [];
                                 if (nativeJoinLeave.joins.length) {
@@ -384,12 +407,20 @@ class ShowdownMoveEffectsView(
                                     var target = type === 'join' || type === 'j' ? nativeJoinLeave.joins : nativeJoinLeave.leaves;
                                     var opposite = type === 'join' || type === 'j' ? nativeJoinLeave.leaves : nativeJoinLeave.joins;
                                     var oppositeIndex = opposite.indexOf(user);
-                                    if (oppositeIndex >= 0) opposite.splice(oppositeIndex, 1);
-                                    if (target.indexOf(user) < 0) target.push(user);
+                                    if (type === 'join' || type === 'j') {
+                                        if (oppositeIndex >= 0) {
+                                            opposite.splice(oppositeIndex, 1);
+                                        } else if (target.indexOf(user) < 0) {
+                                            target.push(user);
+                                        }
+                                    } else if (target.indexOf(user) < 0) {
+                                        target.push(user);
+                                    }
                                     nativeJoinLeaveMarkup(this);
                                 } else if (type === 'name' || type === 'n') {
                                     var renamedUser = nativeUser(args[1]);
                                     if (!(typeof toID === 'function' && toID(args[2] || '') === toID(renamedUser.name))) {
+                                        nativeUpdateJoinLeaveUser(this, args[2], args[1]);
                                         if (!nativeRenameKey) nativeRenameKey = 'rename-' + (++nativeRenameSequence);
                                         nativeBattleMarkup(
                                             nativeRenameKey,
