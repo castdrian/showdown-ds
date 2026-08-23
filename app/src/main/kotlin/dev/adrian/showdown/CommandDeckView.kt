@@ -44,8 +44,8 @@ class CommandDeckView(
     private val menuBounds = arrayOfNulls<RectF>(BattleSession.MENU_ITEM_COUNT)
     private val gimmickBounds = arrayOfNulls<RectF>(7)
     private val targetBounds = arrayOfNulls<RectF>(BattleTargetLayout.MAX_OPTIONS)
-    private val teamSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset>()
-    private val requestedTeamSprites = mutableMapOf<String, BattleSpriteRequest>()
+    private val teamSprites = mutableMapOf<Int, ShowdownSpriteCache.SpriteAsset>()
+    private val requestedTeamSprites = mutableMapOf<Int, BattleSpriteRequest>()
     private val typeIcons = mutableMapOf<String, Bitmap?>()
     private var activityChatBounds: RectF? = null
     private var cancelChoiceBounds: RectF? = null
@@ -1825,7 +1825,7 @@ class CommandDeckView(
             val focused = index == session.focusedTeam
             val previewPosition = previewOrder.indexOf(index)
             val details = session.teamMemberDetails(index)
-            requestTeamSprite(pokemon, details.species.ifBlank { pokemon }, details.shiny)
+            requestTeamSprite(index, details.species.ifBlank { pokemon }, details.shiny)
             paint.style = Paint.Style.FILL
             paint.shader = LinearGradient(
                 bounds.left,
@@ -1869,7 +1869,7 @@ class CommandDeckView(
                 content.sprite.right,
                 content.sprite.bottom
             )
-            teamSprites[pokemon]?.draw(
+            teamSprites[index]?.draw(
                 canvas,
                 spriteBounds,
                 SystemClock.elapsedRealtime(),
@@ -1959,36 +1959,36 @@ class CommandDeckView(
 
     private fun RectF.toSwitchTeamBounds() = SwitchTeamCardBounds(left, top, right, bottom)
 
-    private fun requestTeamSprite(displayName: String, species: String, shiny: Boolean) {
-        val requestedSpecies = species.ifBlank { displayName }
+    private fun requestTeamSprite(index: Int, species: String, shiny: Boolean) {
+        val requestedSpecies = species.ifBlank { session.team().getOrNull(index).orEmpty() }
         val request = BattleSpriteRequest.forOpponent(requestedSpecies, session.spriteStyle, shiny)
-        if (requestedTeamSprites[displayName] == request) return
-        requestedTeamSprites[displayName] = request
-        teamSprites.remove(displayName)?.stopAnimation()
+        if (requestedTeamSprites[index] == request) return
+        requestedTeamSprites[index] = request
+        teamSprites.remove(index)?.stopAnimation()
         spriteCache.requestPokemon(request) { sprite ->
-            acceptTeamSprite(displayName, request, sprite)
+            acceptTeamSprite(index, request, sprite)
         }
         postDelayed({
-            if (requestedTeamSprites[displayName] == request && teamSprites[displayName] == null) {
+            if (requestedTeamSprites[index] == request && teamSprites[index] == null) {
                 spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny) { sprite ->
-                    acceptTeamSprite(displayName, request, sprite)
+                    acceptTeamSprite(index, request, sprite)
                 }
             }
         }, TEAM_STATIC_FALLBACK_DELAY_MILLIS)
     }
 
     private fun acceptTeamSprite(
-        displayName: String,
+        index: Int,
         request: BattleSpriteRequest,
         sprite: ShowdownSpriteCache.SpriteAsset?
     ) {
-        if (requestedTeamSprites[displayName] != request) {
+        if (requestedTeamSprites[index] != request) {
             sprite?.stopAnimation()
             return
         }
-        if (sprite != null && (sprite.isAnimated || teamSprites[displayName]?.isAnimated != true)) {
-            teamSprites[displayName]?.takeUnless { it === sprite }?.stopAnimation()
-            teamSprites[displayName] = sprite
+        if (sprite != null && (sprite.isAnimated || teamSprites[index]?.isAnimated != true)) {
+            teamSprites[index]?.takeUnless { it === sprite }?.stopAnimation()
+            teamSprites[index] = sprite
         }
         postInvalidateOnAnimation()
     }

@@ -115,7 +115,7 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun staticTeamArtworkUsesShowdownBeforePokeApiFallback() {
+    fun staticTeamArtworkUsesPokeApiBeforeShowdownFallback() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val staticResolver = source.substringAfter("fun requestStaticDexSprite(species: String, shiny: Boolean")
             .substringBefore("fun requestTrainer")

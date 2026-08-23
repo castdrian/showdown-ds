@@ -137,11 +137,11 @@ class MainActivityLifecycleContractTest {
     fun teamSpritesAreRerequestedWhenTheSpriteStyleChanges() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
 
-        assertTrue(source.contains("private val requestedTeamSprites = mutableMapOf<String, BattleSpriteRequest>()"))
-        assertTrue(source.contains("val requestedSpecies = species.ifBlank { displayName }"))
+        assertTrue(source.contains("private val requestedTeamSprites = mutableMapOf<Int, BattleSpriteRequest>()"))
+        assertTrue(source.contains("val requestedSpecies = species.ifBlank { session.team().getOrNull(index).orEmpty() }"))
         assertTrue(source.contains("val request = BattleSpriteRequest.forOpponent(requestedSpecies, session.spriteStyle, shiny)"))
-        assertTrue(source.contains("if (requestedTeamSprites[displayName] == request) return"))
-        assertTrue(source.contains("teamSprites.remove(displayName)"))
+        assertTrue(source.contains("if (requestedTeamSprites[index] == request) return"))
+        assertTrue(source.contains("teamSprites.remove(index)"))
     }
 
     @Test
@@ -152,7 +152,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("TEAM_STATIC_FALLBACK_DELAY_MILLIS"))
         assertTrue(source.indexOf("spriteCache.requestPokemon(request)") < source.indexOf("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
         assertTrue(source.contains("private fun acceptTeamSprite("))
-        assertTrue(source.contains("sprite.isAnimated || teamSprites[displayName]?.isAnimated != true"))
+        assertTrue(source.contains("sprite.isAnimated || teamSprites[index]?.isAnimated != true"))
     }
 
     @Test
