@@ -360,9 +360,16 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         configureWindow()
         val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager?.getMemoryInfo(memoryInfo)
         lightweightBattlePlayback = activityManager?.let {
-            shouldUseLightweightBattlePlayback(it.isLowRamDevice, it.memoryClass)
-        } == true
+            shouldUseLightweightBattlePlayback(
+                it.isLowRamDevice,
+                it.memoryClass,
+                memoryInfo.totalMem,
+                memoryInfo.availMem
+            )
+        } ?: true
         serverEndpoint = loadServerEndpoint()
         credentialsStore = ShowdownCredentialsStore(this)
         sessionStore = ShowdownSessionStore(this)
