@@ -902,6 +902,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 (Build.VERSION.SDK_INT < Build.VERSION_CODES.P || !boundedDecoderEligible)
             ) return null
             if (!hasMultipleGifFrames(file.readBytes())) return null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                decodeAnimatedDrawable(file, canvasSize)?.let { return it }
+            }
             if (!fitsMovieBudget) {
                 return decodeBoundedAnimatedSprite(file, canvasSize)
             }
@@ -916,14 +919,21 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private fun decodeBoundedAnimatedSprite(file: File, canvasSize: Pair<Int, Int>): SpriteAsset? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
-        val targetSize = boundedAnimatedFrameSize(canvasSize.first, canvasSize.second, MAX_ANIMATED_FRAME_DIMENSION)
-        val drawable = ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) { decoder, _, _ ->
-            decoder.setTargetSize(targetSize.first, targetSize.second)
-            decoder.setMemorySizePolicy(ImageDecoder.MEMORY_POLICY_LOW_RAM)
-        }
-        val animated = drawable as? AnimatedImageDrawable ?: return null
-        animated.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
-        return SpriteAsset.fromAnimatedDrawable(animated)
+        return decodeAnimatedDrawable(file, canvasSize)
+    }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.P)
+    private fun decodeAnimatedDrawable(file: File, canvasSize: Pair<Int, Int>): SpriteAsset? {
+        return runCatching {
+            val targetSize = boundedAnimatedFrameSize(canvasSize.first, canvasSize.second, MAX_ANIMATED_FRAME_DIMENSION)
+            val drawable = ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) { decoder, _, _ ->
+                decoder.setTargetSize(targetSize.first, targetSize.second)
+                decoder.setMemorySizePolicy(ImageDecoder.MEMORY_POLICY_LOW_RAM)
+            }
+            val animated = drawable as? AnimatedImageDrawable ?: return@runCatching null
+            animated.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
+            SpriteAsset.fromAnimatedDrawable(animated)
+        }.getOrNull()
     }
 
     private fun readGifCanvasSize(file: File): Pair<Int, Int>? {

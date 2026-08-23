@@ -19,6 +19,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("hasDistinctMovieFrames(it)"))
         assertTrue(source.contains("it.duration() > 0"))
         assertTrue(source.contains("val isAnimated get() = movie != null || animatedDrawable != null"))
+        assertTrue(source.indexOf("decodeAnimatedDrawable(file, canvasSize)") < source.indexOf("Movie.decodeFile(file.path)"))
     }
 
     @Test
