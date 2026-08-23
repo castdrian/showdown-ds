@@ -4653,11 +4653,11 @@ class MainActivity : Activity() {
         }
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(name)
-            addView(format)
+            addView(labeledTeamField("Team name", name))
+            addView(labeledTeamField("Format ID", format))
             addView(formatPicker)
-            addView(folder)
-            addView(packed)
+            addView(labeledTeamField("Folder", folder))
+            addView(labeledTeamField("Packed or Showdown export", packed))
             addView(importButton)
             addView(setFields)
             addView(validateButton)
@@ -4854,7 +4854,7 @@ class MainActivity : Activity() {
                 setPadding((2f * density).toInt(), 0, 0, (6f * density).toInt())
             }, LinearLayout.LayoutParams(-1, -2))
             moves.forEachIndexed { index, field ->
-                addView(field, LinearLayout.LayoutParams(-1, -2).apply {
+                addView(labeledTeamField("Move ${index + 1}", field), LinearLayout.LayoutParams(-1, -2).apply {
                     if (index > 0) topMargin = (6f * density).toInt()
                 })
             }
@@ -4924,30 +4924,26 @@ class MainActivity : Activity() {
             advancedFields = advancedFields,
             advancedToggle = advancedToggle
         )
-        listOf(
-            editor.gender,
-            editor.shiny,
-            editor.level,
-            editor.happiness,
-            editor.pokeBall,
-            editor.hiddenPowerType,
-            editor.gigantamax,
-            editor.dynamaxLevel,
-            editor.teraType
-        ).forEach(advancedFields::addView)
-        listOf(
-            editor.nickname,
-            editor.species,
-            editor.item,
-            editor.ability,
-            editor.movesContainer,
-            editor.nature,
-            editor.evs.container,
-            editor.ivs.container,
-            orderBar,
-            editor.advancedToggle,
-            editor.advancedFields
-        ).forEach(details::addView)
+        advancedFields.addView(labeledTeamField("Gender", editor.gender))
+        advancedFields.addView(editor.shiny)
+        advancedFields.addView(labeledTeamField("Level", editor.level))
+        advancedFields.addView(labeledTeamField("Happiness", editor.happiness))
+        advancedFields.addView(labeledTeamField("Poké Ball", editor.pokeBall))
+        advancedFields.addView(labeledTeamField("Hidden Power type", editor.hiddenPowerType))
+        advancedFields.addView(editor.gigantamax)
+        advancedFields.addView(labeledTeamField("Dynamax level", editor.dynamaxLevel))
+        advancedFields.addView(labeledTeamField("Tera type", editor.teraType))
+        details.addView(labeledTeamField("Nickname", editor.nickname))
+        details.addView(labeledTeamField("Species", editor.species))
+        details.addView(labeledTeamField("Item", editor.item))
+        details.addView(labeledTeamField("Ability", editor.ability))
+        details.addView(editor.movesContainer)
+        details.addView(labeledTeamField("Nature", editor.nature))
+        details.addView(editor.evs.container)
+        details.addView(editor.ivs.container)
+        details.addView(orderBar)
+        details.addView(editor.advancedToggle)
+        details.addView(editor.advancedFields)
         editor.section.addView(slotHeader, LinearLayout.LayoutParams(-1, -2))
         editor.section.addView(details, LinearLayout.LayoutParams(-1, -2))
         val suggestionFields = editor.moves + listOf(
@@ -5034,6 +5030,24 @@ class MainActivity : Activity() {
         this.hint = hint
         setSingleLine(true)
         setText(value)
+    }
+
+    private fun labeledTeamField(label: String, field: View): LinearLayout {
+        val density = resources.displayMetrics.density
+        (field as? TextView)?.let { textView ->
+            if (textView.hint?.toString().equals(label, true)) textView.hint = ""
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = label
+                setTextSize(13f)
+                setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+                setTextColor(0xffa9e8e2.toInt())
+                setPadding((4f * density).toInt(), (8f * density).toInt(), (4f * density).toInt(), (2f * density).toInt())
+            }, LinearLayout.LayoutParams(-1, -2))
+            addView(field, LinearLayout.LayoutParams(-1, -2))
+        }
     }
 
     private fun teamStatEditor(title: String, values: List<Int>, default: Int): TeamStatEditor {
