@@ -221,6 +221,15 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun lowMemoryPlaybackKeepsTheAnnouncerProtocolFallback() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val lightweight = source.substringAfter("private fun applyLightweightBattleProtocol").substringBefore("private fun playLightweightDamageCue")
+
+        assertTrue(lightweight.contains("BattleAnnouncerCueResolver.cuesForProtocol(lines)"))
+        assertTrue(lightweight.contains("battleAudio::playAnnouncerCue"))
+    }
+
+    @Test
     fun releasesTheAnimationWebViewAfterFinishedPlaybackDrains() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val playback = source.substringAfter("private val playbackAdvanceRunnable").substringBefore("private var shouldMaintainConnection")

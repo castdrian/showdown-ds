@@ -817,6 +817,9 @@ class MainActivity : Activity() {
             battleScene?.resetBattleFeed()
             lightweightMoveCues.clear()
         }
+        if (session.announcerEnabled) {
+            BattleAnnouncerCueResolver.cuesForProtocol(lines).forEach(battleAudio::playAnnouncerCue)
+        }
         lines.forEach { line ->
             val fields = line.split('|')
             when {
