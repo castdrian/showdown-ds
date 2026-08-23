@@ -19,9 +19,9 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 gpu_mode="${AYN_THOR_GPU_MODE:-$default_gpu_mode}"
 window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
-cpu_cores="${AYN_THOR_CPU_CORES:-2}"
-ram_size_mb="${AYN_THOR_RAM_MB:-1280}"
-vm_heap_size_mb="${AYN_THOR_HEAP_MB:-160}"
+cpu_cores="${AYN_THOR_CPU_CORES:-1}"
+ram_size_mb="${AYN_THOR_RAM_MB:-1024}"
+vm_heap_size_mb="${AYN_THOR_HEAP_MB:-128}"
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
@@ -93,13 +93,13 @@ if [[ ! "$cpu_cores" =~ ^[1-8]$ ]]; then
     exit 1
 fi
 
-if [[ ! "$ram_size_mb" =~ ^[0-9]+$ || "$ram_size_mb" -lt 1280 ]]; then
-    printf '%s\n' "AYN_THOR_RAM_MB must be at least 1280."
+if [[ ! "$ram_size_mb" =~ ^[0-9]+$ || "$ram_size_mb" -lt 1024 ]]; then
+    printf '%s\n' "AYN_THOR_RAM_MB must be at least 1024."
     exit 1
 fi
 
-if [[ ! "$vm_heap_size_mb" =~ ^[0-9]+$ || "$vm_heap_size_mb" -lt 160 ]]; then
-    printf '%s\n' "AYN_THOR_HEAP_MB must be at least 160."
+if [[ ! "$vm_heap_size_mb" =~ ^[0-9]+$ || "$vm_heap_size_mb" -lt 128 ]]; then
+    printf '%s\n' "AYN_THOR_HEAP_MB must be at least 128."
     exit 1
 fi
 
