@@ -230,6 +230,31 @@ class ShowdownConnectionLifecycleTest {
         }
     }
 
+    @Test
+    fun failsWhenTransportNeverBecomesReady() {
+        val server = LoopbackWebSocketServer()
+        val listener = RecordingListener()
+        val httpClient = testHttpClient()
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            httpClient,
+            transportReadyTimeoutMillis = 100
+        )
+        try {
+            connection.connect()
+            server.awaitClient()
+
+            assertTrue(listener.failed.await(2, TimeUnit.SECONDS))
+            assertEquals("Showdown transport did not become ready in time.", listener.states.last().second)
+            assertFalse(connection.isTransportReady())
+            assertFalse(connection.sendGlobal("/search gen9randombattle"))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
     private fun testHttpClient() = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(2, TimeUnit.SECONDS)
