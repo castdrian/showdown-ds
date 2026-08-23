@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Battle sound effects now pause, resume, and retire cleanly with the battle timeline.",
                 "Gigantamax requests now honor Showdown's string capability flags.",
                 "Official animated rear sprites are prioritized before lower-resolution fallbacks.",
                 "Battle party indicators are cached between frames to reduce rendering work.",
