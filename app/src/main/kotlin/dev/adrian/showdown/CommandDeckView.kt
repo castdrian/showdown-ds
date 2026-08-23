@@ -1089,7 +1089,7 @@ class CommandDeckView(
         )
         val valueArea = RectF(content.left, divider.bottom + 8f * scale, content.right, content.bottom)
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(108, 145, 230, 226)
+        paint.color = Color.argb(92, 184, 199, 204)
         canvas.drawRoundRect(divider, 1f * scale, 1f * scale, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
