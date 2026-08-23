@@ -31,6 +31,8 @@ object ShowdownChangelog {
                 "Official No Item exports now round-trip without creating a fake item.",
                 "Controller navigation now stays inside custom dialogs instead of triggering the battle menu underneath.",
                 "Team previews keep species artwork visible while their preferred HD animation loads, including shiny variants.",
+                "Team preview artwork now stays attached to the correct party slot while HD animations load or fall back.",
+                "Battle room joins, leaves, and renames now keep the upper battle feed consistent with Showdown without duplicate entries.",
                 "Terastallization now submits the official Showdown battle command and works correctly in live battles.",
                 "Battle, ladder, and team format selectors now use searchable custom pickers for the full server catalog.",
                 "Team selection now searches saved teams by name, format, folder, Pokémon, and moves.",
