@@ -10,6 +10,9 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Gigantamax requests now honor Showdown's string capability flags.",
+                "Official animated rear sprites are prioritized before lower-resolution fallbacks.",
+                "Battle party indicators are cached between frames to reduce rendering work.",
                 "Team exports now use Showdown's official packed advanced-field order, while older local exports remain readable.",
                 "Finished battles keep the final Showdown result visible on the upper display.",
                 "Replay controls now stay on the lower display with pause and 0.5×–2× speed selection.",
