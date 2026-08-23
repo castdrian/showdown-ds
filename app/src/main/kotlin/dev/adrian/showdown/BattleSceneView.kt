@@ -15,9 +15,11 @@ import android.view.MotionEvent
 import android.view.View
 import dev.adrian.showdown.R
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 class BattleSceneView(
     context: Context,
@@ -67,6 +69,11 @@ class BattleSceneView(
     private var lightweightMoveTargetPlayer: Boolean? = null
     private var lightweightImpactAtNanos = 0L
     private var lightweightImpactTargets = emptyList<String>()
+    private var lightweightMoveName = ""
+    private var lightweightMoveType = "NORMAL"
+    private var lightweightMoveCategory = "PHYSICAL"
+    private var lightweightStatEffectAtNanos = 0L
+    private var lightweightStatDirection = 0
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -135,6 +142,11 @@ class BattleSceneView(
         lightweightMoveTargetPlayer = null
         lightweightImpactAtNanos = 0L
         lightweightImpactTargets = emptyList()
+        lightweightMoveName = ""
+        lightweightMoveType = "NORMAL"
+        lightweightMoveCategory = "PHYSICAL"
+        lightweightStatEffectAtNanos = 0L
+        lightweightStatDirection = 0
         invalidate()
     }
 
@@ -154,6 +166,12 @@ class BattleSceneView(
                     lightweightMoveTargetPlayer = fields.getOrNull(4)?.let(session::isLocalBattleSide)
                     lightweightImpactAtNanos = 0L
                     lightweightImpactTargets = emptyList()
+                    lightweightMoveName = fields.getOrNull(3).orEmpty()
+                    lightweightMoveType = session.moveTypeFor(lightweightMoveName)?.uppercase() ?: inferMoveType(lightweightMoveName)
+                    lightweightMoveCategory = session.moveInfoFor(lightweightMoveName)?.category?.uppercase()
+                        ?: inferMoveCategory(lightweightMoveName)
+                    lightweightStatEffectAtNanos = 0L
+                    lightweightStatDirection = 0
                     changed = true
                 }
                 "-damage", "-sethp" -> {
@@ -172,6 +190,24 @@ class BattleSceneView(
                             directTargets.toList()
                         }
                         lightweightImpactAtNanos = nowNanos
+                        changed = true
+                    }
+                }
+                "-boost", "-unboost", "-setboost" -> {
+                    lightweightMoveCategory = "STATUS"
+                    lightweightStatEffectAtNanos = nowNanos
+                    lightweightStatDirection = when (fields.getOrNull(1)) {
+                        "-unboost" -> -1
+                        "-setboost" -> fields.getOrNull(4)?.toIntOrNull()?.signum() ?: 1
+                        else -> 1
+                    }
+                    changed = true
+                }
+                "-status", "-curestatus", "-heal", "-fail", "-block", "-immune", "-miss", "-nothing" -> {
+                    if (lightweightMoveStartedAtNanos > 0L) {
+                        lightweightMoveCategory = "STATUS"
+                        lightweightImpactAtNanos = nowNanos
+                        lightweightImpactTargets = fields.getOrNull(2)?.let { listOf(it) }.orEmpty()
                         changed = true
                     }
                 }
@@ -558,7 +594,8 @@ class BattleSceneView(
     private fun lightweightMoveEffectActive(nowNanos: Long): Boolean {
         val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < 1_200_000_000L
         val impactActive = lightweightImpactAtNanos > 0L && nowNanos - lightweightImpactAtNanos < 700_000_000L
-        return moveActive || impactActive
+        val statActive = lightweightStatEffectAtNanos > 0L && nowNanos - lightweightStatEffectAtNanos < 1_100_000_000L
+        return moveActive || impactActive || statActive
     }
 
     private fun drawLightweightMoveEffect(
@@ -580,33 +617,238 @@ class BattleSceneView(
         val targetPlayer = lightweightMoveTargetPlayer ?: !lightweightMoveActorPlayer
         val targetX = if (targetPlayer) playerX else opponentX
         val targetY = if (targetPlayer) playerY else opponentY
+        val palette = lightweightMovePalette(lightweightMoveType)
+        if (lightweightMoveCategory == "STATUS") {
+            drawStatusMoveEffect(canvas, targetX, targetY, scale, nowNanos, palette)
+        } else {
+            drawAttackMoveEffect(
+                canvas,
+                width,
+                height,
+                playerX,
+                playerY,
+                opponentX,
+                opponentY,
+                targetPlayer,
+                impactAt,
+                actorX,
+                actorY,
+                targetX,
+                targetY,
+                scale,
+                nowNanos,
+                palette
+            )
+        }
+        drawStatEffect(canvas, targetX, targetY, scale, nowNanos, palette)
+    }
+
+    private fun drawAttackMoveEffect(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        playerX: Float,
+        playerY: Float,
+        opponentX: Float,
+        opponentY: Float,
+        targetPlayer: Boolean,
+        impactAt: Long,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        scale: Float,
+        nowNanos: Long,
+        palette: MoveEffectPalette
+    ) {
+        val moveProgress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / 1_200_000_000f).coerceIn(0f, 1f)
         if (impactAt > 0L && nowNanos >= impactAt) {
             val progress = ((nowNanos - impactAt).toFloat() / 700_000_000f).coerceIn(0f, 1f)
             val radius = (42f + progress * 170f) * scale
             val impactTargets = lightweightImpactTargets.ifEmpty { listOf(if (targetPlayer) "p1a" else "p2a") }
             impactTargets.forEach { target ->
                 val center = lightweightTargetCenter(width, height, target, playerX, playerY, opponentX, opponentY)
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = (12f - progress * 8f) * scale
-                paint.color = Color.argb(((1f - progress) * 220f).toInt(), 245, 252, 255)
-                canvas.drawCircle(center.first, center.second - 38f * scale, radius, paint)
-                paint.style = Paint.Style.FILL
-                paint.color = Color.argb(((1f - progress) * 80f).toInt(), 255, 244, 196)
-                canvas.drawCircle(center.first, center.second - 38f * scale, radius * 0.42f, paint)
+                drawImpactBurst(canvas, center.first, center.second - 38f * scale, radius, progress, scale, palette)
             }
-        } else {
-            val progress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / 1_200_000_000f).coerceIn(0f, 1f)
-            val eased = progress * progress * (3f - 2f * progress)
-            val endX = actorX + (targetX - actorX) * eased
-            val endY = actorY + (targetY - actorY) * eased
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 14f * scale
-            paint.strokeCap = Paint.Cap.ROUND
-            paint.color = Color.argb(((1f - progress) * 190f).toInt(), 178, 242, 255)
-            canvas.drawLine(actorX, actorY - 42f * scale, endX, endY - 42f * scale, paint)
-            paint.strokeCap = Paint.Cap.BUTT
-            paint.style = Paint.Style.FILL
+            return
         }
+        val eased = moveProgress * moveProgress * (3f - 2f * moveProgress)
+        val endX = actorX + (targetX - actorX) * eased
+        val endY = actorY + (targetY - actorY) * eased
+        val dx = targetX - actorX
+        val dy = targetY - actorY
+        val length = maxOf(1f, kotlin.math.sqrt(dx * dx + dy * dy))
+        val normalX = -dy / length
+        val normalY = dx / length
+        val tailProgress = (moveProgress - 0.16f).coerceAtLeast(0f)
+        val tailX = actorX + (targetX - actorX) * tailProgress
+        val tailY = actorY + (targetY - actorY) * tailProgress
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = 34f * scale
+        paint.color = Color.argb(((1f - moveProgress) * 55f).toInt(), Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
+        canvas.drawLine(tailX, tailY - 42f * scale, endX, endY - 42f * scale, paint)
+        paint.strokeWidth = 13f * scale
+        paint.color = Color.argb(((1f - moveProgress) * 220f).toInt(), Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+        canvas.drawLine(tailX, tailY - 42f * scale, endX, endY - 42f * scale, paint)
+        paint.strokeCap = Paint.Cap.BUTT
+        paint.style = Paint.Style.FILL
+        val orbRadius = (24f + 14f * sin(moveProgress * Math.PI).toFloat()) * scale
+        paint.color = palette.accent
+        canvas.drawCircle(endX, endY - 42f * scale, orbRadius, paint)
+        paint.color = Color.argb(220, 255, 255, 255)
+        canvas.drawCircle(endX - normalX * orbRadius * 0.35f, endY - 42f * scale - normalY * orbRadius * 0.35f, orbRadius * 0.34f, paint)
+        paint.color = Color.argb(((1f - moveProgress) * 180f).toInt(), Color.red(palette.secondary), Color.green(palette.secondary), Color.blue(palette.secondary))
+        for (index in 0 until 3) {
+            val offset = (index - 1) * 34f * scale
+            canvas.drawCircle(endX + normalX * offset, endY - 42f * scale + normalY * offset, (8f + index * 3f) * scale, paint)
+        }
+    }
+
+    private fun drawStatusMoveEffect(
+        canvas: Canvas,
+        targetX: Float,
+        targetY: Float,
+        scale: Float,
+        nowNanos: Long,
+        palette: MoveEffectPalette
+    ) {
+        val progress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / 1_200_000_000f).coerceIn(0f, 1f)
+        val centerY = targetY - 42f * scale
+        val pulse = (sin(progress * Math.PI * 2.0).toFloat() + 1f) * 0.5f
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = (8f + pulse * 6f) * scale
+        paint.color = Color.argb(((1f - progress) * 175f).toInt(), Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
+        canvas.drawCircle(targetX, centerY, (65f + progress * 90f) * scale, paint)
+        paint.strokeWidth = 4f * scale
+        paint.color = Color.argb(((1f - progress) * 220f).toInt(), Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+        for (index in 0 until 8) {
+            val angle = progress * Math.PI * 2.0 + index * Math.PI / 4.0
+            val inner = 80f * scale
+            val outer = (116f + pulse * 16f) * scale
+            canvas.drawLine(
+                targetX + cos(angle).toFloat() * inner,
+                centerY + sin(angle).toFloat() * inner,
+                targetX + cos(angle).toFloat() * outer,
+                centerY + sin(angle).toFloat() * outer,
+                paint
+            )
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawStatEffect(
+        canvas: Canvas,
+        targetX: Float,
+        targetY: Float,
+        scale: Float,
+        nowNanos: Long,
+        palette: MoveEffectPalette
+    ) {
+        if (lightweightStatEffectAtNanos <= 0L) return
+        val progress = ((nowNanos - lightweightStatEffectAtNanos).toFloat() / 1_100_000_000f).coerceIn(0f, 1f)
+        if (progress >= 1f) return
+        val centerY = targetY - 56f * scale
+        val direction = lightweightStatDirection.toFloat()
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 10f * scale
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.color = Color.argb(((1f - progress) * 220f).toInt(), Color.red(if (direction > 0f) palette.accent else Color.rgb(245, 112, 128)), Color.green(if (direction > 0f) palette.accent else Color.rgb(245, 112, 128)), Color.blue(if (direction > 0f) palette.accent else Color.rgb(245, 112, 128)))
+        for (index in 0 until 3) {
+            val x = targetX + (index - 1) * 48f * scale
+            val baseY = centerY + 54f * scale
+            val travel = (progress * 100f + index * 16f) * direction * scale
+            canvas.drawLine(x, baseY + travel, x, baseY - 38f * scale + travel, paint)
+            canvas.drawLine(x, baseY - 38f * scale + travel, x - 12f * scale, baseY - 22f * scale + travel, paint)
+            canvas.drawLine(x, baseY - 38f * scale + travel, x + 12f * scale, baseY - 22f * scale + travel, paint)
+        }
+        paint.strokeCap = Paint.Cap.BUTT
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawImpactBurst(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        radius: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = (16f - progress * 10f) * scale
+        paint.color = Color.argb(((1f - progress) * 225f).toInt(), Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+        canvas.drawCircle(centerX, centerY, radius, paint)
+        paint.strokeWidth = 4f * scale
+        paint.color = Color.argb(((1f - progress) * 210f).toInt(), 255, 255, 255)
+        for (index in 0 until 10) {
+            val angle = index * Math.PI / 5.0
+            val inner = radius * 0.55f
+            val outer = radius * (0.95f + (index % 2) * 0.15f)
+            canvas.drawLine(
+                centerX + cos(angle).toFloat() * inner,
+                centerY + sin(angle).toFloat() * inner,
+                centerX + cos(angle).toFloat() * outer,
+                centerY + sin(angle).toFloat() * outer,
+                paint
+            )
+        }
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(((1f - progress) * 110f).toInt(), Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
+        canvas.drawCircle(centerX, centerY, radius * 0.42f, paint)
+    }
+
+    private data class MoveEffectPalette(val primary: Int, val secondary: Int, val accent: Int)
+
+    private fun lightweightMovePalette(type: String): MoveEffectPalette = when (type) {
+        "FIRE" -> MoveEffectPalette(Color.rgb(193, 55, 28), Color.rgb(255, 167, 57), Color.rgb(255, 235, 171))
+        "WATER" -> MoveEffectPalette(Color.rgb(38, 105, 221), Color.rgb(74, 194, 255), Color.rgb(214, 248, 255))
+        "ELECTRIC" -> MoveEffectPalette(Color.rgb(194, 145, 12), Color.rgb(255, 223, 74), Color.rgb(255, 251, 195))
+        "GRASS" -> MoveEffectPalette(Color.rgb(41, 139, 70), Color.rgb(118, 221, 102), Color.rgb(226, 255, 202))
+        "ICE" -> MoveEffectPalette(Color.rgb(56, 154, 190), Color.rgb(159, 244, 255), Color.rgb(240, 255, 255))
+        "FIGHTING" -> MoveEffectPalette(Color.rgb(171, 55, 38), Color.rgb(245, 116, 73), Color.rgb(255, 228, 180))
+        "POISON" -> MoveEffectPalette(Color.rgb(116, 45, 145), Color.rgb(218, 110, 229), Color.rgb(255, 212, 255))
+        "GROUND" -> MoveEffectPalette(Color.rgb(145, 90, 38), Color.rgb(222, 168, 82), Color.rgb(255, 235, 185))
+        "FLYING" -> MoveEffectPalette(Color.rgb(75, 102, 190), Color.rgb(163, 195, 255), Color.rgb(239, 246, 255))
+        "PSYCHIC" -> MoveEffectPalette(Color.rgb(174, 47, 132), Color.rgb(255, 112, 199), Color.rgb(255, 225, 247))
+        "BUG" -> MoveEffectPalette(Color.rgb(72, 128, 40), Color.rgb(180, 226, 69), Color.rgb(240, 255, 196))
+        "ROCK" -> MoveEffectPalette(Color.rgb(105, 81, 42), Color.rgb(201, 165, 92), Color.rgb(255, 240, 191))
+        "GHOST" -> MoveEffectPalette(Color.rgb(69, 54, 137), Color.rgb(153, 125, 245), Color.rgb(232, 224, 255))
+        "DRAGON" -> MoveEffectPalette(Color.rgb(55, 64, 176), Color.rgb(133, 144, 255), Color.rgb(225, 231, 255))
+        "DARK" -> MoveEffectPalette(Color.rgb(33, 37, 57), Color.rgb(118, 120, 151), Color.rgb(231, 232, 255))
+        "STEEL" -> MoveEffectPalette(Color.rgb(73, 101, 125), Color.rgb(185, 215, 232), Color.rgb(244, 253, 255))
+        "FAIRY" -> MoveEffectPalette(Color.rgb(191, 74, 157), Color.rgb(255, 151, 223), Color.rgb(255, 236, 252))
+        else -> MoveEffectPalette(Color.rgb(78, 91, 116), Color.rgb(173, 194, 226), Color.rgb(241, 247, 255))
+    }
+
+    private fun inferMoveType(move: String): String {
+        val normalized = move.lowercase()
+        return when {
+            normalized.containsAny("flame", "fire", "ember", "heat", "blaze") -> "FIRE"
+            normalized.containsAny("water", "hydro", "aqua", "surf", "scald") -> "WATER"
+            normalized.containsAny("thunder", "spark", "volt", "electro", "zap") -> "ELECTRIC"
+            normalized.containsAny("leaf", "vine", "seed", "grass", "wood", "energy") -> "GRASS"
+            normalized.containsAny("ice", "frost", "blizzard", "freeze") -> "ICE"
+            normalized.containsAny("shadow", "ghost", "hex", "spirit") -> "GHOST"
+            normalized.containsAny("psychic", "mind", "psybeam", "future") -> "PSYCHIC"
+            normalized.containsAny("dragon", "scale", "draco") -> "DRAGON"
+            normalized.containsAny("dark", "night", "bite", "crunch", "knock") -> "DARK"
+            normalized.containsAny("fairy", "gleam", "charm", "kiss") -> "FAIRY"
+            else -> "NORMAL"
+        }
+    }
+
+    private fun inferMoveCategory(move: String): String {
+        val normalized = move.lowercase()
+        return if (normalized.containsAny("protect", "recover", "roost", "dance", "plot", "toxic", "will-o", "status")) "STATUS" else "PHYSICAL"
+    }
+
+    private fun String.containsAny(vararg values: String) = values.any(::contains)
+
+    private fun Int.signum() = when {
+        this < 0 -> -1
+        this > 0 -> 1
+        else -> 0
     }
 
     private fun lightweightTargetCenter(

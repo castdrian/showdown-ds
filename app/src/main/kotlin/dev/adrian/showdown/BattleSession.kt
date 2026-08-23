@@ -608,6 +608,10 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun moveTypeFor(move: String): String? = moveTypeResolver?.invoke(move)
+
+    fun moveInfoFor(move: String): MoveInfo? = moveInfoResolver?.invoke(move)
+
     fun setMoveInfoResolver(resolver: (String) -> MoveInfo?) {
         moveInfoResolver = resolver
         val resolvedMoves = moves.mapIndexed { index, move ->
