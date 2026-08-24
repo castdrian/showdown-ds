@@ -251,6 +251,7 @@ internal class ShowdownStreamingGif private constructor(
         private const val DISPOSAL_NONE = 1
         private const val DISPOSAL_BACKGROUND = 2
         private const val DISPOSAL_PREVIOUS = 3
+        private const val MAX_STORED_FRAME_MULTIPLIER = 8
 
         fun fromFile(
             file: File,
@@ -294,6 +295,7 @@ internal class ShowdownStreamingGif private constructor(
             }
             var graphicControl = GraphicControl()
             val frames = mutableListOf<Frame>()
+            val maxStoredFrames = maxFrames.coerceAtLeast(2) * MAX_STORED_FRAME_MULTIPLIER
             while (true) {
                 when (val marker = cursor.readByte() ?: return null) {
                     0x21 -> {
@@ -320,7 +322,7 @@ internal class ShowdownStreamingGif private constructor(
                         }
                     }
                     0x2c -> {
-                        if (frames.size >= maxFrames) return null
+                        if (frames.size >= maxStoredFrames) return null
                         val left = cursor.readLittleEndian() ?: return null
                         val top = cursor.readLittleEndian() ?: return null
                         val frameWidth = cursor.readLittleEndian() ?: return null
@@ -355,6 +357,8 @@ internal class ShowdownStreamingGif private constructor(
                 }
             }
             if (frames.size < 2 || !hasDistinctFrames(frames)) return null
+            val sampledFrames = sampleFrames(frames, maxFrames)
+            if (sampledFrames.size < 2 || !hasDistinctFrames(sampledFrames)) return null
             val (outputWidth, outputHeight) = boundedAnimatedFrameSize(width, height, maxFrameDimension)
             val canvasPixels = IntArray(outputWidth * outputHeight)
             val outputBitmap = runCatching {
@@ -362,7 +366,7 @@ internal class ShowdownStreamingGif private constructor(
             }.getOrElse {
                 return null
             }
-            val memoryBytes = frames.sumOf { it.imageData.size }
+            val memoryBytes = sampledFrames.sumOf { it.imageData.size }
                 .toLong()
                 .plus(canvasPixels.size.toLong() * 4L)
                 .plus(outputBitmap.allocationByteCount.toLong())
@@ -374,7 +378,7 @@ internal class ShowdownStreamingGif private constructor(
                     height,
                     outputWidth,
                     outputHeight,
-                    frames,
+                    sampledFrames,
                     canvasPixels,
                     outputBitmap,
                     memoryBytes
@@ -393,6 +397,26 @@ internal class ShowdownStreamingGif private constructor(
                     frame.left != first.left ||
                     frame.top != first.top ||
                     frame.imageData.contentEquals(first.imageData).not()
+            }
+        }
+
+        private fun sampleFrames(frames: List<Frame>, maxFrames: Int): List<Frame> {
+            if (frames.size <= maxFrames) return frames
+            val sampleCount = maxFrames.coerceAtLeast(2)
+            val starts = sampledFrameIndexes(frames.size, sampleCount).toList()
+            return starts.mapIndexed { index, start ->
+                val end = starts.getOrNull(index + 1) ?: frames.size
+                val duration = frames.subList(start, end).sumOf { it.durationMillis }
+                frames[start].copy(durationMillis = duration.coerceAtLeast(1L))
+            }
+        }
+
+        internal fun sampledFrameIndexes(frameCount: Int, maxFrames: Int): IntArray {
+            if (frameCount <= 0) return intArrayOf()
+            if (frameCount <= maxFrames) return IntArray(frameCount) { it }
+            val sampleCount = maxFrames.coerceAtLeast(2)
+            return IntArray(sampleCount) { index ->
+                index * (frameCount - 1) / (sampleCount - 1)
             }
         }
 

@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class BattleAudio(
     private val context: Context,
     private val resourceCache: ShowdownSpriteCache,
-    session: BattleSession
+    session: BattleSession,
+    private val lowMemoryMode: Boolean = false
 ) {
     private data class PendingBattleCue(val cue: BattleAudioCue, var queuedAtMillis: Long)
     private data class ScheduledBattleCue(
@@ -69,6 +70,7 @@ class BattleAudio(
     private val battleSoundPool = createSoundPool(8)
     private var transientSoundPool: SoundPool? = null
     private val battleSoundIds = Collections.synchronizedMap(mutableMapOf<BattleAudioCue, Int>())
+    private val requestedBattleSoundCues = Collections.synchronizedSet(mutableSetOf<BattleAudioCue>())
     private val loadedBattleSoundIds = Collections.synchronizedSet(mutableSetOf<Int>())
     private val failedBattleCues = Collections.synchronizedSet(mutableSetOf<BattleAudioCue>())
     private val transientSoundIds = LinkedHashMap<String, Int>(16, 0.75f, true)
@@ -134,10 +136,12 @@ class BattleAudio(
                 }
             }
         }
-        audioCueHandler.post(::initializeTransientSoundPool)
-        audioCueHandler.post(::loadBattleSounds)
-        resourceCache.requestAudio("audio/notification.wav") { notificationFile = it }
-        requestMusic(selectedMusic)
+        if (!lowMemoryMode) audioCueHandler.post(::initializeTransientSoundPool)
+        if (!lowMemoryMode) audioCueHandler.post(::loadBattleSounds)
+        if (!lowMemoryMode) {
+            resourceCache.requestAudio("audio/notification.wav") { notificationFile = it }
+        }
+        if (!lowMemoryMode) requestMusic(selectedMusic)
     }
 
     fun updateOptions(session: BattleSession) {
@@ -147,7 +151,7 @@ class BattleAudio(
         val wasAnnouncerEnabled = announcerEnabled
         val effectsEnabled = session.soundEffectsEnabled
         soundEffectsEnabled.set(effectsEnabled)
-        announcerEnabled = session.announcerEnabled
+        announcerEnabled = session.announcerEnabled && !lowMemoryMode
         if (announcerEnabled && !wasAnnouncerEnabled) audioCueHandler.post(::preloadAnnouncerAssets)
         if (!announcerEnabled && wasAnnouncerEnabled) audioCueHandler.post(::clearAnnouncerCues)
         if (!effectsEnabled) {
@@ -157,7 +161,7 @@ class BattleAudio(
                 clearAnnouncerCues()
             }
         }
-        musicEnabled = session.musicEnabled
+        musicEnabled = session.musicEnabled && !lowMemoryMode
         audioCueHandler.post {
             if (musicEnabled) {
                 startMusicIfReady()
@@ -264,6 +268,7 @@ class BattleAudio(
             transientSoundIds.clear()
             transientSoundPathsById.clear()
             loadedTransientSoundIds.clear()
+            requestedBattleSoundCues.clear()
             transientSoundPool?.release()
             transientSoundPool = null
             audioCueThread.quitSafely()
@@ -310,6 +315,7 @@ class BattleAudio(
             if (pendingBattleCues.size < MAX_PENDING_BATTLE_CUES) {
                 pendingBattleCues.addLast(PendingBattleCue(cue, SystemClock.elapsedRealtime()))
             }
+            requestBattleSound(cue)
             flushPendingBattleCues()
         }
     }
@@ -522,14 +528,14 @@ class BattleAudio(
     }
 
     fun playCry(species: String) {
-        if (!soundEffectsEnabled.get()) return
+        if (lowMemoryMode || !soundEffectsEnabled.get()) return
         resourceCache.requestAudio("audio/cries/${resourceId(species)}.mp3") { file ->
             file?.let { audioCueHandler.post { playTransientSound(it.path, 0.60f) } }
         }
     }
 
     fun playAnnouncerCue(cue: BattleAnnouncerCue) {
-        if (!announcerEnabled || !soundEffectsEnabled.get()) return
+        if (lowMemoryMode || !announcerEnabled || !soundEffectsEnabled.get()) return
         audioCueHandler.post {
             if (!announcerEnabled || !soundEffectsEnabled.get()) return@post
             announcerFile(cue)?.let { enqueueAnnouncerCue(cue, it.path) }
@@ -613,6 +619,7 @@ class BattleAudio(
     }
 
     private fun requestMusic(music: Music) {
+        if (lowMemoryMode) return
         resourceCache.requestAudio(music.path) { file ->
             file ?: return@requestAudio
             audioCueHandler.post {
@@ -649,12 +656,27 @@ class BattleAudio(
 
     private fun loadBattleSounds() {
         if (released.get()) return
-        BattleAudioCue.values().forEach { cue ->
-            runCatching {
-                context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
-                    battleSoundIds[cue] = battleSoundPool.load(asset.fileDescriptor, asset.startOffset, asset.length, 1)
+        BattleAudioCue.values().forEach(::requestBattleSound)
+    }
+
+    private fun requestBattleSound(cue: BattleAudioCue) {
+        if (released.get() || cue in failedBattleCues) return
+        synchronized(battleSoundIds) {
+            if (cue in battleSoundIds || !requestedBattleSoundCues.add(cue)) return
+        }
+        runCatching {
+            context.assets.openFd("move-sfx/${cue.assetName}.mp3").use { asset ->
+                val soundId = battleSoundPool.load(asset.fileDescriptor, asset.startOffset, asset.length, 1)
+                if (soundId == 0) {
+                    requestedBattleSoundCues.remove(cue)
+                    failedBattleCues += cue
+                } else {
+                    battleSoundIds[cue] = soundId
                 }
-            }.onFailure { failedBattleCues += cue }
+            }
+        }.onFailure {
+            requestedBattleSoundCues.remove(cue)
+            failedBattleCues += cue
         }
     }
 

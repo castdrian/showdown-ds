@@ -409,7 +409,7 @@ class MainActivity : Activity() {
         spriteCache = ShowdownSpriteCache(this)
         moveDex = ShowdownMoveDex(spriteCache)
         bindMoveDexResolvers()
-        battleAudio = BattleAudio(this, spriteCache, session)
+        battleAudio = BattleAudio(this, spriteCache, session, lightweightBattlePlayback)
         battleAudio.setPlaybackSpeed(replaySpeed)
         battleAudio.updateOptions(session)
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager

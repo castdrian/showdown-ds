@@ -15,4 +15,14 @@ class ShowdownStreamingGifTest {
             ShowdownStreamingGif.interlacedRows(16)
         )
     }
+
+    @Test
+    fun samplesAnimatedSourcesAboveThePlaybackFrameBudget() {
+        assertArrayEquals(
+            intArrayOf(0, 2),
+            ShowdownStreamingGif.sampledFrameIndexes(3, 2)
+        )
+        val indexes = ShowdownStreamingGif.sampledFrameIndexes(118, 16)
+        assertArrayEquals(intArrayOf(0, 117), intArrayOf(indexes.first(), indexes.last()))
+    }
 }

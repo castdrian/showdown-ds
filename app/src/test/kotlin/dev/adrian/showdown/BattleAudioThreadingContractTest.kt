@@ -13,6 +13,11 @@ class BattleAudioThreadingContractTest {
 
         assertTrue(source.contains("private var transientSoundPool: SoundPool? = null"))
         assertTrue(source.contains("private fun initializeTransientSoundPool()"))
+        assertTrue(source.contains("if (!lowMemoryMode) audioCueHandler.post(::initializeTransientSoundPool)"))
+        assertTrue(source.contains("if (!lowMemoryMode) {\n            resourceCache.requestAudio(\"audio/notification.wav\")"))
+        assertTrue(source.contains("announcerEnabled = session.announcerEnabled && !lowMemoryMode"))
+        assertTrue(source.contains("if (lowMemoryMode || !soundEffectsEnabled.get()) return"))
+        assertTrue(source.contains("if (lowMemoryMode || !announcerEnabled || !soundEffectsEnabled.get()) return"))
         assertTrue(source.contains("transientSoundPool = createSoundPool(8)"))
         assertTrue(source.contains("audioCueHandler.post(::loadBattleSounds)"))
         assertTrue(source.contains("fun setPlaybackSpeed(speed: Float)"))

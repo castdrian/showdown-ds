@@ -34,6 +34,11 @@ internal fun isGenericSpritePlaceholder(path: String): Boolean {
     return fileName.equals("substitute", ignoreCase = true) || fileName.equals("decoy", ignoreCase = true)
 }
 
+internal fun isUsableSpriteSpecies(species: String): Boolean {
+    val normalized = species.trim().lowercase(Locale.ROOT)
+    return normalized.isNotEmpty() && normalized != "unknown" && normalized != "???" && normalized != "unrevealed"
+}
+
 internal fun isHighResolutionSpritePath(path: String): Boolean =
     path.contains("/sprites/animados", ignoreCase = true)
 
@@ -109,12 +114,7 @@ internal fun hasMultipleGifFrames(file: File): Boolean =
         BufferedInputStream(FileInputStream(file)).use { input -> hasMultipleGifFrames(input) }
     }.getOrDefault(false)
 
-internal fun hasAnimatedGifFrameBudget(file: File, maxFrames: Int): Boolean =
-    runCatching {
-        BufferedInputStream(FileInputStream(file)).use { input -> hasMultipleGifFrames(input, maxFrames) }
-    }.getOrDefault(false)
-
-private fun hasMultipleGifFrames(input: InputStream, maxFrames: Int? = null): Boolean {
+private fun hasMultipleGifFrames(input: InputStream): Boolean {
     val header = ByteArray(6)
     if (!readGifBytes(input, header)) return false
     val signature = header.toString(Charsets.US_ASCII)
@@ -156,7 +156,6 @@ private fun hasMultipleGifFrames(input: InputStream, maxFrames: Int? = null): Bo
                     hasDistinctFrame = true
                 }
                 frameCount += 1
-                if (maxFrames != null && frameCount > maxFrames) return false
             }
             0x3b -> return frameCount > 1 && hasDistinctFrame
             -1 -> return false
@@ -381,6 +380,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        if (!isUsableSpriteSpecies(request.species)) {
+            mainHandler.post { receiver(null) }
+            return
+        }
         resolvedPokemonCache.get(request)?.get()?.let { asset ->
             mainHandler.post { receiver(asset) }
             return
@@ -604,15 +607,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (regularAsset != null) {
                                 receiver(regularAsset)
                             } else {
-                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                    if (communityAsset != null) {
-                                        receiver(communityAsset)
+                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
+                                    if (modernAsset != null) {
+                                        receiver(modernAsset)
                                     } else {
-                                        requestModernLocalSpriteResolution(request, plan) { asset ->
-                                            if (asset != null || !request.backFacing) {
-                                                receiver(asset)
+                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
+                                            if (communityAsset != null) {
+                                                receiver(communityAsset)
                                             } else {
-                                                requestStaticShowdownBackFallback(request, receiver)
+                                                requestStaticSpriteFallback(request, receiver)
                                             }
                                         }
                                     }
@@ -642,15 +645,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (regularAsset != null) {
                                 receiver(regularAsset)
                             } else {
-                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                    if (communityAsset != null) {
-                                        receiver(communityAsset)
+                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
+                                    if (modernAsset != null) {
+                                        receiver(modernAsset)
                                     } else {
-                                        requestModernLocalSpriteResolution(request, plan) { asset ->
-                                            if (asset != null || !request.backFacing) {
-                                                receiver(asset)
+                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
+                                            if (communityAsset != null) {
+                                                receiver(communityAsset)
                                             } else {
-                                                requestStaticShowdownBackFallback(request, receiver)
+                                                requestStaticSpriteFallback(request, receiver)
                                             }
                                         }
                                     }
@@ -673,13 +676,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) },
             { callback -> requestRegularRemoteSpriteResolution(plan, callback) },
             { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback) },
-            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates, callback) },
-            { callback -> requestModernLocalSpriteResolution(request, plan, callback) }
+            { callback -> requestModernAnimatedSpriteResolution(request, plan, callback) },
+            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback) }
         )
 
         fun requestTier(index: Int) {
             if (index >= animatedTiers.size) {
-                requestStaticShowdownBackFallback(request, receiver)
+                requestStaticSpriteFallback(request, receiver)
                 return
             }
             animatedTiers[index] { asset ->
@@ -777,11 +780,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                     if (regularScrapedAsset != null) {
                                         receiver(regularScrapedAsset)
                                     } else {
-                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates) { communityAsset ->
-                                            if (communityAsset != null) {
-                                                receiver(communityAsset)
+                                        requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
+                                            if (modernAsset != null) {
+                                                receiver(modernAsset)
                                             } else {
-                                                requestModernLocalSpriteResolution(request, plan, receiver)
+                                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
+                                                    if (communityAsset != null) {
+                                                        receiver(communityAsset)
+                                                    } else {
+                                                        requestStaticSpriteFallback(request, receiver)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -857,7 +866,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestIndex(0)
     }
 
-    private fun requestModernLocalSpriteResolution(
+    private fun requestModernAnimatedSpriteResolution(
         request: BattleSpriteRequest,
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
@@ -879,6 +888,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     }
                 }
             }
+        }
+    }
+
+    private fun requestStaticSpriteFallback(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        if (allowsStaticShowdownFallback(request)) {
+            requestPokeApiStaticSprite(request.species, request.shiny) { staticAsset ->
+                if (staticAsset != null) receiver(staticAsset) else requestStaticShowdownFallback(request, receiver)
+            }
+        } else {
+            requestStaticShowdownBackFallback(request, receiver)
         }
     }
 
@@ -1058,7 +1080,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 maxPixels = maxAnimatedSourcePixels
             ) && fileBytes in 1L..maxAnimatedFileBytes
             if (fitsMovieBudget) {
-                if (!hasAnimatedGifFrameBudget(file, maxAnimatedFrameCount)) return null
                 return decodeStreamedGif(file) ?: if (memoryConstrained) null else decodeMovie(file)
             }
             if (!isHighResolutionSpritePath(path)) return null
@@ -1210,6 +1231,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private companion object {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
         const val CONSTRAINED_SPRITE_MEMORY_CACHE_BYTES = 6 * 1024 * 1024
+        const val MAX_COMMUNITY_SPRITE_CANDIDATES = 8
         const val MAX_FILE_BYTES = 16 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }
