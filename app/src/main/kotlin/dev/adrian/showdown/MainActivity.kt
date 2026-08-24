@@ -155,6 +155,8 @@ class MainActivity : Activity() {
     private var roomListDialog: ShowdownDialog? = null
     private var roomListPending = false
     private var pendingRoomListOpen = false
+    private var pendingTournamentDirectoryOpen = false
+    private var pendingLobbyChatOpen = false
     private var roomListSearchQuery = ""
     private var tournamentDirectorySearchQuery = ""
     private val tournamentDirectoryState = ShowdownTournamentDirectoryState()
@@ -452,6 +454,8 @@ class MainActivity : Activity() {
         outState.putString("completed_battle_room", completedBattleRoomId)
         outState.putString("pending_decision_command", pendingDecisionCommand)
         outState.putBoolean("pending_room_list_open", pendingRoomListOpen)
+        outState.putBoolean("pending_tournament_directory_open", pendingTournamentDirectoryOpen)
+        outState.putBoolean("pending_lobby_chat_open", pendingLobbyChatOpen)
         outState.putString("pending_team_upload_local_id", pendingTeamUpload?.localId)
         outState.putString("pending_team_upload_packed", pendingTeamUpload?.packed)
         outState.putString("pending_team_privacy_local_id", pendingTeamPrivacy?.localId)
@@ -475,6 +479,8 @@ class MainActivity : Activity() {
         roomListDialog = null
         roomListPending = false
         pendingRoomListOpen = false
+        pendingTournamentDirectoryOpen = false
+        pendingLobbyChatOpen = false
         tournamentDirectorySearchQuery = ""
         tournamentDirectoryDialog?.dismiss()
         tournamentDirectoryDialog = null
@@ -1422,13 +1428,18 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
-    private fun showTournamentDirectory() {
-        if (!authenticated) {
-            session.setConnectionStatus("Connect to Showdown to browse tournaments.")
-            return
-        }
-        if (showdownConnection == null) {
-            session.setConnectionStatus("Connect to Showdown before browsing tournaments.")
+    private fun showTournamentDirectory(requestPage: Boolean = true) {
+        if (!authenticated || showdownConnection == null) {
+            if (activeBattleRoomId != null) {
+                session.setConnectionStatus("Connect to Showdown before browsing tournaments.")
+                return
+            }
+            startLobbyConnection(
+                listOf(ShowdownTournamentDirectoryState.pageCommand()),
+                "Loading tournaments…"
+            )
+            pendingTournamentDirectoryOpen = true
+            persistLobbyState(flushToDisk = true)
             return
         }
         tournamentDirectoryState.clear()
@@ -1485,7 +1496,7 @@ class MainActivity : Activity() {
         tournamentDirectoryContentView = content
         tournamentDirectoryLinks = links
         dialog.show()
-        requestTournamentDirectory()
+        if (requestPage) requestTournamentDirectory()
     }
 
     private fun requestTournamentDirectory() {
@@ -2003,14 +2014,20 @@ class MainActivity : Activity() {
         chatRoomScroll?.post { chatRoomScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
-    private fun showLobbyChatDialog() {
+    private fun showLobbyChatDialog(joinLobby: Boolean = true) {
         val existing = lobbyChatDialog
         if (existing != null) {
             updateLobbyChatDialog()
             return
         }
         if (showdownConnection == null) {
-            session.setConnectionStatus("Connect to Showdown before opening lobby chat.")
+            if (activeBattleRoomId != null) {
+                session.setConnectionStatus("Connect to Showdown before opening lobby chat.")
+                return
+            }
+            startLobbyConnection(listOf("/join lobby"), "Loading lobby chat…")
+            pendingLobbyChatOpen = true
+            persistLobbyState(flushToDisk = true)
             return
         }
         val density = resources.displayMetrics.density
@@ -2071,7 +2088,7 @@ class MainActivity : Activity() {
         lobbyChatInput = input
         lobbyChatScroll = scroll
         dialog.show()
-        showdownConnection?.sendGlobal("/join lobby")
+        if (joinLobby) showdownConnection?.sendGlobal("/join lobby")
         updateLobbyChatDialog()
     }
 
@@ -2388,6 +2405,8 @@ class MainActivity : Activity() {
         roomListDialog = null
         roomListPending = false
         pendingRoomListOpen = false
+        pendingTournamentDirectoryOpen = false
+        pendingLobbyChatOpen = false
         tournamentDirectoryDialog?.dismiss()
         tournamentDirectoryDialog = null
         tournamentDirectoryContentView = null
@@ -2451,6 +2470,16 @@ class MainActivity : Activity() {
             savedInstanceState.getBoolean("pending_room_list_open")
         } else {
             preferences.getBoolean("pending_room_list_open", false)
+        }
+        pendingTournamentDirectoryOpen = if (savedInstanceState?.containsKey("pending_tournament_directory_open") == true) {
+            savedInstanceState.getBoolean("pending_tournament_directory_open")
+        } else {
+            preferences.getBoolean("pending_tournament_directory_open", false)
+        }
+        pendingLobbyChatOpen = if (savedInstanceState?.containsKey("pending_lobby_chat_open") == true) {
+            savedInstanceState.getBoolean("pending_lobby_chat_open")
+        } else {
+            preferences.getBoolean("pending_lobby_chat_open", false)
         }
         activeSearchFormat = (savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null))
             ?.let { ShowdownFormatCompatibility.canonicalId(it) }
@@ -2528,6 +2557,8 @@ class MainActivity : Activity() {
             .putString("battle_player_slot", activeBattleRoomId?.let { session.battlePlayerSlot() })
             .putString("pending_decision_command", pendingDecisionCommand)
             .putBoolean("pending_room_list_open", pendingRoomListOpen)
+            .putBoolean("pending_tournament_directory_open", pendingTournamentDirectoryOpen)
+            .putBoolean("pending_lobby_chat_open", pendingLobbyChatOpen)
         if (flushToDisk) {
             editor.commit()
         } else {
@@ -2560,6 +2591,8 @@ class MainActivity : Activity() {
         pendingLobbyStatus = null
         reconnectLobbyCommands = null
         pendingRoomListOpen = false
+        pendingTournamentDirectoryOpen = false
+        pendingLobbyChatOpen = false
         clearPersistedLobbyState()
         clearBattlePlayback()
         session.prepareForLobby()
@@ -3055,9 +3088,13 @@ class MainActivity : Activity() {
             }
         }
         val opensRoomList = pendingRoomListOpen && rawCommands.any { it == "/cmd rooms" }
+        val opensTournamentDirectory = pendingTournamentDirectoryOpen && rawCommands.any { it == ShowdownTournamentDirectoryState.pageCommand() }
+        val opensLobbyChat = pendingLobbyChatOpen && rawCommands.any { it == "/join lobby" }
         val rejoiningBattle = activeBattleRoomId != null && commands == listOf(ShowdownLobbyState.joinBattleCommand(activeBattleRoomId!!))
         val searching = commands.any { it.startsWith("/search ") }
         if (opensRoomList) prepareRoomListDialog()
+        if (opensTournamentDirectory) showTournamentDirectory(requestPage = false)
+        if (opensLobbyChat) showLobbyChatDialog(joinLobby = false)
         val sent = commands.all(connection::sendGlobal)
         if (!sent) {
             if (opensRoomList) {
@@ -3065,12 +3102,16 @@ class MainActivity : Activity() {
                 roomListDialog?.dismiss()
                 roomListDialog = null
             }
+            if (opensTournamentDirectory) tournamentDirectoryDialog?.dismiss()
+            if (opensLobbyChat) lobbyChatDialog?.dismiss()
             session.setConnectionStatus("Could not send the Showdown lobby command.")
             return
         }
         pendingLobbyCommands = null
-        if (opensRoomList) {
+        if (opensRoomList || opensTournamentDirectory || opensLobbyChat) {
             pendingRoomListOpen = false
+            pendingTournamentDirectoryOpen = false
+            pendingLobbyChatOpen = false
             reconnectLobbyCommands = null
         }
         pendingBattleJoinRoomId = commands.firstOrNull { it.startsWith("/join battle-") }?.removePrefix("/join ")

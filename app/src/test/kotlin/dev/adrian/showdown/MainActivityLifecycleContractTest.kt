@@ -447,6 +447,23 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun publicLobbySurfacesQueueTheirJoinCommandsDuringReconnect() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val tournament = source.substringAfter("private fun showTournamentDirectory(requestPage: Boolean = true)").substringBefore("private fun requestTournamentDirectory()")
+        val lobbyChat = source.substringAfter("private fun showLobbyChatDialog(joinLobby: Boolean = true)").substringBefore("private fun updateLobbyChatDialog()")
+        val pendingCommands = source.substringAfter("private fun sendPendingLobbyCommands").substringBefore("private fun showChallengeComposer")
+
+        assertTrue(tournament.contains("pendingTournamentDirectoryOpen = true"))
+        assertTrue(source.contains("private fun showTournamentDirectory(requestPage: Boolean = true)"))
+        assertTrue(lobbyChat.contains("pendingLobbyChatOpen = true"))
+        assertTrue(source.contains("private fun showLobbyChatDialog(joinLobby: Boolean = true)"))
+        assertTrue(pendingCommands.contains("opensTournamentDirectory"))
+        assertTrue(pendingCommands.contains("opensLobbyChat"))
+        assertTrue(pendingCommands.contains("showTournamentDirectory(requestPage = false)"))
+        assertTrue(pendingCommands.contains("showLobbyChatDialog(joinLobby = false)"))
+    }
+
+    @Test
     fun tournamentDirectoryUsesAFilterableCustomSurface() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val directory = source.substringAfter("private fun showTournamentDirectory()").substringBefore("private fun requestTournamentDirectory()")
