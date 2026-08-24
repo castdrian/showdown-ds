@@ -61,6 +61,15 @@ private const val MAX_STREAMED_HD_SOURCE_DIMENSION = 1024
 private const val MAX_STREAMED_HD_SOURCE_PIXELS = 1024L * 1024L
 private const val MAX_STREAMED_HD_FILE_BYTES = 16L * 1024L * 1024L
 private const val MAX_STREAMED_HD_FRAME_COUNT = 96
+private const val CONSTRAINED_ANIMATED_FRAME_DIMENSION = 384
+private const val CONSTRAINED_ANIMATED_SOURCE_DIMENSION = 448
+private const val CONSTRAINED_ANIMATED_SOURCE_PIXELS = 448L * 448L
+private const val CONSTRAINED_ANIMATED_FILE_BYTES = 4L * 1024L * 1024L
+private const val CONSTRAINED_ANIMATED_FRAME_COUNT = 16
+private const val CONSTRAINED_STREAMED_HD_SOURCE_DIMENSION = 768
+private const val CONSTRAINED_STREAMED_HD_SOURCE_PIXELS = 768L * 768L
+private const val CONSTRAINED_STREAMED_HD_FILE_BYTES = 8L * 1024L * 1024L
+private const val CONSTRAINED_STREAMED_HD_FRAME_COUNT = 48
 private const val MOVIE_MEMORY_MULTIPLIER = 4L
 
 internal fun boundedAnimatedFrameSize(sourceWidth: Int, sourceHeight: Int, maxDimension: Int): Pair<Int, Int> {
@@ -338,7 +347,27 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
         ?.let { manager -> ActivityManager.MemoryInfo().also(manager::getMemoryInfo).totalMem < 2L * 1024L * 1024L * 1024L }
         ?: false
-    private val memoryCache = object : LruCache<String, SpriteAsset>(SPRITE_MEMORY_CACHE_BYTES) {
+    private val spriteMemoryCacheBytes =
+        if (memoryConstrained) CONSTRAINED_SPRITE_MEMORY_CACHE_BYTES else SPRITE_MEMORY_CACHE_BYTES
+    private val maxAnimatedFrameDimension =
+        if (memoryConstrained) CONSTRAINED_ANIMATED_FRAME_DIMENSION else MAX_ANIMATED_FRAME_DIMENSION
+    private val maxAnimatedSourceDimension =
+        if (memoryConstrained) CONSTRAINED_ANIMATED_SOURCE_DIMENSION else MAX_ANIMATED_SOURCE_DIMENSION
+    private val maxAnimatedSourcePixels =
+        if (memoryConstrained) CONSTRAINED_ANIMATED_SOURCE_PIXELS else MAX_ANIMATED_SOURCE_PIXELS
+    private val maxAnimatedFileBytes =
+        if (memoryConstrained) CONSTRAINED_ANIMATED_FILE_BYTES else MAX_ANIMATED_FILE_BYTES
+    private val maxAnimatedFrameCount =
+        if (memoryConstrained) CONSTRAINED_ANIMATED_FRAME_COUNT else MAX_ANIMATED_FRAME_COUNT
+    private val maxStreamedHdSourceDimension =
+        if (memoryConstrained) CONSTRAINED_STREAMED_HD_SOURCE_DIMENSION else MAX_STREAMED_HD_SOURCE_DIMENSION
+    private val maxStreamedHdSourcePixels =
+        if (memoryConstrained) CONSTRAINED_STREAMED_HD_SOURCE_PIXELS else MAX_STREAMED_HD_SOURCE_PIXELS
+    private val maxStreamedHdFileBytes =
+        if (memoryConstrained) CONSTRAINED_STREAMED_HD_FILE_BYTES else MAX_STREAMED_HD_FILE_BYTES
+    private val maxStreamedHdFrameCount =
+        if (memoryConstrained) CONSTRAINED_STREAMED_HD_FRAME_COUNT else MAX_STREAMED_HD_FRAME_COUNT
+    private val memoryCache = object : LruCache<String, SpriteAsset>(spriteMemoryCacheBytes) {
         override fun sizeOf(key: String, value: SpriteAsset) = value.estimatedMemoryBytes()
 
         override fun entryRemoved(evicted: Boolean, key: String, oldValue: SpriteAsset, newValue: SpriteAsset?) {
@@ -1025,12 +1054,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             val fitsMovieBudget = animatedGifFitsDecodeBudget(
                 sourceWidth = canvasSize.first,
                 sourceHeight = canvasSize.second,
-                maxDimension = MAX_ANIMATED_SOURCE_DIMENSION,
-                maxPixels = MAX_ANIMATED_SOURCE_PIXELS
-            ) && fileBytes in 1L..MAX_ANIMATED_FILE_BYTES
+                maxDimension = maxAnimatedSourceDimension,
+                maxPixels = maxAnimatedSourcePixels
+            ) && fileBytes in 1L..maxAnimatedFileBytes
             if (fitsMovieBudget) {
-                if (!hasAnimatedGifFrameBudget(file, MAX_ANIMATED_FRAME_COUNT)) return null
-                return decodeStreamedGif(file) ?: decodeMovie(file)
+                if (!hasAnimatedGifFrameBudget(file, maxAnimatedFrameCount)) return null
+                return decodeStreamedGif(file) ?: if (memoryConstrained) null else decodeMovie(file)
             }
             if (!isHighResolutionSpritePath(path)) return null
             decodeStreamedHdGif(file, canvasSize)
@@ -1049,11 +1078,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private fun decodeStreamedGif(file: File): SpriteAsset? {
         val gif = ShowdownStreamingGif.fromFile(
             file = file,
-            maxFrameDimension = MAX_ANIMATED_FRAME_DIMENSION,
-            maxSourceDimension = MAX_ANIMATED_SOURCE_DIMENSION,
-            maxSourcePixels = MAX_ANIMATED_SOURCE_PIXELS,
-            maxFileBytes = MAX_ANIMATED_FILE_BYTES,
-            maxFrames = MAX_ANIMATED_FRAME_COUNT
+            maxFrameDimension = maxAnimatedFrameDimension,
+            maxSourceDimension = maxAnimatedSourceDimension,
+            maxSourcePixels = maxAnimatedSourcePixels,
+            maxFileBytes = maxAnimatedFileBytes,
+            maxFrames = maxAnimatedFrameCount
         )
         return gif?.let(SpriteAsset::fromStreamingGif)
     }
@@ -1062,17 +1091,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         if (!animatedGifFitsDecodeBudget(
                 sourceWidth = canvasSize.first,
                 sourceHeight = canvasSize.second,
-                maxDimension = MAX_STREAMED_HD_SOURCE_DIMENSION,
-                maxPixels = MAX_STREAMED_HD_SOURCE_PIXELS
-            ) || file.length() !in 1L..MAX_STREAMED_HD_FILE_BYTES
+                maxDimension = maxStreamedHdSourceDimension,
+                maxPixels = maxStreamedHdSourcePixels
+            ) || file.length() !in 1L..maxStreamedHdFileBytes
         ) return null
         val gif = ShowdownStreamingGif.fromFile(
             file = file,
-            maxFrameDimension = MAX_ANIMATED_FRAME_DIMENSION,
-            maxSourceDimension = MAX_STREAMED_HD_SOURCE_DIMENSION,
-            maxSourcePixels = MAX_STREAMED_HD_SOURCE_PIXELS,
-            maxFileBytes = MAX_STREAMED_HD_FILE_BYTES,
-            maxFrames = MAX_STREAMED_HD_FRAME_COUNT
+            maxFrameDimension = maxAnimatedFrameDimension,
+            maxSourceDimension = maxStreamedHdSourceDimension,
+            maxSourcePixels = maxStreamedHdSourcePixels,
+            maxFileBytes = maxStreamedHdFileBytes,
+            maxFrames = maxStreamedHdFrameCount
         )
         return gif?.let(SpriteAsset::fromStreamingGif)
     }
@@ -1180,6 +1209,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private companion object {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
+        const val CONSTRAINED_SPRITE_MEMORY_CACHE_BYTES = 6 * 1024 * 1024
         const val MAX_FILE_BYTES = 16 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }
