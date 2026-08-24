@@ -1180,11 +1180,6 @@ class CommandDeckView(
         paint.style = Paint.Style.FILL
         paint.color = Color.argb(156, 3, 14, 24)
         canvas.drawRoundRect(summary, 16f * scale, 16f * scale, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.25f * scale
-        paint.color = Color.argb(118, 107, 181, 196)
-        canvas.drawRoundRect(summary, 16f * scale, 16f * scale, paint)
-        paint.style = Paint.Style.FILL
         paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = readableTextSize(18f, scale, 16f, 16f).coerceAtMost(summary.height() - 8f * scale)

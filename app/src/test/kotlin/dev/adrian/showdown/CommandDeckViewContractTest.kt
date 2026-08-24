@@ -37,10 +37,13 @@ class CommandDeckViewContractTest {
             .substringBefore("private fun drawTestFightButton")
         val compactMetrics = source.substringAfter("private fun drawCompactMetricLine")
             .substringBefore("private fun drawEffectSummary")
+        val effectSummary = source.substringAfter("private fun drawEffectSummary")
+            .substringBefore("private fun formatBoosts")
 
         assertFalse(detailCell.contains("Paint.Style.STROKE"))
         assertFalse(battleConsole.contains("Paint.Style.STROKE"))
         assertFalse(compactMetrics.contains("Paint.Style.STROKE"))
+        assertFalse(effectSummary.contains("Paint.Style.STROKE"))
         assertTrue(detailCell.contains("paint.shader = null"))
         assertTrue(detailCell.contains("Color.rgb(24, 31, 38)"))
         assertTrue(detailCell.contains("Color.argb(72, 172, 180, 186)"))
