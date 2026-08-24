@@ -200,6 +200,40 @@ class BattleSessionTest {
     }
 
     @Test
+    fun lightweightProtocolFeedIncludesOfficialStyleDamageAndHealingMessages() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p2a: Eevee|Eevee, L50|100/100",
+                "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee",
+                "|-damage|p2a: Eevee|50/100",
+                "|-heal|p2a: Eevee|75/100"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("The opposing Eevee lost 50% of its health!"))
+        assertTrue(session.battleLog().contains("The opposing Eevee had its HP restored."))
+    }
+
+    @Test
+    fun healthMessagesRespectSilentPacketsAndSourceSpecificWording() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Eevee|Eevee, L50|100/100",
+                "|-damage|p2a: Eevee|90/100|[from] brn",
+                "|-heal|p2a: Eevee|100/100|[from] item: Leftovers",
+                "|-damage|p2a: Eevee|80/100|[silent]"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("(The opposing Eevee was hurt by its burn!)"))
+        assertTrue(session.battleLog().contains("The opposing Eevee restored a little HP using its Leftovers!"))
+        assertFalse(session.battleLog().contains("The opposing Eevee lost 20% of its health!"))
+    }
+
+    @Test
     fun upperBattleFeedRemovesAdjacentDuplicateMessages() {
         val session = BattleSession()
 

@@ -2,6 +2,7 @@ package dev.adrian.showdown
 
 import org.json.JSONObject
 import kotlin.random.Random
+import kotlin.math.roundToInt
 
 private fun inferredRandomTeamFormat(id: String): Boolean {
     val normalized = id.trim().lowercase()
@@ -301,6 +302,18 @@ class BattleSession {
         Z_POWER,
         DYNAMAX
     }
+
+    private enum class HealthChangeKind {
+        DAMAGE,
+        HEAL,
+        SET_HP
+    }
+
+    private data class HealthTransition(
+        val actor: String,
+        val previousFraction: Float?,
+        val nextFraction: Float?
+    )
 
     private val listeners = mutableListOf<Listener>()
     private val feedbackListeners = mutableListOf<FeedbackListener>()
@@ -1588,18 +1601,23 @@ class BattleSession {
                     }
                     "-damage" -> {
                         val target = protocolTarget(fields)
+                        val transition = healthTransition(fields)
                         if (target != null && pendingHit != null && pendingHit?.target != target) publishPendingHit()
                         applyHealth(fields)
+                        appendHealthChangeLog(fields, listOfNotNull(transition), HealthChangeKind.DAMAGE)
                         target?.takeUnless { hasProtocolSource(fields) }?.let {
                             if (pendingHit == null) pendingHit = PendingHit(it, it)
                         }
                     }
                     "-heal" -> {
+                        val transition = healthTransition(fields)
                         applyHealth(fields)
-                        if (!isSilent(fields)) appendLog("${battleActor(fields.getOrNull(2))} recovered health.")
+                        appendHealthChangeLog(fields, listOfNotNull(transition), HealthChangeKind.HEAL)
                     }
                     "-sethp" -> {
-                        healthUpdateTargetIndices(fields).forEach { targetIndex ->
+                        val targetIndices = healthUpdateTargetIndices(fields)
+                        val transitions = targetIndices.mapNotNull { targetIndex -> healthTransition(fields, targetIndex) }
+                        targetIndices.forEach { targetIndex ->
                             val target = protocolTarget(fields, targetIndex)
                             val previousHealth = fields.getOrNull(targetIndex)?.let(::healthForActor)?.let(::healthFractionOrNull)
                             val nextHealth = fields.getOrNull(targetIndex + 1)?.let(::healthFractionOrNull)
@@ -1609,6 +1627,7 @@ class BattleSession {
                                 if (pendingHit == null) pendingHit = PendingHit(target, target)
                             }
                         }
+                        appendHealthChangeLog(fields, transitions, HealthChangeKind.SET_HP)
                     }
                     "-status" -> applyStatus(fields)
                     "-curestatus" -> applyStatus(fields, cured = true)
@@ -2395,6 +2414,90 @@ class BattleSession {
                 }
             }
         }
+    }
+
+    private fun healthTransition(fields: List<String>, targetIndex: Int = 2): HealthTransition? {
+        val actor = fields.getOrNull(targetIndex)?.takeIf(::isProtocolActor) ?: return null
+        val nextFraction = fields.getOrNull(targetIndex + 1)?.let(::healthFractionOrNull) ?: return null
+        return HealthTransition(actor, healthForActor(actor)?.let(::healthFractionOrNull), nextFraction)
+    }
+
+    private fun appendHealthChangeLog(
+        fields: List<String>,
+        transitions: List<HealthTransition>,
+        kind: HealthChangeKind
+    ) {
+        if (isSilent(fields)) return
+        transitions.mapNotNull { healthChangeMessage(fields, it, kind) }.forEach(::appendLog)
+    }
+
+    private fun healthChangeMessage(
+        fields: List<String>,
+        transition: HealthTransition,
+        kind: HealthChangeKind
+    ): String? {
+        val actualKind = when (kind) {
+            HealthChangeKind.SET_HP -> when {
+                transition.previousFraction == null || transition.nextFraction == null -> return null
+                transition.nextFraction < transition.previousFraction -> HealthChangeKind.DAMAGE
+                transition.nextFraction > transition.previousFraction -> HealthChangeKind.HEAL
+                else -> return null
+            }
+            else -> kind
+        }
+        val actor = healthActor(transition.actor)
+        val source = protocolSource(fields)
+        return when (actualKind) {
+            HealthChangeKind.DAMAGE -> damageMessage(actor, transition, source, fields)
+            HealthChangeKind.HEAL -> healMessage(actor, source)
+            HealthChangeKind.SET_HP -> null
+        }
+    }
+
+    private fun damageMessage(
+        actor: String,
+        transition: HealthTransition,
+        source: String?,
+        fields: List<String>
+    ): String {
+        val effect = battleEffectName(source).trim()
+        val effectId = effect.lowercase().filter(Char::isLetterOrDigit)
+        val percent = healthLossPercent(transition)
+        return when {
+            effectId == "brn" -> "($actor was hurt by its burn!)"
+            effectId == "psn" || effectId == "tox" -> "($actor was hurt by poison!)"
+            effectId == "sandstorm" -> "($actor is buffeted by the sandstorm!)"
+            effectId == "hail" || effectId == "snowscape" -> "($actor is buffeted by the hail!)"
+            effectId == "confusion" -> "It hurt itself in its confusion!"
+            source?.startsWith("item:", true) == true && effectId == "lifeorb" -> "$actor lost some of its HP!"
+            source?.startsWith("item:", true) == true && effect.isNotBlank() -> "($actor was hurt by its $effect!)"
+            fields.any { it.equals("[partiallytrapped]", true) } && effect.isNotBlank() -> "$actor is hurt by $effect!"
+            percent != null -> "$actor lost $percent% of its health!"
+            else -> "($actor was hurt!)"
+        }
+    }
+
+    private fun healMessage(actor: String, source: String?): String {
+        val effect = battleEffectName(source).trim()
+        val effectId = effect.lowercase().filter(Char::isLetterOrDigit)
+        return when {
+            effectId == "zpower" || effectId == "zmove" -> "$actor restored its HP using its Z-Power!"
+            source?.startsWith("item:", true) == true && effectId in setOf("leftovers", "blacksludge", "shellbell") -> "$actor restored a little HP using its $effect!"
+            source?.startsWith("ability:", true) == true || effect.isBlank() -> "$actor had its HP restored."
+            else -> "$actor restored HP using its $effect!"
+        }
+    }
+
+    private fun healthActor(actor: String): String {
+        val name = battleActor(actor)
+        return if (isPlayerSide(actor)) name else "The opposing $name"
+    }
+
+    private fun healthLossPercent(transition: HealthTransition): Int? {
+        val previous = transition.previousFraction ?: return null
+        val next = transition.nextFraction ?: return null
+        if (next >= previous) return null
+        return (((previous - next) * 100f).roundToInt()).coerceAtLeast(1)
     }
 
     private fun applyFaint(fields: List<String>) {

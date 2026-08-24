@@ -21,6 +21,7 @@ object ShowdownChangelog {
                 "The upper battle feed now hides silent protocol events while keeping their state changes applied.",
                 "Constrained sprite loading now checks bounded indexed HD front and back groups before regular animated fallbacks.",
                 "Animated community sprite fallbacks now run before pixelated Showdown artwork when official HD sources are unavailable.",
+                "Lightweight battles now keep official-style damage and healing messages in the upper battle feed.",
                 "Low-memory battle playback now keeps effectiveness cues attached to split damage packets after the generic impact sound.",
                 "Constrained devices now keep direct HD back-sprites first without crawling large sprite indexes.",
                 "Battle startup now loads move data without parsing the full team-building datasets.",

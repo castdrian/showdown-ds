@@ -6,6 +6,7 @@ object BattleFeedMessageIdentity {
     private fun normalizedText(value: String): String = value
         .lowercase()
         .replace("restored hp", "recovered health")
+        .replace("had its hp restored", "recovered health")
         .replace("restored health", "recovered health")
         .replace("recovered hp", "recovered health")
         .let(::collapseWhitespace)

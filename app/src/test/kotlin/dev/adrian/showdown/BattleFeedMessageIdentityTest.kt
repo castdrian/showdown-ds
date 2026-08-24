@@ -8,6 +8,7 @@ class BattleFeedMessageIdentityTest {
     @Test
     fun ignoresShowdownPunctuationAndWhitespaceDifferences() {
         assertTrue(BattleFeedMessageIdentity.matches(" Pikachu restored HP!  ", "Pikachu recovered health."))
+        assertTrue(BattleFeedMessageIdentity.matches("Pikachu had its HP restored.", "Pikachu restored health!"))
     }
 
     @Test
