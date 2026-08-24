@@ -1,0 +1,32 @@
+diff --git a/host/vulkan/post_worker_vk.cpp b/host/vulkan/post_worker_vk.cpp
+--- a/host/vulkan/post_worker_vk.cpp
++++ b/host/vulkan/post_worker_vk.cpp
+@@ -162,4 +162,12 @@
+                     continue;
+                 }
+ 
++                multiDisplay.get_display_pose(currentDisplayId, &currentDisplayOffsetX,
++                                              &currentDisplayOffsetY, &currentDisplayW,
++                                              &currentDisplayH);
++                if (currentDisplayId != 0 && currentDisplayW == 1240 &&
++                    currentDisplayH == 1080) {
++                    currentDisplayW = 1085;
++                    currentDisplayH = 945;
++                }
+                 float rotation = static_cast<float>(mFb->getZrot());
+diff --git a/host/post_worker_gl.cpp b/host/post_worker_gl.cpp
+--- a/host/post_worker_gl.cpp
++++ b/host/post_worker_gl.cpp
+@@ -132,7 +132,12 @@ std::shared_future<void> PostWorkerGl::postImpl(
+                     continue;
+                 }
+ 
++                if (currentDisplayId != 0 && currentDisplayW == 1240 &&
++                    currentDisplayH == 1080) {
++                    currentDisplayW = 1085;
++                    currentDisplayH = 945;
++                }
+ 
+                 const auto transform = getTransformFromRotation(mFb->getZrot());
+                 postLayerOptions.transform = transform;
+                 if ( transform == HWC_TRANSFORM_ROT_90 || transform == HWC_TRANSFORM_ROT_270) {

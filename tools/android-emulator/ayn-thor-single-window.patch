@@ -141,37 +141,3 @@ index 8cacba4027a..1fe07d814020 100644
 +        return;
 +    }
      performRotationLocked(rotation);
-
-diff --git a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
---- a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
-+++ b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
-@@ -162,3 +162,11 @@
-                     continue;
-                 }
-
-+                multiDisplay.get_display_pose(currentDisplayId, &currentDisplayOffsetX,
-+                                              &currentDisplayOffsetY, &currentDisplayW,
-+                                              &currentDisplayH);
-+                if (currentDisplayId != 0 && currentDisplayW == 1240 &&
-+                    currentDisplayH == 1080) {
-+                    currentDisplayW = 1085;
-+                    currentDisplayH = 945;
-+                }
-                 float rotation = static_cast<float>(mFb->getZrot());
-diff --git a/hardware/google/gfxstream/host/post_worker_gl.cpp b/hardware/google/gfxstream/host/post_worker_gl.cpp
---- a/hardware/google/gfxstream/host/post_worker_gl.cpp
-+++ b/hardware/google/gfxstream/host/post_worker_gl.cpp
-@@ -132,6 +132,11 @@ std::shared_future<void> PostWorkerGl::postImpl(
-                     continue;
-                 }
-
-+                if (currentDisplayId != 0 && currentDisplayW == 1240 &&
-+                    currentDisplayH == 1080) {
-+                    currentDisplayW = 1085;
-+                    currentDisplayH = 945;
-+                }
-
-                 const auto transform = getTransformFromRotation(mFb->getZrot());
-                 postLayerOptions.transform = transform;
-                 if ( transform == HWC_TRANSFORM_ROT_90 || transform == HWC_TRANSFORM_ROT_270) {
-                     std::swap(currentDisplayW, currentDisplayH);
