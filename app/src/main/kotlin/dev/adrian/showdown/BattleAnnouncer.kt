@@ -14,8 +14,15 @@ enum class BattleAnnouncerCue(
     CANNOT_MOVE("tb_390m", 1_271L),
     FAINT("h1b_107", 1_332L),
     INTIMIDATE("cb_130", 1_759L),
-    POISON("kb_020", 1_480L),
-    BURN("kb_040", 1_640L),
+    POISON("tb_820", 1_240L),
+    TOXIC_POISON("tb_830", 1_764L),
+    BURN("tb_850", 1_518L),
+    PARALYSIS("tb_810", 1_724L),
+    SLEEP("tb_800", 1_122L),
+    FREEZE("tb_840", 1_740L),
+    CONFUSION("tb_860", 1_659L),
+    STAT_BOOST("tb_890", 1_680L),
+    STAT_DROP("tb_892", 1_524L),
     HAIL("cb_230", 2_399L),
     SANDSTORM("cb_240", 2_501L),
     HEAL("cb_171", 2_088L),
@@ -35,7 +42,14 @@ object BattleAnnouncerCueResolver {
         "faint" -> BattleAnnouncerCue.FAINT
         "intimidate" -> BattleAnnouncerCue.INTIMIDATE
         "poison" -> BattleAnnouncerCue.POISON
+        "toxic_poison" -> BattleAnnouncerCue.TOXIC_POISON
         "burn" -> BattleAnnouncerCue.BURN
+        "paralysis" -> BattleAnnouncerCue.PARALYSIS
+        "sleep" -> BattleAnnouncerCue.SLEEP
+        "freeze" -> BattleAnnouncerCue.FREEZE
+        "confusion" -> BattleAnnouncerCue.CONFUSION
+        "stat_boost" -> BattleAnnouncerCue.STAT_BOOST
+        "stat_drop" -> BattleAnnouncerCue.STAT_DROP
         "hail" -> BattleAnnouncerCue.HAIL
         "sandstorm" -> BattleAnnouncerCue.SANDSTORM
         "heal" -> BattleAnnouncerCue.HEAL
@@ -80,6 +94,7 @@ object BattleAnnouncerCueResolver {
         allowUnannotatedSetHpDamage: Boolean = false
     ): BattleAnnouncerCue? {
         val fields = line.split('|')
+        if (fields.drop(2).any { it.equals("[silent]", ignoreCase = true) }) return null
         return when (fields.getOrNull(1)) {
             "init" -> BattleAnnouncerCue.BATTLE_START.takeIf { fields.getOrNull(2) == "battle" }
             "switch", "drag", "replace" -> BattleAnnouncerCue.SWITCH
@@ -94,10 +109,23 @@ object BattleAnnouncerCueResolver {
             "win", "tie", "draw", "prematureend" -> BattleAnnouncerCue.BATTLE_END
             "-ability" -> BattleAnnouncerCue.INTIMIDATE.takeIf { fields.getOrNull(3).equals("Intimidate", true) }
             "-status" -> when (fields.getOrNull(3)?.lowercase()) {
-                "psn", "tox" -> BattleAnnouncerCue.POISON
+                "psn" -> BattleAnnouncerCue.POISON
+                "tox" -> BattleAnnouncerCue.TOXIC_POISON
                 "brn" -> BattleAnnouncerCue.BURN
+                "par" -> BattleAnnouncerCue.PARALYSIS
+                "slp" -> BattleAnnouncerCue.SLEEP
+                "frz" -> BattleAnnouncerCue.FREEZE
                 else -> null
             }
+            "-start" -> when (fields.getOrNull(3)?.lowercase()) {
+                "confusion" -> BattleAnnouncerCue.CONFUSION
+                else -> null
+            }
+            "-boost" -> statCue(fields, positiveEvent = true)
+            "-unboost" -> statCue(fields, positiveEvent = false)
+            "-setboost" -> statCue(fields, positiveEvent = true)
+            "-clearpositiveboost", "-clearboost", "-clearallboost" -> BattleAnnouncerCue.STAT_DROP
+            "-clearnegativeboost", "-restoreboost" -> BattleAnnouncerCue.STAT_BOOST
             "-weather" -> when (fields.getOrNull(2)?.substringBefore(':')?.lowercase()) {
                 "hail", "snow" -> BattleAnnouncerCue.HAIL
                 "sandstorm" -> BattleAnnouncerCue.SANDSTORM
@@ -111,6 +139,16 @@ object BattleAnnouncerCueResolver {
     private fun isDirectMoveDamage(fields: List<String>, allowUnannotated: Boolean): Boolean {
         if (BattleDamageCueResolver.hasNonMoveSource(fields)) return false
         return BattleDamageCueResolver.hasMoveSource(fields) || allowUnannotated
+    }
+
+    private fun statCue(fields: List<String>, positiveEvent: Boolean): BattleAnnouncerCue? {
+        val amount = fields.getOrNull(4)?.toIntOrNull() ?: return null
+        val signedAmount = if (positiveEvent) amount else -amount
+        return when {
+            signedAmount > 0 -> BattleAnnouncerCue.STAT_BOOST
+            signedAmount < 0 -> BattleAnnouncerCue.STAT_DROP
+            else -> null
+        }
     }
 }
 
