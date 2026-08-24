@@ -607,13 +607,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (regularAsset != null) {
                                 receiver(regularAsset)
                             } else {
-                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
-                                    if (modernAsset != null) {
-                                        receiver(modernAsset)
+                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
+                                    if (communityAsset != null) {
+                                        receiver(communityAsset)
                                     } else {
-                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
-                                            if (communityAsset != null) {
-                                                receiver(communityAsset)
+                                        requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
+                                            if (modernAsset != null) {
+                                                receiver(modernAsset)
                                             } else {
                                                 requestStaticSpriteFallback(request, receiver)
                                             }
@@ -645,13 +645,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                             if (regularAsset != null) {
                                 receiver(regularAsset)
                             } else {
-                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
-                                    if (modernAsset != null) {
-                                        receiver(modernAsset)
+                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
+                                    if (communityAsset != null) {
+                                        receiver(communityAsset)
                                     } else {
-                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
-                                            if (communityAsset != null) {
-                                                receiver(communityAsset)
+                                        requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
+                                            if (modernAsset != null) {
+                                                receiver(modernAsset)
                                             } else {
                                                 requestStaticSpriteFallback(request, receiver)
                                             }
@@ -676,8 +676,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) },
             { callback -> requestRegularRemoteSpriteResolution(plan, callback) },
             { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback) },
-            { callback -> requestModernAnimatedSpriteResolution(request, plan, callback) },
-            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback) }
+            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback) },
+            { callback -> requestModernAnimatedSpriteResolution(request, plan, callback) }
         )
 
         fun requestTier(index: Int) {
@@ -780,13 +780,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                     if (regularScrapedAsset != null) {
                                         receiver(regularScrapedAsset)
                                     } else {
-                                        requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
-                                            if (modernAsset != null) {
-                                                receiver(modernAsset)
+                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
+                                            if (communityAsset != null) {
+                                                receiver(communityAsset)
                                             } else {
-                                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
-                                                    if (communityAsset != null) {
-                                                        receiver(communityAsset)
+                                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
+                                                    if (modernAsset != null) {
+                                                        receiver(modernAsset)
                                                     } else {
                                                         requestStaticSpriteFallback(request, receiver)
                                                     }

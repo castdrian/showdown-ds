@@ -20,6 +20,7 @@ object ShowdownChangelog {
                 "Move choices now wait for the authoritative Showdown battle entry instead of adding a duplicate local action line.",
                 "The upper battle feed now hides silent protocol events while keeping their state changes applied.",
                 "Constrained sprite loading now checks bounded indexed HD front and back groups before regular animated fallbacks.",
+                "Animated community sprite fallbacks now run before pixelated Showdown artwork when official HD sources are unavailable.",
                 "Low-memory battle playback now keeps effectiveness cues attached to split damage packets after the generic impact sound.",
                 "Constrained devices now keep direct HD back-sprites first without crawling large sprite indexes.",
                 "Battle startup now loads move data without parsing the full team-building datasets.",
