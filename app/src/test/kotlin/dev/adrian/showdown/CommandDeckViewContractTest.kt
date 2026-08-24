@@ -35,4 +35,12 @@ class CommandDeckViewContractTest {
         assertTrue(detailCell.contains("Color.argb(72, 172, 180, 186)"))
         assertTrue(detailCell.contains("Color.rgb(216, 227, 232)"))
     }
+
+    @Test
+    fun moveTouchBoundsAreUnavailableWhileWaitingForTheNextRequest() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+        val layout = source.substringAfter("private fun layoutMoveTouchBounds").substringBefore("private fun layoutReplayControlTouchBounds")
+
+        assertTrue(layout.contains("if (!session.decisionAvailable) return"))
+    }
 }

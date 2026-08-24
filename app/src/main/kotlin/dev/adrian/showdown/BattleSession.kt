@@ -1260,6 +1260,7 @@ class BattleSession {
 
     fun focusMove(index: Int) {
         if (redirectToTeamDecisionPanel()) return
+        if (!decisionAvailable) return
         val selectableMoves = displayedMoves()
         if (index !in selectableMoves.indices) return
         panel = Panel.MOVES
@@ -1271,6 +1272,7 @@ class BattleSession {
 
     fun selectMoveWithTouch(index: Int) {
         if (redirectToTeamDecisionPanel()) return
+        if (!decisionAvailable) return
         val selectableMoves = displayedMoves()
         if (index !in selectableMoves.indices) return
         if (selectableMoves[index].disabled) {
@@ -1285,6 +1287,7 @@ class BattleSession {
     }
 
     fun selectTargetWithTouch(index: Int) {
+        if (!decisionAvailable) return
         if (index !in targetOptions.indices) return
         selectedTargetIndex = index
         status = "Target: ${targetOptions[index].label}"
@@ -1501,6 +1504,7 @@ class BattleSession {
     }
 
     fun selectGimmick(gimmick: BattleGimmick) {
+        if (!decisionAvailable) return
         if (gimmick !in availableGimmicks) return
         selectedGimmick = if (selectedGimmick == gimmick) null else gimmick
         updateTargetOptions()
@@ -1509,6 +1513,7 @@ class BattleSession {
     }
 
     fun cycleGimmick() {
+        if (!decisionAvailable) return
         if (availableGimmicks.isEmpty()) return
         val currentIndex = availableGimmicks.indexOf(selectedGimmick)
         selectedGimmick = availableGimmicks[Math.floorMod(currentIndex + 1, availableGimmicks.size)]

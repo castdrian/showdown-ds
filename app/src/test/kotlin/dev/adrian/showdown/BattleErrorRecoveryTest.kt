@@ -32,6 +32,22 @@ class BattleErrorRecoveryTest {
     }
 
     @Test
+    fun staleMoveInputCannotResubmitWhileWaiting() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession()
+        session.addDecisionListener(decisions::add)
+        session.applyProtocolLine("|request|{\"rqid\":22,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35}]}]}")
+        session.confirmSelection()
+        val waitingStatus = session.status
+
+        session.selectMoveWithTouch(0)
+        session.selectTargetWithTouch(0)
+
+        assertEquals(listOf("/choose move 1|22"), decisions)
+        assertEquals(waitingStatus, session.status)
+    }
+
+    @Test
     fun replayedSentChoiceCanBeCancelledInALiveBattle() {
         val session = BattleSession()
         session.setLiveBattleActive(true)

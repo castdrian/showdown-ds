@@ -344,6 +344,7 @@ class CommandDeckView(
         if (session.isSpectatorMode() && !session.isBattleFinished()) return
         if (!session.isLiveBattleActive() && !session.isBattleFinished()) return
         if (session.isBattleFinished() || session.moves().isEmpty()) return
+        if (!session.decisionAvailable) return
         val panelTop = 184f * scale
         val left = 44f * scale
         val consoleRight = 438f * scale
