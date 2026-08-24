@@ -5074,7 +5074,7 @@ class MainActivity : Activity() {
             }
         }
         val nature = teamAutocompleteField("Nature", set.nature, emptyList())
-        val evs = teamStatEditor("EVs · max 252 each / 510 total", set.evs, 0)
+        val evs = teamStatEditor("EVs · max 255 each / 510 total", set.evs, 0)
         val gender = teamField("Gender M or F", set.gender)
         val ivs = teamStatEditor("IVs · max 31", set.ivs, 31)
         val shiny = CheckBox(this).apply { text = "Shiny"; isChecked = set.shiny }

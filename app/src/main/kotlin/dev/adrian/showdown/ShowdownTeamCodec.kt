@@ -102,7 +102,7 @@ object ShowdownTeamCodec {
             if (set.moves.size > 4) errors += "$label can have at most four moves."
             val moveIds = set.moves.map(ShowdownMoveDex::moveId).filter(String::isNotBlank)
             if (moveIds.size != moveIds.distinct().size) errors += "$label contains duplicate moves."
-            if (set.evs.size != 6 || set.evs.any { it !in 0..252 }) errors += "$label has invalid EVs."
+            if (set.evs.size != 6 || set.evs.any { it !in 0..255 }) errors += "$label has invalid EVs."
             if (set.evs.sum() > 510) errors += "$label has more than 510 total EVs."
             if (set.ivs.size != 6 || set.ivs.any { it !in 0..31 }) errors += "$label has invalid IVs."
             if (set.level !in 1..100) errors += "$label has an invalid level."
@@ -148,7 +148,7 @@ object ShowdownTeamCodec {
             ability = fields.value(3),
             moves = fields.value(4).split(',').filter(String::isNotBlank),
             nature = fields.value(5),
-            evs = parseValues(fields.value(6), 0, 0, 252),
+            evs = parseValues(fields.value(6), 0, 0, 255),
             gender = fields.value(7),
             ivs = parseValues(fields.value(8), 31, 0, 31),
             shiny = fields.value(9) == "S",
@@ -166,8 +166,8 @@ object ShowdownTeamCodec {
         if (value.isBlank()) return PackedAdvanced()
         val values = value.split(',', limit = 6)
         val legacyOrder = isLegacyAdvancedOrder(values)
-        val pokeBallIndex = if (legacyOrder) 2 else 1
-        val hiddenPowerIndex = if (legacyOrder) 1 else 2
+        val pokeBallIndex = if (legacyOrder) 1 else 2
+        val hiddenPowerIndex = if (legacyOrder) 2 else 1
         return PackedAdvanced(
             happiness = values.value(0).toIntOrNull()?.coerceIn(0, 255) ?: 255,
             pokeBall = values.value(pokeBallIndex),
@@ -182,12 +182,11 @@ object ShowdownTeamCodec {
         val firstAdvancedValue = values.value(1).lowercase()
         val secondAdvancedValue = values.value(2).lowercase()
         return when {
-            firstAdvancedValue in hiddenPowerTypeIds ->
-                secondAdvancedValue.isBlank() || secondAdvancedValue in pokeBallIds
-            firstAdvancedValue.isBlank() ->
-                secondAdvancedValue.isNotBlank() && secondAdvancedValue !in hiddenPowerTypeIds
-            secondAdvancedValue in hiddenPowerTypeIds -> false
-            secondAdvancedValue in pokeBallIds -> true
+            firstAdvancedValue in hiddenPowerTypeIds -> false
+            secondAdvancedValue in hiddenPowerTypeIds -> true
+            firstAdvancedValue.isBlank() -> false
+            secondAdvancedValue.isBlank() -> true
+            firstAdvancedValue in pokeBallIds -> true
             else -> false
         }
     }
@@ -203,7 +202,7 @@ object ShowdownTeamCodec {
             packedAbility(set.ability),
             set.moves.map(::packedId).filter(String::isNotBlank).take(4).joinToString(","),
             set.nature.trim(),
-            packValues(set.evs, 0, 252),
+            packValues(set.evs, 0, 255),
             set.gender.trim().uppercase().takeIf { it == "M" || it == "F" }.orEmpty(),
             packValues(set.ivs, 31, 31),
             if (set.shiny) "S" else "",
@@ -216,8 +215,8 @@ object ShowdownTeamCodec {
     private fun packAdvanced(set: ShowdownTeamSet): String {
         val values = listOf(
             set.happiness.coerceIn(0, 255).takeUnless { it == 255 }?.toString().orEmpty(),
-            packedId(set.pokeBall),
             set.hiddenPowerType.trim(),
+            packedId(set.pokeBall),
             if (set.gigantamax) "G" else "",
             set.dynamaxLevel.coerceIn(0, 10).takeUnless { it == 10 }?.toString().orEmpty(),
             set.teraType.trim()

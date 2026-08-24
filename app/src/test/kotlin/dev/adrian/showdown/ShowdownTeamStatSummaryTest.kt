@@ -21,10 +21,18 @@ class ShowdownTeamStatSummaryTest {
     }
 
     @Test
-    fun flagsAnEvValueAboveThePerStatLimit() {
+    fun acceptsShowdownMaximumEvValue() {
         assertEquals(
-            "EV total 253/510 · over limit",
-            ShowdownTeamStatSummary.evs(listOf(253, 0, 0, 0, 0, 0))
+            "EV total 255/510 · 255 remaining",
+            ShowdownTeamStatSummary.evs(listOf(255, 0, 0, 0, 0, 0))
+        )
+    }
+
+    @Test
+    fun flagsAnEvValueAboveTheShowdownPerStatLimit() {
+        assertEquals(
+            "EV total 256/510 · over limit",
+            ShowdownTeamStatSummary.evs(listOf(256, 0, 0, 0, 0, 0))
         )
     }
 

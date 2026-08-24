@@ -21,7 +21,7 @@ object ShowdownTeamStatSummary {
         }
     }
 
-    private const val EV_MAX_PER_STAT = 252
+    private const val EV_MAX_PER_STAT = 255
     private const val EV_TOTAL_LIMIT = 510
     private const val IV_MAX_VALUE = 31
     private const val IV_TOTAL_LIMIT = IV_MAX_VALUE * 6

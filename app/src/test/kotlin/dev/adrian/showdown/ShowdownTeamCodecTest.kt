@@ -57,7 +57,7 @@ class ShowdownTeamCodecTest {
 
         val packed = ShowdownTeamCodec.pack(listOf(set))
         assertEquals(
-            "Lead|Gholdengo|leftovers|goodasgold|makeitrain,shadowball,recover,nastyplot|Timid|4,,,252,,252||,,,0,,|S|50|200,premierball,Ice,G,8,Steel",
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain,shadowball,recover,nastyplot|Timid|4,,,252,,252||,,,0,,|S|50|200,Ice,premierball,G,8,Steel",
             packed
         )
         assertEquals(
@@ -86,6 +86,21 @@ class ShowdownTeamCodecTest {
         assertEquals("Pikachu||||thunderbolt||,252,,,,4|||||", packed)
         assertEquals(listOf(0, 252, 0, 0, 0, 4), ShowdownTeamCodec.unpack(packed).single().evs)
         assertTrue(ShowdownTeamCodec.unpack("").isEmpty())
+    }
+
+    @Test
+    fun preservesShowdownMaximumEvValue() {
+        val set = ShowdownTeamSet(
+            species = "Pikachu",
+            moves = listOf("Thunderbolt"),
+            evs = listOf(255, 255, 0, 0, 0, 0)
+        )
+
+        val packed = ShowdownTeamCodec.pack(listOf(set))
+
+        assertTrue(packed.contains("255,255,,,,"))
+        assertEquals(set.evs, ShowdownTeamCodec.unpack(packed).single().evs)
+        assertTrue(ShowdownTeamCodec.validate(listOf(set)).isEmpty())
     }
 
     @Test
@@ -122,7 +137,7 @@ Ability: Static
     @Test
     fun unpacksOfficialAdvancedFieldOrder() {
         val team = ShowdownTeamCodec.unpack(
-            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,premierball,Ice,G,8,Steel"
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,Ice,premierball,G,8,Steel"
         ).single()
 
         assertEquals("premierball", team.pokeBall)
@@ -135,7 +150,7 @@ Ability: Static
     @Test
     fun unpacksTeamsSavedWithThePreviousAdvancedFieldOrder() {
         val team = ShowdownTeamCodec.unpack(
-            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,Ice,premierball,G,8,Steel"
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,premierball,Ice,G,8,Steel"
         ).single()
 
         assertEquals("premierball", team.pokeBall)
@@ -146,7 +161,7 @@ Ability: Static
     }
 
     @Test
-    fun keepsLegacyPackedTeamsWithAnEmptyHiddenPowerFieldReadable() {
+    fun keepsOfficialPackedTeamsWithAnEmptyHiddenPowerFieldReadable() {
         val team = ShowdownTeamCodec.unpack(
             "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,,premierball,G,8,Steel"
         ).single()
@@ -156,9 +171,29 @@ Ability: Static
     }
 
     @Test
-    fun keepsLegacyPackedTeamsWithAnUnknownBallAndEmptyHiddenPowerReadable() {
+    fun keepsOfficialPackedTeamsWithAnUnknownBallAndEmptyHiddenPowerReadable() {
         val team = ShowdownTeamCodec.unpack(
             "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,,customball,G,8,Steel"
+        ).single()
+
+        assertEquals("customball", team.pokeBall)
+        assertEquals("", team.hiddenPowerType)
+    }
+
+    @Test
+    fun keepsPreviousExportsWithAnEmptyHiddenPowerFieldReadable() {
+        val team = ShowdownTeamCodec.unpack(
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,premierball,,G,8,Steel"
+        ).single()
+
+        assertEquals("premierball", team.pokeBall)
+        assertEquals("", team.hiddenPowerType)
+    }
+
+    @Test
+    fun keepsPreviousExportsWithAnUnknownBallAndEmptyHiddenPowerReadable() {
+        val team = ShowdownTeamCodec.unpack(
+            "Lead|Gholdengo|leftovers|goodasgold|makeitrain|Timid||||S|50|200,customball,,G,8,Steel"
         ).single()
 
         assertEquals("customball", team.pokeBall)
