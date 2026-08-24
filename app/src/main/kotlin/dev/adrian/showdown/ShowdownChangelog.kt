@@ -12,7 +12,7 @@ object ShowdownChangelog {
             listOf(
                 "The optional PBR announcer now works on constrained Thor profiles while staying off until explicitly enabled.",
                 "Battle timer controls now preserve the correct availability message when no live timer exists.",
-                "Constrained Thor profiles now keep the five battle SFX cues available while leaving heavier audio assets disabled.",
+                "Constrained Thor profiles now lazy-load the five battle SFX cues while leaving heavier audio assets disabled.",
                 "Interlaced HD sprite playback now stays within its decoded row buffer during live battles.",
                 "Formed Pokémon now retry their base species for the final facing-correct back-sprite fallback.",
                 "HD sprite index lookup now targets the matching giant asset group instead of crawling broad page sets.",
@@ -22,6 +22,7 @@ object ShowdownChangelog {
                 "Constrained sprite loading now checks bounded indexed HD front and back groups before regular animated fallbacks.",
                 "Animated community sprite fallbacks now run before pixelated Showdown artwork when official HD sources are unavailable.",
                 "Lightweight battles now keep official-style damage and healing messages in the upper battle feed.",
+                "Battle hints now retain Showdown's parenthesized formatting in lightweight playback.",
                 "Low-memory battle playback now keeps effectiveness cues attached to split damage packets after the generic impact sound.",
                 "Constrained devices now keep direct HD back-sprites first without crawling large sprite indexes.",
                 "Battle startup now loads move data without parsing the full team-building datasets.",

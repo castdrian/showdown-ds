@@ -1663,7 +1663,8 @@ class BattleSession {
                     "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge.")
                     "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
-                    "-hint", "-message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
+                    "-hint" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let { appendLog("($it)") }
+                    "-message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "-waiting" -> appendLog("${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}.")
                     "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
                     "-singleturn" -> applySingleBattleEffect(fields, turnScoped = true)

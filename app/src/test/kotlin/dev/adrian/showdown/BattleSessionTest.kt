@@ -234,6 +234,21 @@ class BattleSessionTest {
     }
 
     @Test
+    fun protocolHintsKeepShowdownParenthesesSeparateFromMessages() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-hint|This explains the battle rule.",
+                "|-message|This is a custom battle message."
+            )
+        )
+
+        assertTrue(session.battleLog().contains("(This explains the battle rule.)"))
+        assertTrue(session.battleLog().contains("This is a custom battle message."))
+    }
+
+    @Test
     fun upperBattleFeedRemovesAdjacentDuplicateMessages() {
         val session = BattleSession()
 
