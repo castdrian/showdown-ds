@@ -62,20 +62,35 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun constrainedSpritesAvoidIndexedCrawlingAfterDirectHdProbes() {
+    fun constrainedSpritesUseIndexedHdRetriesBeforeRegularFallbacks() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
-        val constrainedResolver = source.substringAfter("private fun requestConstrainedSpriteResolution")
+        val constrainedFrontResolver = source.substringAfter("private fun requestConstrainedSpriteResolution")
+            .substringBefore("private fun requestConstrainedBackSpriteResolution")
+        val constrainedBackResolver = source.substringAfter("private fun requestConstrainedBackSpriteResolution")
             .substringBefore("private fun requestBackSpriteResolution")
 
-        assertTrue(constrainedResolver.contains("if (request.backFacing)"))
-        assertTrue(constrainedResolver.contains("requestConstrainedBackSpriteResolution(request, plan, receiver)"))
-        assertTrue(constrainedResolver.contains("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->"))
-        assertTrue(constrainedResolver.contains("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->"))
-        assertFalse(constrainedResolver.contains("requestScrapedFrontSpriteResolution"))
-        assertFalse(constrainedResolver.contains("requestScavioAnimatedSprite"))
+        assertTrue(constrainedFrontResolver.contains("if (request.backFacing)"))
+        assertTrue(constrainedFrontResolver.contains("requestConstrainedBackSpriteResolution(request, plan, receiver)"))
+        assertTrue(constrainedFrontResolver.contains("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)"))
+        assertTrue(constrainedBackResolver.contains("requestScrapedBackSpriteResolution(request, highResolutionOnly = true)"))
+        assertTrue(constrainedFrontResolver.contains("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->"))
+        assertTrue(constrainedBackResolver.contains("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->"))
+        assertFalse(constrainedFrontResolver.contains("requestScavioAnimatedSprite"))
         assertTrue(
-            constrainedResolver.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->") <
-                constrainedResolver.indexOf("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->")
+            constrainedFrontResolver.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->") <
+                constrainedFrontResolver.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)")
+        )
+        assertTrue(
+            constrainedFrontResolver.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)") <
+                constrainedFrontResolver.indexOf("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->")
+        )
+        assertTrue(
+            constrainedBackResolver.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->") <
+                constrainedBackResolver.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = true)")
+        )
+        assertTrue(
+            constrainedBackResolver.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = true)") <
+                constrainedBackResolver.indexOf("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->")
         )
         assertTrue(source.contains("private fun requestConstrainedBackSpriteResolution("))
     }
