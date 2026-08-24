@@ -59,6 +59,7 @@ object ShowdownChangelog {
                 "Battle, ladder, and team format selectors now use searchable custom pickers for the full server catalog.",
                 "Team selection now searches saved teams by name, format, folder, Pokémon, and moves.",
                 "Room and live-battle catalogs now support custom search by room, player, and format.",
+                "Rooms now reconnect automatically when the guest socket is still starting or recovering.",
                 "Tournament listings now support custom search by room, format, status, and player count.",
                 "Ladder player lists now support public guest browsing and custom search by rank, name, and rating.",
                 "Player lookup now works for guests through public Showdown profiles while private actions remain account-gated.",

@@ -432,6 +432,21 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun roomsReconnectWhenLobbySocketIsNotReady() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val roomList = source.substringAfter("private fun showRoomList()").substringBefore("private fun prepareRoomListDialog()")
+        val pendingCommands = source.substringAfter("private fun sendPendingLobbyCommands").substringBefore("private fun showChallengeComposer")
+
+        assertTrue(roomList.contains("startLobbyConnection(listOf(\"/cmd rooms\", \"/cmd roomlist\"), \"Loading public rooms…\")"))
+        assertTrue(roomList.contains("pendingRoomListOpen = true"))
+        assertTrue(roomList.contains("persistLobbyState(flushToDisk = true)"))
+        assertTrue(pendingCommands.contains("val opensRoomList = pendingRoomListOpen"))
+        assertTrue(pendingCommands.contains("prepareRoomListDialog()"))
+        assertTrue(pendingCommands.contains("pendingRoomListOpen = false"))
+        assertTrue(pendingCommands.contains("reconnectLobbyCommands = null"))
+    }
+
+    @Test
     fun tournamentDirectoryUsesAFilterableCustomSurface() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val directory = source.substringAfter("private fun showTournamentDirectory()").substringBefore("private fun requestTournamentDirectory()")
