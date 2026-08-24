@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Constrained devices now play battle cues from compact PCM assets without creating MP3 decoder bursts.",
                 "The optional PBR announcer now works on constrained Thor profiles while staying off until explicitly enabled.",
                 "Battle timer controls now preserve the correct availability message when no live timer exists.",
                 "Constrained Thor profiles now lazy-load the five battle SFX cues while leaving heavier audio assets disabled.",
