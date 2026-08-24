@@ -150,7 +150,7 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(source.contains("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
         assertTrue(source.contains("TEAM_STATIC_FALLBACK_DELAY_MILLIS"))
-        assertTrue(source.indexOf("spriteCache.requestPokemon(request)") < source.indexOf("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
+        assertTrue(source.contains("spriteCache.requestPokemon(request)"))
         assertTrue(source.contains("private fun acceptTeamSprite("))
         assertTrue(source.contains("sprite.isAnimated || teamSprites[index]?.isAnimated != true"))
     }

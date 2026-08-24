@@ -1,6 +1,5 @@
 package dev.adrian.showdown
 
-import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -25,10 +24,6 @@ class CommandDeckView(
     private val interactionListener: InteractionListener
 ) : View(context) {
     private data class MovePalette(val highlight: Int, val base: Int, val shadow: Int, val edge: Int)
-
-    private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
-        ?.let { manager -> ActivityManager.MemoryInfo().also(manager::getMemoryInfo).totalMem < 2L * 1024L * 1024L * 1024L }
-        ?: false
 
     interface InteractionListener {
         fun onNavigation()
@@ -1950,22 +1945,21 @@ class CommandDeckView(
         if (requestedTeamSprites[index] == request) return
         requestedTeamSprites[index] = request
         teamSprites.remove(index)?.stopAnimation()
-        if (!memoryConstrained) {
-            spriteCache.requestPokemon(request) { sprite ->
-                acceptTeamSprite(index, request, sprite)
-            }
-            postDelayed({
-                if (requestedTeamSprites[index] == request && teamSprites[index] == null) {
-                    spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny) { sprite ->
-                        acceptTeamSprite(index, request, sprite)
-                    }
-                }
-            }, TEAM_STATIC_FALLBACK_DELAY_MILLIS)
-        } else {
-            spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny) { sprite ->
-                acceptTeamSprite(index, request, sprite)
+        var staticFallbackRequested = false
+        fun requestStaticFallback() {
+            if (staticFallbackRequested || requestedTeamSprites[index] != request) return
+            staticFallbackRequested = true
+            spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny) { fallback ->
+                acceptTeamSprite(index, request, fallback)
             }
         }
+        spriteCache.requestPokemon(request) { sprite ->
+            acceptTeamSprite(index, request, sprite)
+            if (sprite == null) requestStaticFallback()
+        }
+        postDelayed({
+            if (teamSprites[index] == null) requestStaticFallback()
+        }, TEAM_STATIC_FALLBACK_DELAY_MILLIS)
     }
 
     private fun acceptTeamSprite(

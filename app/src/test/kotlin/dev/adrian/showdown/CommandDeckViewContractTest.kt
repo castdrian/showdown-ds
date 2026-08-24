@@ -18,6 +18,17 @@ class CommandDeckViewContractTest {
     }
 
     @Test
+    fun teamArtworkAlwaysAttemptsAnimatedResolutionBeforeStaticFallback() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+        val request = source.substringAfter("private fun requestTeamSprite")
+            .substringBefore("private fun acceptTeamSprite")
+
+        assertTrue(request.contains("spriteCache.requestPokemon(request)"))
+        assertTrue(request.contains("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
+        assertFalse(request.contains("if (!memoryConstrained)"))
+    }
+
+    @Test
     fun moveDetailMetricsAvoidColoredOutlines() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
         val detailCell = source.substringAfter("private fun drawMoveInfoCell")
