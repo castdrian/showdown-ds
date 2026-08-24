@@ -57,6 +57,54 @@ internal fun requiresAnimatedSprite(path: String, animatedOnly: Boolean): Boolea
 
 internal fun allowsStaticShowdownFallback(request: BattleSpriteRequest): Boolean = !request.backFacing
 
+internal class SpriteResolutionGate<T>(
+    private val receiver: (T?) -> Unit
+) {
+    private var primaryFinished = false
+    private var primaryDelivered = false
+    private var fallbackStarted = false
+    private var fallbackFinished = false
+    private var deliveredAny = false
+    private var deliveredEmpty = false
+
+    @Synchronized
+    fun primary(asset: T?) {
+        primaryFinished = true
+        if (asset != null) {
+            primaryDelivered = true
+            deliveredAny = true
+            receiver(asset)
+        } else {
+            finishIfEmpty()
+        }
+    }
+
+    @Synchronized
+    fun beginFallback(): Boolean {
+        if (primaryDelivered || fallbackStarted) return false
+        fallbackStarted = true
+        return true
+    }
+
+    @Synchronized
+    fun fallback(asset: T?) {
+        fallbackFinished = true
+        if (asset != null && (!primaryFinished || !primaryDelivered)) {
+            deliveredAny = true
+            receiver(asset)
+        } else {
+            finishIfEmpty()
+        }
+    }
+
+    private fun finishIfEmpty() {
+        if (primaryFinished && fallbackFinished && !deliveredAny && !deliveredEmpty) {
+            deliveredEmpty = true
+            receiver(null)
+        }
+    }
+}
+
 private const val MAX_ANIMATED_FRAME_DIMENSION = 512
 private const val MAX_ANIMATED_SOURCE_DIMENSION = 576
 private const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L
@@ -633,37 +681,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->
-            if (hdAsset != null) {
-                receiver(hdAsset)
-            } else {
-                requestScrapedBackSpriteResolution(request, highResolutionOnly = true) { indexedHdAsset ->
-                    if (indexedHdAsset != null) {
-                        receiver(indexedHdAsset)
-                    } else {
-                        requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->
-                            if (regularAsset != null) {
-                                receiver(regularAsset)
-                            } else {
-                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
-                                    if (communityAsset != null) {
-                                        receiver(communityAsset)
-                                    } else {
-                                        requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
-                                            if (modernAsset != null) {
-                                                receiver(modernAsset)
-                                            } else {
-                                                requestStaticSpriteFallback(request, receiver)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        requestAnimatedBackSpriteResolution(request, plan, receiver, includeRegularScrapedBack = false)
     }
 
     private fun requestBackSpriteResolution(
@@ -671,23 +689,34 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        val animatedTiers: List<((SpriteAsset?) -> Unit) -> Unit> = listOf(
-            { callback -> requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, callback) },
-            { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) },
-            { callback -> requestRegularRemoteSpriteResolution(plan, callback) },
-            { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback) },
-            { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback) },
-            { callback -> requestModernAnimatedSpriteResolution(request, plan, callback) }
-        )
+        requestAnimatedBackSpriteResolution(request, plan, receiver, includeRegularScrapedBack = true)
+    }
+
+    private fun requestAnimatedBackSpriteResolution(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit,
+        includeRegularScrapedBack: Boolean
+    ) {
+        val animatedTiers = buildList<((SpriteAsset?) -> Unit) -> Unit> {
+            add { callback -> requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, callback) }
+            add { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) }
+            add { callback -> requestRegularRemoteSpriteResolution(plan, callback) }
+            if (includeRegularScrapedBack) {
+                add { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback) }
+            }
+            add { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback) }
+        }
+        val gate = SpriteResolutionGate<SpriteAsset>(receiver)
 
         fun requestTier(index: Int) {
             if (index >= animatedTiers.size) {
-                requestStaticSpriteFallback(request, receiver)
+                gate.primary(null)
                 return
             }
             animatedTiers[index] { asset ->
                 if (asset != null) {
-                    receiver(asset)
+                    gate.primary(asset)
                 } else {
                     requestTier(index + 1)
                 }
@@ -695,6 +724,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
 
         requestTier(0)
+        mainHandler.postDelayed({
+            if (gate.beginFallback()) {
+                requestModernAnimatedSpriteResolution(request, plan) { asset -> gate.fallback(asset) }
+            }
+        }, BACK_SPRITE_ANIMATED_FALLBACK_DELAY_MILLIS)
     }
 
     private fun requestScrapedBackSpriteResolution(
@@ -900,7 +934,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 if (staticAsset != null) receiver(staticAsset) else requestStaticShowdownFallback(request, receiver)
             }
         } else {
-            requestStaticShowdownBackFallback(request, receiver)
+            receiver(null)
         }
     }
 
@@ -957,13 +991,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(null)
             }
         }
-    }
-
-    private fun requestStaticShowdownBackFallback(
-        request: BattleSpriteRequest,
-        receiver: (SpriteAsset?) -> Unit
-    ) {
-        requestSpriteCandidates(ShowdownAssetPaths.staticBackSpriteCandidates(request.species), receiver)
     }
 
     private fun requestStaticShowdownFallback(
@@ -1232,6 +1259,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
         const val CONSTRAINED_SPRITE_MEMORY_CACHE_BYTES = 6 * 1024 * 1024
         const val MAX_COMMUNITY_SPRITE_CANDIDATES = 8
+        const val BACK_SPRITE_ANIMATED_FALLBACK_DELAY_MILLIS = 900L
         const val MAX_FILE_BYTES = 16 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }

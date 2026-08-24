@@ -365,10 +365,6 @@ object ShowdownAssetPaths {
         }
         .distinct()
 
-    fun staticBackSpriteCandidates(species: String): List<String> = spriteSpeciesNames(species)
-        .map { name -> "sprites/gen5-back/${animationId(name)}.png" }
-        .distinct()
-
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
 
     fun itemSprite(item: String): String? {

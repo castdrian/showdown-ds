@@ -588,6 +588,7 @@ class BattleSceneView(
                 playerSprite = null
                 spriteCache.requestPokemon(playerRequest) { asset ->
                     if (playerRequest == requestedPlayerSprite) {
+                        playerSprite?.takeUnless { it === asset }?.stopAnimation()
                         playerSprite = asset
                         invalidate()
                     } else asset?.stopAnimation()
@@ -610,6 +611,7 @@ class BattleSceneView(
                 opponentSprite = null
                 spriteCache.requestPokemon(opponentRequest) { asset ->
                     if (opponentRequest == requestedOpponentSprite) {
+                        opponentSprite?.takeUnless { it === asset }?.stopAnimation()
                         opponentSprite = asset
                         invalidate()
                     } else asset?.stopAnimation()
@@ -987,6 +989,7 @@ class BattleSceneView(
             assets[slot] = null
             spriteCache.requestPokemon(request) { asset ->
                 if (requests[slot] == request) {
+                    assets[slot]?.takeUnless { it === asset }?.stopAnimation()
                     assets[slot] = asset
                     invalidate()
                 } else asset?.stopAnimation()

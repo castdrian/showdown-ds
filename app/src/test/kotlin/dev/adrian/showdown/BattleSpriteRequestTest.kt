@@ -88,21 +88,12 @@ class BattleSpriteRequestTest {
     }
 
     @Test
-    fun missingAnimatedPlayerArtworkFallsBackToARealBackSprite() {
-        assertEquals(
-            listOf("sprites/gen5-back/ironvaliant.png"),
-            ShowdownAssetPaths.staticBackSpriteCandidates("Iron Valiant")
-        )
-        assertEquals(
-            listOf(
-                "sprites/gen5-back/terapagosterastal.png",
-                "sprites/gen5-back/terapagos.png"
-            ),
-            ShowdownAssetPaths.staticBackSpriteCandidates("Terapagos-Terastal")
-        )
+    fun missingAnimatedPlayerArtworkDoesNotUseStaticBackArtwork() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
-        assertTrue(source.contains("requestStaticShowdownBackFallback(request, receiver)"))
-        assertTrue(source.contains("ShowdownAssetPaths.staticBackSpriteCandidates(request.species)"))
+        assertFalse(source.contains("requestStaticShowdownBackFallback"))
+        assertFalse(source.contains("ShowdownAssetPaths.staticBackSpriteCandidates"))
+        assertFalse(source.contains("sprites/gen5-back"))
+        assertFalse(allowsStaticShowdownFallback(BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)))
     }
 
     @Test
@@ -123,7 +114,7 @@ class BattleSpriteRequestTest {
         val scrapedBackRegularIndex = source.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback)", backIndex)
         val backRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan, callback)", backIndex)
         val backCommunityIndex = source.indexOf("requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback)", backIndex)
-        val backLocalIndex = source.indexOf("requestModernAnimatedSpriteResolution(request, plan, callback)", backIndex)
+        val backLocalIndex = source.indexOf("requestModernAnimatedSpriteResolution(request, plan) { asset -> gate.fallback(asset) }", backIndex)
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
         val frontHdIndex = source.indexOf("requestScrapedFrontSpriteResolution(request, highResolutionOnly = true)", frontIndex)
         val scavioIndex = source.indexOf("requestScavioAnimatedSprite(request)", frontIndex)
