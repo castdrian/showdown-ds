@@ -15,6 +15,12 @@ class BattleAudioThreadingContractTest {
         assertTrue(source.contains("private fun initializeTransientSoundPool()"))
         assertTrue(source.contains("if (!lowMemoryMode) audioCueHandler.post(::initializeTransientSoundPool)"))
         assertTrue(source.contains("if (!lowMemoryMode) audioCueHandler.post(::loadBattleSounds)"))
+        assertTrue(source.contains("private val staticBattleCues = mutableMapOf<BattleAudioCue, StaticBattleCue>()"))
+        assertTrue(source.contains("private fun requestStaticBattleCue(cue: BattleAudioCue)"))
+        assertTrue(source.contains("context.assets.open(\"move-sfx/\${cue.assetName}.pcm\")"))
+        assertTrue(source.contains("AudioTrack.Builder()"))
+        assertTrue(source.contains("if (lowMemoryMode) {\n            flushStaticBattleCues()"))
+        assertTrue(source.contains("releaseStaticBattleCues()"))
         assertTrue(source.contains("if (!lowMemoryMode) {\n            resourceCache.requestAudio(\"audio/notification.wav\")"))
         assertTrue(source.contains("announcerEnabled = session.announcerEnabled"))
         assertTrue(source.contains("if (lowMemoryMode) initializeTransientSoundPool()"))
@@ -55,5 +61,14 @@ class BattleAudioThreadingContractTest {
         assertEquals(4_750L, battleMusicLoopDelayMillis(95_000, 100_000, 750L, 500L))
         assertEquals(0L, battleMusicLoopDelayMillis(99_500, 100_000, 750L, 500L))
         assertEquals(0L, battleMusicLoopDelayMillis(100_500, 100_000, 750L, 500L))
+    }
+
+    @Test
+    fun constrainedCueAssetsArePresentAsStaticPcm() {
+        BattleAudioCue.values().forEach { cue ->
+            val file = File("src/main/assets/move-sfx/${cue.assetName}.pcm")
+            assertTrue(file.isFile)
+            assertTrue(file.length() > 0L)
+        }
     }
 }
