@@ -27,7 +27,7 @@ diff --git a/host/post_worker_gl.cpp b/host/post_worker_gl.cpp
 +                    currentDisplayW = 1085;
 +                    currentDisplayH = 945;
 +                }
-++
++
                  const auto transform = getTransformFromRotation(mFb->getZrot());
                  postLayerOptions.transform = transform;
                  if ( transform == HWC_TRANSFORM_ROT_90 || transform == HWC_TRANSFORM_ROT_270) {
