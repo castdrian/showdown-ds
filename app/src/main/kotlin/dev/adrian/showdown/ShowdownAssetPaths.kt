@@ -195,7 +195,7 @@ object ShowdownAssetPaths {
     }
 
     fun highResolutionBackSpriteIndexUrls(shiny: Boolean = false): List<String> =
-        backSpriteIndexUrls(shiny)
+        backSpriteIndexUrls(shiny).take(1)
 
     fun frontSpriteIndexUrls(shiny: Boolean = false): List<String> {
         val normalIndexes = listOf(
@@ -216,7 +216,7 @@ object ShowdownAssetPaths {
     }
 
     fun highResolutionFrontSpriteIndexUrls(shiny: Boolean = false): List<String> =
-        frontSpriteIndexUrls(shiny)
+        frontSpriteIndexUrls(shiny).take(2)
 
     fun pokeApiAnimatedSprite(number: Int, side: BattleSpriteSide, shiny: Boolean = false): String {
         val facingPath = if (side == BattleSpriteSide.PLAYER) "back/" else ""

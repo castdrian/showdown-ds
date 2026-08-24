@@ -79,8 +79,7 @@ class ShowdownBackSpriteIndexTest {
 
         assertEquals(
             listOf(
-                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/alcremie-back.gif",
-                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados/alcremie-back.gif"
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/alcremie-back.gif"
             ),
             ShowdownBackSpriteIndex.highResolutionCandidates(html, listOf("Alcremie"))
         )
@@ -95,8 +94,7 @@ class ShowdownBackSpriteIndexTest {
 
         assertEquals(
             listOf(
-                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/decidueye-back.gif",
-                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-espalda/decidueye.gif"
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/decidueye-back.gif"
             ),
             ShowdownBackSpriteIndex.highResolutionCandidates(html, listOf("Decidueye"))
         )

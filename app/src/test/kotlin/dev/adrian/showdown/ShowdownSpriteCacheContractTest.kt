@@ -62,20 +62,22 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun constrainedPlayerBackSpritesKeepDirectHdResolutionWithoutIndexCrawling() {
+    fun constrainedSpritesAvoidIndexedCrawlingAfterDirectHdProbes() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val constrainedResolver = source.substringAfter("private fun requestConstrainedSpriteResolution")
             .substringBefore("private fun requestBackSpriteResolution")
 
         assertTrue(constrainedResolver.contains("if (request.backFacing)"))
         assertTrue(constrainedResolver.contains("requestConstrainedBackSpriteResolution(request, plan, receiver)"))
-        assertTrue(source.contains("private fun requestConstrainedBackSpriteResolution("))
-        assertTrue(source.contains("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->"))
+        assertTrue(constrainedResolver.contains("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->"))
+        assertTrue(constrainedResolver.contains("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->"))
+        assertFalse(constrainedResolver.contains("requestScrapedFrontSpriteResolution"))
+        assertFalse(constrainedResolver.contains("requestScavioAnimatedSprite"))
         assertTrue(
-            source.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->") <
-                source.indexOf("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->")
+            constrainedResolver.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->") <
+                constrainedResolver.indexOf("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->")
         )
-        assertFalse(constrainedResolver.contains("requestBackSpriteResolution(request, plan, receiver)"))
+        assertTrue(source.contains("private fun requestConstrainedBackSpriteResolution("))
     }
 
     @Test
@@ -375,7 +377,7 @@ class ShowdownSpriteCacheContractTest {
         val backResolver = source.substringAfter("private fun requestScrapedBackSpriteResolution")
             .substringBefore("private fun requestModernLocalSpriteResolution")
 
-        assertTrue(backResolver.contains("ShowdownSpriteIndexGroups.pageUrls(html, indexUrl)"))
+        assertTrue(backResolver.contains("ShowdownSpriteIndexGroups.pageUrls(html, indexUrl, speciesNames)"))
         assertTrue(backResolver.contains("ShowdownAssetPaths.highResolutionBackSpriteIndexUrls(request.shiny)"))
         assertTrue(backResolver.contains("fun requestPage(pageIndex: Int, pageFile: File?)"))
         assertTrue(backResolver.contains("requestBytes(pageUrls[nextPageIndex])"))

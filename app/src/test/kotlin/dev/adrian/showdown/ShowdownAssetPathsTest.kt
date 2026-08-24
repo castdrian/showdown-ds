@@ -433,21 +433,21 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun highResolutionCrawlsEveryDocumentedAnimatedSpriteIndexPage() {
+    fun highResolutionCrawlsOnlyTheDocumentedGiantSpriteIndexPages() {
         assertEquals(
-            ShowdownAssetPaths.backSpriteIndexUrls(),
+            ShowdownAssetPaths.backSpriteIndexUrls().take(1),
             ShowdownAssetPaths.highResolutionBackSpriteIndexUrls()
         )
         assertEquals(
-            ShowdownAssetPaths.frontSpriteIndexUrls(),
+            ShowdownAssetPaths.frontSpriteIndexUrls().take(2),
             ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls()
         )
         assertEquals(
-            ShowdownAssetPaths.backSpriteIndexUrls(shiny = true),
+            ShowdownAssetPaths.backSpriteIndexUrls(shiny = true).take(1),
             ShowdownAssetPaths.highResolutionBackSpriteIndexUrls(shiny = true)
         )
         assertEquals(
-            ShowdownAssetPaths.frontSpriteIndexUrls(shiny = true),
+            ShowdownAssetPaths.frontSpriteIndexUrls(shiny = true).take(2),
             ShowdownAssetPaths.highResolutionFrontSpriteIndexUrls(shiny = true)
         )
     }

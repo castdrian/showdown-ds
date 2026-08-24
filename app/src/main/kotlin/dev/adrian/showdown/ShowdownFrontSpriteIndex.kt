@@ -27,14 +27,15 @@ object ShowdownFrontSpriteIndex {
     }
 
     fun highResolutionCandidates(html: String, speciesNames: List<String>, shiny: Boolean = false): List<String> =
-        candidates(html, speciesNames, shiny).filter(::isHighResolution)
+        candidates(html, speciesNames, shiny).filter(::isGiant)
 
     private fun normalizedNames(value: String): List<String> = listOf(value, value.replace('-', ' ')).map(::normalize).distinct()
 
     private fun normalize(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
 
-    private fun isHighResolution(path: String) =
-        path.contains("/sprites/animados", ignoreCase = true)
+    private fun isGiant(path: String) =
+        path.contains("/sprites/animados-gigante/", ignoreCase = true) ||
+            path.contains("/sprites/animados-sinbordes-gigante/", ignoreCase = true)
 
     private fun absoluteUrl(path: String): String = when {
         path.startsWith("https://", ignoreCase = true) -> path

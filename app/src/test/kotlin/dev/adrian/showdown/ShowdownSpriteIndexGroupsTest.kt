@@ -53,4 +53,22 @@ class ShowdownSpriteIndexGroupsTest {
             )
         )
     }
+
+    @Test
+    fun selectsOnlyTheIndexGroupContainingTheRequestedSpeciesRange() {
+        val html = """
+            <a class="grouplink" href="espada_escudo/sprites_pokemon.php?cid=0&order=#sprites">abomasnow.gif to alcremie.gif</a>
+            <a class="grouplink" href="espada_escudo/sprites_pokemon.php?cid=1&order=#sprites">alcremie-s.gif to corviknight.gif</a>
+            <a class="grouplink" href="espada_escudo/sprites_pokemon.php?cid=2&order=#sprites">dragapult.gif to zweilous.gif</a>
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://www.pkparaiso.com/espada_escudo/sprites_pokemon.php?cid=1&order=#sprites"),
+            ShowdownSpriteIndexGroups.pageUrls(
+                html,
+                "https://www.pkparaiso.com/espada_escudo/sprites_pokemon.php",
+                listOf("Corviknight")
+            )
+        )
+    }
 }

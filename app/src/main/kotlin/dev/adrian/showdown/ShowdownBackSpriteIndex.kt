@@ -24,13 +24,10 @@ object ShowdownBackSpriteIndex {
     }
 
     fun highResolutionCandidates(html: String, speciesNames: List<String>, shiny: Boolean = false): List<String> =
-        candidates(html, speciesNames, shiny).filter(::isHighResolution)
+        candidates(html, speciesNames, shiny).filter(::isGiant)
 
     private fun isGiant(path: String) =
         path.contains("/animados-gigante/") || path.contains("/animados-sinbordes-gigante/")
-
-    private fun isHighResolution(path: String) =
-        path.contains("/sprites/animados", ignoreCase = true)
 
     private fun normalizedNames(value: String): List<String> = listOf(value, value.replace('-', ' ')).map(::normalize).distinct()
 

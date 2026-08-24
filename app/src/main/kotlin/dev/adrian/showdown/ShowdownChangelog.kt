@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "HD sprite index lookup now targets the matching giant asset group instead of crawling broad page sets.",
                 "Constrained Thor profiles now stay on lightweight battle playback and avoid WebView memory pressure.",
                 "Move choices now wait for the authoritative Showdown battle entry instead of adding a duplicate local action line.",
                 "The upper battle feed now hides silent protocol events while keeping their state changes applied.",

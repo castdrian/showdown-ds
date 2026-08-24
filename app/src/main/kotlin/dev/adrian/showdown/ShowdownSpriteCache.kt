@@ -37,6 +37,10 @@ internal fun isGenericSpritePlaceholder(path: String): Boolean {
 internal fun isHighResolutionSpritePath(path: String): Boolean =
     path.contains("/sprites/animados", ignoreCase = true)
 
+internal fun isHdSpritePath(path: String): Boolean =
+    path.contains("/sprites/animados-gigante/", ignoreCase = true) ||
+        path.contains("/sprites/animados-sinbordes-gigante/", ignoreCase = true)
+
 internal fun isAnimatedSpritePath(path: String): Boolean =
     path.contains("/sprites/animados", ignoreCase = true) ||
         path.startsWith("sprites/ani", ignoreCase = true) ||
@@ -670,7 +674,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             requestBytes(indexUrl) { file ->
                 val html = file?.let { cachedFile -> runCatching { cachedFile.readText() }.getOrNull() }
                 val pageUrls = if (html == null) emptyList() else {
-                    listOf(indexUrl) + ShowdownSpriteIndexGroups.pageUrls(html, indexUrl)
+                    listOf(indexUrl) + ShowdownSpriteIndexGroups.pageUrls(html, indexUrl, speciesNames)
                 }.distinct()
 
                 fun requestPage(pageIndex: Int, pageFile: File?) {
@@ -770,7 +774,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             requestBytes(indexUrl) { file ->
                 val html = file?.let { cachedFile -> runCatching { cachedFile.readText() }.getOrNull() }
                 val pageUrls = if (html == null) emptyList() else {
-                    listOf(indexUrl) + ShowdownSpriteIndexGroups.pageUrls(html, indexUrl)
+                    listOf(indexUrl) + ShowdownSpriteIndexGroups.pageUrls(html, indexUrl, speciesNames)
                 }.distinct()
 
                 fun requestPage(pageIndex: Int, pageFile: File?) {
@@ -783,7 +787,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                     }.orEmpty().let { allCandidates ->
                         if (highResolutionOnly) {
                             allCandidates.filter { candidate ->
-                                isHighResolutionSpritePath(candidate)
+                                isHdSpritePath(candidate)
                             }
                         } else {
                             allCandidates
