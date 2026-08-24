@@ -151,9 +151,19 @@ class BattleAudio(
         val wasAnnouncerEnabled = announcerEnabled
         val effectsEnabled = session.soundEffectsEnabled
         soundEffectsEnabled.set(effectsEnabled)
-        announcerEnabled = session.announcerEnabled && !lowMemoryMode
-        if (announcerEnabled && !wasAnnouncerEnabled) audioCueHandler.post(::preloadAnnouncerAssets)
-        if (!announcerEnabled && wasAnnouncerEnabled) audioCueHandler.post(::clearAnnouncerCues)
+        announcerEnabled = session.announcerEnabled
+        if (announcerEnabled && !wasAnnouncerEnabled) {
+            audioCueHandler.post {
+                if (lowMemoryMode) initializeTransientSoundPool()
+                preloadAnnouncerAssets()
+            }
+        }
+        if (!announcerEnabled && wasAnnouncerEnabled) {
+            audioCueHandler.post {
+                clearAnnouncerCues()
+                releaseLowMemoryTransientSoundPool()
+            }
+        }
         if (!effectsEnabled) {
             audioCueHandler.post {
                 clearPendingBattleCues()
@@ -535,9 +545,10 @@ class BattleAudio(
     }
 
     fun playAnnouncerCue(cue: BattleAnnouncerCue) {
-        if (lowMemoryMode || !announcerEnabled || !soundEffectsEnabled.get()) return
+        if (!announcerEnabled || !soundEffectsEnabled.get()) return
         audioCueHandler.post {
             if (!announcerEnabled || !soundEffectsEnabled.get()) return@post
+            if (transientSoundPool == null) initializeTransientSoundPool()
             announcerFile(cue)?.let { enqueueAnnouncerCue(cue, it.path) }
         }
     }
@@ -837,7 +848,7 @@ class BattleAudio(
     }
 
     private fun initializeTransientSoundPool() {
-        if (released.get()) return
+        if (released.get() || transientSoundPool != null) return
         transientSoundPool = createSoundPool(8).also { pool ->
             pool.setOnLoadCompleteListener { _, sampleId, status ->
                 audioCueHandler.post {
@@ -855,6 +866,16 @@ class BattleAudio(
                 }
             }
         }
+    }
+
+    private fun releaseLowMemoryTransientSoundPool() {
+        if (!lowMemoryMode) return
+        transientSoundPool?.release()
+        transientSoundPool = null
+        transientSoundIds.clear()
+        transientSoundPathsById.clear()
+        loadedTransientSoundIds.clear()
+        pendingTransientSounds.clear()
     }
 
     private fun createSoundPool(maxStreams: Int) = SoundPool.Builder()

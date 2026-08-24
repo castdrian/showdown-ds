@@ -10,6 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "The optional PBR announcer now works on constrained Thor profiles while staying off until explicitly enabled.",
+                "Battle timer controls now preserve the correct availability message when no live timer exists.",
                 "Constrained Thor profiles now keep the five battle SFX cues available while leaving heavier audio assets disabled.",
                 "Interlaced HD sprite playback now stays within its decoded row buffer during live battles.",
                 "Formed Pokémon now retry their base species for the final facing-correct back-sprite fallback.",

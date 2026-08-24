@@ -4371,6 +4371,8 @@ class BattleSession {
         if (focusedMenuItem == 0) {
             status = "Connecting to a ${matchFormatDisplayLabel()}…"
             publishClientAction(ClientAction.FIND_BATTLE)
+        } else if (focusedMenuItem == MENU_ITEM_COUNT - 1 && !battleFinished) {
+            publishClientAction(ClientAction.TOGGLE_BATTLE_TIMER)
         } else {
             status = when (focusedMenuItem) {
                 1 -> {
@@ -4440,7 +4442,6 @@ class BattleSession {
                         publishClientAction(ClientAction.SAVE_REPLAY)
                         "Saving the battle replay."
                     } else {
-                        publishClientAction(ClientAction.TOGGLE_BATTLE_TIMER)
                         "Battle timer ${if (battleTimerEnabled) "stopping" else "starting"}."
                     }
                 }

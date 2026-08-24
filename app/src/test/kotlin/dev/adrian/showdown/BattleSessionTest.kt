@@ -2895,6 +2895,22 @@ class BattleSessionTest {
     }
 
     @Test
+    fun battleMenuPreservesTheNoLiveTimerStatus() {
+        val session = BattleSession()
+        session.addClientActionListener {
+            if (it == BattleSession.ClientAction.TOGGLE_BATTLE_TIMER) {
+                session.setConnectionStatus("There is no live battle timer to change.")
+            }
+        }
+
+        session.selectPanel(BattleSession.Panel.MENU)
+        session.selectMenuItem(14)
+        session.confirmSelection()
+
+        assertEquals("There is no live battle timer to change.", session.status)
+    }
+
+    @Test
     fun nativeBattleMarkupUpdatesReplacePreviousEntries() {
         val session = BattleSession()
 
