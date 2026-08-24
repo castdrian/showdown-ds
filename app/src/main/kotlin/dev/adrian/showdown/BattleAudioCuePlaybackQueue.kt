@@ -7,6 +7,9 @@ data class BattleAudioCuePlayback(
     val delayMillis: Long
 )
 
+internal fun effectiveBattleAudioCueRequestTime(queuedAtMillis: Long, nowMillis: Long): Long =
+    maxOf(queuedAtMillis, nowMillis)
+
 class BattleAudioCuePlaybackQueue {
     private var nextStandardAvailableAtMillis = 0L
     private var lastImpactAtMillis = Long.MIN_VALUE

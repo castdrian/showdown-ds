@@ -5,6 +5,12 @@ import org.junit.Test
 
 class BattleAudioCuePlaybackQueueTest {
     @Test
+    fun staleQueuedCuesUseTheFlushTimeAsTheirPlaybackOrigin() {
+        assertEquals(5_000L, effectiveBattleAudioCueRequestTime(1_000L, 5_000L))
+        assertEquals(6_000L, effectiveBattleAudioCueRequestTime(6_000L, 5_000L))
+    }
+
+    @Test
     fun effectivenessStartsAfterTheImpactSampleFinishes() {
         val queue = BattleAudioCuePlaybackQueue()
 

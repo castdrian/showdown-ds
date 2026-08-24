@@ -433,7 +433,8 @@ class BattleAudio(
             pendingBattleCues.removeFirst()
             val cue = pending.cue
             val queuedAtMillis = pending.queuedAtMillis
-            val playback = cuePlaybackQueue.enqueue(cue, queuedAtMillis)
+            val requestedAtMillis = effectiveBattleAudioCueRequestTime(queuedAtMillis, nowMillis)
+            val playback = cuePlaybackQueue.enqueue(cue, requestedAtMillis)
             scheduleBattleCue(cue, soundId, queuedAtMillis, playback.delayMillis, playback.delayMillis)
         }
     }
@@ -449,7 +450,8 @@ class BattleAudio(
             requestStaticBattleCue(pending.cue)
             if (pending.cue !in staticBattleCues) return
             pendingBattleCues.removeFirst()
-            val playback = cuePlaybackQueue.enqueue(pending.cue, pending.queuedAtMillis)
+            val requestedAtMillis = effectiveBattleAudioCueRequestTime(pending.queuedAtMillis, nowMillis)
+            val playback = cuePlaybackQueue.enqueue(pending.cue, requestedAtMillis)
             scheduleBattleCue(
                 pending.cue,
                 0,
