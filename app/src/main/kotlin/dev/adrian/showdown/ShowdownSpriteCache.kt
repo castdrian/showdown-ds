@@ -110,18 +110,18 @@ private const val MAX_ANIMATED_SOURCE_DIMENSION = 576
 private const val MAX_ANIMATED_SOURCE_PIXELS = 576L * 576L
 private const val MAX_ANIMATED_FILE_BYTES = 6L * 1024L * 1024L
 private const val MAX_ANIMATED_FRAME_COUNT = 24
-private const val MAX_STREAMED_HD_SOURCE_DIMENSION = 1024
-private const val MAX_STREAMED_HD_SOURCE_PIXELS = 1024L * 1024L
-private const val MAX_STREAMED_HD_FILE_BYTES = 16L * 1024L * 1024L
+private const val MAX_STREAMED_HD_SOURCE_DIMENSION = 1280
+private const val MAX_STREAMED_HD_SOURCE_PIXELS = 1280L * 1280L
+private const val MAX_STREAMED_HD_FILE_BYTES = 24L * 1024L * 1024L
 private const val MAX_STREAMED_HD_FRAME_COUNT = 96
 private const val CONSTRAINED_ANIMATED_FRAME_DIMENSION = 384
 private const val CONSTRAINED_ANIMATED_SOURCE_DIMENSION = 448
 private const val CONSTRAINED_ANIMATED_SOURCE_PIXELS = 448L * 448L
 private const val CONSTRAINED_ANIMATED_FILE_BYTES = 4L * 1024L * 1024L
 private const val CONSTRAINED_ANIMATED_FRAME_COUNT = 16
-private const val CONSTRAINED_STREAMED_HD_SOURCE_DIMENSION = 768
-private const val CONSTRAINED_STREAMED_HD_SOURCE_PIXELS = 768L * 768L
-private const val CONSTRAINED_STREAMED_HD_FILE_BYTES = 8L * 1024L * 1024L
+private const val CONSTRAINED_STREAMED_HD_SOURCE_DIMENSION = 1280
+private const val CONSTRAINED_STREAMED_HD_SOURCE_PIXELS = 1280L * 1280L
+private const val CONSTRAINED_STREAMED_HD_FILE_BYTES = 24L * 1024L * 1024L
 private const val CONSTRAINED_STREAMED_HD_FRAME_COUNT = 48
 private const val MOVIE_MEMORY_MULTIPLIER = 4L
 
@@ -360,11 +360,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
             fun fromBitmap(bitmap: Bitmap) = SpriteAsset(bitmap, null, null, bitmap.width, bitmap.height)
 
-            fun fromMovie(movie: Movie): SpriteAsset {
+            fun fromMovie(movie: Movie, maxFrameDimension: Int = MAX_ANIMATED_FRAME_DIMENSION): SpriteAsset {
                 val (frameWidth, frameHeight) = boundedAnimatedFrameSize(
                     movie.width(),
                     movie.height(),
-                    MAX_ANIMATED_FRAME_DIMENSION
+                    maxFrameDimension
                 )
                 return SpriteAsset(null, movie, null, frameWidth, frameHeight, movie.width(), movie.height())
             }
@@ -1107,20 +1107,24 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 maxPixels = maxAnimatedSourcePixels
             ) && fileBytes in 1L..maxAnimatedFileBytes
             if (fitsMovieBudget) {
-                return decodeStreamedGif(file) ?: if (memoryConstrained) null else decodeMovie(file)
+                return if (memoryConstrained) {
+                    decodeMovie(file) ?: decodeStreamedGif(file)
+                } else {
+                    decodeStreamedGif(file) ?: decodeMovie(file)
+                }
             }
             if (!isHighResolutionSpritePath(path)) return null
-            decodeStreamedHdGif(file, canvasSize)
+            decodeMovie(file, maxAnimatedFrameDimension) ?: decodeStreamedHdGif(file, canvasSize)
         } else {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
         }
     }
 
-    private fun decodeMovie(file: File): SpriteAsset? {
+    private fun decodeMovie(file: File, maxFrameDimension: Int = maxAnimatedFrameDimension): SpriteAsset? {
         return Movie.decodeFile(file.path)?.takeIf {
             it.width() > 0 && it.height() > 0 && it.duration() > 0 && hasDistinctMovieFrames(it)
-        }?.let(SpriteAsset::fromMovie)
+        }?.let { SpriteAsset.fromMovie(it, maxFrameDimension) }
     }
 
     private fun decodeStreamedGif(file: File): SpriteAsset? {
@@ -1260,7 +1264,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         const val CONSTRAINED_SPRITE_MEMORY_CACHE_BYTES = 6 * 1024 * 1024
         const val MAX_COMMUNITY_SPRITE_CANDIDATES = 8
         const val BACK_SPRITE_ANIMATED_FALLBACK_DELAY_MILLIS = 900L
-        const val MAX_FILE_BYTES = 16 * 1024 * 1024
+        const val MAX_FILE_BYTES = 24 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }
 }

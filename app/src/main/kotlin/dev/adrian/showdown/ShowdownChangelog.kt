@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Constrained Thor profiles now use bounded native animation playback for smoother HD sprites with lower CPU use.",
                 "The optional PBR announcer now covers stat changes and common status effects with matching voice clips.",
                 "Constrained devices now play battle cues from compact PCM assets without creating MP3 decoder bursts.",
                 "The optional PBR announcer now works on constrained Thor profiles while staying off until explicitly enabled.",
