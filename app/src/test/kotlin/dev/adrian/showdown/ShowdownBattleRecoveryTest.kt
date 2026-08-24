@@ -41,4 +41,26 @@ class ShowdownBattleRecoveryTest {
             ShowdownBattleRecovery.mode("battle-test", false, false)
         )
     }
+
+    @Test
+    fun guestSpectatorRecoveryDropsAStalePendingDecision() {
+        assertEquals(
+            null,
+            ShowdownBattleRecovery.pendingDecisionCommand(
+                ShowdownBattleRecovery.Mode.GUEST_SPECTATOR,
+                "/choose move 1"
+            )
+        )
+    }
+
+    @Test
+    fun participantRecoveryPreservesAPendingDecision() {
+        assertEquals(
+            "/choose move 1",
+            ShowdownBattleRecovery.pendingDecisionCommand(
+                ShowdownBattleRecovery.Mode.REGISTERED_PARTICIPANT,
+                "/choose move 1"
+            )
+        )
+    }
 }

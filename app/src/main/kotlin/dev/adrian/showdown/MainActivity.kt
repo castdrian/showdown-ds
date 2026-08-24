@@ -2517,6 +2517,8 @@ class MainActivity : Activity() {
         pendingBattleSearchTeamPacked = savedInstanceState?.getString("pending_battle_search_team")
             ?: preferences.getString("pending_battle_search_team", null)
         val battlePlayerSlot = savedInstanceState?.getString("battle_player_slot") ?: preferences.getString("battle_player_slot", null)
+        val restoredPendingDecisionCommand = savedInstanceState?.getString("pending_decision_command")
+            ?: preferences.getString("pending_decision_command", null)
         val recoveryMode = ShowdownBattleRecovery.mode(activeBattleRoomId, battleWasRegistered, battleWasParticipant, battleIsSpectator)
         if (recoveryMode == ShowdownBattleRecovery.Mode.GUEST_SPECTATOR) {
             battleIsSpectator = true
@@ -2524,8 +2526,7 @@ class MainActivity : Activity() {
         }
         if (activeBattleRoomId != null) session.restoreBattlePlayerSlot(battlePlayerSlot)
         completedBattleRoomId = savedInstanceState?.getString("completed_battle_room")
-        pendingDecisionCommand = savedInstanceState?.getString("pending_decision_command")
-            ?: preferences.getString("pending_decision_command", null)
+        pendingDecisionCommand = ShowdownBattleRecovery.pendingDecisionCommand(recoveryMode, restoredPendingDecisionCommand)
         pendingDecisionSentConnection = null
         battleProtocolReady = false
         session.setLiveBattleActive(false)

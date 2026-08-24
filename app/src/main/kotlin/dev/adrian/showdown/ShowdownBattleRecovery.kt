@@ -15,4 +15,8 @@ object ShowdownBattleRecovery {
         participant -> Mode.GUEST_SPECTATOR
         else -> Mode.SPECTATOR
     }
+
+    fun pendingDecisionCommand(mode: Mode, command: String?): String? = command.takeUnless {
+        mode == Mode.GUEST_SPECTATOR
+    }
 }

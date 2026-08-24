@@ -324,8 +324,9 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(source.contains("pendingDecisionCommand = command"))
         assertTrue(source.contains("pendingDecisionSentConnection = connection"))
-        assertTrue(source.contains("pendingDecisionCommand = savedInstanceState?.getString(\"pending_decision_command\")"))
+        assertTrue(source.contains("val restoredPendingDecisionCommand = savedInstanceState?.getString(\"pending_decision_command\")"))
         assertTrue(source.contains("preferences.getString(\"pending_decision_command\", null)"))
+        assertTrue(source.contains("ShowdownBattleRecovery.pendingDecisionCommand(recoveryMode, restoredPendingDecisionCommand)"))
         assertTrue(source.contains("reconcilePendingDecisionCommand(lines)"))
         assertFalse(source.contains("if (packet.connection.send(roomId, command)) pendingDecisionCommand = null"))
     }
