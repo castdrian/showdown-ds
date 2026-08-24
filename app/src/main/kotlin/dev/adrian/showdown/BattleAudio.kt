@@ -137,7 +137,7 @@ class BattleAudio(
             }
         }
         if (!lowMemoryMode) audioCueHandler.post(::initializeTransientSoundPool)
-        if (!lowMemoryMode) audioCueHandler.post(::loadBattleSounds)
+        audioCueHandler.post(::loadBattleSounds)
         if (!lowMemoryMode) {
             resourceCache.requestAudio("audio/notification.wav") { notificationFile = it }
         }

@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Constrained Thor profiles now keep the five battle SFX cues available while leaving heavier audio assets disabled.",
                 "Interlaced HD sprite playback now stays within its decoded row buffer during live battles.",
                 "Formed Pokémon now retry their base species for the final facing-correct back-sprite fallback.",
                 "HD sprite index lookup now targets the matching giant asset group instead of crawling broad page sets.",
