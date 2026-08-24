@@ -93,6 +93,13 @@ class BattleSpriteRequestTest {
             listOf("sprites/gen5-back/ironvaliant.png"),
             ShowdownAssetPaths.staticBackSpriteCandidates("Iron Valiant")
         )
+        assertEquals(
+            listOf(
+                "sprites/gen5-back/terapagosterastal.png",
+                "sprites/gen5-back/terapagos.png"
+            ),
+            ShowdownAssetPaths.staticBackSpriteCandidates("Terapagos-Terastal")
+        )
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         assertTrue(source.contains("requestStaticShowdownBackFallback(request, receiver)"))
         assertTrue(source.contains("ShowdownAssetPaths.staticBackSpriteCandidates(request.species)"))
