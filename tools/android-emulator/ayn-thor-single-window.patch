@@ -2,7 +2,7 @@ diff --git a/android/android-emu/android/emulation/MultiDisplay.cpp b/android/an
 index 8cacba4027a..1fe07d814020 100644
 --- a/android/android-emu/android/emulation/MultiDisplay.cpp
 +++ b/android/android-emu/android/emulation/MultiDisplay.cpp
-@@ -405,10 +405,18 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
+@@ -405,10 +405,19 @@ bool MultiDisplay::translateCoordination(uint32_t* x,
                  pos_x = iter.second.pos_x;
                  pos_y = totalH - iter.second.height - iter.second.pos_y;
                  w = iter.second.width;
@@ -145,7 +145,7 @@ index 8cacba4027a..1fe07d814020 100644
 diff --git a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
 --- a/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
 +++ b/hardware/google/gfxstream/host/vulkan/post_worker_vk.cpp
-@@ -162,6 +162,9 @@
+@@ -162,3 +162,11 @@
                      continue;
                  }
 
