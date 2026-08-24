@@ -962,9 +962,10 @@ class CommandDeckView(
             bounds.right - detailPadding,
             bounds.bottom - detailPadding
         )
+        paint.style = Paint.Style.FILL
+        paint.shader = null
         paint.color = Color.argb(178, 3, 14, 24)
         canvas.drawRoundRect(bounds, 18f * scale, 18f * scale, paint)
-        paint.style = Paint.Style.FILL
         if (veryCompact) {
             drawCompactMoveDetails(canvas, detailContent, move, scale)
             return

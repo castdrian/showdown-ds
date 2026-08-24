@@ -34,6 +34,10 @@ class CommandDeckViewContractTest {
         assertTrue(detailCell.contains("Color.rgb(24, 31, 38)"))
         assertTrue(detailCell.contains("Color.argb(72, 172, 180, 186)"))
         assertTrue(detailCell.contains("Color.rgb(216, 227, 232)"))
+
+        val moveDetails = source.substringAfter("private fun drawMoveDetails")
+            .substringBefore("private fun drawCompactMoveDetails")
+        assertTrue(moveDetails.contains("paint.style = Paint.Style.FILL\n        paint.shader = null\n        paint.color = Color.argb(178, 3, 14, 24)"))
     }
 
     @Test
