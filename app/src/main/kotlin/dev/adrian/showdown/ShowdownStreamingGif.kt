@@ -396,31 +396,16 @@ internal class ShowdownStreamingGif private constructor(
             }
         }
 
-        private fun interlacedRows(height: Int): IntArray {
+        internal fun interlacedRows(height: Int): IntArray {
             val rows = IntArray(height)
             var index = 0
-            var step = 8
-            var start = 0
-            while (step > 0) {
-                var row = start
-                while (row < height) {
+            val starts = intArrayOf(0, 4, 2, 1)
+            val steps = intArrayOf(8, 8, 4, 2)
+            starts.indices.forEach { pass ->
+                var row = starts[pass]
+                while (row < height && index < rows.size) {
                     rows[index++] = row
-                    row += step
-                }
-                when (step) {
-                    8 -> {
-                        start = 4
-                        step = 8
-                    }
-                    4 -> {
-                        start = 2
-                        step = 4
-                    }
-                    2 -> {
-                        start = 1
-                        step = 2
-                    }
-                    else -> step = 0
+                    row += steps[pass]
                 }
             }
             return rows
