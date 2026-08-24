@@ -17,7 +17,8 @@ diff --git a/host/vulkan/post_worker_vk.cpp b/host/vulkan/post_worker_vk.cpp
 diff --git a/host/post_worker_gl.cpp b/host/post_worker_gl.cpp
 --- a/host/post_worker_gl.cpp
 +++ b/host/post_worker_gl.cpp
-@@ -132,7 +132,12 @@ std::shared_future<void> PostWorkerGl::postImpl(
+@@ -137,7 +137,13 @@ std::shared_future<void> PostWorkerGl::postImpl(
+                 if (!currentCb) {
                      continue;
                  }
  
@@ -26,7 +27,7 @@ diff --git a/host/post_worker_gl.cpp b/host/post_worker_gl.cpp
 +                    currentDisplayW = 1085;
 +                    currentDisplayH = 945;
 +                }
- 
+++
                  const auto transform = getTransformFromRotation(mFb->getZrot());
                  postLayerOptions.transform = transform;
                  if ( transform == HWC_TRANSFORM_ROT_90 || transform == HWC_TRANSFORM_ROT_270) {
