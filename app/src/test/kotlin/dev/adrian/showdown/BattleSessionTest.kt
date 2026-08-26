@@ -1509,6 +1509,34 @@ class BattleSessionTest {
     }
 
     @Test
+    fun targetedGimmickChoicesPlaceTheTargetBeforeTheOfficialSuffix() {
+        val cases = listOf(
+            BattleSession.BattleGimmick.Z_POWER to "zmove",
+            BattleSession.BattleGimmick.MEGA_EVOLUTION to "mega",
+            BattleSession.BattleGimmick.DYNAMAX to "max",
+            BattleSession.BattleGimmick.TERASTALLIZATION to "terastallize"
+        )
+
+        cases.forEachIndexed { index, (gimmick, suffix) ->
+            val decisions = mutableListOf<String>()
+            val session = BattleSession()
+            session.addDecisionListener(decisions::add)
+            session.applyProtocolLine(
+                "|request|{\"rqid\":${40 + index},\"active\":[{\"canZMove\":[{}],\"canMegaEvo\":true,\"canDynamax\":true,\"canTerastallize\":\"Fire\",\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"target\":\"self\"}]}]}"
+            )
+
+            session.selectGimmick(gimmick)
+            session.selectTargetWithTouch(0)
+            session.confirmSelection()
+
+            assertEquals(
+                listOf("/choose move 1 +1 $suffix, move 1|${40 + index}"),
+                decisions
+            )
+        }
+    }
+
+    @Test
     fun noCancelRequestsDoNotExposeCancellationAfterSubmittingAChoice() {
         val session = BattleSession()
         session.setLiveBattleActive(true)

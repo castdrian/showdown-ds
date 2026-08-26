@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Targeted gimmick moves now use Showdown's official target-before-gimmick choice order in multi-Pokémon battles.",
                 "Lightweight battle playback now suppresses move animations when Showdown sends the official still marker.",
                 "Lightweight battle playback now honors Showdown animation overrides while keeping the displayed move unchanged.",
                 "Team exports now use Showdown's canonical advanced-field order and accept the full 0–255 EV range.",

@@ -1391,7 +1391,7 @@ class BattleSession {
                 }
                 val gimmick = selectedGimmick
                 val gimmickLabel = gimmick?.let(::gimmickLabel)
-                val selectedChoice = "move ${focusedMove + 1}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}${target?.let { " $it" } ?: ""}"
+                val selectedChoice = "move ${focusedMove + 1}${target?.let { " $it" } ?: ""}${gimmick?.let { " ${it.choiceSuffix}" } ?: ""}"
                 val activeRequest = activeRequests.getOrNull(activeSlotIndex)
                 val isLastActiveChoice = activeRequests.size <= 1 || activeSlotIndex >= activeRequests.lastIndex
                 val choiceMayNotBeCancelled = isLastActiveChoice &&
