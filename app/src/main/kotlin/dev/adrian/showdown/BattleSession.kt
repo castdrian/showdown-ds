@@ -1528,7 +1528,7 @@ class BattleSession {
 
     fun applyLobbyChat(lines: List<String>) {
         lines.map { it.split('|') }
-            .filter { it.getOrNull(1) == "c" || it.getOrNull(1) == "c:" || it.getOrNull(1) == "pm" }
+            .filter { it.getOrNull(1) in setOf("c", "chat", "c:", "pm") }
             .forEach(::applyChat)
         notifyListeners()
     }
@@ -1715,7 +1715,7 @@ class BattleSession {
                     "n", "name" -> applyBattleRoomRename(fields)
                     "bigerror" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.takeIf { it.isNotBlank() }?.let { appendLog("Warning: $it") }
                     "error" -> applyBattleError(fields)
-                    "c", "c:" -> applyChat(fields)
+                    "c", "chat", "c:" -> applyChat(fields)
                     "inactive" -> {
                         val message = fields.drop(2).joinToString("|")
                         battleTimerEnabled = true
@@ -3397,9 +3397,15 @@ class BattleSession {
 
     private fun applyChat(fields: List<String>) {
         val parsed = when (fields.getOrNull(1)) {
-            "c:" -> fields.getOrNull(3)?.let { fields.getOrNull(4)?.let { message -> fields[3] to message } }
-            "pm" -> fields.getOrNull(2)?.let { fields.getOrNull(4)?.let { message -> "PM $it" to message } }
-            else -> fields.getOrNull(2)?.let { fields.getOrNull(3)?.let { message -> it to message } }
+            "c:" -> fields.getOrNull(3)?.let { speaker ->
+                fields.drop(4).joinToString("|").takeIf(String::isNotEmpty)?.let { speaker to it }
+            }
+            "pm" -> fields.getOrNull(2)?.let { speaker ->
+                fields.drop(4).joinToString("|").takeIf(String::isNotEmpty)?.let { "PM $speaker" to it }
+            }
+            else -> fields.getOrNull(2)?.let { speaker ->
+                fields.drop(3).joinToString("|").takeIf(String::isNotEmpty)?.let { speaker to it }
+            }
         } ?: return
         val message = "[${parsed.first}] ${parsed.second}"
         chatMessages += message

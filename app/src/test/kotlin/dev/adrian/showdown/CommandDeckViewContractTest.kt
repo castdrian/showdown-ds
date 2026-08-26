@@ -44,8 +44,12 @@ class CommandDeckViewContractTest {
         assertFalse(battleConsole.contains("Paint.Style.STROKE"))
         assertFalse(compactMetrics.contains("Paint.Style.STROKE"))
         assertFalse(effectSummary.contains("Paint.Style.STROKE"))
+        assertFalse(detailCell.contains("canvas.drawRoundRect(bounds"))
+        assertFalse(detailCell.contains("canvas.drawRoundRect(inner"))
+        assertTrue(battleConsole.indexOf("paint.style = Paint.Style.FILL") < battleConsole.indexOf("canvas.drawRoundRect(bounds"))
         assertTrue(detailCell.contains("paint.shader = null"))
-        assertTrue(detailCell.contains("Color.rgb(24, 31, 38)"))
+        assertTrue(detailCell.contains("Color.rgb(5, 17, 28)"))
+        assertTrue(detailCell.contains("canvas.drawRect(bounds, paint)"))
         assertTrue(detailCell.contains("Color.argb(72, 172, 180, 186)"))
         assertTrue(detailCell.contains("Color.rgb(216, 227, 232)"))
 

@@ -10,6 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Move power, accuracy, category, and target now share a clean detail panel without colored tile outlines.",
+                "Full-form Showdown chat messages now reach lobby and battle activity without truncating pipe characters.",
                 "Official plain-text and double-pipe battle-room messages now appear in the readable upper-screen battle log.",
                 "Targeted gimmick moves now use Showdown's official target-before-gimmick choice order in multi-Pokémon battles.",
                 "Lightweight battle playback now suppresses move animations when Showdown sends the official still marker.",

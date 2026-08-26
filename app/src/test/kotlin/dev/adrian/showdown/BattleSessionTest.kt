@@ -836,12 +836,30 @@ class BattleSessionTest {
     fun lobbyChatAndPrivateMessagesEnterActivity() {
         val session = BattleSession()
 
-        session.applyLobbyChat(listOf("|c|MISTY|Hello", "|c:|123|MISTY|Timestamped hello", "|pm|GARY|ADRIAN|Want to battle?"))
+        session.applyLobbyChat(
+            listOf(
+                "|c|MISTY|Hello|there",
+                "|chat|BROCK|Rock|solid",
+                "|c:|123|MISTY|Timestamped|hello",
+                "|pm|GARY|ADRIAN|Want|to battle?"
+            )
+        )
 
-        assertTrue(session.chatMessages().contains("[MISTY] Hello"))
-        assertTrue(session.chatMessages().contains("[MISTY] Timestamped hello"))
-        assertTrue(session.chatMessages().contains("[PM GARY] Want to battle?"))
-        assertTrue(session.activityMessages().last().contains("Want to battle?"))
+        assertTrue(session.chatMessages().contains("[MISTY] Hello|there"))
+        assertTrue(session.chatMessages().contains("[BROCK] Rock|solid"))
+        assertTrue(session.chatMessages().contains("[MISTY] Timestamped|hello"))
+        assertTrue(session.chatMessages().contains("[PM GARY] Want|to battle?"))
+        assertTrue(session.activityMessages().last().contains("Want|to battle?"))
+    }
+
+    @Test
+    fun fullBattleChatMessagesPreserveTheirEntirePayload() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|chat|ERIKA|Good|luck out there")
+
+        assertTrue(session.chatMessages().contains("[ERIKA] Good|luck out there"))
+        assertTrue(session.activityMessages().contains("[ERIKA] Good|luck out there"))
     }
 
     @Test

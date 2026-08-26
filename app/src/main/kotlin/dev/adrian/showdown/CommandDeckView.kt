@@ -855,10 +855,10 @@ class CommandDeckView(
     }
 
     private fun drawBattleConsole(canvas: Canvas, bounds: RectF, scale: Float) {
+        paint.style = Paint.Style.FILL
         paint.shader = LinearGradient(bounds.left, bounds.top, bounds.right, bounds.bottom, Color.rgb(17, 47, 63), Color.rgb(6, 21, 34), Shader.TileMode.CLAMP)
         canvas.drawRoundRect(bounds, 25f * scale, 25f * scale, paint)
         paint.shader = null
-        paint.style = Paint.Style.FILL
         targetBounds.fill(null)
         gimmickBounds.fill(null)
         shiftBounds = null
@@ -1052,20 +1052,17 @@ class CommandDeckView(
     }
 
     private fun drawMoveInfoCell(canvas: Canvas, bounds: RectF, label: String, value: String, scale: Float) {
-        val radius = 18f * scale
-        val inner = RectF(bounds)
         paint.style = Paint.Style.FILL
         paint.shader = null
-        paint.color = Color.rgb(24, 31, 38)
-        canvas.drawRoundRect(inner, radius, radius, paint)
-
+        paint.color = Color.rgb(5, 17, 28)
+        canvas.drawRect(bounds, paint)
         val horizontalPadding = 24f * scale
         val verticalPadding = 16f * scale
         val content = RectF(
-            inner.left + horizontalPadding,
-            inner.top + verticalPadding,
-            inner.right - horizontalPadding,
-            inner.bottom - verticalPadding
+            bounds.left + horizontalPadding,
+            bounds.top + verticalPadding,
+            bounds.right - horizontalPadding,
+            bounds.bottom - verticalPadding
         )
         val labelHeight = 28f * scale
         val labelArea = RectF(content.left, content.top, content.right, content.top + labelHeight)
