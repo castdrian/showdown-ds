@@ -1534,7 +1534,7 @@ class BattleSession {
     }
 
     fun applyProtocolPacket(lines: List<String>) {
-        val rawPacket = lines.filter { it.startsWith('|') }
+        val rawPacket = lines.filter(String::isNotBlank)
         synchronizePlayerSlot(rawPacket)
         val packet = visibleProtocolLines(rawPacket)
         if (packet.any { it.startsWith("|init|battle") }) protocolHistory.clear()
@@ -1544,13 +1544,19 @@ class BattleSession {
         try {
             packet.forEach { line ->
                 protocolLogSuppressed = false
+                if (!line.startsWith('|')) {
+                    battleRoomPresenceLog = null
+                    battleRoomRenameFallback = null
+                    appendDirectMessage(line)
+                    return@forEach
+                }
                 val fields = line.split('|')
                 if (fields.size < 2) return@forEach
                 if (line == "|") {
                     battleFeedVisible = false
                     return@forEach
                 }
-                protocolLogSuppressed = isSilent(fields)
+                protocolLogSuppressed = fields[1].isNotEmpty() && isSilent(fields)
                 when (fields[1]) {
                     "j", "join", "l", "leave" -> battleRoomRenameFallback = null
                     "n", "name" -> Unit
@@ -1561,6 +1567,7 @@ class BattleSession {
                     }
                 }
                 when (fields[1]) {
+                    "" -> appendDirectMessage(fields.drop(2).joinToString("|"))
                     "init" -> applyInit(fields)
                     "player" -> applyPlayer(fields)
                     "gametype" -> applyGameType(fields)
@@ -4356,6 +4363,10 @@ class BattleSession {
 
     private fun appendMarkup(value: String) {
         sanitizeMarkup(value)?.let(::appendLog)
+    }
+
+    private fun appendDirectMessage(value: String) {
+        value.trim().takeIf(String::isNotEmpty)?.let(::appendLog)
     }
 
     private fun applyMarkup(key: String?, value: String) {

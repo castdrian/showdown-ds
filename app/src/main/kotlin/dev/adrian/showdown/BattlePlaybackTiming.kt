@@ -45,8 +45,9 @@ object BattlePlaybackTiming {
 
     private fun readableMessageCount(lines: List<String>): Long = lines.count { line ->
         val action = line.split('|').getOrNull(1).orEmpty()
-        !line.contains("|[silent]") &&
-            (action.startsWith("-") || action in READABLE_ACTIONS)
+        val directMessage = !line.startsWith('|') || line.startsWith("||")
+        line.isNotBlank() &&
+            (directMessage || !line.contains("|[silent]") && (action.startsWith("-") || action in READABLE_ACTIONS))
     }.toLong()
 
     private fun isActionBoundary(line: String) =

@@ -90,6 +90,20 @@ class BattlePlaybackTimingTest {
     }
 
     @Test
+    fun leavesDirectRoomMessagesOnScreenLongEnoughToRead() {
+        assertEquals(
+            7_200L,
+            BattlePlaybackTiming.pauseAfter(
+                listOf(
+                    "A moderator paused the battle.",
+                    "||The server will restart after this battle.",
+                    "||Maintenance|[silent]"
+                )
+            )
+        )
+    }
+
+    @Test
     fun scalesReplayPausesWithoutChangingLiveTiming() {
         assertEquals(1_300L, BattlePlaybackTiming.scaledPause(2_600L, 2f))
         assertEquals(5_200L, BattlePlaybackTiming.scaledPause(2_600L, 0.5f))

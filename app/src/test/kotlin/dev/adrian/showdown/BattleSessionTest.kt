@@ -249,6 +249,27 @@ class BattleSessionTest {
     }
 
     @Test
+    fun officialDirectRoomMessagesAppearInTheBattleLog() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "A moderator paused the battle.",
+                "Use <foo> &amp; bar",
+                "||The server will restart on <sim3> &amp; stay online.",
+                "||Maintenance|[silent]"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("A moderator paused the battle."))
+        assertTrue(session.battleLog().contains("Use <foo> &amp; bar"))
+        assertTrue(session.battleLog().contains("The server will restart on <sim3> &amp; stay online."))
+        assertTrue(session.battleLog().contains("Maintenance|[silent]"))
+        assertTrue(session.protocolHistory().contains("A moderator paused the battle."))
+    }
+
+    @Test
     fun upperBattleFeedRemovesAdjacentDuplicateMessages() {
         val session = BattleSession()
 
@@ -2627,14 +2648,14 @@ class BattleSessionTest {
         session.applyProtocolLine("|turn|1")
         session.addProtocolListener { received += it }
 
-        session.applyProtocolPacket(listOf("ignored", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"))
+        session.applyProtocolPacket(listOf("A moderator paused the battle.", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"))
 
         assertEquals(
-            listOf("|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"),
+            listOf("A moderator paused the battle.", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"),
             received.single()
         )
         assertEquals(
-            listOf("|turn|1", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"),
+            listOf("|turn|1", "A moderator paused the battle.", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"),
             session.protocolHistory()
         )
 
