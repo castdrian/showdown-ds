@@ -201,9 +201,13 @@ class BattleSceneView(
                     lightweightImpactSoundCue = null
                     lightweightLateImpactSoundCue = null
                     lightweightMoveName = fields.getOrNull(3).orEmpty()
-                    lightweightMoveType = session.moveTypeFor(lightweightMoveName)?.uppercase() ?: inferMoveType(lightweightMoveName)
-                    lightweightMoveCategory = session.moveInfoFor(lightweightMoveName)?.category?.uppercase()
+                    val animationMoveName = ShowdownBattleMovePresentation.animationName(fields.drop(5), lightweightMoveName)
+                    val originalMoveType = session.moveTypeFor(lightweightMoveName)?.uppercase() ?: inferMoveType(lightweightMoveName)
+                    val originalMoveCategory = session.moveInfoFor(lightweightMoveName)?.category?.uppercase()
                         ?: inferMoveCategory(lightweightMoveName)
+                    lightweightMoveType = session.moveTypeFor(animationMoveName)?.uppercase() ?: originalMoveType
+                    lightweightMoveCategory = session.moveInfoFor(animationMoveName)?.category?.uppercase()
+                        ?: originalMoveCategory
                     lightweightStatEffectAtNanos = 0L
                     lightweightStatDirection = 0
                     changed = true
