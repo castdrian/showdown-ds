@@ -19,9 +19,9 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 gpu_mode="${AYN_THOR_GPU_MODE:-$default_gpu_mode}"
 window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
-cpu_cores="${AYN_THOR_CPU_CORES:-1}"
-ram_size_mb="${AYN_THOR_RAM_MB:-1024}"
-vm_heap_size_mb="${AYN_THOR_HEAP_MB:-128}"
+cpu_cores="${AYN_THOR_CPU_CORES:-2}"
+ram_size_mb="${AYN_THOR_RAM_MB:-1536}"
+vm_heap_size_mb="${AYN_THOR_HEAP_MB:-192}"
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
