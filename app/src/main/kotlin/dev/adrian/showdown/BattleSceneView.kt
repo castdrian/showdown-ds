@@ -66,6 +66,7 @@ class BattleSceneView(
     private var animationsPaused = false
     private var playbackSpeed = 1f
     private var lightweightMoveStartedAtNanos = 0L
+    private var lightweightMoveAnimationEnabled = true
     private var lightweightMoveActorPlayer = true
     private var lightweightMoveTargetPlayer: Boolean? = null
     private var lightweightImpactAtNanos = 0L
@@ -156,6 +157,7 @@ class BattleSceneView(
         battleFeedPresentation.reset()
         battleFeedBounds.setEmpty()
         lightweightMoveStartedAtNanos = 0L
+        lightweightMoveAnimationEnabled = true
         lightweightMoveActorPlayer = true
         lightweightMoveTargetPlayer = null
         lightweightImpactAtNanos = 0L
@@ -192,7 +194,9 @@ class BattleSceneView(
             when (fields.getOrNull(1)) {
                 "move" -> {
                     val actor = fields.getOrNull(2).orEmpty()
-                    lightweightMoveStartedAtNanos = nowNanos
+                    val moveArguments = fields.drop(5)
+                    lightweightMoveAnimationEnabled = ShowdownBattleMovePresentation.shouldAnimate(moveArguments)
+                    lightweightMoveStartedAtNanos = if (lightweightMoveAnimationEnabled) nowNanos else 0L
                     lightweightMoveActorPlayer = session.isLocalBattleSide(actor)
                     lightweightMoveTargetPlayer = fields.getOrNull(4)?.let(session::isLocalBattleSide)
                     lightweightImpactAtNanos = 0L
@@ -201,7 +205,7 @@ class BattleSceneView(
                     lightweightImpactSoundCue = null
                     lightweightLateImpactSoundCue = null
                     lightweightMoveName = fields.getOrNull(3).orEmpty()
-                    val animationMoveName = ShowdownBattleMovePresentation.animationName(fields.drop(5), lightweightMoveName)
+                    val animationMoveName = ShowdownBattleMovePresentation.animationName(moveArguments, lightweightMoveName)
                     val originalMoveType = session.moveTypeFor(lightweightMoveName)?.uppercase() ?: inferMoveType(lightweightMoveName)
                     val originalMoveCategory = session.moveInfoFor(lightweightMoveName)?.category?.uppercase()
                         ?: inferMoveCategory(lightweightMoveName)
@@ -659,7 +663,7 @@ class BattleSceneView(
 
     private fun lightweightMoveEffectActive(nowNanos: Long): Boolean {
         val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < scaledLightweightMoveDurationNanos()
-        val impactActive = lightweightImpactAtNanos > 0L && nowNanos - lightweightImpactAtNanos < scaledLightweightImpactDurationNanos()
+        val impactActive = lightweightMoveAnimationEnabled && lightweightImpactAtNanos > 0L && nowNanos - lightweightImpactAtNanos < scaledLightweightImpactDurationNanos()
         val statActive = lightweightStatEffectAtNanos > 0L && nowNanos - lightweightStatEffectAtNanos < scaledLightweightStatDurationNanos()
         return moveActive || impactActive || statActive
     }
@@ -684,27 +688,29 @@ class BattleSceneView(
         val targetX = if (targetPlayer) playerX else opponentX
         val targetY = if (targetPlayer) playerY else opponentY
         val palette = lightweightMovePalette(lightweightMoveType)
-        if (lightweightMoveCategory == "STATUS") {
-            drawStatusMoveEffect(canvas, targetX, targetY, scale, nowNanos, palette)
-        } else {
-            drawAttackMoveEffect(
-                canvas,
-                width,
-                height,
-                playerX,
-                playerY,
-                opponentX,
-                opponentY,
-                targetPlayer,
-                impactAt,
-                actorX,
-                actorY,
-                targetX,
-                targetY,
-                scale,
-                nowNanos,
-                palette
-            )
+        if (lightweightMoveAnimationEnabled) {
+            if (lightweightMoveCategory == "STATUS") {
+                drawStatusMoveEffect(canvas, targetX, targetY, scale, nowNanos, palette)
+            } else {
+                drawAttackMoveEffect(
+                    canvas,
+                    width,
+                    height,
+                    playerX,
+                    playerY,
+                    opponentX,
+                    opponentY,
+                    targetPlayer,
+                    impactAt,
+                    actorX,
+                    actorY,
+                    targetX,
+                    targetY,
+                    scale,
+                    nowNanos,
+                    palette
+                )
+            }
         }
         drawStatEffect(canvas, targetX, targetY, scale, nowNanos, palette)
     }
