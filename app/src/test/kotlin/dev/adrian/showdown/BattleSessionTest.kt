@@ -863,6 +863,27 @@ class BattleSessionTest {
     }
 
     @Test
+    fun userFacingBattleNoticesStayInActivityWithoutCrowdingTheBattleFeed() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|chatmsg|The tournament starts in two minutes.",
+                "|chatmsg-raw|<strong>Round 2</strong> is ready.",
+                "|warning|Your connection is unstable.",
+                "|popup|Reconnect|to continue."
+            )
+        )
+
+        assertTrue(session.activityMessages().contains("[System] The tournament starts in two minutes."))
+        assertTrue(session.activityMessages().contains("[System] Round 2 is ready."))
+        assertTrue(session.activityMessages().contains("[Warning] Your connection is unstable."))
+        assertTrue(session.activityMessages().contains("[Notice] Reconnect|to continue."))
+        assertFalse(session.battleLog().any { it.contains("tournament", true) })
+        assertFalse(session.battleFeedEntries().any { it.contains("connection", true) })
+    }
+
+    @Test
     fun failedLocalChatCanBeRemovedWithoutTouchingEarlierMessages() {
         val session = BattleSession()
         session.sendChat("gl hf")
@@ -1169,6 +1190,23 @@ class BattleSessionTest {
         assertEquals("doubles", session.gameType)
         assertFalse(session.isSinglesBattle())
         assertTrue(session.battleLog().last().contains("Flare Blitz"))
+    }
+
+    @Test
+    fun protocolTimestampTracksTheLatestAuthoritativeBattleTime() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|t:|1787745600")
+
+        assertEquals(1787745600L, session.protocolTimestampSeconds())
+
+        session.applyProtocolLine("|t:|invalid")
+
+        assertEquals(1787745600L, session.protocolTimestampSeconds())
+
+        session.applyProtocolLine("|init|battle")
+
+        assertNull(session.protocolTimestampSeconds())
     }
 
     @Test

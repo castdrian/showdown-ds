@@ -332,6 +332,7 @@ class BattleSession {
     private var battleLogGeneration = 0L
     private var nativeBattleLogGeneration = -1L
     private var nativeBattleLogPending = false
+    private var protocolTimestampSeconds: Long? = null
     private val battleFeedEntriesCache = mutableMapOf<Int, List<String>>()
     private var hasBattleProtocolTranscript = false
     private var moveTypeResolver: ((String) -> String?)? = null
@@ -737,6 +738,8 @@ class BattleSession {
     fun battleLog() = battleLog.toList()
 
     fun battleLogGeneration() = battleLogGeneration
+
+    fun protocolTimestampSeconds() = protocolTimestampSeconds
 
     fun markNativeBattleLogSynchronized(generation: Long) {
         if (generation != battleLogGeneration) return
@@ -1602,6 +1605,7 @@ class BattleSession {
                         battlePhase = BattlePhase.BATTLE
                         applyTurn(fields)
                     }
+                    "t:" -> fields.getOrNull(2)?.toLongOrNull()?.let { protocolTimestampSeconds = it }
                     "switch", "drag" -> applySwitch(fields)
                     "replace" -> applySwitch(fields, replacingIllusion = true)
                     "swap" -> applySwap(fields)
@@ -1716,6 +1720,9 @@ class BattleSession {
                     "bigerror" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.takeIf { it.isNotBlank() }?.let { appendLog("Warning: $it") }
                     "error" -> applyBattleError(fields)
                     "c", "chat", "c:" -> applyChat(fields)
+                    "chatmsg", "chatmsg-raw" -> appendSystemNotice("System", fields.drop(2).joinToString("|"), includeInChat = true)
+                    "warning" -> appendSystemNotice("Warning", fields.drop(2).joinToString("|"))
+                    "popup" -> appendSystemNotice("Notice", fields.drop(2).joinToString("|"))
                     "inactive" -> {
                         val message = fields.drop(2).joinToString("|")
                         battleTimerEnabled = true
@@ -1817,6 +1824,7 @@ class BattleSession {
         battleLogGeneration += 1L
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = true
+        protocolTimestampSeconds = null
         battleLog += "Battle started."
         markupEntries.clear()
         chatMessages.clear()
@@ -3411,6 +3419,16 @@ class BattleSession {
         chatMessages += message
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         appendActivity(message, ActivityOrigin.CHAT)
+    }
+
+    private fun appendSystemNotice(label: String, value: String, includeInChat: Boolean = false) {
+        val body = sanitizeMarkup(value)?.takeIf(String::isNotBlank) ?: return
+        val message = "[$label] $body"
+        if (includeInChat && chatMessages.lastOrNull() != message) {
+            chatMessages += message
+            if (chatMessages.size > 32) chatMessages.removeAt(0)
+        }
+        appendActivity(message, ActivityOrigin.SYSTEM)
     }
 
     private fun applyCant(fields: List<String>) {
