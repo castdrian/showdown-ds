@@ -21,6 +21,11 @@ private data class BattleFieldAnnouncement(
     val end: String
 )
 
+private data class BattleSideConditionAnnouncement(
+    val start: String,
+    val end: String
+)
+
 private val BATTLE_WEATHER_ANNOUNCEMENTS = mapOf(
     "sandstorm" to BattleWeatherAnnouncement(
         start = "A sandstorm kicked up!",
@@ -116,6 +121,49 @@ private val BATTLE_FIELD_ANNOUNCEMENTS = mapOf(
     "wonderroom" to BattleFieldAnnouncement(
         start = "It created a bizarre area in which Defense and Sp. Def stats are swapped!",
         end = "Wonder Room wore off, and Defense and Sp. Def stats returned to normal!"
+    )
+)
+
+private val BATTLE_SIDE_CONDITION_ANNOUNCEMENTS = mapOf(
+    "auroraveil" to BattleSideConditionAnnouncement(
+        start = "Aurora Veil made {TEAM} stronger against physical and special moves!",
+        end = "{TEAM}'s Aurora Veil wore off!"
+    ),
+    "lightscreen" to BattleSideConditionAnnouncement(
+        start = "Light Screen made {TEAM} stronger against special moves!",
+        end = "{TEAM}'s Light Screen wore off!"
+    ),
+    "mist" to BattleSideConditionAnnouncement(
+        start = "{TEAM} became shrouded in mist!",
+        end = "{TEAM} is no longer protected by mist!"
+    ),
+    "reflect" to BattleSideConditionAnnouncement(
+        start = "Reflect made {TEAM} stronger against physical moves!",
+        end = "{TEAM}'s Reflect wore off!"
+    ),
+    "safeguard" to BattleSideConditionAnnouncement(
+        start = "{TEAM} cloaked itself in a mystical veil!",
+        end = "{TEAM} is no longer protected by Safeguard!"
+    ),
+    "spikes" to BattleSideConditionAnnouncement(
+        start = "Spikes were scattered on the ground all around {TEAM}!",
+        end = "The spikes disappeared from the ground around {TEAM}!"
+    ),
+    "stealthrock" to BattleSideConditionAnnouncement(
+        start = "Pointed stones float in the air around {TEAM}!",
+        end = "The pointed stones disappeared from around {TEAM}!"
+    ),
+    "stickyweb" to BattleSideConditionAnnouncement(
+        start = "A sticky web has been laid out on the ground around {TEAM}!",
+        end = "The sticky web has disappeared from the ground around {TEAM}!"
+    ),
+    "tailwind" to BattleSideConditionAnnouncement(
+        start = "The Tailwind blew from behind {TEAM}!",
+        end = "{TEAM}'s Tailwind petered out!"
+    ),
+    "toxicspikes" to BattleSideConditionAnnouncement(
+        start = "Poison spikes were scattered on the ground all around {TEAM}!",
+        end = "The poison spikes disappeared from the ground around {TEAM}!"
     )
 )
 
@@ -3729,7 +3777,15 @@ class BattleSession {
         } else {
             conditions.removeAll { it.equals(effect, true) }
         }
-        appendLog(if (enabled) "$effect started on ${if (isPlayerSide(side)) "your side" else "the opponent's side"}." else "$effect ended.")
+        if (!isSilent(fields)) appendLog(sideConditionAnnouncement(effect, side, enabled))
+    }
+
+    private fun sideConditionAnnouncement(effect: String, side: String, enabled: Boolean): String {
+        val team = if (isPlayerSide(side)) "your team" else "the opposing team"
+        val announcement = BATTLE_SIDE_CONDITION_ANNOUNCEMENTS[normalizeBattleTextKey(effect)]
+        val template = if (enabled) announcement?.start else announcement?.end
+        return template?.replace("{TEAM}", team)
+            ?: if (enabled) "($effect started on $team!)" else "($effect ended on $team!)"
     }
 
     private fun applyBoost(fields: List<String>, direction: Int) {

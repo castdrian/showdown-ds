@@ -241,6 +241,38 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialSideConditionAnnouncements() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|-sidestart|p1: ADRIAN|move: Stealth Rock",
+                "|-sidestart|p2: OPPONENT|move: Reflect",
+                "|-sidestart|p1: ADRIAN|move: Sticky Web",
+                "|-sideend|p1: ADRIAN|move: Sticky Web",
+                "|-sidestart|p2: OPPONENT|move: G-Max Cannonade",
+                "|-sideend|p2: OPPONENT|move: G-Max Cannonade",
+                "|-sidestart|p1: ADRIAN|move: Spikes|[silent]"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Pointed stones float in the air around your team!",
+                "Reflect made the opposing team stronger against physical moves!",
+                "A sticky web has been laid out on the ground around your team!",
+                "The sticky web has disappeared from the ground around your team!",
+                "(G-Max Cannonade started on the opposing team!)",
+                "(G-Max Cannonade ended on the opposing team!)"
+            ),
+            session.battleLog().takeLast(6)
+        )
+        assertFalse(session.battleLog().any { it.contains("Spikes") })
+    }
+
+    @Test
     fun keepsSilentProtocolStateUpdatesOutOfTheUserFacingBattleFeed() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
 
