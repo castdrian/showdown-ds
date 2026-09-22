@@ -113,7 +113,7 @@ class BattleDamageCueResolverTest {
                 BattleSession.MoveInfo("80", "100", "Physical")
             )
         )
-        assertTrue(BattleDamageCueResolver.acceptsUnannotatedMoveDamage(null))
+        assertFalse(BattleDamageCueResolver.acceptsUnannotatedMoveDamage(null))
     }
 
     @Test

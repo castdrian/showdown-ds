@@ -34,7 +34,7 @@ object BattleDamageCueResolver {
     }
 
     fun acceptsUnannotatedMoveDamage(moveInfo: BattleSession.MoveInfo?): Boolean {
-        if (moveInfo == null) return true
+        if (moveInfo == null) return false
         if (!moveInfo.category.equals("Status", true)) return true
         return moveInfo.power.toIntOrNull()?.let { it > 0 } == true
     }
