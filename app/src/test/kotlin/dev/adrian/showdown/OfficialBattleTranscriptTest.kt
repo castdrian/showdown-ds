@@ -205,7 +205,7 @@ class OfficialBattleTranscriptTest {
 
         assertEquals("RainDance", session.battleInfo().weather)
         assertEquals("Electric Terrain", session.battleInfo().terrain)
-        assertTrue(session.battleLog().any { it.contains("couldn't move") })
+        assertTrue(session.battleLog().contains("Mewtwo is fast asleep."))
         assertTrue(session.battleLog().any { it.contains("missed") })
         assertTrue(session.battleLog().any { it.contains("Warning: The battle is nearing its turn limit.") })
     }
@@ -265,6 +265,9 @@ class OfficialBattleTranscriptTest {
         assertFalse(session.battleLog().any { it.contains("failed", true) })
         assertFalse(session.battleLog().contains("It started to rain!"))
         assertFalse(session.battleLog().contains("An electric current ran across the battlefield!"))
+
+        session.applyProtocolLine("|-curestatus|p1a: Pikachu|brn|[silent]")
+        assertFalse(session.battleLog().contains("Pikachu's burn was healed!"))
     }
 
     @Test
@@ -420,9 +423,46 @@ class OfficialBattleTranscriptTest {
             )
         )
 
-        assertTrue(session.battleLog().contains("Mewtwo was burned."))
-        assertTrue(session.battleLog().contains("Magikarp is paralyzed! It may be unable to move."))
-        assertTrue(session.battleLog().contains("Mewtwo was badly poisoned."))
+        assertTrue(session.battleLog().contains("Mewtwo was burned!"))
+        assertTrue(session.battleLog().contains("Magikarp is paralyzed, so it may be unable to move!"))
+        assertTrue(session.battleLog().contains("Mewtwo was badly poisoned!"))
+    }
+
+    @Test
+    fun formatsOfficialStatusCuresAndCantReasons() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-curestatus|p1a: Mewtwo|brn",
+                "|-curestatus|p1a: Mewtwo|frz",
+                "|-curestatus|p1a: Mewtwo|par",
+                "|-curestatus|p1a: Mewtwo|psn",
+                "|-curestatus|p1a: Mewtwo|slp",
+                "|-curestatus|p1a: Mewtwo|brn|[from] item: Lum Berry",
+                "|-curestatus|p1a: Mewtwo|frz|[from] move: Flamethrower",
+                "|cant|p1a: Mewtwo|slp",
+                "|cant|p1a: Mewtwo|frz",
+                "|cant|p1a: Mewtwo|par",
+                "|cant|p1a: Mewtwo|flinch",
+                "|cant|p1a: Mewtwo|recharge",
+                "|cant|p1a: Mewtwo|gravity|Thunder Wave"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo's burn was healed!"))
+        assertTrue(session.battleLog().contains("Mewtwo thawed out!"))
+        assertTrue(session.battleLog().contains("Mewtwo was cured of paralysis!"))
+        assertTrue(session.battleLog().contains("Mewtwo was cured of its poisoning!"))
+        assertTrue(session.battleLog().contains("Mewtwo woke up!"))
+        assertTrue(session.battleLog().contains("Mewtwo's Lum Berry healed its burn!"))
+        assertTrue(session.battleLog().contains("Mewtwo's Flamethrower melted the ice!"))
+        assertTrue(session.battleLog().contains("Mewtwo is fast asleep."))
+        assertTrue(session.battleLog().contains("Mewtwo is frozen solid!"))
+        assertTrue(session.battleLog().contains("Mewtwo is paralyzed! It can't move!"))
+        assertTrue(session.battleLog().contains("Mewtwo flinched and couldn't move!"))
+        assertEquals(1, session.battleLog().count { it == "Mewtwo must recharge!" })
+        assertTrue(session.battleLog().contains("Mewtwo can't use Thunder Wave because of gravity!"))
     }
 
     @Test

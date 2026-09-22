@@ -2688,10 +2688,12 @@ class BattleSession {
                 updateOpponentPartyForSlot(slot) { details -> details.copy(condition = opponentCondition) }
             }
         }
-        appendLog(
-            if (cured) "${battleActor(actor)}'s status was cured."
-            else formatStatusAnnouncement(actor, status)
-        )
+        if (!isSilent(fields)) {
+            appendLog(
+                if (cured) formatStatusCureAnnouncement(actor, fields.getOrNull(3).orEmpty(), fields)
+                else formatStatusAnnouncement(actor, status)
+            )
+        }
     }
 
     private fun cureTeam(fields: List<String>) {
@@ -3545,7 +3547,24 @@ class BattleSession {
         clearMoveEffects(actorId)
         val actor = battleActor(actorId)
         val reason = battleEffectName(fields.getOrNull(3)).ifBlank { "that status" }
-        appendLog(if (reason.equals("recharge", true)) "$actor must recharge!" else "$actor couldn't move because of $reason.")
+        when (normalizeBattleTextKey(reason)) {
+            "nopp" -> {
+                val move = battleEffectName(fields.getOrNull(4)).ifBlank { "the move" }
+                appendLog("$actor used $move!")
+                appendLog("But there was no PP left for the move!")
+            }
+            "recharge" -> appendLog("$actor must recharge!")
+            "slp" -> appendLog("$actor is fast asleep.")
+            "frz" -> appendLog("$actor is frozen solid!")
+            "par" -> appendLog("$actor is paralyzed! It can't move!")
+            "flinch" -> appendLog("$actor flinched and couldn't move!")
+            "focuspunch" -> appendLog("$actor lost its focus and couldn't move!")
+            "gravity" -> {
+                val move = battleEffectName(fields.getOrNull(4)).ifBlank { "this move" }
+                appendLog("$actor can't use $move because of gravity!")
+            }
+            else -> appendLog("$actor couldn't move because of $reason.")
+        }
     }
 
     private fun applyBlock(fields: List<String>) {
@@ -4224,14 +4243,38 @@ class BattleSession {
         else -> status.lowercase()
     }
 
-    private fun formatStatusAnnouncement(actor: String, status: String) = when (status) {
-        "BRN" -> "${battleActor(actor)} was burned."
-        "FRZ" -> "${battleActor(actor)} was frozen solid."
-        "PAR" -> "${battleActor(actor)} is paralyzed! It may be unable to move."
-        "PSN" -> "${battleActor(actor)} was poisoned."
-        "TOX" -> "${battleActor(actor)} was badly poisoned."
-        "SLP" -> "${battleActor(actor)} fell asleep."
-        else -> "${battleActor(actor)} became ${statusLabel(status)}."
+    private fun formatStatusAnnouncement(actor: String, status: String): String {
+        val pokemon = battleActor(actor)
+        return when (status) {
+            "BRN" -> "$pokemon was burned!"
+            "FRZ" -> "$pokemon was frozen solid!"
+            "PAR" -> "$pokemon is paralyzed, so it may be unable to move!"
+            "PSN" -> "$pokemon was poisoned!"
+            "TOX" -> "$pokemon was badly poisoned!"
+            "SLP" -> "$pokemon fell asleep!"
+            else -> "$pokemon became ${statusLabel(status)}."
+        }
+    }
+
+    private fun formatStatusCureAnnouncement(actor: String, status: String, fields: List<String>): String {
+        val pokemon = battleActor(actor)
+        val source = fields.drop(4).firstOrNull { it.startsWith("[from]", true) }
+        val sourceKind = source?.removePrefix("[from]")?.trim()?.substringBefore(':')?.lowercase()
+        val sourceName = source?.let(::battleEffectName).orEmpty()
+        return when {
+            sourceKind == "item" && sourceName.isNotBlank() && status.equals("brn", true) -> "$pokemon's $sourceName healed its burn!"
+            sourceKind == "item" && sourceName.isNotBlank() && status.equals("frz", true) -> "$pokemon's $sourceName defrosted it!"
+            sourceKind == "item" && sourceName.isNotBlank() && status.equals("par", true) -> "$pokemon's $sourceName cured its paralysis!"
+            sourceKind == "item" && sourceName.isNotBlank() && status.equals("psn", true) -> "$pokemon's $sourceName cured its poison!"
+            sourceKind == "item" && sourceName.isNotBlank() && status.equals("slp", true) -> "$pokemon's $sourceName woke it up!"
+            sourceKind == "move" && sourceName.isNotBlank() && status.equals("frz", true) -> "$pokemon's $sourceName melted the ice!"
+            status.equals("brn", true) -> "$pokemon's burn was healed!"
+            status.equals("frz", true) -> "$pokemon thawed out!"
+            status.equals("par", true) -> "$pokemon was cured of paralysis!"
+            status.equals("psn", true) || status.equals("tox", true) -> "$pokemon was cured of its poisoning!"
+            status.equals("slp", true) -> "$pokemon woke up!"
+            else -> "$pokemon was cured of its status condition!"
+        }
     }
 
     private fun updateAvailableGimmicks(active: JSONObject) {

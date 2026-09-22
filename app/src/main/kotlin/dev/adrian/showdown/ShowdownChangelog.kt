@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Status, status-cure, and cannot-move messages now use Showdown's official battle-log wording.",
                 "Weather, terrain, and field-effect announcements now use Showdown's user-facing battle-log wording.",
                 "Recharge turns now use Showdown's user-facing battle-log wording.",
                 "Battle audio now stays silent for unannotated HP changes until move metadata confirms the move can deal damage.",
