@@ -59,9 +59,12 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(decisionListener.contains("clearBattlePlayback(preserveQueuedPlayback = true)"))
         assertTrue(clearPlayback.contains("if (!preserveQueuedPlayback) battleEventHandler.removeCallbacksAndMessages(null)"))
+        assertTrue(clearPlayback.contains("if (!preserveQueuedPlayback) displayRefreshScheduler.cancel()"))
         assertTrue(clearPlayback.contains("if (!preserveQueuedPlayback) {"))
         assertTrue(clearPlayback.contains("pendingBattlePackets.clear()"))
         assertTrue(clearPlayback.contains("battlePacketPlaybackScheduled = false"))
+        assertTrue(clearPlayback.contains("livePlaybackPausedRemainingMillis = null"))
+        assertTrue(clearPlayback.contains("if (!preserveQueuedPlayback) {\n            playbackPausedRemainingMillis = null"))
     }
 
     @Test

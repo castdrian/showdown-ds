@@ -1044,16 +1044,18 @@ class MainActivity : Activity() {
 
     private fun clearBattlePlayback(preserveQueuedPlayback: Boolean = false) {
         if (!preserveQueuedPlayback) battleEventHandler.removeCallbacksAndMessages(null)
-        displayRefreshScheduler.cancel()
+        if (!preserveQueuedPlayback) displayRefreshScheduler.cancel()
         if (!preserveQueuedPlayback) {
             pendingBattlePackets.clear()
             battlePacketPlaybackScheduled = false
         }
         lightweightMoveCues.clear()
         lightweightHealthByTarget.clear()
-        replayPaused = false
-        replayPausedForLifecycle = false
-        livePlaybackPausedRemainingMillis = null
+        if (!preserveQueuedPlayback) {
+            replayPaused = false
+            replayPausedForLifecycle = false
+            livePlaybackPausedRemainingMillis = null
+        }
         if (!livePlaybackPausedForLifecycle) showdownMoveEffects?.setPlaybackPaused(false)
         resumeBattleAudioIfActive()
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
@@ -1062,8 +1064,10 @@ class MainActivity : Activity() {
             playbackScheduledAtMillis = 0L
             playbackScheduledSpeed = 1f
         }
-        playbackPausedRemainingMillis = null
-        replayStatus = null
+        if (!preserveQueuedPlayback) {
+            playbackPausedRemainingMillis = null
+            replayStatus = null
+        }
     }
 
     private fun pauseReplayForLifecycle() {
