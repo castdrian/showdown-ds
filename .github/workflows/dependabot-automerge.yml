@@ -1,6 +1,12 @@
 name: Dependabot auto-merge
 
 on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   workflow_run:
     workflows:
       - Android CI
@@ -14,7 +20,11 @@ permissions:
 
 jobs:
   automerge:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    if: >-
+      (github.event_name == 'pull_request_target' && github.event.pull_request.user.login == 'dependabot[bot]') ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request')
     runs-on: ubuntu-24.04
     steps:
       - name: Find safe dependency update
@@ -24,21 +34,67 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo
-            const { data: pullRequests } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            let pullRequest = context.payload.pull_request
+            const workflowRun = context.payload.workflow_run
+
+            if (!pullRequest && workflowRun?.pull_requests?.length) {
+              pullRequest = workflowRun.pull_requests.find((candidate) => (
+                candidate.base?.ref === 'main' &&
+                candidate.user?.login === 'dependabot[bot]'
+              ))
+            }
+
+            if (!pullRequest && workflowRun?.head_sha) {
+              const { data: pullRequests } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: workflowRun.head_sha
+              })
+              pullRequest = pullRequests.find((candidate) => (
+                candidate.base.ref === 'main' &&
+                candidate.user?.login === 'dependabot[bot]'
+              ))
+            }
+
+            if (!pullRequest) return
+
+            const { data: currentPullRequest } = await github.rest.pulls.get({
               owner,
               repo,
-              commit_sha: context.payload.workflow_run.head_sha
+              pull_number: pullRequest.number
             })
-            const pullRequest = pullRequests.find((candidate) => (
-              candidate.state === 'open' &&
-              candidate.base.ref === 'main' &&
-              candidate.user?.login === 'dependabot[bot]'
+
+            if (
+              currentPullRequest.state !== 'open' ||
+              currentPullRequest.draft ||
+              currentPullRequest.base.ref !== 'main' ||
+              currentPullRequest.user?.login !== 'dependabot[bot]'
+            ) return
+
+            const { data: workflow } = await github.rest.actions.getWorkflowByFileName({
+              owner,
+              repo,
+              file_name: 'android-ci.yml'
+            })
+            const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: workflow.id,
+              head_sha: currentPullRequest.head.sha,
+              per_page: 20
+            })
+            const greenCiRun = workflowRuns.workflow_runs.find((run) => (
+              run.event === 'pull_request' &&
+              run.status === 'completed' &&
+              run.conclusion === 'success'
             ))
-            if (!pullRequest) return
-            const updateTypes = [...(pullRequest.body ?? '').matchAll(/update-type:\s*version-update:semver-(patch|minor|major)/g)]
+            if (!greenCiRun) return
+
+            const updateTypes = [...(currentPullRequest.body ?? '').matchAll(/update-type:\s*version-update:semver-(patch|minor|major)/g)]
               .map((match) => match[1])
             if (!updateTypes.length) return
-            core.setOutput('number', String(pullRequest.number))
+
+            core.setOutput('number', String(currentPullRequest.number))
 
       - name: Merge dependency update after green CI
         if: steps.dependency.outputs.number != ''
