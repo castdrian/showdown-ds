@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Recharge turns now use Showdown's user-facing battle-log wording.",
                 "Battle audio now stays silent for unannotated HP changes until move metadata confirms the move can deal damage.",
                 "Lightweight battle audio now only plays damage cues for moves that actually deal damage, while keeping annotated special damage effects audible.",
                 "Live battle choices now preserve queued Showdown actions so the upper battle log and effects cannot be skipped.",

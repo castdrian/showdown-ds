@@ -241,6 +241,16 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsRechargeAnnouncementsLikeShowdown() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|-mustrecharge|p1a: Hyper Beam")
+        session.applyProtocolLine("|cant|p1a: Hyper Beam|recharge")
+
+        assertEquals(1, session.battleLog().count { it == "Hyper Beam must recharge!" })
+    }
+
+    @Test
     fun preservesOptionalRatedAndTimerMessages() {
         val session = BattleSession()
 

@@ -1676,7 +1676,7 @@ class BattleSession {
                     "-miss" -> appendLog("${battleActor(fields.getOrNull(2))}'s attack missed ${battleActor(fields.getOrNull(3))}.")
                     "-immune" -> appendLog("${battleActor(fields.getOrNull(2))} is immune.")
                     "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
-                    "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge.")
+                    "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge!")
                     "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
                     "-hint" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let { appendLog("($it)") }
@@ -3436,7 +3436,7 @@ class BattleSession {
         clearMoveEffects(actorId)
         val actor = battleActor(actorId)
         val reason = battleEffectName(fields.getOrNull(3)).ifBlank { "that status" }
-        appendLog("$actor couldn't move because of $reason.")
+        appendLog(if (reason.equals("recharge", true)) "$actor must recharge!" else "$actor couldn't move because of $reason.")
     }
 
     private fun applyBlock(fields: List<String>) {
