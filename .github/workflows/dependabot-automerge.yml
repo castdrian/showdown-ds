@@ -40,9 +40,9 @@ jobs:
             if (!updateTypes.length) return
             core.setOutput('number', String(pullRequest.number))
 
-      - name: Enable safe dependency auto-merge
+      - name: Merge dependency update after green CI
         if: steps.dependency.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.dependency.outputs.number }}
-        run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --squash
+        run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
