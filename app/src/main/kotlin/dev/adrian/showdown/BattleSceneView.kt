@@ -37,6 +37,8 @@ class BattleSceneView(
     private val opponentActiveSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
     private val requestedPlayerActiveSprites = mutableMapOf<String, BattleSpriteRequest>()
     private val requestedOpponentActiveSprites = mutableMapOf<String, BattleSpriteRequest>()
+    private val previewSprites = mutableMapOf<Int, ShowdownSpriteCache.SpriteAsset?>()
+    private val requestedPreviewSprites = mutableMapOf<Int, BattleSpriteRequest>()
     private var requestedPlayerSprite: BattleSpriteRequest? = null
     private var requestedOpponentSprite: BattleSpriteRequest? = null
     private val itemSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
@@ -142,6 +144,9 @@ class BattleSceneView(
         opponentActiveSprites.clear()
         requestedPlayerActiveSprites.clear()
         requestedOpponentActiveSprites.clear()
+        previewSprites.values.forEach { it?.stopAnimation() }
+        previewSprites.clear()
+        requestedPreviewSprites.clear()
         itemSprites.clear()
         requestedItemSprites.clear()
         effectAssets.clear()
@@ -278,6 +283,7 @@ class BattleSceneView(
         val width = width.toFloat()
         val height = height.toFloat()
         val scale = min(width / 1920f, height / 1080f)
+        val teamPreview = session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW
         val singles = session.isSinglesBattle()
         val playerX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.PLAYER_X) else width * 0.30f
         val playerY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.PLAYER_Y) else height * 0.67f
@@ -291,9 +297,23 @@ class BattleSceneView(
             drawLobby(canvas, width, height, scale)
             return
         }
-        if (!session.isLiveBattleActive() && !session.isBattleFinished()) {
+        if (!session.isLiveBattleActive() && !session.isBattleFinished() && !teamPreview) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
+            return
+        }
+        if (teamPreview) {
+            battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
+            battleFeedBounds.setEmpty()
+            if (!resourcesRequested) {
+                requestResources()
+                resourcesRequested = true
+            }
+            drawBackdrop(canvas, width, height)
+            drawTeamPreview(canvas, width, height, scale)
+            if (!animationsPaused && previewSprites.values.any { it?.isAnimated == true }) {
+                postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
+            }
             return
         }
         val playerStatusAlpha = statusCardAlpha(session.playerPokemon, session.playerCondition, nowNanos) *
@@ -582,6 +602,8 @@ class BattleSceneView(
                 }
             }
         }
+        requestTeamPreviewSprites()
+        if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW) return
         val playerActiveCombatants = session.playerActiveCombatants()
         val opponentActiveCombatants = session.opponentActiveCombatants()
         if (session.isSinglesBattle() || playerActiveCombatants.isEmpty()) {
@@ -656,6 +678,39 @@ class BattleSceneView(
                     if (name !in requestedEffects) return@requestEffect
                     if (asset != null) effectAssets[name] = asset
                     invalidate()
+                }
+            }
+        }
+    }
+
+    private fun requestTeamPreviewSprites() {
+        val party = session.opponentPartyDetails().take(6)
+        val visibleIndices = if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW) party.indices.toSet() else emptySet()
+        requestedPreviewSprites.keys.filterNot(visibleIndices::contains).toList().forEach { index ->
+            requestedPreviewSprites.remove(index)
+            previewSprites.remove(index)?.stopAnimation()
+        }
+        if (session.battlePhase != BattleSession.BattlePhase.TEAM_PREVIEW) return
+        party.forEachIndexed { index, details ->
+            val species = details.species.ifBlank { details.name }.trim()
+            if (species.isBlank() || species.equals("Unknown", true)) return@forEachIndexed
+            val request = BattleSpriteRequests.single(
+                species,
+                BattleSpriteSide.OPPONENT,
+                session.spriteStyle,
+                details.shiny
+            )
+            if (requestedPreviewSprites[index] == request) return@forEachIndexed
+            requestedPreviewSprites[index] = request
+            previewSprites[index]?.stopAnimation()
+            previewSprites[index] = null
+            spriteCache.requestPokemon(request) { asset ->
+                if (requestedPreviewSprites[index] == request) {
+                    previewSprites[index]?.takeUnless { it === asset }?.stopAnimation()
+                    previewSprites[index] = asset
+                    invalidate()
+                } else {
+                    asset?.stopAnimation()
                 }
             }
         }
@@ -1112,6 +1167,106 @@ class BattleSceneView(
             card.bottom - 70f * scale,
             paint
         )
+    }
+
+    private fun drawTeamPreview(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        drawHeader(canvas, width, scale)
+        val party = session.opponentPartyDetails().take(6)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(44f, scale, 20f)
+        paint.color = INK
+        canvas.drawText("Opponent team", width / 2f, height * 0.195f, paint)
+        paint.textAlign = Paint.Align.LEFT
+        if (party.isEmpty()) {
+            val bounds = RectF(width * 0.23f, height * 0.40f, width * 0.77f, height * 0.62f)
+            paint.color = Color.argb(148, 8, 23, 38)
+            canvas.drawRoundRect(bounds, 24f * scale, 24f * scale, paint)
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            paint.textSize = readableTextSize(30f, scale, 15f)
+            paint.color = MUTED
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText("Waiting for the opponent's team…", width / 2f, bounds.centerY() + 10f * scale, paint)
+            paint.textAlign = Paint.Align.LEFT
+            return
+        }
+        BattleTeamPreviewLayout.slots(width, height, party.size).forEachIndexed { index, card ->
+            val details = party[index]
+            paint.shader = LinearGradient(
+                card.left,
+                card.top,
+                card.right,
+                card.bottom,
+                Color.argb(218, 20, 58, 78),
+                Color.argb(218, 5, 24, 41),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawRoundRect(RectF(card.left, card.top, card.right, card.bottom), 24f * scale, 24f * scale, paint)
+            paint.shader = null
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 2f * scale
+            paint.color = Color.argb(205, 86, 215, 231)
+            canvas.drawRoundRect(RectF(card.left, card.top, card.right, card.bottom), 24f * scale, 24f * scale, paint)
+            paint.style = Paint.Style.FILL
+            val spriteBounds = RectF(
+                card.left + 22f * scale,
+                card.top + 26f * scale,
+                card.left + 206f * scale,
+                card.bottom - 26f * scale
+            )
+            previewSprites[index]?.draw(
+                canvas,
+                spriteBounds,
+                SystemClock.elapsedRealtime(),
+                animate = !animationsPaused
+            ) ?: drawPartyBall(
+                canvas,
+                spriteBounds.centerX() - 42f * scale,
+                spriteBounds.centerY() - 42f * scale,
+                84f * scale,
+                PartyBallState.READY
+            )
+            val textLeft = card.left + 230f * scale
+            val textRight = card.right - 22f * scale
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = readableTextSize(34f, scale, 17f)
+            paint.color = INK
+            canvas.drawText(
+                ellipsizeToWidth(BattleSession.displayPokemonName(details.name, details.species), textRight - textLeft, paint),
+                textLeft,
+                card.top + 92f * scale,
+                paint
+            )
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            paint.textSize = readableTextSize(24f, scale, 14f)
+            paint.color = MUTED
+            canvas.drawText("Lv.${details.level}${details.gender}", textLeft, card.top + 136f * scale, paint)
+            drawTeamPreviewTypes(canvas, details.types, textLeft, card.top + 174f * scale, textRight, scale)
+        }
+    }
+
+    private fun drawTeamPreviewTypes(
+        canvas: Canvas,
+        types: List<String>,
+        left: Float,
+        top: Float,
+        right: Float,
+        scale: Float
+    ) {
+        var badgeLeft = left
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+        paint.textSize = readableTextSize(19f, scale, 11f)
+        types.take(2).forEach { type ->
+            val badgeWidth = maxOf(78f * scale, paint.measureText(type) + 30f * scale)
+            if (badgeLeft + badgeWidth > right) return@forEach
+            paint.color = typeColor(type)
+            canvas.drawRoundRect(RectF(badgeLeft, top, badgeLeft + badgeWidth, top + 38f * scale), 13f * scale, 13f * scale, paint)
+            paint.color = Color.WHITE
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(type, badgeLeft + badgeWidth / 2f, top + 26f * scale, paint)
+            paint.textAlign = Paint.Align.LEFT
+            badgeLeft += badgeWidth + 8f * scale
+        }
     }
 
     private fun multiCombatantX(width: Float, player: Boolean, index: Int, count: Int): Float {

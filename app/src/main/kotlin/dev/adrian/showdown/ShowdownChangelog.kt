@@ -10,6 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Opponent team previews now render on the upper battle screen with readable HD-first animated sprites.",
+                "Official Showdown system notices, warnings, and popups now stay readable in Activity without crowding the battle feed.",
                 "Move power, accuracy, category, and target now share a clean detail panel without colored tile outlines.",
                 "Full-form Showdown chat messages now reach lobby and battle activity without truncating pipe characters.",
                 "Official plain-text and double-pipe battle-room messages now appear in the readable upper-screen battle log.",

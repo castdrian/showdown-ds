@@ -84,4 +84,22 @@ class BattleFieldStateTest {
 
         assertTrue(session.opponentPartyDetails().isEmpty())
     }
+
+    @Test
+    fun keepsOpponentTeamPreviewEntriesForTheBattleScreen() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|gametype|doubles",
+                "|teampreview|2",
+                "|poke|p2|Garchomp, L50|",
+                "|poke|p2|Rotom-Wash, L50|"
+            )
+        )
+
+        assertEquals(BattleSession.BattlePhase.TEAM_PREVIEW, session.battlePhase)
+        assertEquals(listOf("Garchomp", "Rotom-Wash"), session.opponentPartyDetails().map { it.species })
+    }
 }
