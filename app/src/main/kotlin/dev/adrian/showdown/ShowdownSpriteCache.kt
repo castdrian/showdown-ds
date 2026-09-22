@@ -630,7 +630,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(asset)
                 return@requestAnimatedSpriteCandidates
             }
-            requestFrontSpriteResolution(request, plan, receiver)
+            requestNumberedHdSpriteResolution(request) { numberedHdAsset ->
+                if (numberedHdAsset != null) {
+                    receiver(numberedHdAsset)
+                } else {
+                    requestFrontSpriteResolution(request, plan, receiver)
+                }
+            }
         }
     }
 
@@ -647,23 +653,29 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (hdAsset != null) {
                 receiver(hdAsset)
             } else {
-                requestScrapedFrontSpriteResolution(request, highResolutionOnly = true) { indexedHdAsset ->
-                    if (indexedHdAsset != null) {
-                        receiver(indexedHdAsset)
+                requestNumberedHdSpriteResolution(request) { numberedHdAsset ->
+                    if (numberedHdAsset != null) {
+                        receiver(numberedHdAsset)
                     } else {
-                        requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->
-                            if (regularAsset != null) {
-                                receiver(regularAsset)
+                        requestScrapedFrontSpriteResolution(request, highResolutionOnly = true) { indexedHdAsset ->
+                            if (indexedHdAsset != null) {
+                                receiver(indexedHdAsset)
                             } else {
-                                requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
-                                    if (communityAsset != null) {
-                                        receiver(communityAsset)
+                                requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->
+                                    if (regularAsset != null) {
+                                        receiver(regularAsset)
                                     } else {
-                                        requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
-                                            if (modernAsset != null) {
-                                                receiver(modernAsset)
+                                        requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
+                                            if (communityAsset != null) {
+                                                receiver(communityAsset)
                                             } else {
-                                                requestStaticSpriteFallback(request, receiver)
+                                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
+                                                    if (modernAsset != null) {
+                                                        receiver(modernAsset)
+                                                    } else {
+                                                        requestStaticSpriteFallback(request, receiver)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -700,6 +712,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     ) {
         val animatedTiers = buildList<((SpriteAsset?) -> Unit) -> Unit> {
             add { callback -> requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, callback) }
+            add { callback -> requestNumberedHdSpriteResolution(request, callback) }
             add { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) }
             add { callback -> requestRegularRemoteSpriteResolution(plan, callback) }
             if (includeRegularScrapedBack) {
@@ -943,6 +956,19 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         receiver: (SpriteAsset?) -> Unit
     ) {
         requestAnimatedSpriteCandidates(plan.regularRemoteCandidates, receiver)
+    }
+
+    private fun requestNumberedHdSpriteResolution(
+        request: BattleSpriteRequest,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestPokeApiSpriteCandidates(request.species, animatedOnly = true, { resourceNumber ->
+            ShowdownAssetPaths.highResolutionBattleSpriteCandidates(
+                resourceNumber = resourceNumber,
+                backFacing = request.backFacing,
+                shiny = request.shiny
+            )
+        }, receiver)
     }
 
     private fun requestScavioAnimatedSprite(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {

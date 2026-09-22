@@ -224,6 +224,21 @@ object ShowdownAssetPaths {
         return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${facingPath}${shinyPath}$number.gif"
     }
 
+    fun highResolutionBattleSpriteCandidates(
+        resourceNumber: Int,
+        backFacing: Boolean,
+        shiny: Boolean = false
+    ): List<String> {
+        val fileName = buildString {
+            append(resourceNumber)
+            if (backFacing) append("-back")
+            if (shiny) append("-s")
+            append(".gif")
+        }
+        val roots = if (backFacing) hdBackSpriteRoots else hdNumberedSpriteRoots
+        return roots.map { root -> "$root$fileName" }
+    }
+
     private fun battleSprite(species: String, side: BattleSpriteSide, collection: String, shiny: Boolean = false) =
         animatedBattleSprite(species, side, collection, shiny)
 

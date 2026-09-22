@@ -157,6 +157,21 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun buildsNumericHdFrontAndBackCandidatesForPokeApiFallbacks() {
+        assertEquals(
+            listOf(
+                "https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/73-s.gif",
+                "https://www.pkparaiso.com/imagenes/ultra_sol_ultra_luna/sprites/animados-sinbordes-gigante/73-s.gif"
+            ),
+            ShowdownAssetPaths.highResolutionBattleSpriteCandidates(73, backFacing = false, shiny = true)
+        )
+        assertEquals(
+            listOf("https://www.pkparaiso.com/imagenes/espada_escudo/sprites/animados-gigante/73-back.gif"),
+            ShowdownAssetPaths.highResolutionBattleSpriteCandidates(73, backFacing = true)
+        )
+    }
+
+    @Test
     fun staticFallbacksPreserveShinyArtworkAndForms() {
         assertEquals(
             listOf(

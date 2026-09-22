@@ -69,6 +69,7 @@ object ShowdownChangelog {
                 "Large animated HD back sprites now remain eligible without increasing the rendered frame budget.",
                 "Large animated HD front sprites now remain eligible instead of falling back to pixel artwork.",
                 "Constrained devices now try bounded remote animated sprites before using pixel fallbacks.",
+                "HD sprite loading now retries PokeAPI dex-numbered animated assets when a named HD asset is unavailable.",
                 "The team editor now shows the live EV budget and perfect-IV count while you edit a set.",
                 "Official No Item exports now round-trip without creating a fake item.",
                 "Controller navigation now stays inside custom dialogs instead of triggering the battle menu underneath.",
