@@ -525,7 +525,52 @@ class OfficialBattleTranscriptTest {
         assertEquals("Ability Shield", session.playerDetails().item)
         assertEquals("Protective Pads", session.opponentDetails().item)
         assertEquals(listOf("Protect"), session.opponentActiveCombatants().single().turnEffects)
-        assertTrue(session.battleLog().any { it.contains("Gliscor was blocked by Protect.") })
+        assertTrue(session.battleLog().any { it.contains("Gliscor protected itself!") })
+        assertTrue(session.battleLog().any { it.contains("Gholdengo's Ability is protected by the effects of its Ability Shield!") })
+        assertTrue(session.battleLog().any { it.contains("Gliscor protected itself with its Protective Pads!") })
+    }
+
+    @Test
+    fun formatsOfficialProtectionAndMoveBlockAnnouncements() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Gholdengo|Gholdengo, L50|100/100",
+                "|switch|p2a: Gliscor|Gliscor, L50|100/100",
+                "|-block|p1a: Gholdengo|Quick Guard",
+                "|-block|p2a: Gliscor|Wide Guard",
+                "|-block|p1a: Gholdengo|Crafty Shield",
+                "|-block|p2a: Gliscor|Mat Block|move: Earthquake",
+                "|-block|p1a: Gholdengo|item: Safety Goggles|move: Spore",
+                "|-block|p2a: Gliscor|Misty Terrain",
+                "|-block|p1a: Gholdengo|Safeguard",
+                "|-block|p2a: Gliscor|Ingrain",
+                "|-block|p1a: Gholdengo|ability: Aroma Veil",
+                "|-block|p2a: Gliscor|ability: Flower Veil",
+                "|-block|p1a: Gholdengo|ability: Sweet Veil",
+                "|-block|p2a: Gliscor|ability: Telepathy",
+                "|-block|p1a: Gholdengo|ability: Sticky Hold",
+                "|-block|p2a: Gliscor|ability: Suction Cups",
+                "|-block|p1a: Gholdengo|ability: Disguise"
+            )
+        )
+
+        assertTrue(session.battleLog().any { it.contains("Quick Guard protected Gholdengo!") })
+        assertTrue(session.battleLog().any { it.contains("Wide Guard protected Gliscor!") })
+        assertTrue(session.battleLog().any { it.contains("Crafty Shield protected Gholdengo!") })
+        assertTrue(session.battleLog().any { it.contains("Earthquake was blocked by the kicked-up mat!") })
+        assertTrue(session.battleLog().any { it.contains("Gholdengo is not affected by Spore thanks to its Safety Goggles!") })
+        assertTrue(session.battleLog().any { it.contains("Gliscor surrounds itself with a protective mist!") })
+        assertTrue(session.battleLog().any { it.contains("Gholdengo is protected by Safeguard!") })
+        assertTrue(session.battleLog().any { it.contains("Gliscor is anchored in place with its roots!") })
+        assertTrue(session.battleLog().any { it.contains("Gholdengo is protected by an aromatic veil!") })
+        assertTrue(session.battleLog().any { it.contains("Gliscor surrounded itself with a veil of petals!") })
+        assertTrue(session.battleLog().any { it.contains("Gholdengo can't fall asleep due to a veil of sweetness!") })
+        assertTrue(session.battleLog().any { it.contains("Gliscor can't be hit by attacks from its ally Pokémon!") })
+        assertTrue(session.battleLog().any { it.contains("Gholdengo's item cannot be removed!") })
+        assertTrue(session.battleLog().any { it.contains("Gliscor is anchored in place with its suction cups!") })
+        assertTrue(session.battleLog().any { it.contains("Its disguise served it as a decoy!") })
+        assertEquals(listOf("Wide Guard", "Mat Block"), session.opponentActiveCombatants().single().turnEffects)
     }
 
     @Test

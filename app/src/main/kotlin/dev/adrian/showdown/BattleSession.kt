@@ -3690,8 +3690,24 @@ class BattleSession {
     private fun applyBlock(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         val effect = battleEffectName(fields.getOrNull(3))
-        val normalizedEffect = effect.lowercase().filter(Char::isLetterOrDigit)
-        if (normalizedEffect in setOf("quickguard", "wideguard", "craftyshield", "protect")) {
+        val normalizedEffect = normalizeBattleTextKey(effect)
+        if (normalizedEffect in setOf(
+                "banefulbunker",
+                "burningbulwark",
+                "craftyshield",
+                "detect",
+                "endure",
+                "kingsshield",
+                "matblock",
+                "maxguard",
+                "obstruct",
+                "protect",
+                "quickguard",
+                "silktrap",
+                "spikyshield",
+                "wideguard"
+            )
+        ) {
             updateSingleBattleEffect(actor, normalizedEffect, turnScoped = true)
         }
         val item = when (effect.lowercase()) {
@@ -3703,8 +3719,33 @@ class BattleSession {
         item?.let { revealedItem ->
             updateActorDetails(actor) { details -> details.copy(item = revealedItem) }
         }
+        val move = fields.drop(4)
+            .firstOrNull { it.isNotBlank() && !it.trim().startsWith("[") }
+            ?.let(::battleEffectName)
+            ?.takeIf(String::isNotBlank)
         val announcement = when (normalizedEffect) {
             "dynamax" -> "The move was blocked by the power of Dynamax!"
+            "protect" -> "${battleActor(actor)} protected itself!"
+            "quickguard" -> "Quick Guard protected ${battleActor(actor)}!"
+            "wideguard" -> "Wide Guard protected ${battleActor(actor)}!"
+            "craftyshield" -> "Crafty Shield protected ${battleActor(actor)}!"
+            "matblock" -> move?.let { "$it was blocked by the kicked-up mat!" }
+            "ingrain" -> "${battleActor(actor)} is anchored in place with its roots!"
+            "mist" -> "${battleActor(actor)} is protected by the mist!"
+            "safeguard" -> "${battleActor(actor)} is protected by Safeguard!"
+            "electricterrain" -> "${battleActor(actor)} is protected by the Electric Terrain!"
+            "psychicterrain" -> "${battleActor(actor)} is protected by the Psychic Terrain!"
+            "mistyterrain" -> "${battleActor(actor)} surrounds itself with a protective mist!"
+            "aromaveil" -> "${battleActor(actor)} is protected by an aromatic veil!"
+            "flowerveil" -> "${battleActor(actor)} surrounded itself with a veil of petals!"
+            "sweetveil" -> "${battleActor(actor)} can't fall asleep due to a veil of sweetness!"
+            "telepathy" -> "${battleActor(actor)} can't be hit by attacks from its ally Pokémon!"
+            "stickyhold" -> "${battleActor(actor)}'s item cannot be removed!"
+            "suctioncups" -> "${battleActor(actor)} is anchored in place with its suction cups!"
+            "disguise" -> "Its disguise served it as a decoy!"
+            "safetygoggles" -> move?.let { "${battleActor(actor)} is not affected by $it thanks to its Safety Goggles!" }
+            "protectivepads" -> "${battleActor(actor)} protected itself with its Protective Pads!"
+            "abilityshield" -> "${battleActor(actor)}'s Ability is protected by the effects of its Ability Shield!"
             else -> "${battleActor(actor)} was blocked by $effect."
         }
         appendProtocolAnnouncement(fields, announcement)
