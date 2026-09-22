@@ -359,6 +359,36 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialTransformFailureSpreadAndSilentAnnouncements() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p2a: Magikarp|Magikarp, L1|11/11",
+                "|-fail|p1a: Mewtwo|unboost|atk",
+                "|-fail|p1a: Mewtwo|heal",
+                "|-fail|p1a: Mewtwo|brn",
+                "|-fail|p1a: Mewtwo|dynamax",
+                "|-supereffective|p2a: Magikarp|2|[spread]",
+                "|-resisted|p2a: Magikarp|[spread]",
+                "|-crit|p2a: Magikarp|[spread]",
+                "|-ohko|p2a: Magikarp|[silent]",
+                "|-transform|p1a: Mewtwo|p2a: Magikarp"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo's Attack was not lowered!"))
+        assertTrue(session.battleLog().contains("Mewtwo's HP is full!"))
+        assertTrue(session.battleLog().contains("Mewtwo is already burned!"))
+        assertTrue(session.battleLog().contains("Mewtwo shook its head. It seems like it can't use this move..."))
+        assertTrue(session.battleLog().contains("It's extremely effective on Magikarp!"))
+        assertTrue(session.battleLog().contains("It's not very effective on Magikarp."))
+        assertTrue(session.battleLog().contains("A critical hit on Magikarp!"))
+        assertTrue(session.battleLog().contains("Mewtwo transformed!"))
+        assertFalse(session.battleLog().contains("It's a one-hit KO!"))
+    }
+
+    @Test
     fun formatsOfficialMegaAndPrimalAnnouncements() {
         val session = BattleSession().apply {
             setLocalUsername("ADRIAN")

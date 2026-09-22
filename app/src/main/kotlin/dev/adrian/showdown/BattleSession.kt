@@ -1823,7 +1823,7 @@ class BattleSession {
                     "-unboost" -> applyBoost(fields, -1)
                     "-setboost" -> applySetBoost(fields)
                     "cant" -> applyCant(fields)
-                    "-fail" -> appendProtocolAnnouncement(fields, "But it failed!")
+                    "-fail" -> applyFail(fields)
                     "-block" -> applyBlock(fields)
                     "-notarget" -> appendProtocolAnnouncement(fields, "But there was no target...")
                     "-miss" -> {
@@ -1859,7 +1859,7 @@ class BattleSession {
                     "-singleturn" -> applySingleBattleEffect(fields, turnScoped = true)
                     "-singlemove" -> applySingleBattleEffect(fields, turnScoped = false)
                     "-activate" -> applyActivate(fields)
-                    "-ohko" -> appendLog("It's a one-hit KO!")
+                    "-ohko" -> appendProtocolAnnouncement(fields, "It's a one-hit KO!")
                     "-combine" -> appendProtocolAnnouncement(fields, "The two moves have become one! It's a combined move!")
                     "-candynamax" -> applyCanDynamax(fields)
                     "-nothing" -> appendProtocolAnnouncement(fields, "Splash activated.")
@@ -2953,7 +2953,12 @@ class BattleSession {
                 )
             }
         }
-        appendLog("${displayPokemonName(species)} changed form.")
+        when (fields.getOrNull(1)) {
+            "detailschange", "-formechange", "-transform" -> {
+                appendProtocolAnnouncement(fields, "${battleActor(actor)} transformed!")
+            }
+            else -> appendLog("${displayPokemonName(species)} changed form.")
+        }
     }
 
     private fun identityName(actor: String, currentName: String, currentSpecies: String, newSpecies: String): String {
@@ -3577,11 +3582,18 @@ class BattleSession {
         hit.critical = hit.critical || critical
         if (!isSilent(fields)) {
             val effectiveness = fields.drop(3).firstOrNull { it == "2" }
+            val spread = fields.any { it.equals("[spread]", true) }
+            val targetName = battleActor(fields.getOrNull(2))
             when {
+                critical && spread -> appendLog("A critical hit on $targetName!")
                 critical -> appendLog("A critical hit!")
+                superEffective && effectiveness == "2" && spread -> appendLog("It's extremely effective on $targetName!")
                 superEffective && effectiveness == "2" -> appendLog("It's extremely effective!")
+                superEffective && spread -> appendLog("It's super effective on $targetName!")
                 superEffective -> appendLog("It's super effective!")
+                resisted && effectiveness == "2" && spread -> appendLog("It's mostly ineffective on $targetName.")
                 resisted && effectiveness == "2" -> appendLog("It's mostly ineffective...")
+                resisted && spread -> appendLog("It's not very effective on $targetName.")
                 resisted -> appendLog("It's not very effective...")
             }
         }
@@ -3653,6 +3665,28 @@ class BattleSession {
         }
     }
 
+    private fun applyFail(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val effect = normalizeBattleTextKey(battleEffectName(fields.getOrNull(3)))
+        val stat = fields.drop(4)
+            .firstOrNull { it.isNotBlank() && !it.trim().startsWith("[") }
+            ?.trim()
+        val announcement = when (effect) {
+            "unboost" -> stat?.let { "${battleActor(actor)}'s ${statLabel(it)} was not lowered!" }
+                ?: "${battleActor(actor)}'s stats were not lowered!"
+            "heal" -> "${battleActor(actor)}'s HP is full!"
+            "brn" -> "${battleActor(actor)} is already burned!"
+            "frz" -> "${battleActor(actor)} is already frozen solid!"
+            "par" -> "${battleActor(actor)} is already paralyzed!"
+            "psn", "tox" -> "${battleActor(actor)} is already poisoned!"
+            "slp" -> "${battleActor(actor)} is already asleep!"
+            "substitute", "shedtail" -> "${battleActor(actor)} already has a Substitute!"
+            "dynamax" -> "${battleActor(actor)} shook its head. It seems like it can't use this move..."
+            else -> "But it failed!"
+        }
+        appendProtocolAnnouncement(fields, announcement)
+    }
+
     private fun applyBlock(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         val effect = battleEffectName(fields.getOrNull(3))
@@ -3716,7 +3750,7 @@ class BattleSession {
     private fun applyEndAbility(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         updateActorDetails(actor) { it.copy(ability = "Suppressed") }
-        appendLog("${battleActor(actor)}'s ability was suppressed.")
+        appendProtocolAnnouncement(fields, "${battleActor(actor)}'s ability was suppressed.")
     }
 
     private fun applyActivate(fields: List<String>) {
