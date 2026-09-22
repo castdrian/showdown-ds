@@ -37,7 +37,7 @@ jobs:
             if (!pullRequest) return
             const updateTypes = [...(pullRequest.body ?? '').matchAll(/update-type:\s*version-update:semver-(patch|minor|major)/g)]
               .map((match) => match[1])
-            if (!updateTypes.length || updateTypes.some((updateType) => updateType === 'major')) return
+            if (!updateTypes.length) return
             core.setOutput('number', String(pullRequest.number))
 
       - name: Enable safe dependency auto-merge
