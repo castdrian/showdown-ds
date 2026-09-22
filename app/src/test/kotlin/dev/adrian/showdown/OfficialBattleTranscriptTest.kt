@@ -359,6 +359,34 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialMegaAndPrimalAnnouncements() {
+        val session = BattleSession().apply {
+            setLocalUsername("ADRIAN")
+            applyProtocolPacket(
+                listOf(
+                    "|player|p1|ADRIAN||",
+                    "|player|p2|OPPONENT||",
+                    "|switch|p1a: Charizard|Charizard, L50|100/100",
+                    "|switch|p2a: Kyogre|Kyogre, L50|100/100"
+                )
+            )
+        }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-mega|p1a: Charizard|Charizard|Charizardite X",
+                "|-primal|p2a: Kyogre|Blue Orb"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Charizard's Charizardite X is reacting to the Key Stone!"))
+        assertTrue(session.battleLog().contains("Charizard has Mega Evolved into Mega Charizard!"))
+        assertTrue(session.battleLog().contains("Kyogre's Primal Reversion! It reverted to its primal state!"))
+        assertEquals("Charizardite X", session.playerDetails().item)
+        assertEquals("Blue Orb", session.opponentDetails().item)
+    }
+
+    @Test
     fun keepsSilentProtocolStateUpdatesOutOfTheUserFacingBattleFeed() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
 

@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Mega Evolution and Primal Reversion announcements now match Showdown while preserving the correct stone or orb.",
                 "Battle-log effect variants now match Showdown for 4× and ¼× effectiveness, Terastallization, Dynamax, center shifts, and hit counts.",
                 "Battle-log misses, immunities, failed moves, field activations, combined moves, and Z-Power messages now match Showdown's official wording.",
                 "Side-condition messages now match Showdown for hazards, screens, Mist, Safeguard, Tailwind, and Aurora Veil.",

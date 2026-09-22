@@ -3752,12 +3752,31 @@ class BattleSession {
     }
 
     private fun applyGimmickFormChange(fields: List<String>, message: String) {
-        fields.getOrNull(3)
-            ?.takeIf(String::isNotBlank)
+        val actor = fields.getOrNull(2) ?: return
+        val speciesField = fields.getOrNull(3)
             ?.takeUnless { it.trim().startsWith("[") }
-            ?.let { itemNameResolver?.invoke(it) ?: it }
-            ?.let { applyItem(fields, it) }
-        appendLog("${battleActor(fields.getOrNull(2))} $message")
+            ?.takeIf(String::isNotBlank)
+        val itemField = fields.getOrNull(4)
+            ?.takeUnless { it.trim().startsWith("[") }
+            ?.takeIf(String::isNotBlank)
+            ?: speciesField
+        val item = itemField?.let { itemNameResolver?.invoke(it) ?: it }
+        item?.let { revealedItem -> updateActorDetails(actor) { details -> details.copy(item = revealedItem) } }
+        val actorName = battleActor(actor)
+        if (message.startsWith("Mega", true)) {
+            val trainer = sideNames[sideForSlot(targetSlot(actor))]
+                ?: if (isPlayerSide(actor)) playerName else opponentName
+            val activation = if (item == null) {
+                "$actorName is reacting to $trainer's Key Stone!"
+            } else {
+                "$actorName's $item is reacting to the Key Stone!"
+            }
+            appendProtocolAnnouncement(fields, activation)
+            val species = speciesField?.takeUnless { it.equals(itemField, true) } ?: actorName
+            appendProtocolAnnouncement(fields, "$actorName has Mega Evolved into Mega $species!")
+        } else {
+            appendProtocolAnnouncement(fields, "$actorName's Primal Reversion! It reverted to its primal state!")
+        }
     }
 
     private fun applyEndItem(fields: List<String>) {
