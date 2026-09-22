@@ -211,6 +211,36 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialWeatherTerrainAndFieldAnnouncements() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-weather|RainDance",
+                "|-weather|RainDance|[upkeep]",
+                "|-weather|none",
+                "|-fieldstart|move: Electric Terrain",
+                "|-fieldend|move: Electric Terrain",
+                "|-fieldstart|move: Gravity",
+                "|-fieldend|move: Gravity"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "It started to rain!",
+                "(Rain continues to fall.)",
+                "The rain stopped.",
+                "An electric current ran across the battlefield!",
+                "The electricity disappeared from the battlefield.",
+                "Gravity intensified!",
+                "Gravity returned to normal!"
+            ),
+            session.battleLog().takeLast(7)
+        )
+    }
+
+    @Test
     fun keepsSilentProtocolStateUpdatesOutOfTheUserFacingBattleFeed() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
 
@@ -221,14 +251,20 @@ class OfficialBattleTranscriptTest {
                 "|switch|p1a: Pikachu|Pikachu, L50|100/100",
                 "|-status|p1a: Pikachu|psn|[silent]",
                 "|-boost|p1a: Pikachu|atk|1|[silent]",
-                "|-fail|p1a: Pikachu|move: Protect|[silent]"
+                "|-fail|p1a: Pikachu|move: Protect|[silent]",
+                "|-weather|RainDance|[silent]",
+                "|-fieldstart|move: Electric Terrain|[silent]"
             )
         )
 
         assertEquals("PSN", session.playerDetails().condition)
+        assertEquals("RainDance", session.battleInfo().weather)
+        assertEquals("Electric Terrain", session.battleInfo().terrain)
         assertFalse(session.battleLog().any { it.contains("status", true) })
         assertFalse(session.battleLog().any { it.contains("rose", true) })
         assertFalse(session.battleLog().any { it.contains("failed", true) })
+        assertFalse(session.battleLog().contains("It started to rain!"))
+        assertFalse(session.battleLog().contains("An electric current ran across the battlefield!"))
     }
 
     @Test

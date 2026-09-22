@@ -10,6 +10,115 @@ private fun inferredRandomTeamFormat(id: String): Boolean {
         (normalized.contains("random") && normalized.contains("battle"))
 }
 
+private data class BattleWeatherAnnouncement(
+    val start: String,
+    val end: String,
+    val upkeep: String? = null
+)
+
+private data class BattleFieldAnnouncement(
+    val start: String,
+    val end: String
+)
+
+private val BATTLE_WEATHER_ANNOUNCEMENTS = mapOf(
+    "sandstorm" to BattleWeatherAnnouncement(
+        start = "A sandstorm kicked up!",
+        end = "The sandstorm subsided.",
+        upkeep = "(The sandstorm is raging.)"
+    ),
+    "sunnyday" to BattleWeatherAnnouncement(
+        start = "The sunlight turned harsh!",
+        end = "The harsh sunlight faded.",
+        upkeep = "(The sunlight is strong.)"
+    ),
+    "sun" to BattleWeatherAnnouncement(
+        start = "The sunlight turned harsh!",
+        end = "The harsh sunlight faded.",
+        upkeep = "(The sunlight is strong.)"
+    ),
+    "raindance" to BattleWeatherAnnouncement(
+        start = "It started to rain!",
+        end = "The rain stopped.",
+        upkeep = "(Rain continues to fall.)"
+    ),
+    "rain" to BattleWeatherAnnouncement(
+        start = "It started to rain!",
+        end = "The rain stopped.",
+        upkeep = "(Rain continues to fall.)"
+    ),
+    "hail" to BattleWeatherAnnouncement(
+        start = "It started to hail!",
+        end = "The hail stopped.",
+        upkeep = "(The hail is crashing down.)"
+    ),
+    "snowscape" to BattleWeatherAnnouncement(
+        start = "It started to snow!",
+        end = "The snow stopped.",
+        upkeep = "(The snow is blowing about!)"
+    ),
+    "snow" to BattleWeatherAnnouncement(
+        start = "It started to snow!",
+        end = "The snow stopped.",
+        upkeep = "(The snow is blowing about!)"
+    ),
+    "desolateland" to BattleWeatherAnnouncement(
+        start = "The sunlight turned extremely harsh!",
+        end = "The extremely harsh sunlight faded."
+    ),
+    "primordialsea" to BattleWeatherAnnouncement(
+        start = "A heavy rain began to fall!",
+        end = "The heavy rain has lifted!"
+    ),
+    "deltastream" to BattleWeatherAnnouncement(
+        start = "Mysterious strong winds are protecting Flying-type Pokémon!",
+        end = "The mysterious strong winds have dissipated!"
+    )
+)
+
+private val BATTLE_FIELD_ANNOUNCEMENTS = mapOf(
+    "electricterrain" to BattleFieldAnnouncement(
+        start = "An electric current ran across the battlefield!",
+        end = "The electricity disappeared from the battlefield."
+    ),
+    "grassyterrain" to BattleFieldAnnouncement(
+        start = "Grass grew to cover the battlefield!",
+        end = "The grass disappeared from the battlefield."
+    ),
+    "mistyterrain" to BattleFieldAnnouncement(
+        start = "Mist swirled around the battlefield!",
+        end = "The mist disappeared from the battlefield."
+    ),
+    "psychicterrain" to BattleFieldAnnouncement(
+        start = "The battlefield got weird!",
+        end = "The weirdness disappeared from the battlefield!"
+    ),
+    "gravity" to BattleFieldAnnouncement(
+        start = "Gravity intensified!",
+        end = "Gravity returned to normal!"
+    ),
+    "magicroom" to BattleFieldAnnouncement(
+        start = "It created a bizarre area in which Pokémon's held items lose their effects!",
+        end = "Magic Room wore off, and held items' effects returned to normal!"
+    ),
+    "mudsport" to BattleFieldAnnouncement(
+        start = "Electricity's power was weakened!",
+        end = "The effects of Mud Sport have faded."
+    ),
+    "trickroom" to BattleFieldAnnouncement(
+        start = "The dimensions were twisted!",
+        end = "The twisted dimensions returned to normal!"
+    ),
+    "watersport" to BattleFieldAnnouncement(
+        start = "Fire's power was weakened!",
+        end = "The effects of Water Sport have faded."
+    ),
+    "wonderroom" to BattleFieldAnnouncement(
+        start = "It created a bizarre area in which Defense and Sp. Def stats are swapped!",
+        end = "Wonder Room wore off, and Defense and Sp. Def stats returned to normal!"
+    )
+)
+
 class BattleSession {
     enum class Panel {
         MOVES,
@@ -3551,10 +3660,15 @@ class BattleSession {
     }
 
     private fun applyWeather(fields: List<String>) {
+        val previousWeather = weather
         val upkeep = fields.drop(3).any { it.trim().equals("[upkeep]", true) }
         weather = fields.getOrNull(2)?.takeUnless { it.equals("none", true) }.orEmpty()
-        if (upkeep) return
-        appendLog(if (weather.isBlank()) "The weather cleared." else "The weather changed to $weather.")
+        val announcement = when {
+            upkeep -> weatherUpkeepAnnouncement(weather)
+            weather.isBlank() -> weatherEndAnnouncement(previousWeather)
+            else -> weatherStartAnnouncement(weather)
+        }
+        if (!isSilent(fields)) announcement?.let(::appendLog)
     }
 
     private fun applyFieldEffect(fields: List<String>, enabled: Boolean) {
@@ -3566,7 +3680,23 @@ class BattleSession {
         } else {
             fieldEffects.removeAll { it.equals(effect, true) }
         }
-        appendLog(if (enabled) "$effect began." else "$effect ended.")
+        if (!isSilent(fields)) appendLog(fieldEffectAnnouncement(effect, enabled))
+    }
+
+    private fun weatherStartAnnouncement(value: String) =
+        BATTLE_WEATHER_ANNOUNCEMENTS[normalizeBattleTextKey(value)]?.start
+            ?: "The weather changed to $value."
+
+    private fun weatherEndAnnouncement(value: String) =
+        BATTLE_WEATHER_ANNOUNCEMENTS[normalizeBattleTextKey(value)]?.end
+            ?: "The weather cleared."
+
+    private fun weatherUpkeepAnnouncement(value: String) =
+        BATTLE_WEATHER_ANNOUNCEMENTS[normalizeBattleTextKey(value)]?.upkeep
+
+    private fun fieldEffectAnnouncement(effect: String, enabled: Boolean): String {
+        val announcement = BATTLE_FIELD_ANNOUNCEMENTS[normalizeBattleTextKey(effect)]
+        return if (enabled) announcement?.start ?: "$effect began." else announcement?.end ?: "$effect ended."
     }
 
     private fun applySideCondition(fields: List<String>, enabled: Boolean) {
@@ -3738,6 +3868,8 @@ class BattleSession {
     private fun battleActor(value: String?) = displayPokemonName(value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" })
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
+
+    private fun normalizeBattleTextKey(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
 
     private fun formatStatChange(actor: String, stat: String, delta: Int): String {
         val strength = when (kotlin.math.abs(delta)) {

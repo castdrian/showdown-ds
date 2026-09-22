@@ -55,7 +55,7 @@ class BattleFieldStateTest {
     }
 
     @Test
-    fun doesNotRepeatWeatherAnnouncementsDuringUpkeep() {
+    fun formatsWeatherAnnouncementsDuringUpkeep() {
         val session = BattleSession()
 
         session.applyProtocolPacket(
@@ -67,7 +67,8 @@ class BattleFieldStateTest {
         )
 
         assertEquals("RainDance", session.battleInfo().weather)
-        assertEquals(1, session.battleLog().count { it == "The weather changed to RainDance." })
+        assertEquals(1, session.battleLog().count { it == "It started to rain!" })
+        assertEquals(1, session.battleLog().count { it == "(Rain continues to fall.)" })
         assertTrue(session.battleLog().contains("Splash activated."))
     }
 

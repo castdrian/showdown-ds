@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Weather, terrain, and field-effect announcements now use Showdown's user-facing battle-log wording.",
                 "Recharge turns now use Showdown's user-facing battle-log wording.",
                 "Battle audio now stays silent for unannotated HP changes until move metadata confirms the move can deal damage.",
                 "Lightweight battle audio now only plays damage cues for moves that actually deal damage, while keeping annotated special damage effects audible.",
