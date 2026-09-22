@@ -1855,13 +1855,13 @@ class BattleSession {
                         fields,
                         "${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}'s move..."
                     )
-                    "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
+                    "-hitcount" -> applyHitCount(fields)
                     "-singleturn" -> applySingleBattleEffect(fields, turnScoped = true)
                     "-singlemove" -> applySingleBattleEffect(fields, turnScoped = false)
                     "-activate" -> applyActivate(fields)
                     "-ohko" -> appendLog("It's a one-hit KO!")
                     "-combine" -> appendProtocolAnnouncement(fields, "The two moves have become one! It's a combined move!")
-                    "-candynamax" -> appendLog("Dynamax is available.")
+                    "-candynamax" -> applyCanDynamax(fields)
                     "-nothing" -> appendProtocolAnnouncement(fields, "Splash activated.")
                     "-zpower" -> appendProtocolAnnouncement(
                         fields,
@@ -1884,7 +1884,7 @@ class BattleSession {
                     "-transform" -> applyTransform(fields)
                     "-mega" -> applyGimmickFormChange(fields, "Mega Evolved.")
                     "-primal" -> applyGimmickFormChange(fields, "reverted to its primal form.")
-                    "-center" -> appendLog("The remaining Pokémon moved to the center of the field.")
+                    "-center" -> appendProtocolAnnouncement(fields, "Automatic center!")
                     "-terastallize" -> applyTerastallize(fields)
                     "custom" -> applyCustom(fields)
                     "-start" -> applyStart(fields)
@@ -2988,7 +2988,10 @@ class BattleSession {
             }
             if (slot.endsWith('a')) opponentDetails = opponentDetails.copy(types = displayedTypes)
         }
-        appendLog("${actor.substringAfter(':').trim()} Terastallized into $teraType.")
+        appendProtocolAnnouncement(
+            fields,
+            "(${battleActor(actor)} has Terastallized into the ${battleTypeLabel(teraType)}-type!)"
+        )
     }
 
     private fun applyStart(fields: List<String>) {
@@ -3003,7 +3006,15 @@ class BattleSession {
                 typeChangeBySlot[slot] = types
                 typeAdditionsBySlot.remove(slot)
                 updateActiveTypes(actor, types)
-                if (!isSilent(fields)) appendLog("${battleActor(actor)}'s types changed to ${types.joinToString("/")}.")
+                val source = protocolSource(fields)?.let(::battleEffectName)?.takeIf { it.isNotBlank() }
+                appendProtocolAnnouncement(
+                    fields,
+                    if (source == null) {
+                        "${battleActor(actor)} transformed into the ${battleTypeLabel(types.first())} type!"
+                    } else {
+                        "${battleActor(actor)}'s $source made it the ${battleTypeLabel(types.first())} type!"
+                    }
+                )
             }
             "typeadd" -> {
                 if (slot in terastallizedSlots) return
@@ -3011,16 +3022,16 @@ class BattleSession {
                 val additions = typeAdditionsBySlot.getOrPut(slot) { mutableListOf() }
                 if (type !in additions) additions += type
                 updateActiveTypes(actor, effectiveTypes(slot))
-                if (!isSilent(fields)) appendLog("${battleActor(actor)} gained the $type type.")
+                appendProtocolAnnouncement(fields, "${battleTypeLabel(type)} type was added to ${battleActor(actor)}!")
             }
             "dynamax" -> {
                 updateDynamaxState(actor, true, fields.drop(4).any { it.equals("Gmax", true) })
-                if (!isSilent(fields)) appendLog("${battleActor(actor)} Dynamaxed.")
+                appendProtocolAnnouncement(fields, "(${battleActor(actor)}'s Dynamax!)")
             }
             else -> {
                 updateVolatileEffect(actor, effect, true)
-                if (!isSilent(fields) && !isHiddenAbilityStateEffect(effect)) {
-                    appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} started.")
+                if (!isHiddenAbilityStateEffect(effect)) {
+                    appendProtocolAnnouncement(fields, "(${battleEffectName(fields.getOrNull(3))} started on ${battleActor(actor)}!)")
                 }
             }
         }
@@ -3034,7 +3045,7 @@ class BattleSession {
             "typechange" -> {
                 typeChangeBySlot.remove(slot)
                 updateActiveTypes(actor, effectiveTypes(slot))
-                if (!isSilent(fields)) appendLog("${battleActor(actor)}'s temporary types ended.")
+                appendProtocolAnnouncement(fields, "${battleActor(actor)} was freed from ${battleEffectName(fields.getOrNull(3))}!")
             }
             "typeadd" -> {
                 typeAdditionsBySlot.remove(slot)
@@ -3043,12 +3054,12 @@ class BattleSession {
             }
             "dynamax" -> {
                 updateDynamaxState(actor, false)
-                if (!isSilent(fields)) appendLog("${battleActor(actor)} returned to normal size.")
+                appendProtocolAnnouncement(fields, "(${battleActor(actor)} returned to normal!)")
             }
             else -> {
                 updateVolatileEffect(actor, effect, false)
-                if (!isSilent(fields) && !isHiddenAbilityStateEffect(effect)) {
-                    appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))} ended.")
+                if (!isHiddenAbilityStateEffect(effect)) {
+                    appendProtocolAnnouncement(fields, "${battleActor(actor)} was freed from ${battleEffectName(fields.getOrNull(3))}!")
                 }
             }
         }
@@ -3564,10 +3575,15 @@ class BattleSession {
         hit.superEffective = hit.superEffective || superEffective
         hit.resisted = hit.resisted || resisted
         hit.critical = hit.critical || critical
-        when {
-            critical -> appendLog("A critical hit!")
-            superEffective -> appendLog("It's super effective!")
-            resisted -> appendLog("It's not very effective.")
+        if (!isSilent(fields)) {
+            val effectiveness = fields.drop(3).firstOrNull { it == "2" }
+            when {
+                critical -> appendLog("A critical hit!")
+                superEffective && effectiveness == "2" -> appendLog("It's extremely effective!")
+                superEffective -> appendLog("It's super effective!")
+                resisted && effectiveness == "2" -> appendLog("It's mostly ineffective...")
+                resisted -> appendLog("It's not very effective...")
+            }
         }
     }
 
@@ -3653,7 +3669,30 @@ class BattleSession {
         item?.let { revealedItem ->
             updateActorDetails(actor) { details -> details.copy(item = revealedItem) }
         }
-        if (!isSilent(fields)) appendLog("${battleActor(actor)} was blocked by $effect.")
+        val announcement = when (normalizedEffect) {
+            "dynamax" -> "The move was blocked by the power of Dynamax!"
+            else -> "${battleActor(actor)} was blocked by $effect."
+        }
+        appendProtocolAnnouncement(fields, announcement)
+    }
+
+    private fun applyHitCount(fields: List<String>) {
+        val count = fields.getOrNull(3)?.toIntOrNull() ?: return
+        val suffix = if (count == 1) "time" else "times"
+        appendProtocolAnnouncement(fields, "The Pokémon was hit $count $suffix!")
+    }
+
+    private fun applyCanDynamax(fields: List<String>) {
+        val side = fields.getOrNull(2)?.trim().orEmpty()
+        if (side.isBlank() || (turn == 1 && isPlayerSide(side))) {
+            if (side.isNotBlank() && isPlayerSide(side)) {
+                val trainer = sideNames[side] ?: playerName
+                appendProtocolAnnouncement(fields, "Dynamax Energy gathered around $trainer!")
+            }
+            return
+        }
+        val trainer = sideNames[side] ?: side
+        appendProtocolAnnouncement(fields, "$trainer can dynamax now!")
     }
 
     private fun applyAbility(fields: List<String>) {
@@ -3974,6 +4013,8 @@ class BattleSession {
     private fun battleActor(value: String?) = displayPokemonName(value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" })
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
+
+    private fun battleTypeLabel(value: String) = value.trim().lowercase().replaceFirstChar { it.uppercase() }
 
     private fun normalizeBattleTextKey(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
 

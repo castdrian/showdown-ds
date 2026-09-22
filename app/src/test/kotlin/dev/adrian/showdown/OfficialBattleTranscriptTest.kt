@@ -314,6 +314,51 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialEffectVariantsAndMultiplierAnnouncements() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        val initialLogSize = session.battleLog().size
+
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|turn|1",
+                "|-supereffective|p2a: Gholdengo|2",
+                "|-resisted|p2a: Gholdengo|2",
+                "|-center",
+                "|-hitcount|p2a: Gholdengo|1",
+                "|-hitcount|p2a: Gholdengo|3",
+                "|-start|p1a: Mewtwo|typechange|WATER",
+                "|-end|p1a: Mewtwo|typechange",
+                "|-terastallize|p1a: Mewtwo|FIRE",
+                "|-start|p1a: Mewtwo|Dynamax",
+                "|-end|p1a: Mewtwo|Dynamax",
+                "|-candynamax|p1",
+                "|-block|p1a: Mewtwo|Dynamax"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Turn 1.",
+                "It's extremely effective!",
+                "It's mostly ineffective...",
+                "Automatic center!",
+                "The Pokémon was hit 1 time!",
+                "The Pokémon was hit 3 times!",
+                "Mewtwo transformed into the Water type!",
+                "Mewtwo was freed from typechange!",
+                "(Mewtwo has Terastallized into the Fire-type!)",
+                "(Mewtwo's Dynamax!)",
+                "(Mewtwo returned to normal!)",
+                "Dynamax Energy gathered around ADRIAN!",
+                "The move was blocked by the power of Dynamax!"
+            ),
+            session.battleLog().drop(initialLogSize)
+        )
+    }
+
+    @Test
     fun keepsSilentProtocolStateUpdatesOutOfTheUserFacingBattleFeed() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
 
