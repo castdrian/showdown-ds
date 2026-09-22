@@ -1815,7 +1815,7 @@ class BattleSession {
                     "-weather" -> applyWeather(fields)
                     "-fieldstart" -> applyFieldEffect(fields, true)
                     "-fieldend" -> applyFieldEffect(fields, false)
-                    "-fieldactivate" -> appendLog(battleEffectName(fields.getOrNull(2)).ifBlank { "A field effect activated." })
+                    "-fieldactivate" -> appendProtocolAnnouncement(fields, fieldEffectActivationAnnouncement(fields))
                     "-sidestart" -> applySideCondition(fields, true)
                     "-sideend" -> applySideCondition(fields, false)
                     "-swapsideconditions" -> swapSideConditions()
@@ -1823,32 +1823,54 @@ class BattleSession {
                     "-unboost" -> applyBoost(fields, -1)
                     "-setboost" -> applySetBoost(fields)
                     "cant" -> applyCant(fields)
-                    "-fail" -> {
-                        val actor = battleActor(fields.getOrNull(2))
-                        val effect = battleEffectName(fields.getOrNull(3))
-                        appendLog(if (effect.isBlank()) "$actor's move failed." else "$actor failed to use $effect.")
-                    }
+                    "-fail" -> appendProtocolAnnouncement(fields, "But it failed!")
                     "-block" -> applyBlock(fields)
-                    "-notarget" -> appendLog("${battleActor(fields.getOrNull(2))} had no target.")
-                    "-miss" -> appendLog("${battleActor(fields.getOrNull(2))}'s attack missed ${battleActor(fields.getOrNull(3))}.")
-                    "-immune" -> appendLog("${battleActor(fields.getOrNull(2))} is immune.")
+                    "-notarget" -> appendProtocolAnnouncement(fields, "But there was no target...")
+                    "-miss" -> {
+                        val target = fields.getOrNull(3)?.takeIf(::isProtocolActor)
+                        appendProtocolAnnouncement(
+                            fields,
+                            if (target == null) {
+                                "${battleActor(fields.getOrNull(2))}'s attack missed!"
+                            } else {
+                                "${battleActor(target)} avoided the attack!"
+                            }
+                        )
+                    }
+                    "-immune" -> {
+                        val target = fields.getOrNull(2)?.takeIf(::isProtocolActor)
+                        appendProtocolAnnouncement(
+                            fields,
+                            if (target == null) "But it had no effect!"
+                            else "It doesn't affect ${battleActor(target)}..."
+                        )
+                    }
                     "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
                     "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge!")
                     "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
                     "-hint" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let { appendLog("($it)") }
                     "-message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
-                    "-waiting" -> appendLog("${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}.")
+                    "-waiting" -> appendProtocolAnnouncement(
+                        fields,
+                        "${battleActor(fields.getOrNull(2))} is waiting for ${battleActor(fields.getOrNull(3))}'s move..."
+                    )
                     "-hitcount" -> appendLog("${battleActor(fields.getOrNull(2))} was hit ${fields.getOrNull(3).orEmpty()} times.")
                     "-singleturn" -> applySingleBattleEffect(fields, turnScoped = true)
                     "-singlemove" -> applySingleBattleEffect(fields, turnScoped = false)
                     "-activate" -> applyActivate(fields)
                     "-ohko" -> appendLog("It's a one-hit KO!")
-                    "-combine" -> appendLog("The move effects combined.")
+                    "-combine" -> appendProtocolAnnouncement(fields, "The two moves have become one! It's a combined move!")
                     "-candynamax" -> appendLog("Dynamax is available.")
-                    "-nothing" -> appendLog("The move had no effect.")
-                    "-zpower" -> appendLog("${battleActor(fields.getOrNull(2))} used a Z-Power move.")
-                    "-zbroken" -> appendLog("${battleActor(fields.getOrNull(2))}'s protection was broken by Z-Power.")
+                    "-nothing" -> appendProtocolAnnouncement(fields, "Splash activated.")
+                    "-zpower" -> appendProtocolAnnouncement(
+                        fields,
+                        "${battleActor(fields.getOrNull(2))} surrounded itself with its Z-Power!"
+                    )
+                    "-zbroken" -> appendProtocolAnnouncement(
+                        fields,
+                        "${battleActor(fields.getOrNull(2))} couldn't fully protect itself and got hurt!"
+                    )
                     "-clearallboost" -> clearAllBoosts()
                     "-clearboost" -> clearBoosts(fields)
                     "-restoreboost" -> clearNegativeBoosts(fields, restored = true)
@@ -3763,7 +3785,16 @@ class BattleSession {
 
     private fun fieldEffectAnnouncement(effect: String, enabled: Boolean): String {
         val announcement = BATTLE_FIELD_ANNOUNCEMENTS[normalizeBattleTextKey(effect)]
-        return if (enabled) announcement?.start ?: "$effect began." else announcement?.end ?: "$effect ended."
+        return if (enabled) announcement?.start ?: "($effect started!)" else announcement?.end ?: "($effect ended!)"
+    }
+
+    private fun fieldEffectActivationAnnouncement(fields: List<String>): String? {
+        val effect = battleEffectName(fields.getOrNull(2)).takeIf { it.isNotBlank() } ?: return null
+        return "($effect started!)"
+    }
+
+    private fun appendProtocolAnnouncement(fields: List<String>, announcement: String?) {
+        if (!isSilent(fields)) announcement?.let(::appendLog)
     }
 
     private fun applySideCondition(fields: List<String>, enabled: Boolean) {

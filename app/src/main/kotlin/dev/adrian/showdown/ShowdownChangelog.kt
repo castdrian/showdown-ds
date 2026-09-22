@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Battle-log misses, immunities, failed moves, field activations, combined moves, and Z-Power messages now match Showdown's official wording.",
                 "Side-condition messages now match Showdown for hazards, screens, Mist, Safeguard, Tailwind, and Aurora Veil.",
                 "Status, status-cure, and cannot-move messages now use Showdown's official battle-log wording.",
                 "Weather, terrain, and field-effect announcements now use Showdown's user-facing battle-log wording.",

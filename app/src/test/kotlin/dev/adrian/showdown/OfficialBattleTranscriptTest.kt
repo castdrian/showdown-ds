@@ -206,7 +206,7 @@ class OfficialBattleTranscriptTest {
         assertEquals("RainDance", session.battleInfo().weather)
         assertEquals("Electric Terrain", session.battleInfo().terrain)
         assertTrue(session.battleLog().contains("Mewtwo is fast asleep."))
-        assertTrue(session.battleLog().any { it.contains("missed") })
+        assertTrue(session.battleLog().any { it.contains("avoided the attack") })
         assertTrue(session.battleLog().any { it.contains("Warning: The battle is nearing its turn limit.") })
     }
 
@@ -273,6 +273,47 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialProtocolAnnouncements() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p2a: Magikarp|Magikarp, L1|11/11",
+                "|-fieldactivate|move: Fairy Lock",
+                "|-fail|p1a: Mewtwo|move: Protect",
+                "|-notarget|p1a: Mewtwo",
+                "|-miss|p1a: Mewtwo|p2a: Magikarp",
+                "|-miss|p1a: Mewtwo",
+                "|-immune|p2a: Magikarp",
+                "|-immune",
+                "|-combine|p1a: Mewtwo",
+                "|-nothing",
+                "|-zpower|p1a: Mewtwo",
+                "|-zbroken|p1a: Mewtwo",
+                "|-waiting|p1a: Mewtwo|p2a: Magikarp"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "(Fairy Lock started!)",
+                "But it failed!",
+                "But there was no target...",
+                "Magikarp avoided the attack!",
+                "Mewtwo's attack missed!",
+                "It doesn't affect Magikarp...",
+                "But it had no effect!",
+                "The two moves have become one! It's a combined move!",
+                "Splash activated.",
+                "Mewtwo surrounded itself with its Z-Power!",
+                "Mewtwo couldn't fully protect itself and got hurt!",
+                "Mewtwo is waiting for Magikarp's move..."
+            ),
+            session.battleLog().takeLast(12)
+        )
+    }
+
+    @Test
     fun keepsSilentProtocolStateUpdatesOutOfTheUserFacingBattleFeed() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
 
@@ -308,7 +349,7 @@ class OfficialBattleTranscriptTest {
 
         session.applyProtocolLine("|-fail|p1a: Plusle")
 
-        assertTrue(session.battleLog().contains("Plusle's move failed."))
+        assertTrue(session.battleLog().contains("But it failed!"))
     }
 
     @Test
@@ -570,7 +611,7 @@ class OfficialBattleTranscriptTest {
         assertFalse(session.opponentActiveCombatants().single().dynamaxed)
         assertFalse(session.opponentActiveCombatants().single().gMaxed)
         assertTrue(session.battleLog().contains("It's a one-hit KO!"))
-        assertTrue(session.battleLog().contains("The move effects combined."))
+        assertTrue(session.battleLog().contains("The two moves have become one! It's a combined move!"))
     }
 
     @Test
