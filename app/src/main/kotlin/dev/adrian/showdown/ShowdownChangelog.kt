@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Live battle choices now preserve queued Showdown actions so the upper battle log and effects cannot be skipped.",
                 "Opponent team previews now render on the upper battle screen with readable HD-first animated sprites.",
                 "Official Showdown system notices, warnings, and popups now stay readable in Activity without crowding the battle feed.",
                 "Move power, accuracy, category, and target now share a clean detail panel without colored tile outlines.",

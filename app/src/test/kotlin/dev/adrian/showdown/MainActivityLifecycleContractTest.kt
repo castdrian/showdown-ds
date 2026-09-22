@@ -52,6 +52,19 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun liveChoicesDoNotDiscardQueuedBattleActions() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val decisionListener = source.substringAfter("private val decisionListener").substringBefore("private val chatListener")
+        val clearPlayback = source.substringAfter("private fun clearBattlePlayback").substringBefore("private fun pauseReplayForLifecycle")
+
+        assertTrue(decisionListener.contains("clearBattlePlayback(preserveQueuedPlayback = true)"))
+        assertTrue(clearPlayback.contains("if (!preserveQueuedPlayback) battleEventHandler.removeCallbacksAndMessages(null)"))
+        assertTrue(clearPlayback.contains("if (!preserveQueuedPlayback) {"))
+        assertTrue(clearPlayback.contains("pendingBattlePackets.clear()"))
+        assertTrue(clearPlayback.contains("battlePacketPlaybackScheduled = false"))
+    }
+
+    @Test
     fun resumeRestoresTheThorPresentationIfAndroidDismissedIt() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")

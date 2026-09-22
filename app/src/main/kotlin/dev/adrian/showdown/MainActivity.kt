@@ -290,7 +290,7 @@ class MainActivity : Activity() {
             session.setConnectionStatus("Replays are read-only.")
             return@DecisionListener
         }
-        clearBattlePlayback()
+        clearBattlePlayback(preserveQueuedPlayback = true)
         val roomId = activeBattleRoomId
         pendingDecisionCommand = command
         pendingDecisionSentConnection = null
@@ -1042,11 +1042,13 @@ class MainActivity : Activity() {
         flushBattlePlayback()
     }
 
-    private fun clearBattlePlayback() {
-        battleEventHandler.removeCallbacksAndMessages(null)
+    private fun clearBattlePlayback(preserveQueuedPlayback: Boolean = false) {
+        if (!preserveQueuedPlayback) battleEventHandler.removeCallbacksAndMessages(null)
         displayRefreshScheduler.cancel()
-        pendingBattlePackets.clear()
-        battlePacketPlaybackScheduled = false
+        if (!preserveQueuedPlayback) {
+            pendingBattlePackets.clear()
+            battlePacketPlaybackScheduled = false
+        }
         lightweightMoveCues.clear()
         lightweightHealthByTarget.clear()
         replayPaused = false
@@ -1055,9 +1057,11 @@ class MainActivity : Activity() {
         if (!livePlaybackPausedForLifecycle) showdownMoveEffects?.setPlaybackPaused(false)
         resumeBattleAudioIfActive()
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
-        playbackScheduledPauseMillis = 0L
-        playbackScheduledAtMillis = 0L
-        playbackScheduledSpeed = 1f
+        if (!preserveQueuedPlayback) {
+            playbackScheduledPauseMillis = 0L
+            playbackScheduledAtMillis = 0L
+            playbackScheduledSpeed = 1f
+        }
         playbackPausedRemainingMillis = null
         replayStatus = null
     }
