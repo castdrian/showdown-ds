@@ -100,4 +100,42 @@ class BattleDamageCueResolverTest {
             ).isEmpty()
         )
     }
+
+    @Test
+    fun gatesUnannotatedDamageByMoveCategoryAndPower() {
+        assertFalse(
+            BattleDamageCueResolver.acceptsUnannotatedMoveDamage(
+                BattleSession.MoveInfo("—", "—", "Status")
+            )
+        )
+        assertTrue(
+            BattleDamageCueResolver.acceptsUnannotatedMoveDamage(
+                BattleSession.MoveInfo("80", "100", "Physical")
+            )
+        )
+        assertTrue(BattleDamageCueResolver.acceptsUnannotatedMoveDamage(null))
+    }
+
+    @Test
+    fun allowsAnnotatedMoveDamageForStatusMovesButRejectsUnannotatedHpChanges() {
+        val pendingTargets = listOf("p2a: Garchomp")
+        val previousHealth = mapOf("p2a" to 100f)
+
+        assertTrue(
+            BattleDamageCueResolver.directDamageTargets(
+                "|-damage|p2a: Garchomp|50/100|[from] move: Pain Split".split('|'),
+                pendingTargets,
+                previousHealth,
+                emptyList()
+            ).isNotEmpty()
+        )
+        assertTrue(
+            BattleDamageCueResolver.directDamageTargets(
+                "|-damage|p2a: Garchomp|50/100".split('|'),
+                pendingTargets,
+                previousHealth,
+                emptyList()
+            ).isEmpty()
+        )
+    }
 }

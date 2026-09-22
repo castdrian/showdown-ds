@@ -9,22 +9,34 @@ object BattleDamageCueResolver {
     fun directDamageTargets(
         fields: List<String>,
         pendingMoveTargets: List<String>,
-        previousHealth: Map<String, Float>
+        previousHealth: Map<String, Float>,
+        unannotatedMoveTargets: List<String> = pendingMoveTargets
     ): List<String> {
         val event = fields.getOrNull(1)
         if (event != "-damage" && event != "-sethp") return emptyList()
         if (hasNonMoveSource(fields)) return emptyList()
         val pendingTargets = pendingMoveTargets.map(::targetKey)
+        val eligibleTargets = if (hasMoveSource(fields)) {
+            pendingTargets
+        } else {
+            unannotatedMoveTargets.map(::targetKey)
+        }
         return healthUpdates(fields)
             .filter { update ->
                 val previous = previousHealth[targetKey(update.target)]
                 val decreased = previous == null && event == "-damage" ||
                     previous != null && update.health < previous
                 if (!decreased) return@filter false
-                pendingTargets.any { pendingTargetMatches(it, update.target) }
+                eligibleTargets.any { pendingTargetMatches(it, update.target) }
             }
             .map(BattleHealthUpdate::target)
             .distinctBy(::targetKey)
+    }
+
+    fun acceptsUnannotatedMoveDamage(moveInfo: BattleSession.MoveInfo?): Boolean {
+        if (moveInfo == null) return true
+        if (!moveInfo.category.equals("Status", true)) return true
+        return moveInfo.power.toIntOrNull()?.let { it > 0 } == true
     }
 
     fun healthUpdates(fields: List<String>): List<BattleHealthUpdate> = when (fields.getOrNull(1)) {

@@ -875,16 +875,18 @@ class MainActivity : Activity() {
         var latestDamageLineIndex: Int? = null
         lines.forEachIndexed { lineIndex, line ->
             val fields = line.split('|')
+            val pendingMoves = lightweightMoveCues.filterNot(LightweightMoveCue::damagePlayed)
             val directDamageTargets = BattleDamageCueResolver.directDamageTargets(
                 fields,
-                lightweightMoveCues
-                    .filter { !it.damagePlayed && it.acceptsUnannotatedDamage }
-                    .map(LightweightMoveCue::target),
-                lightweightHealthByTarget
+                pendingMoves.map(LightweightMoveCue::target),
+                lightweightHealthByTarget,
+                pendingMoves
+                    .filter(LightweightMoveCue::acceptsUnannotatedDamage)
+                    .map(LightweightMoveCue::target)
             )
             if (directDamageTargets.isNotEmpty()) {
                 directDamageTargetsByLine[lineIndex] = directDamageTargets.toSet()
-                impactCueByLine[lineIndex] = playLightweightDamageCue(directDamageTargets.first())
+                impactCueByLine[lineIndex] = playLightweightDamageCue(directDamageTargets.first(), fields)
                 latestDamageLineIndex = lineIndex
             }
             when {
@@ -892,8 +894,12 @@ class MainActivity : Activity() {
                     latestDamageLineIndex = null
                     lightweightMoveCues.removeAll { it.damagePlayed || !it.acceptsUnannotatedDamage }
                     battleAudio.beginBattleMove()
+                    val moveName = fields.getOrNull(3).orEmpty()
                     lightweightMoveCues += LightweightMoveCue(
-                        target = fields.getOrNull(4).orEmpty()
+                        target = fields.getOrNull(4).orEmpty(),
+                        acceptsUnannotatedDamage = BattleDamageCueResolver.acceptsUnannotatedMoveDamage(
+                            session.moveInfoFor(moveName)
+                        )
                     )
                 }
                 fields.getOrNull(1) == "turn" -> {
@@ -930,12 +936,15 @@ class MainActivity : Activity() {
         battleScene?.applyLightweightBattleProtocol(lines, directDamageTargetsByLine, impactCueByLine)
     }
 
-    private fun playLightweightDamageCue(targetValue: String): BattleAudioCue? {
+    private fun playLightweightDamageCue(targetValue: String, fields: List<String>): BattleAudioCue? {
         val target = targetValue.substringBefore(':')
+        val annotatedDamage = BattleDamageCueResolver.hasMoveSource(fields)
         val move = lightweightMoveCues.firstOrNull { cue ->
-            !cue.damagePlayed && cue.acceptsUnannotatedDamage &&
+            !cue.damagePlayed && (annotatedDamage || cue.acceptsUnannotatedDamage) &&
                 (cue.target.isBlank() || cue.target.substringBefore(':').equals(target, true))
-        } ?: lightweightMoveCues.firstOrNull { !it.damagePlayed && it.acceptsUnannotatedDamage }
+        } ?: lightweightMoveCues.firstOrNull {
+            !it.damagePlayed && (annotatedDamage || it.acceptsUnannotatedDamage)
+        }
         if (move == null) return null
         move.damagePlayed = true
         val impactCue = move.impactCue
