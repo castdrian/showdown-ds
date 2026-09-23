@@ -32,8 +32,8 @@ class ShowdownSpriteCacheContractTest {
         val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val gifSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownStreamingGif.kt").readText()
 
-        assertTrue(cacheSource.contains("decodeMovie(file) ?: decodeStreamedGif(file)"))
         assertTrue(cacheSource.contains("decodeStreamedGif(file) ?: decodeMovie(file)"))
+        assertTrue(cacheSource.contains("decodeStreamedHdGif(file, canvasSize) ?: decodeMovie(file, maxAnimatedFrameDimension)"))
         assertTrue(cacheSource.contains("private fun decodeStreamedGif(file: File): SpriteAsset?"))
         assertTrue(cacheSource.contains("if (memoryConstrained && plan.usesModernAnimatedFallback)"))
         assertTrue(cacheSource.contains("private fun requestConstrainedSpriteResolution("))

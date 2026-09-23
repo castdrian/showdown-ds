@@ -1166,13 +1166,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             ) && fileBytes in 1L..maxAnimatedFileBytes
             if (fitsMovieBudget) {
                 return if (memoryConstrained) {
-                    decodeMovie(file) ?: decodeStreamedGif(file)
+                    decodeStreamedGif(file) ?: decodeMovie(file)
                 } else {
                     decodeStreamedGif(file) ?: decodeMovie(file)
                 }
             }
             if (!isHighResolutionSpritePath(path)) return null
-            decodeMovie(file, maxAnimatedFrameDimension) ?: decodeStreamedHdGif(file, canvasSize)
+            decodeStreamedHdGif(file, canvasSize) ?: decodeMovie(file, maxAnimatedFrameDimension)
         } else {
             if (isHighResolutionSpritePath(path)) return null
             BitmapFactory.decodeFile(file.path)?.let(SpriteAsset::fromBitmap)
