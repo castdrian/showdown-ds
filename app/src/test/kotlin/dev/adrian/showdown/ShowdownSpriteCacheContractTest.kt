@@ -79,7 +79,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(constrainedBackResolver.contains("requestAnimatedBackSpriteResolution(request, plan, receiver, includeRegularScrapedBack = false)"))
         assertTrue(constrainedFrontResolver.contains("requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->"))
         assertTrue(animatedBackResolver.contains("requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback)"))
-        assertTrue(animatedBackResolver.contains("requestRegularRemoteSpriteResolution(plan, callback)"))
+        assertTrue(animatedBackResolver.contains("requestRegularRemoteSpriteResolution(plan) {"))
         assertFalse(constrainedFrontResolver.contains("requestScavioAnimatedSprite"))
         assertTrue(
             constrainedFrontResolver.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->") <
@@ -95,7 +95,7 @@ class ShowdownSpriteCacheContractTest {
         )
         assertTrue(
             animatedBackResolver.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback)") <
-                animatedBackResolver.indexOf("requestRegularRemoteSpriteResolution(plan, callback)")
+                animatedBackResolver.indexOf("requestHdBackOrRegularResolution(request, plan, includeRegularScrapedBack, callback)")
         )
         assertTrue(source.contains("private fun requestConstrainedBackSpriteResolution("))
     }
@@ -310,8 +310,9 @@ class ShowdownSpriteCacheContractTest {
         val backIndex = source.indexOf("private fun requestBackSpriteResolution")
         val backPreferredIndex = source.indexOf("requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, callback)", backIndex)
         val scrapedBackIndex = source.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback)", backIndex)
-        val scrapedBackRegularIndex = source.indexOf("requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback)", backIndex)
-        val backRegularIndex = source.indexOf("requestRegularRemoteSpriteResolution(plan, callback)", backIndex)
+        val backQualityIndex = source.indexOf("requestHdBackOrRegularResolution(request, plan, includeRegularScrapedBack, callback)", backIndex)
+        val backQualityResolver = source.substringAfter("private fun requestHdBackOrRegularResolution")
+            .substringBefore("private fun requestScrapedBackSpriteResolution")
         val backCommunityIndex = source.indexOf("requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback)", backIndex)
         val backLocalIndex = source.indexOf("requestModernAnimatedSpriteResolution(request, plan) { asset -> gate.fallback(asset) }", backIndex)
         val frontIndex = source.indexOf("private fun requestFrontSpriteResolution")
@@ -325,13 +326,13 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(backPreferredIndex >= 0)
         assertTrue(scrapedBackIndex >= 0)
         assertTrue(backCommunityIndex >= 0)
-        assertTrue(backRegularIndex >= 0)
-        assertTrue(scrapedBackRegularIndex >= 0)
+        assertTrue(backQualityIndex >= 0)
+        assertTrue(backQualityResolver.contains("requestRegularRemoteSpriteResolution(plan)"))
+        assertTrue(backQualityResolver.contains("requestScrapedBackSpriteResolution(request, highResolutionOnly = false)"))
         assertTrue(backLocalIndex >= 0)
         assertTrue(backPreferredIndex < scrapedBackIndex)
-        assertTrue(scrapedBackIndex < backRegularIndex)
-        assertTrue(backRegularIndex < scrapedBackRegularIndex)
-        assertTrue(scrapedBackRegularIndex < backLocalIndex)
+        assertTrue(scrapedBackIndex < backQualityIndex)
+        assertTrue(backQualityIndex < backLocalIndex)
         assertTrue(backCommunityIndex < backLocalIndex)
         assertTrue(frontHdIndex >= 0)
         assertTrue(frontHdIndex < scavioIndex)

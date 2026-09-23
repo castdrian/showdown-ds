@@ -712,12 +712,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     ) {
         val animatedTiers = buildList<((SpriteAsset?) -> Unit) -> Unit> {
             add { callback -> requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates, callback) }
-            add { callback -> requestNumberedHdSpriteResolution(request, callback) }
             add { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = true, receiver = callback) }
-            add { callback -> requestRegularRemoteSpriteResolution(plan, callback) }
-            if (includeRegularScrapedBack) {
-                add { callback -> requestScrapedBackSpriteResolution(request, highResolutionOnly = false, receiver = callback) }
-            }
+            add { callback -> requestHdBackOrRegularResolution(request, plan, includeRegularScrapedBack, callback) }
             add { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback) }
         }
         val gate = SpriteResolutionGate<SpriteAsset>(receiver)
@@ -742,6 +738,42 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 requestModernAnimatedSpriteResolution(request, plan) { asset -> gate.fallback(asset) }
             }
         }, BACK_SPRITE_ANIMATED_FALLBACK_DELAY_MILLIS)
+    }
+
+    private fun requestHdBackOrRegularResolution(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        includeRegularScrapedBack: Boolean,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        var numberedFinished = false
+        var regularFinished = false
+        var numberedAsset: SpriteAsset? = null
+        var regularAsset: SpriteAsset? = null
+
+        fun finishIfReady() {
+            if (!numberedFinished || !regularFinished) return
+            receiver(numberedAsset ?: regularAsset)
+        }
+
+        requestNumberedHdSpriteResolution(request) { asset ->
+            numberedAsset = asset
+            numberedFinished = true
+            finishIfReady()
+        }
+        requestRegularRemoteSpriteResolution(plan) { asset ->
+            if (asset != null || !includeRegularScrapedBack) {
+                regularAsset = asset
+                regularFinished = true
+                finishIfReady()
+            } else {
+                requestScrapedBackSpriteResolution(request, highResolutionOnly = false) { scrapedAsset ->
+                    regularAsset = scrapedAsset
+                    regularFinished = true
+                    finishIfReady()
+                }
+            }
+        }
     }
 
     private fun requestScrapedBackSpriteResolution(

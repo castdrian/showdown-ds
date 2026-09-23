@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "Animated player back sprites now check indexed and generation-specific HD artwork before numbered pixel fallbacks.",
                 "Common protection, terrain, and held-item block messages now use Showdown's exact battle wording.",
                 "Battle transcripts now match Showdown for form transformations, spread effectiveness, silent OHKO events, and common failed moves.",
                 "Mega Evolution and Primal Reversion announcements now match Showdown while preserving the correct stone or orb.",

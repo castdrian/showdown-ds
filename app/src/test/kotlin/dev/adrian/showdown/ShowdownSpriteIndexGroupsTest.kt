@@ -71,4 +71,22 @@ class ShowdownSpriteIndexGroupsTest {
             )
         )
     }
+
+    @Test
+    fun selectsTheBackSpriteGroupContainingTheRequestedSpeciesRange() {
+        val html = """
+            <a class="backsgrouplink" href="xy/sprites_pokemon_espalda.php?cid=6#backsgroup6">drapion.gif to empoleon.gif</a>
+            <a class="backsgrouplink" href="xy/sprites_pokemon_espalda.php?cid=7#backsgroup7">entei.gif to floette-eternal.gif</a>
+            <a class="backsgrouplink" href="xy/sprites_pokemon_espalda.php?cid=8#backsgroup8">floette-orange.gif to genesect.gif</a>
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://www.pkparaiso.com/xy/sprites_pokemon_espalda.php?cid=7&order=#sprites"),
+            ShowdownSpriteIndexGroups.pageUrls(
+                html,
+                "https://www.pkparaiso.com/xy/sprites_pokemon_espalda.php",
+                listOf("Flareon")
+            )
+        )
+    }
 }
