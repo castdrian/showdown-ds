@@ -2844,6 +2844,7 @@ class MainActivity : Activity() {
                             pendingTeamDelete = null
                             teamEditorDialog?.dismiss()
                             session.setConnectionStatus("Remote team deleted.")
+                            window.decorView.post { if (!isFinishing) showTeamLibrary() }
                         }
                     }
                     privacyUpdate?.let { update ->
@@ -4924,6 +4925,7 @@ class MainActivity : Activity() {
                 if (remoteId == null) {
                     teamLibrary.remove(existing.id)
                     session.setConnectionStatus("Deleted ${existing.name}.")
+                    window.decorView.post { if (!isFinishing) showTeamLibrary() }
                 } else if (!authenticated || !serverUserNamed || showdownConnection == null) {
                     session.setConnectionStatus("Sign in to Showdown before deleting the uploaded team.")
                 } else if (pendingTeamDelete != null) {

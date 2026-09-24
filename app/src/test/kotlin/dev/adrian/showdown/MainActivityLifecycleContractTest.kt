@@ -578,6 +578,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(teamLibrary.contains("onReturnToLibrary = { showTeamLibrary() }"))
         assertTrue(teamEditor.contains("onReturnToLibrary: (() -> Unit)? = null"))
         assertTrue(teamEditor.contains("window.decorView.post"))
+        assertTrue(source.contains("session.setConnectionStatus(\"Remote team deleted.\")"))
     }
 
     @Test
