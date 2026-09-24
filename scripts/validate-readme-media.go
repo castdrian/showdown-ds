@@ -6,6 +6,7 @@ import (
 	"image/color"
 	_ "image/png"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -15,14 +16,19 @@ type visualRegion struct {
 }
 
 func main() {
-	if err := validateReadme(); err != nil {
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, fmt.Errorf("read README.md: %w", err))
+		os.Exit(1)
+	}
+	if err := validateReadme(string(readme)); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
 	paths := os.Args[1:]
 	if len(paths) == 0 {
-		paths = []string{"media/showdown-battle-hd.png", "media/showdown-switch-hd.png"}
+		paths = readmeScreenshotPaths(string(readme))
 	}
 
 	for _, path := range paths {
@@ -35,17 +41,30 @@ func main() {
 	fmt.Printf("validated %d dual-screen screenshot(s) with visible battle sprites on both sides\n", len(paths))
 }
 
-func validateReadme() error {
-	readme, err := os.ReadFile("README.md")
-	if err != nil {
-		return fmt.Errorf("read README.md: %w", err)
-	}
+func validateReadme(readme string) error {
 	for _, asset := range []string{"media/showdown-battle-hd.png", "media/showdown-switch-hd.png"} {
-		if !strings.Contains(string(readme), asset) {
+		if !strings.Contains(readme, asset) {
 			return fmt.Errorf("README.md does not embed %s", asset)
 		}
 	}
+	if len(readmeScreenshotPaths(readme)) == 0 {
+		return fmt.Errorf("README.md does not embed any PNG screenshots")
+	}
 	return nil
+}
+
+func readmeScreenshotPaths(readme string) []string {
+	pattern := regexp.MustCompile(`(?:src\s*=\s*["']|!\[[^\]]*\]\()\s*(media/[^"' )>]+\.png)`)
+	seen := map[string]bool{}
+	paths := make([]string, 0)
+	for _, match := range pattern.FindAllStringSubmatch(readme, -1) {
+		path := match[1]
+		if !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 func validateScreenshot(path string) error {
