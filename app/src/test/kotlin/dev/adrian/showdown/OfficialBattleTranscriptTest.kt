@@ -710,6 +710,31 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun suppressesSilentStatResetAnnouncements() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-clearallboost|[silent]",
+                "|-clearboost|p1a: Mewtwo|[silent]",
+                "|-copyboost|p1a: Mewtwo|p1b: Mimikyu|[silent]",
+                "|-invertboost|p1b: Mimikyu|[silent]",
+                "|-swapboost|p1a: Mewtwo|p1b: Mimikyu|def|[silent]"
+            )
+        )
+
+        assertFalse(session.battleLog().any { message ->
+            message.contains("stat changes", true) ||
+                message.contains("stat changes were inverted", true) ||
+                message.contains("All stat changes", true)
+        })
+
+        session.applyProtocolLine("|-clearallboost")
+
+        assertTrue(session.battleLog().contains("All stat changes were reset."))
+    }
+
+    @Test
     fun hidesInternalAbilityStateTokensFromTheBattleFeed() {
         val session = BattleSession()
         session.applyProtocolPacket(
