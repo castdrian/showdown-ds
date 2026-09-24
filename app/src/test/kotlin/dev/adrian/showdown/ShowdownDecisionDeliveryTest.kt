@@ -48,6 +48,22 @@ class ShowdownDecisionDeliveryTest {
     }
 
     @Test
+    fun clearsWhenTheSameRequestBecomesWaitingAfterTheChoice() {
+        assertTrue(
+            ShowdownDecisionDelivery.shouldClearPendingCommand(
+                "/choose move 1|17",
+                listOf("|request|{\"rqid\":17,\"wait\":true}")
+            )
+        )
+        assertTrue(
+            ShowdownDecisionDelivery.shouldClearPendingCommand(
+                "/choose move 1|17",
+                listOf("|request|{\"rqid\":17,\"requestType\":\"wait\"}")
+            )
+        )
+    }
+
+    @Test
     fun clearsWhenAnOlderServerDoesNotIncludeRequestIds() {
         assertTrue(
             ShowdownDecisionDelivery.shouldClearPendingCommand(
