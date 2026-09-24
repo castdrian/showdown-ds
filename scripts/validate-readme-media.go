@@ -11,8 +11,9 @@ import (
 )
 
 type visualRegion struct {
-	name string
-	area image.Rectangle
+	name       string
+	area       image.Rectangle
+	windowSize int
 }
 
 func main() {
@@ -87,17 +88,36 @@ func validateScreenshot(path string) error {
 	}
 
 	regions := []visualRegion{
-		{name: "player side", area: image.Rect(250, 260, 900, 900)},
-		{name: "opponent side", area: image.Rect(820, 80, 1180, 680)},
+		{name: "player side", area: image.Rect(300, 300, 900, 850), windowSize: 180},
+		{name: "opponent side", area: image.Rect(850, 160, 1180, 680), windowSize: 140},
 	}
 	for _, region := range regions {
-		score := visualScore(decoded, region.area)
-		if score < 0.08 {
-			return fmt.Errorf("%s has no visible foreground in the %s capture region (score %.3f)", path, region.name, score)
+		score := focusedVisualScore(decoded, region.area, region.windowSize)
+		if score < 0.18 {
+			return fmt.Errorf("%s has no visible battle sprite on the %s (score %.3f)", path, region.name, score)
 		}
 	}
 
 	return nil
+}
+
+func focusedVisualScore(source image.Image, area image.Rectangle, windowSize int) float64 {
+	area = area.Intersect(source.Bounds())
+	if area.Empty() {
+		return 0
+	}
+	windowSize = min(windowSize, min(area.Dx(), area.Dy()))
+	best := 0.0
+	step := windowSize / 6
+	if step < 12 {
+		step = 12
+	}
+	for y := area.Min.Y; y+windowSize <= area.Max.Y; y += step {
+		for x := area.Min.X; x+windowSize <= area.Max.X; x += step {
+			best = maxFloat(best, visualScore(source, image.Rect(x, y, x+windowSize, y+windowSize)))
+		}
+	}
+	return best
 }
 
 func visualScore(source image.Image, area image.Rectangle) float64 {
@@ -165,6 +185,13 @@ func min3(first, second, third uint8) uint8 {
 }
 
 func max(first, second uint8) uint8 {
+	if first > second {
+		return first
+	}
+	return second
+}
+
+func maxFloat(first, second float64) float64 {
 	if first > second {
 		return first
 	}
