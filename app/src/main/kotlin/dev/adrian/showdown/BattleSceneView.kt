@@ -310,6 +310,7 @@ class BattleSceneView(
         val height = height.toFloat()
         val scale = min(width / 1920f, height / 1080f)
         val teamPreview = session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW
+        val publicTeamPreview = shouldShowPublicTeamPreview()
         val singles = session.isSinglesBattle()
         val playerX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.PLAYER_X) else width * 0.30f
         val playerY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.PLAYER_Y) else height * 0.67f
@@ -323,12 +324,12 @@ class BattleSceneView(
             drawLobby(canvas, width, height, scale)
             return
         }
-        if (!session.isLiveBattleActive() && !session.isBattleFinished() && !teamPreview) {
+        if (!session.isLiveBattleActive() && !session.isBattleFinished() && !teamPreview && !publicTeamPreview) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
             return
         }
-        if (teamPreview) {
+        if (teamPreview || publicTeamPreview) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             battleFeedBounds.setEmpty()
             if (!resourcesRequested) {
@@ -711,12 +712,17 @@ class BattleSceneView(
 
     private fun requestTeamPreviewSprites() {
         val party = session.opponentPartyDetails().take(6)
-        val visibleIndices = if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW) party.indices.toSet() else emptySet()
+        val publicTeamPreview = shouldShowPublicTeamPreview()
+        val visibleIndices = if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || publicTeamPreview) {
+            party.indices.toSet()
+        } else {
+            emptySet()
+        }
         requestedPreviewSprites.keys.filterNot(visibleIndices::contains).toList().forEach { index ->
             requestedPreviewSprites.remove(index)
             previewSprites.remove(index)?.stopAnimation()
         }
-        if (session.battlePhase != BattleSession.BattlePhase.TEAM_PREVIEW) return
+        if (session.battlePhase != BattleSession.BattlePhase.TEAM_PREVIEW && !publicTeamPreview) return
         party.forEachIndexed { index, details ->
             val species = details.species.ifBlank { details.name }.trim()
             if (species.isBlank() || species.equals("Unknown", true)) return@forEachIndexed
@@ -741,6 +747,13 @@ class BattleSceneView(
             }
         }
     }
+
+    private fun shouldShowPublicTeamPreview() =
+        !session.isBattleFinished() &&
+            (session.isReplayMode() || session.isSpectatorMode()) &&
+            session.opponentPartyDetails().isNotEmpty() &&
+            session.playerActiveCombatants().isEmpty() &&
+            session.opponentActiveCombatants().isEmpty()
 
     private fun lightweightMoveEffectActive(nowNanos: Long): Boolean {
         val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < scaledLightweightMoveDurationNanos()

@@ -3359,6 +3359,139 @@ class BattleSessionTest {
     }
 
     @Test
+    fun replayTeamPreviewKeepsPublicPokemonOnBothSides() {
+        val session = BattleSession()
+        session.setReplayMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|MISTY",
+                "|player|p2|GLADION",
+                "|poke|p1|Pikachu, L50, F|item",
+                "|poke|p2|Garchomp, L50, M|"
+            )
+        )
+
+        assertEquals(listOf("Pikachu"), session.playerPartyDetails().map { it.name })
+        assertEquals(listOf("Garchomp"), session.opponentPartyDetails().map { it.name })
+        assertEquals("Pikachu", session.playerDetails().name)
+        assertEquals("Garchomp", session.opponentDetails().name)
+    }
+
+    @Test
+    fun replayTeamPreviewMergesAlliedPublicSidesWithoutDroppingEntries() {
+        val session = BattleSession()
+        session.setReplayMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|gametype|doubles",
+                "|poke|p1|Pikachu, L50|",
+                "|poke|p3|Eevee, L50|",
+                "|poke|p2|Garchomp, L50|",
+                "|poke|p4|Darmanitan, L50|"
+            )
+        )
+
+        assertEquals(listOf("Pikachu", "Eevee"), session.playerPartyDetails().map { it.name })
+        assertEquals(listOf("Garchomp", "Darmanitan"), session.opponentPartyDetails().map { it.name })
+    }
+
+    @Test
+    fun publicTeamPreviewResetRemovesStalePlayerEntries() {
+        val session = BattleSession()
+        session.setSpectatorMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|poke|p1|Pikachu, L50|",
+                "|poke|p2|Garchomp, L50|",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p2a: Garchomp|Garchomp, L50|100/100",
+                "|clearpoke",
+                "|poke|p1|Eevee, L50|",
+                "|poke|p2|Garchomp, L50|"
+            )
+        )
+
+        assertEquals(listOf("Eevee"), session.playerPartyDetails().map { it.name })
+        assertTrue(session.playerActiveCombatants().isEmpty())
+        assertTrue(session.opponentActiveCombatants().isEmpty())
+    }
+
+    @Test
+    fun replayTeamPreviewPreservesDuplicateSpeciesEntries() {
+        val session = BattleSession()
+        session.setReplayMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|poke|p1|Pikachu, L50|",
+                "|poke|p1|Pikachu, L50|"
+            )
+        )
+
+        assertEquals(listOf("Pikachu", "Pikachu"), session.playerPartyDetails().map { it.name })
+    }
+
+    @Test
+    fun replayDuplicatePublicPokemonSwitchesUseDifferentPartyEntries() {
+        val session = BattleSession()
+        session.setReplayMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|poke|p1|Pikachu, L50|",
+                "|poke|p1|Pikachu, L50|",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|-damage|p1a: Pikachu|50/100",
+                "|switch|p1b: Pikachu|Pikachu, L50|100/100"
+            )
+        )
+
+        assertEquals(listOf("50/100", "100/100"), session.playerPartyDetails().map { it.hp })
+    }
+
+    @Test
+    fun replayDuplicateOpponentPokemonSwitchesUseDifferentPartyEntries() {
+        val session = BattleSession()
+        session.setReplayMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|poke|p2|Pikachu, L50|",
+                "|poke|p2|Pikachu, L50|",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100",
+                "|-damage|p2a: Pikachu|50/100",
+                "|switch|p2b: Pikachu|Pikachu, L50|100/100"
+            )
+        )
+
+        assertEquals(listOf("50/100", "100/100"), session.opponentPartyDetails().map { it.hp })
+    }
+
+    @Test
+    fun liveOpponentPokePacketsKeepDuplicateSpeciesEntries() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|poke|p2|Pikachu, L50|",
+                "|poke|p2|Pikachu, L50|"
+            )
+        )
+
+        assertEquals(listOf("Pikachu", "Pikachu"), session.opponentPartyDetails().map { it.name })
+    }
+
+    @Test
     fun recoveredSpectatorMenuLeavesTheBattleInsteadOfChallenging() {
         val session = BattleSession()
         val actions = mutableListOf<BattleSession.ClientAction>()

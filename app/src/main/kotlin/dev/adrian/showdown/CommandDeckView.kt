@@ -288,6 +288,12 @@ class CommandDeckView(
     private fun isTeamDecision() = session.decisionKind == BattleSession.DecisionKind.SWITCH ||
         session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW
 
+    private fun shouldShowPublicTeamPreview() =
+        !session.isBattleFinished() &&
+            (session.isReplayMode() || session.isSpectatorMode()) &&
+            session.playerPartyDetails().isNotEmpty() &&
+            (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || session.playerActiveCombatants().isEmpty())
+
     private fun clearInteractiveBounds() {
         tabBounds.fill(null)
         moveBounds.fill(null)
@@ -337,7 +343,7 @@ class CommandDeckView(
 
     private fun layoutTeamTouchBounds(width: Float, height: Float, scale: Float, decisionLayout: Boolean) {
         teamBounds.fill(null)
-        if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished()) return
+        if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished() && !shouldShowPublicTeamPreview()) return
         val visibleTeam = session.team().take(teamBounds.size)
         visibleTeam.forEachIndexed { index, _ ->
             val layoutBounds = if (decisionLayout) {
@@ -564,6 +570,10 @@ class CommandDeckView(
     }
 
     private fun drawActivePanel(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        if (shouldShowPublicTeamPreview() && session.panel == BattleSession.Panel.MOVES) {
+            drawTeam(canvas, width, height, scale)
+            return
+        }
         when (session.panel) {
             BattleSession.Panel.MOVES -> drawMoves(canvas, width, height, scale)
             BattleSession.Panel.TEAM -> drawTeam(canvas, width, height, scale)
@@ -711,7 +721,8 @@ class CommandDeckView(
 
     private fun hasReplayControls() = session.isReplayMode() &&
         session.hasBattleProtocolTranscript() &&
-        !session.isBattleFinished()
+        !session.isBattleFinished() &&
+        !shouldShowPublicTeamPreview()
 
     private fun replayControlPanelBounds(width: Float, height: Float, scale: Float) = RectF(
         44f * scale,
@@ -1795,18 +1806,21 @@ class CommandDeckView(
         scale: Float,
         decisionLayout: Boolean = false
     ) {
+        val publicTeamPreview = shouldShowPublicTeamPreview()
         if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished()) {
-            teamBounds.fill(null)
-            drawEmptyPanel(
-                canvas,
-                width,
-                height,
-                scale,
-                "No active team",
-                "Your battle team appears here during a live battle.",
-                "Open Menu  ·  Team library"
-            )
-            return
+            if (!publicTeamPreview) {
+                teamBounds.fill(null)
+                drawEmptyPanel(
+                    canvas,
+                    width,
+                    height,
+                    scale,
+                    "No active team",
+                    "Your battle team appears here during a live battle.",
+                    "Open Menu  ·  Team library"
+                )
+                return
+            }
         }
         val visibleTeam = session.team().take(teamBounds.size)
         teamBounds.fill(null)
