@@ -98,6 +98,19 @@ func validateScreenshot(path string) error {
 		}
 	}
 
+	if strings.HasSuffix(strings.ToLower(path), "showdown-switch-hd.png") {
+		teamPreviewRegions := []visualRegion{
+			{name: "player team preview", area: image.Rect(260, 1290, 570, 1580), windowSize: 120},
+			{name: "opponent team preview", area: image.Rect(850, 1290, 1170, 1580), windowSize: 120},
+		}
+		for _, region := range teamPreviewRegions {
+			score := focusedVisualScore(decoded, region.area, region.windowSize)
+			if score < 0.24 {
+				return fmt.Errorf("%s has no visible team-preview Pokémon on the %s (score %.3f)", path, region.name, score)
+			}
+		}
+	}
+
 	return nil
 }
 
