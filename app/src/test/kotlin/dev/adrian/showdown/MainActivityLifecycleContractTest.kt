@@ -35,6 +35,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun trimsRetainedArtworkWhenAndroidReportsMemoryPressure() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val trim = source.substringAfter("override fun onTrimMemory(level: Int)").substringBefore("override fun onBackPressed")
+
+        assertTrue(trim.contains("ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW"))
+        assertTrue(trim.contains("battleScene?.releaseRetainedResources()"))
+        assertTrue(trim.contains("battleScene?.refreshResourceRequests()"))
+        assertTrue(trim.contains("commandDeck?.releaseRetainedResources()"))
+    }
+
+    @Test
     fun keepsTheUpperBattleFeedPausedWhenAReplayWasManuallyPaused() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")

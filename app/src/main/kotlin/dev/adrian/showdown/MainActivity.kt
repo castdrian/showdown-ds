@@ -3,6 +3,7 @@ package dev.adrian.showdown
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.Presentation
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -644,6 +645,14 @@ class MainActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) configureWindow()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) return
+        battleScene?.releaseRetainedResources()
+        battleScene?.refreshResourceRequests()
+        commandDeck?.releaseRetainedResources()
     }
 
     override fun onBackPressed() {
