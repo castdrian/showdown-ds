@@ -15,6 +15,8 @@ class CommandDeckViewContractTest {
         assertTrue(source.contains("requestTeamSprite(index, details.species.ifBlank { pokemon }, details.shiny)"))
         assertTrue(source.contains("val sprite = teamSprites[index]"))
         assertTrue(source.contains("teamStaticSprites[index]?.takeUnless { it === sprite }?.draw("))
+        assertTrue(source.contains("if (!rendered && !renderedStatic) drawTeamSpriteFallback("))
+        assertTrue(source.contains("private fun drawTeamSpriteFallback("))
         assertTrue(source.contains("requestedTeamSprites[index] == request"))
         assertTrue(source.contains("session.isReplayMode()"))
     }

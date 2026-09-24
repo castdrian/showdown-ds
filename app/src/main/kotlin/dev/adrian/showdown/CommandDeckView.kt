@@ -1887,14 +1887,15 @@ class CommandDeckView(
                 SystemClock.elapsedRealtime(),
                 animate = !animationsPaused
             ) == true
-            if (!rendered) {
+            val renderedStatic = if (!rendered) {
                 teamStaticSprites[index]?.takeUnless { it === sprite }?.draw(
                     canvas,
                     spriteBounds,
                     SystemClock.elapsedRealtime(),
                     animate = false
-                )
-            }
+                ) == true
+            } else false
+            if (!rendered && !renderedStatic) drawTeamSpriteFallback(canvas, spriteBounds, details.condition, scale)
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val displayPokemon = BattleSession.displayPokemonName(pokemon, details.species)
             val headerHeight = content.header.bottom - content.header.top
@@ -2039,6 +2040,53 @@ class CommandDeckView(
         teamStaticSprites[index] = sprite
         if (teamSprites[index] == null) teamSprites[index] = sprite
         postInvalidateOnAnimation()
+    }
+
+    private fun drawTeamSpriteFallback(canvas: Canvas, bounds: RectF, condition: String, scale: Float) {
+        val size = minOf(bounds.width(), bounds.height()) * 0.62f
+        val centerX = bounds.centerX()
+        val centerY = bounds.centerY()
+        val radius = size * 0.43f
+        val circle = RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
+        val colors = if (condition.contains("FNT", true)) {
+            Color.rgb(156, 170, 184) to Color.rgb(78, 91, 105)
+        } else {
+            Color.rgb(255, 113, 76) to Color.rgb(205, 43, 31)
+        }
+        paint.shader = LinearGradient(
+            circle.left,
+            circle.top,
+            circle.left,
+            circle.bottom,
+            Color.rgb(249, 252, 255),
+            Color.rgb(188, 204, 216),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(centerX, centerY, radius, paint)
+        paint.shader = LinearGradient(circle.left, circle.top, circle.left, centerY, colors.first, colors.second, Shader.TileMode.CLAMP)
+        canvas.drawArc(circle, 180f, 180f, true, paint)
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = maxOf(1.5f * scale, size * 0.06f)
+        paint.color = Color.rgb(176, 192, 205)
+        canvas.drawCircle(centerX, centerY, radius, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(27, 38, 48)
+        canvas.drawRoundRect(
+            RectF(centerX - radius, centerY - size * 0.045f, centerX + radius, centerY + size * 0.045f),
+            size * 0.045f,
+            size * 0.045f,
+            paint
+        )
+        paint.color = Color.rgb(218, 229, 237)
+        canvas.drawCircle(centerX, centerY, size * 0.13f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = maxOf(1f * scale, size * 0.035f)
+        paint.color = Color.rgb(105, 123, 138)
+        canvas.drawCircle(centerX, centerY, size * 0.13f, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(145, 255, 255, 255)
+        canvas.drawCircle(centerX - size * 0.15f, centerY - size * 0.18f, size * 0.07f, paint)
     }
 
     private fun drawTeamHp(canvas: Canvas, bounds: RectF, hp: String, condition: String, scale: Float) {
