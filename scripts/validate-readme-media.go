@@ -88,8 +88,8 @@ func validateScreenshot(path string) error {
 	}
 
 	regions := []visualRegion{
-		{name: "player side", area: image.Rect(300, 300, 900, 850), windowSize: 180},
-		{name: "opponent side", area: image.Rect(850, 160, 1180, 680), windowSize: 140},
+		{name: "player side", area: image.Rect(250, 350, 900, 1050), windowSize: 220},
+		{name: "opponent side", area: image.Rect(1050, 150, 1600, 700), windowSize: 200},
 	}
 	for _, region := range regions {
 		score := focusedVisualScore(decoded, region.area, region.windowSize)
@@ -100,8 +100,8 @@ func validateScreenshot(path string) error {
 
 	if strings.HasSuffix(strings.ToLower(path), "showdown-switch-hd.png") {
 		teamPreviewRegions := []visualRegion{
-			{name: "player team preview", area: image.Rect(260, 1290, 570, 1580), windowSize: 120},
-			{name: "opponent team preview", area: image.Rect(850, 1290, 1170, 1580), windowSize: 120},
+			{name: "player team preview", area: image.Rect(390, 1310, 650, 1600), windowSize: 120},
+			{name: "opponent team preview", area: image.Rect(950, 1310, 1260, 1600), windowSize: 120},
 		}
 		for _, region := range teamPreviewRegions {
 			score := focusedVisualScore(decoded, region.area, region.windowSize)
