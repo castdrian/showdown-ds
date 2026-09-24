@@ -221,6 +221,9 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(fallbackSource.contains("plan.fallbackCandidates.filter(::isModernLocalCandidate)"))
         assertTrue(fallbackSource.contains("requestPokeApiAnimatedSprite(request, receiver)"))
         assertTrue(sceneSource.contains("spriteCache.requestTeamPreviewPokemon(request)"))
+        assertTrue(sceneSource.contains("spriteCache.requestStaticDexSprite(species, details.shiny)"))
+        assertTrue(sceneSource.contains("TEAM_PREVIEW_STATIC_FALLBACK_DELAY_MILLIS"))
+        assertTrue(sceneSource.contains("current == null || !current.isAnimated"))
     }
 
     @Test

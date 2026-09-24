@@ -736,6 +736,25 @@ class BattleSceneView(
             requestedPreviewSprites[index] = request
             previewSprites[index]?.stopAnimation()
             previewSprites[index] = null
+            var staticFallbackRequested = false
+            fun requestStaticFallback() {
+                if (staticFallbackRequested || requestedPreviewSprites[index] != request) return
+                staticFallbackRequested = true
+                spriteCache.requestStaticDexSprite(species, details.shiny) { fallback ->
+                    if (requestedPreviewSprites[index] != request) {
+                        fallback?.stopAnimation()
+                        return@requestStaticDexSprite
+                    }
+                    val current = previewSprites[index]
+                    if (fallback != null && (current == null || !current.isAnimated)) {
+                        current?.takeUnless { it === fallback }?.stopAnimation()
+                        previewSprites[index] = fallback
+                        invalidate()
+                    } else {
+                        fallback?.stopAnimation()
+                    }
+                }
+            }
             spriteCache.requestTeamPreviewPokemon(request) { asset ->
                 if (requestedPreviewSprites[index] == request) {
                     previewSprites[index]?.takeUnless { it === asset }?.stopAnimation()
@@ -745,6 +764,7 @@ class BattleSceneView(
                     asset?.stopAnimation()
                 }
             }
+            postDelayed(::requestStaticFallback, TEAM_PREVIEW_STATIC_FALLBACK_DELAY_MILLIS)
         }
     }
 
@@ -2027,6 +2047,7 @@ class BattleSceneView(
 
     private companion object {
         val SHOWDOWN_EFFECTS = listOf("pokeball.png")
+        const val TEAM_PREVIEW_STATIC_FALLBACK_DELAY_MILLIS = 900L
         const val INK = 0xFFF0F7FF.toInt()
         const val CYAN = 0xFF4AE7FF.toInt()
         const val MAGENTA = 0xFFFF49B0.toInt()
