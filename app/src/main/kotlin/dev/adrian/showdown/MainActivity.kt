@@ -194,6 +194,7 @@ class MainActivity : Activity() {
     private var pokedexSprite: ShowdownPokedexSpriteView? = null
     private var selectedPokedexEntry: ShowdownPokedex.Entry? = null
     private var pokedexSpriteNeedsReload = false
+    private var battleSceneNeedsReload = false
     private var pokedexLoading = false
     private var privateMessageDialog: ShowdownDialog? = null
     private var privateMessageTarget: String? = null
@@ -619,6 +620,7 @@ class MainActivity : Activity() {
         pauseLivePlaybackForLifecycle()
         if (::session.isInitialized && shouldMaintainConnection) persistLobbyState(flushToDisk = true)
         window.decorView.removeCallbacks(secondaryDisplayRetry)
+        releaseRetainedArtworkForLifecycle()
         dismissSecondaryDisplay()
         super.onStop()
     }
@@ -633,6 +635,10 @@ class MainActivity : Activity() {
         activityResumed = true
         configureWindow()
         showSecondaryDisplay()
+        if (battleSceneNeedsReload) {
+            battleSceneNeedsReload = false
+            battleScene?.refreshResourceRequests()
+        }
         commandDeck?.setAnimationsPaused(false)
         pokedexSprite?.setAnimationsPaused(false)
         if (pokedexSpriteNeedsReload) reloadSelectedPokedexSprite()
@@ -653,8 +659,13 @@ class MainActivity : Activity() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) return
+        releaseRetainedArtworkForLifecycle()
+    }
+
+    private fun releaseRetainedArtworkForLifecycle() {
         battleScene?.releaseRetainedResources()
         battleScene?.refreshResourceRequests()
+        battleSceneNeedsReload = battleScene != null
         commandDeck?.releaseRetainedResources()
         pokedexSprite?.releaseRetainedResources()
         pokedexSpriteNeedsReload = selectedPokedexEntry != null

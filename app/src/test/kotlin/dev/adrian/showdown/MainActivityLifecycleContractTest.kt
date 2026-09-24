@@ -37,14 +37,17 @@ class MainActivityLifecycleContractTest {
     @Test
     fun trimsRetainedArtworkWhenAndroidReportsMemoryPressure() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val trim = source.substringAfter("override fun onTrimMemory(level: Int)").substringBefore("override fun onBackPressed")
+        val trim = source.substringAfter("override fun onTrimMemory(level: Int)").substringBefore("private fun releaseRetainedArtworkForLifecycle")
+        val release = source.substringAfter("private fun releaseRetainedArtworkForLifecycle").substringBefore("override fun onBackPressed")
 
         assertTrue(trim.contains("ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW"))
-        assertTrue(trim.contains("battleScene?.releaseRetainedResources()"))
-        assertTrue(trim.contains("battleScene?.refreshResourceRequests()"))
-        assertTrue(trim.contains("commandDeck?.releaseRetainedResources()"))
-        assertTrue(trim.contains("pokedexSprite?.releaseRetainedResources()"))
-        assertTrue(trim.contains("pokedexSpriteNeedsReload = selectedPokedexEntry != null"))
+        assertTrue(trim.contains("releaseRetainedArtworkForLifecycle()"))
+        assertTrue(release.contains("battleScene?.releaseRetainedResources()"))
+        assertTrue(release.contains("battleScene?.refreshResourceRequests()"))
+        assertTrue(release.contains("battleSceneNeedsReload = battleScene != null"))
+        assertTrue(release.contains("commandDeck?.releaseRetainedResources()"))
+        assertTrue(release.contains("pokedexSprite?.releaseRetainedResources()"))
+        assertTrue(release.contains("pokedexSpriteNeedsReload = selectedPokedexEntry != null"))
         assertTrue(source.contains("if (pokedexSpriteNeedsReload) reloadSelectedPokedexSprite()"))
     }
 
@@ -210,11 +213,24 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
-    fun onStopDismissesTheThorPresentationBeforeTheActivityLeavesTheScreen() {
+    fun onStopReleasesArtworkBeforeDismissingTheThorPresentation() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val stop = source.substringAfter("override fun onStop() {").substringBefore("override fun onStart")
 
+        assertTrue(stop.contains("releaseRetainedArtworkForLifecycle()"))
         assertTrue(stop.contains("dismissSecondaryDisplay()"))
+    }
+
+    @Test
+    fun resumesAnUpperBattleAfterBackgroundArtworkWasReleased() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
+
+        assertTrue(source.contains("private var battleSceneNeedsReload = false"))
+        assertTrue(source.contains("battleSceneNeedsReload = battleScene != null"))
+        assertTrue(resume.contains("if (battleSceneNeedsReload)"))
+        assertTrue(resume.contains("battleSceneNeedsReload = false"))
+        assertTrue(resume.contains("battleScene?.refreshResourceRequests()"))
     }
 
     @Test
