@@ -89,4 +89,22 @@ class ShowdownSpriteIndexGroupsTest {
             )
         )
     }
+
+    @Test
+    fun selectsGroupsFromCurrentPkParaisoAnchorsWithoutCssClasses() {
+        val html = """
+            <a style="font-weight:bold" href="/xy/sprites_pokemon.php?cid=0#chunk0"><img src="/skin/ballmenu.gif"> abomasnow-f.gif to arceus.gif</a>
+            <a style="" href="/xy/sprites_pokemon.php?cid=14#chunk14"><img src="/skin/ballmenu.gif"> kyurem.gif to lopunny.gif</a>
+            <a style="" href="/xy/sprites_pokemon.php?cid=15#chunk15"><img src="/skin/ballmenu.gif"> lotad.gif to malamar.gif</a>
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://www.pkparaiso.com/xy/sprites_pokemon.php?cid=14&order=#sprites"),
+            ShowdownSpriteIndexGroups.pageUrls(
+                html,
+                "https://www.pkparaiso.com/xy/sprites_pokemon.php",
+                listOf("Lapras")
+            )
+        )
+    }
 }

@@ -6,8 +6,8 @@ object ShowdownSpriteIndexGroups {
         RegexOption.IGNORE_CASE
     )
     private val groupRangePattern = Regex(
-        """<a[^>]*class=[\"'][^\"']*grouplink[^\"']*[\"'][^>]*href=[\"'][^\"']*sprites_pokemon(?:_variocolores)?(?:_espalda)?(?:_sin_bordes)?\.php\?cid=(\d+)[^\"']*[\"'][^>]*>\s*([^<]+?)\s*</a>""",
-        RegexOption.IGNORE_CASE
+        """<a\b[^>]*href=[\"'][^\"']*sprites_pokemon(?:_variocolores)?(?:_espalda)?(?:_sin_bordes)?\.php\?cid=(\d+)[^\"']*[\"'][^>]*>(.*?)</a>""",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
     )
 
     private data class GroupRange(val id: Int, val end: String)
@@ -27,7 +27,11 @@ object ShowdownSpriteIndexGroups {
         val groups = groupRangePattern.findAll(html)
             .mapNotNull { match ->
                 val id = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
-                val bounds = match.groupValues[2].split(" to ", limit = 2)
+                val label = match.groupValues[2]
+                    .replace(Regex("<[^>]*>"), " ")
+                    .replace("&nbsp;", " ", ignoreCase = true)
+                    .trim()
+                val bounds = label.split(Regex("\\s+to\\s+"), limit = 2)
                 if (bounds.size != 2) return@mapNotNull null
                 GroupRange(id, normalize(bounds[1]))
             }
