@@ -16,6 +16,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -99,6 +103,29 @@ class ShowdownConnectionLifecycleTest {
         } finally {
             connection.close()
             server.close()
+        }
+    }
+
+    @Test
+    fun closesSocketWhenQueuedCommandsCannotBeFlushed() {
+        val client = FailingWebSocketClient()
+        val listener = RecordingListener()
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://loopback.invalid/showdown/websocket"),
+            listener,
+            client
+        )
+        try {
+            connection.connect()
+            assertTrue(connection.sendGlobal("/search gen9randombattle"))
+
+            client.listener.onMessage(client.socket, "o")
+
+            assertTrue(listener.failed.await(2, TimeUnit.SECONDS))
+            assertEquals(1, client.socket.closeCalls)
+            assertFalse(connection.isTransportReady())
+        } finally {
+            connection.close()
         }
     }
 
@@ -308,6 +335,35 @@ class ShowdownConnectionLifecycleTest {
             protocolPackets += roomId to lines
             protocol.countDown()
         }
+    }
+
+    private class FailingWebSocketClient : OkHttpClient() {
+        lateinit var listener: WebSocketListener
+        val socket = FailingWebSocket()
+
+        override fun newWebSocket(request: Request, listener: WebSocketListener): WebSocket {
+            this.listener = listener
+            return socket
+        }
+    }
+
+    private class FailingWebSocket : WebSocket {
+        var closeCalls = 0
+
+        override fun request() = Request.Builder().url("ws://loopback.invalid/showdown/websocket").build()
+
+        override fun queueSize() = 0L
+
+        override fun send(text: String) = false
+
+        override fun send(bytes: ByteString) = false
+
+        override fun close(code: Int, reason: String?): Boolean {
+            closeCalls += 1
+            return true
+        }
+
+        override fun cancel() = Unit
     }
 
     private class LoopbackWebSocketServer : Closeable {
