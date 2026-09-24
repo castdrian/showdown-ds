@@ -2830,6 +2830,10 @@ class MainActivity : Activity() {
                             }
                         }
                     }
+                    if (roomId == null) {
+                        lines.mapNotNull(ShowdownGlobalProtocol::notification)
+                            .forEach { notice -> session.presentSystemNotice(notice.title, notice.message) }
+                    }
                     val deletedTeamId = lines.mapNotNull(ShowdownTeamRemote::parseDeleted).firstOrNull()
                     val privacyUpdate = lines.mapNotNull(ShowdownTeamRemote::parsePrivacyUpdate).firstOrNull()
                     val upload = lines.mapNotNull(ShowdownTeamRemote::parseUpload).firstOrNull()

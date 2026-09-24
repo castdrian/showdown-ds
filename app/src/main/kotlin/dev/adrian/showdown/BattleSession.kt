@@ -1196,6 +1196,17 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun presentSystemNotice(title: String, message: String) {
+        val body = sanitizeMarkup(message.replace("||", "\n")) ?: return
+        val label = sanitizeMarkup(title).orEmpty()
+        val entry = if (label.isBlank()) body else "[$label] $body"
+        appendActivity(entry, ActivityOrigin.SYSTEM)
+        status = entry
+        latestBattleEvent = entry
+        latestBattleEventAtNanos = System.nanoTime()
+        notifyListeners()
+    }
+
     fun setBattleSearchActive(value: Boolean) {
         if (battleSearchActive == value) return
         battleSearchActive = value
