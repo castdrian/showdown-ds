@@ -123,6 +123,7 @@ class ShowdownConnection(
 
     private fun markTransportReady(webSocket: WebSocket, generation: Long, sockJs: Boolean): TransportReadyResult {
         var stateToReport: Pair<ShowdownConnection.State, String>? = null
+        var shouldCloseSocket = false
         val result = synchronized(sendLock) {
             val result = when {
                 !isCurrentLocked(webSocket, generation) -> TransportReadyResult.STALE
@@ -147,6 +148,7 @@ class ShowdownConnection(
                         cancelTransportReadyTimeoutLocked()
                         pendingMessages.clear()
                         activeGeneration += 1
+                        shouldCloseSocket = true
                         TransportReadyResult.FAILED
                     } else {
                         TransportReadyResult.READY
@@ -161,6 +163,7 @@ class ShowdownConnection(
             result
         }
         stateToReport?.let { (state, detail) -> listener.onConnectionStateChanged(state, detail) }
+        if (shouldCloseSocket) webSocket.close(1000, "Showdown queued command send failure")
         return result
     }
 
