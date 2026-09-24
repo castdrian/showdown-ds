@@ -29,6 +29,7 @@ object BattlePlaybackTiming {
             } -> END_OF_BATTLE_PAUSE_MILLIS
             lines.any { it.startsWith("|faint|") } -> FAINT_PAUSE_MILLIS
             lines.any { it.startsWith("|move|") } -> MOVE_PAUSE_MILLIS
+            lines.any { it.startsWith("|-anim|") } -> MOVE_PAUSE_MILLIS
             lines.any { it.startsWith("|switch|") || it.startsWith("|drag|") || it.startsWith("|replace|") } -> SWITCH_PAUSE_MILLIS
             lines.any { it.startsWith("|turn|") } -> TURN_PAUSE_MILLIS
             else -> 0L

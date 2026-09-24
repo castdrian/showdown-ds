@@ -45,6 +45,14 @@ class BattlePlaybackTimingTest {
     }
 
     @Test
+    fun givesStandaloneAnimationPacketsHumanReadableTiming() {
+        assertEquals(
+            2_600L,
+            BattlePlaybackTiming.pauseAfter(listOf("|-anim|p1a: Pikachu|Thunderbolt|p2a: Eevee"))
+        )
+    }
+
+    @Test
     fun givesMultiLineMoveResultsEnoughTimeToReadEachLine() {
         assertEquals(
             7_200L,
