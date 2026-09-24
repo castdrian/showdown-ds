@@ -730,7 +730,7 @@ class BattleSceneView(
             requestedPreviewSprites[index] = request
             previewSprites[index]?.stopAnimation()
             previewSprites[index] = null
-            spriteCache.requestPokemon(request) { asset ->
+            spriteCache.requestTeamPreviewPokemon(request) { asset ->
                 if (requestedPreviewSprites[index] == request) {
                     previewSprites[index]?.takeUnless { it === asset }?.stopAnimation()
                     previewSprites[index] = asset

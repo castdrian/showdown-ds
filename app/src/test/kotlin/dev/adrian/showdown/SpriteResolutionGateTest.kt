@@ -40,4 +40,22 @@ class SpriteResolutionGateTest {
 
         assertEquals(listOf<String?>(null), received)
     }
+
+    @Test
+    fun primaryStaticArtworkCannotDowngradeAnAnimatedFallback() {
+        val received = mutableListOf<String?>()
+        val released = mutableListOf<String>()
+        val gate = SpriteResolutionGate(
+            receiver = received::add,
+            primaryCanReplaceFallback = { it == "hd artwork" },
+            releaseRejectedAsset = released::add
+        )
+
+        assertTrue(gate.beginFallback())
+        gate.fallback("animated fallback")
+        gate.primary("static artwork")
+
+        assertEquals(listOf("animated fallback"), received)
+        assertEquals(listOf("static artwork"), released)
+    }
 }

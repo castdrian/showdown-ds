@@ -205,6 +205,41 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun teamPreviewUsesProgressiveAnimatedFallbackWhileHdArtworkLoads() {
+        val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val sceneSource = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
+        val previewSource = cacheSource.substringAfter("fun requestTeamPreviewPokemon")
+            .substringBefore("fun requestDexSprite")
+        val fallbackSource = cacheSource.substringAfter("private fun requestPreviewAnimatedSpriteResolution")
+            .substringBefore("private fun isModernLocalCandidate")
+
+        assertTrue(previewSource.contains("requestResolutionPlan(request, plan, gate::primary)"))
+        assertTrue(previewSource.contains("TEAM_PREVIEW_ANIMATED_FALLBACK_DELAY_MILLIS"))
+        assertTrue(previewSource.contains("gate.beginFallback()"))
+        assertTrue(fallbackSource.contains("plan.regularRemoteCandidates"))
+        assertTrue(fallbackSource.contains("plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)"))
+        assertTrue(fallbackSource.contains("plan.fallbackCandidates.filter(::isModernLocalCandidate)"))
+        assertTrue(fallbackSource.contains("requestPokeApiAnimatedSprite(request, receiver)"))
+        assertTrue(sceneSource.contains("spriteCache.requestTeamPreviewPokemon(request)"))
+    }
+
+    @Test
+    fun delayedPreviewArtworkCannotRestartWorkAfterCacheShutdown() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+
+        assertTrue(source.contains("private val closed = AtomicBoolean(false)"))
+        assertTrue(source.contains("if (!closed.compareAndSet(false, true)) return"))
+        assertTrue(source.contains("if (closed.get()) return@postDelayed"))
+        assertTrue(source.contains("if (closed.get()) {\n            mainHandler.post { receiver(null) }"))
+        assertTrue(source.contains("if (closed.get()) {\n            asset?.stopAnimation()\n            return"))
+        assertTrue(source.contains("if (!closed.get()) receivers.forEach { it(file) }"))
+        assertTrue(source.contains("if (!closed.get()) receiver(it)"))
+        assertTrue(source.contains("if (!closed.get()) receivers.forEach { it(asset) }"))
+        assertTrue(source.contains("primaryCanReplaceFallback = { it.isAnimated }"))
+        assertTrue(source.contains("releaseRejectedAsset = { it.stopAnimation() }"))
+    }
+
+    @Test
     fun dexFallbackCanResolveShinyTeamArtwork() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 

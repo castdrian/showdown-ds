@@ -25,6 +25,7 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 import kotlin.math.roundToInt
 import org.json.JSONObject
@@ -58,23 +59,27 @@ internal fun requiresAnimatedSprite(path: String, animatedOnly: Boolean): Boolea
 internal fun allowsStaticShowdownFallback(request: BattleSpriteRequest): Boolean = !request.backFacing
 
 internal class SpriteResolutionGate<T>(
-    private val receiver: (T?) -> Unit
+    private val receiver: (T?) -> Unit,
+    private val primaryCanReplaceFallback: (T) -> Boolean = { true },
+    private val releaseRejectedAsset: (T) -> Unit = {}
 ) {
     private var primaryFinished = false
     private var primaryDelivered = false
     private var fallbackStarted = false
     private var fallbackFinished = false
+    private var fallbackDelivered = false
     private var deliveredAny = false
     private var deliveredEmpty = false
 
     @Synchronized
     fun primary(asset: T?) {
         primaryFinished = true
-        if (asset != null) {
+        if (asset != null && (!fallbackDelivered || primaryCanReplaceFallback(asset))) {
             primaryDelivered = true
             deliveredAny = true
             receiver(asset)
         } else {
+            asset?.let(releaseRejectedAsset)
             finishIfEmpty()
         }
     }
@@ -90,9 +95,11 @@ internal class SpriteResolutionGate<T>(
     fun fallback(asset: T?) {
         fallbackFinished = true
         if (asset != null && (!primaryFinished || !primaryDelivered)) {
+            fallbackDelivered = true
             deliveredAny = true
             receiver(asset)
         } else {
+            asset?.let(releaseRejectedAsset)
             finishIfEmpty()
         }
     }
@@ -442,8 +449,13 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val pendingFileReceivers = ConcurrentHashMap<String, MutableList<(File?) -> Unit>>()
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
     private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
+    private val closed = AtomicBoolean(false)
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        if (closed.get()) {
+            mainHandler.post { receiver(null) }
+            return
+        }
         if (!isUsableSpriteSpecies(request.species)) {
             mainHandler.post { receiver(null) }
             return
@@ -462,6 +474,30 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(asset)
             }
         )
+    }
+
+    fun requestTeamPreviewPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
+        if (closed.get()) {
+            mainHandler.post { receiver(null) }
+            return
+        }
+        if (!isUsableSpriteSpecies(request.species)) {
+            mainHandler.post { receiver(null) }
+            return
+        }
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request)
+        val gate = SpriteResolutionGate<SpriteAsset>(
+            receiver = receiver,
+            primaryCanReplaceFallback = { it.isAnimated },
+            releaseRejectedAsset = { it.stopAnimation() }
+        )
+        requestResolutionPlan(request, plan, gate::primary)
+        mainHandler.postDelayed({
+            if (closed.get()) return@postDelayed
+            if (gate.beginFallback()) {
+                requestPreviewAnimatedSpriteResolution(request, plan, gate::fallback)
+            }
+        }, TEAM_PREVIEW_ANIMATED_FALLBACK_DELAY_MILLIS)
     }
 
     fun requestDexSprite(species: String, receiver: (SpriteAsset?) -> Unit) {
@@ -545,6 +581,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         downloadExecutor.shutdownNow()
         decodeExecutor.shutdownNow()
         memoryCache.evictAll()
@@ -559,8 +596,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestSprite(path: String, receiver: (SpriteAsset?) -> Unit) {
+        if (closed.get()) {
+            mainHandler.post { receiver(null) }
+            return
+        }
         memoryCache.get(path)?.let {
-            mainHandler.post { receiver(it) }
+            mainHandler.post {
+                if (!closed.get()) receiver(it)
+            }
             return
         }
         var shouldStart = false
@@ -573,27 +616,38 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             }
         } ?: return
         if (!shouldStart) return
-        downloadExecutor.execute {
-            val file = loadBytes(path)
-            if (file == null) {
-                finishSpriteRequest(path, null)
-                return@execute
-            }
-            runCatching {
-                decodeExecutor.execute {
-                    val asset = runCatching { decodeSprite(file, path) }.getOrNull()
-                    finishSpriteRequest(path, asset)
+        runCatching {
+            downloadExecutor.execute {
+                val file = loadBytes(path)
+                if (file == null) {
+                    finishSpriteRequest(path, null)
+                    return@execute
                 }
-            }.onFailure {
-                finishSpriteRequest(path, null)
+                runCatching {
+                    decodeExecutor.execute {
+                        val asset = runCatching { decodeSprite(file, path) }.getOrNull()
+                        finishSpriteRequest(path, asset)
+                    }
+                }.onFailure {
+                    finishSpriteRequest(path, null)
+                }
             }
+        }.onFailure {
+            finishSpriteRequest(path, null)
         }
     }
 
     private fun finishSpriteRequest(path: String, asset: SpriteAsset?) {
-        if (asset != null) memoryCache.put(path, asset)
         val receivers = pendingSpriteReceivers.remove(path).orEmpty()
-        mainHandler.post { receivers.forEach { it(asset) } }
+        if (closed.get()) {
+            asset?.stopAnimation()
+            return
+        }
+        if (asset != null) memoryCache.put(path, asset)
+        mainHandler.post {
+            if (!closed.get()) receivers.forEach { it(asset) }
+            else asset?.stopAnimation()
+        }
     }
 
     private fun requestSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
@@ -732,7 +786,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             add { callback -> requestHdBackOrRegularResolution(request, plan, includeRegularScrapedBack, callback) }
             add { callback -> requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES), callback) }
         }
-        val gate = SpriteResolutionGate<SpriteAsset>(receiver)
+        val gate = SpriteResolutionGate<SpriteAsset>(
+            receiver = receiver,
+            releaseRejectedAsset = { it.stopAnimation() }
+        )
 
         fun requestTier(index: Int) {
             if (index >= animatedTiers.size) {
@@ -999,6 +1056,25 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         }
     }
 
+    private fun requestPreviewAnimatedSpriteResolution(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        val fallbackCandidates = buildList {
+            addAll(plan.regularRemoteCandidates)
+            addAll(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES))
+            addAll(plan.fallbackCandidates.filter(::isModernLocalCandidate))
+        }.distinct()
+        requestAnimatedSpriteCandidates(fallbackCandidates) { asset ->
+            if (asset != null) {
+                receiver(asset)
+            } else {
+                requestPokeApiAnimatedSprite(request, receiver)
+            }
+        }
+    }
+
     private fun requestRegularRemoteSpriteResolution(
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
@@ -1136,6 +1212,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestBytes(path: String, receiver: (File?) -> Unit) {
+        if (closed.get()) {
+            mainHandler.post { receiver(null) }
+            return
+        }
         var shouldStart = false
         pendingFileReceivers.compute(path) { _, existing ->
             if (existing == null) {
@@ -1150,11 +1230,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             downloadExecutor.execute {
                 val file = loadBytes(path)
                 val receivers = pendingFileReceivers.remove(path).orEmpty()
-                mainHandler.post { receivers.forEach { it(file) } }
+                mainHandler.post {
+                    if (!closed.get()) receivers.forEach { it(file) }
+                }
             }
         }.onFailure {
             val receivers = pendingFileReceivers.remove(path).orEmpty()
-            mainHandler.post { receivers.forEach { it(null) } }
+            mainHandler.post {
+                if (!closed.get()) receivers.forEach { it(null) }
+            }
         }
     }
 
@@ -1338,6 +1422,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         const val CONSTRAINED_SPRITE_MEMORY_CACHE_BYTES = 6 * 1024 * 1024
         const val MAX_COMMUNITY_SPRITE_CANDIDATES = 8
         const val BACK_SPRITE_ANIMATED_FALLBACK_DELAY_MILLIS = 900L
+        const val TEAM_PREVIEW_ANIMATED_FALLBACK_DELAY_MILLIS = 450L
         const val MAX_FILE_BYTES = 24 * 1024 * 1024
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
     }

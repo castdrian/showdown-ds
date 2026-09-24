@@ -26,6 +26,7 @@ object ShowdownChangelog {
                 "Lightweight battle audio now only plays damage cues for moves that actually deal damage, while keeping annotated special damage effects audible.",
                 "Live battle choices now preserve queued Showdown actions so the upper battle log and effects cannot be skipped.",
                 "Opponent team previews now render on the upper battle screen with readable HD-first animated sprites.",
+                "Team previews now show an animated fallback while HD artwork loads and upgrade in place when it resolves.",
                 "Official Showdown system notices, warnings, and popups now stay readable in Activity without crowding the battle feed.",
                 "Move power, accuracy, category, and target now share a clean detail panel without colored tile outlines.",
                 "Full-form Showdown chat messages now reach lobby and battle activity without truncating pipe characters.",
