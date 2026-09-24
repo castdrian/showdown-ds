@@ -61,6 +61,7 @@ internal fun allowsStaticShowdownFallback(request: BattleSpriteRequest): Boolean
 internal class SpriteResolutionGate<T>(
     private val receiver: (T?) -> Unit,
     private val primaryCanReplaceFallback: (T) -> Boolean = { true },
+    private val fallbackCanReplacePrimary: ((T) -> Boolean)? = null,
     private val releaseRejectedAsset: (T) -> Unit = {}
 ) {
     private var primaryFinished = false
@@ -86,7 +87,7 @@ internal class SpriteResolutionGate<T>(
 
     @Synchronized
     fun beginFallback(): Boolean {
-        if (primaryDelivered || fallbackStarted) return false
+        if (fallbackStarted || (primaryDelivered && fallbackCanReplacePrimary == null)) return false
         fallbackStarted = true
         return true
     }
@@ -94,7 +95,7 @@ internal class SpriteResolutionGate<T>(
     @Synchronized
     fun fallback(asset: T?) {
         fallbackFinished = true
-        if (asset != null && (!primaryFinished || !primaryDelivered)) {
+        if (asset != null && (!primaryFinished || !primaryDelivered || fallbackCanReplacePrimary?.invoke(asset) == true)) {
             fallbackDelivered = true
             deliveredAny = true
             receiver(asset)
@@ -489,6 +490,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         val gate = SpriteResolutionGate<SpriteAsset>(
             receiver = receiver,
             primaryCanReplaceFallback = { it.isAnimated },
+            fallbackCanReplacePrimary = { it.isAnimated },
             releaseRejectedAsset = { it.stopAnimation() }
         )
         requestResolutionPlan(request, plan, gate::primary)

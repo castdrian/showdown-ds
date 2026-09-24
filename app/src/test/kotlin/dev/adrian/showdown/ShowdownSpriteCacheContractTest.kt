@@ -236,6 +236,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("if (!closed.get()) receiver(it)"))
         assertTrue(source.contains("if (!closed.get()) receivers.forEach { it(asset) }"))
         assertTrue(source.contains("primaryCanReplaceFallback = { it.isAnimated }"))
+        assertTrue(source.contains("fallbackCanReplacePrimary = { it.isAnimated }"))
         assertTrue(source.contains("releaseRejectedAsset = { it.stopAnimation() }"))
     }
 
