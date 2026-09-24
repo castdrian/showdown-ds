@@ -647,6 +647,7 @@ class MainActivity : Activity() {
         if (hasFocus) configureWindow()
     }
 
+    @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) return
