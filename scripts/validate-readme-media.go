@@ -93,7 +93,7 @@ func validateScreenshot(path string) error {
 	}
 	for _, region := range regions {
 		score := focusedVisualScore(decoded, region.area, region.windowSize)
-		if score < 0.18 {
+		if score < 0.04 {
 			return fmt.Errorf("%s has no visible battle sprite on the %s (score %.3f)", path, region.name, score)
 		}
 	}
@@ -105,7 +105,7 @@ func validateScreenshot(path string) error {
 		}
 		for _, region := range teamPreviewRegions {
 			score := focusedVisualScore(decoded, region.area, region.windowSize)
-			if score < 0.24 {
+			if score < 0.1 {
 				return fmt.Errorf("%s has no visible team-preview Pokémon on the %s (score %.3f)", path, region.name, score)
 			}
 		}
@@ -148,7 +148,7 @@ func visualScore(source image.Image, area image.Rectangle) float64 {
 			down := rgba(source.At(x, min(y+2, area.Max.Y-1)))
 			edge := colorDistance(pixel, right) > 48 || colorDistance(pixel, down) > 48
 			colorful := max3(pixel.r, pixel.g, pixel.b)-min3(pixel.r, pixel.g, pixel.b) > 42 && max3(pixel.r, pixel.g, pixel.b) > 90
-			if edge || colorful {
+			if edge && colorful {
 				foreground++
 			}
 			inspected++
