@@ -27,7 +27,7 @@ class CommandDeckViewContractTest {
         val request = source.substringAfter("private fun requestTeamSprite")
             .substringBefore("private fun acceptTeamSprite")
 
-        assertTrue(request.contains("spriteCache.requestPokemon(request)"))
+        assertTrue(request.contains("spriteCache.requestTeamPreviewPokemon(request)"))
         assertTrue(request.contains("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
         assertFalse(request.contains("if (!memoryConstrained)"))
     }

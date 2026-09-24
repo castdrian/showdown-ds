@@ -2000,7 +2000,7 @@ class CommandDeckView(
                 }
             }
         }
-        spriteCache.requestPokemon(request) { sprite ->
+        spriteCache.requestTeamPreviewPokemon(request) { sprite ->
             acceptTeamSprite(index, request, sprite)
             if (sprite == null) requestStaticFallback()
         }
