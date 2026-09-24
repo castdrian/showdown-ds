@@ -303,10 +303,10 @@ object ShowdownTeamCodec {
         if (set.level != 100) put("level", set.level.coerceIn(1, 100))
         if (set.happiness != 255) put("happiness", set.happiness.coerceIn(0, 255))
         if (set.pokeBall.isNotBlank()) put("pokeball", set.pokeBall.trim())
-        if (set.hiddenPowerType.isNotBlank()) put("hiddenpowertype", set.hiddenPowerType.trim())
+        if (set.hiddenPowerType.isNotBlank()) put("hpType", set.hiddenPowerType.trim())
         if (set.gigantamax) put("gigantamax", true)
-        if (set.dynamaxLevel != 10) put("dynamaxlevel", set.dynamaxLevel.coerceIn(0, 10))
-        if (set.teraType.isNotBlank()) put("teratype", set.teraType.trim())
+        if (set.dynamaxLevel != 10) put("dynamaxLevel", set.dynamaxLevel.coerceIn(0, 10))
+        if (set.teraType.isNotBlank()) put("teraType", set.teraType.trim())
     }
 
     private fun jsonStats(values: List<Int>, default: Int) = JSONObject().apply {
@@ -433,8 +433,16 @@ object ShowdownTeamCodec {
         if (set.nature.isNotBlank()) lines += "${set.nature.trim()} Nature"
         val ivText = formatStatValues(set.ivs, 31)
         if (ivText.isNotBlank()) lines += "IVs: $ivText"
-        set.moves.take(4).mapTo(lines) { "- ${it.trim()}" }
+        set.moves.take(4).mapTo(lines) { "- ${exportMoveName(it)}" }
         return lines.joinToString("\n")
+    }
+
+    private fun exportMoveName(value: String): String {
+        val move = value.trim()
+        val prefix = "Hidden Power "
+        if (!move.startsWith(prefix, true)) return move
+        val type = move.substring(prefix.length).trim().removePrefix("[").removeSuffix("]").trim()
+        return if (type.isBlank()) move else "$prefix[$type]"
     }
 
     private fun formatStatValues(values: List<Int>, default: Int): String {

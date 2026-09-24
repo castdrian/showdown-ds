@@ -318,8 +318,8 @@ IVs: 30 SpA / 30 SpD"""
         assertEquals("Ice", set.hiddenPowerType)
         assertEquals("Steel", set.teraType)
         val exported = ShowdownTeamCodec.toJson(listOf(set))
-        assertTrue(exported.contains("\"hiddenpowertype\":\"Ice\""))
-        assertTrue(exported.contains("\"teratype\":\"Steel\""))
+        assertTrue(exported.contains("\"hpType\":\"Ice\""))
+        assertTrue(exported.contains("\"teraType\":\"Steel\""))
         assertEquals(1, ShowdownTeamCodec.parse(exported).size)
     }
 
@@ -338,10 +338,19 @@ IVs: 30 SpA / 30 SpD"""
 
         val exported = ShowdownTeamCodec.toJson(listOf(set))
         assertTrue(exported.contains("\"pokeball\":\"Luxury Ball\""))
-        assertTrue(exported.contains("\"hiddenpowertype\":\"Ice\""))
+        assertTrue(exported.contains("\"hpType\":\"Ice\""))
         assertTrue(exported.contains("\"gigantamax\":true"))
-        assertTrue(exported.contains("\"dynamaxlevel\":4"))
-        assertTrue(exported.contains("\"teratype\":\"Electric\""))
+        assertTrue(exported.contains("\"dynamaxLevel\":4"))
+        assertTrue(exported.contains("\"teraType\":\"Electric\""))
         assertEquals(set, ShowdownTeamCodec.parse(exported).single())
+    }
+
+    @Test
+    fun exportsHiddenPowerWithShowdownBrackets() {
+        val text = ShowdownTeamCodec.toText(
+            listOf(ShowdownTeamSet(species = "Pikachu", moves = listOf("Hidden Power Ice")))
+        )
+
+        assertTrue(text.contains("- Hidden Power [Ice]"))
     }
 }
