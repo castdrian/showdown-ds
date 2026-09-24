@@ -19,6 +19,7 @@ internal class ShowdownStreamingGif private constructor(
     private var currentFrameIndex = -1
     private var savedCanvas: IntArray? = null
     private var released = false
+    private var currentFrameHasVisiblePixels = false
 
     val isAnimated: Boolean get() = !released && frames.size > 1
     val estimatedMemoryBytes: Int get() = memoryBytes
@@ -26,6 +27,7 @@ internal class ShowdownStreamingGif private constructor(
     val sourceHeight: Int get() = height
     val frameWidth: Int get() = outputWidth
     val frameHeight: Int get() = outputHeight
+    val hasVisiblePixels: Boolean get() = currentFrameHasVisiblePixels
 
     fun frameAt(elapsedMillis: Long): Bitmap? {
         if (!isAnimated) return null
@@ -44,6 +46,7 @@ internal class ShowdownStreamingGif private constructor(
         outputBitmap.recycle()
         savedCanvas = null
         currentFrameIndex = -1
+        currentFrameHasVisiblePixels = false
     }
 
     private fun frameIndexAt(elapsedMillis: Long): Int {
@@ -62,6 +65,7 @@ internal class ShowdownStreamingGif private constructor(
         Arrays.fill(canvasPixels, 0)
         savedCanvas = null
         currentFrameIndex = -1
+        currentFrameHasVisiblePixels = false
     }
 
     private fun renderFrame(index: Int, publish: Boolean) {
@@ -110,6 +114,7 @@ internal class ShowdownStreamingGif private constructor(
 
     private fun publishFrame() {
         outputBitmap.setPixels(canvasPixels, 0, outputWidth, 0, 0, outputWidth, outputHeight)
+        currentFrameHasVisiblePixels = canvasPixels.any { it ushr 24 != 0 }
     }
 
     private fun decodeLzw(frame: Frame, emit: (Int) -> Unit) {

@@ -13,8 +13,10 @@ class CommandDeckViewContractTest {
         assertTrue(source.contains("private val teamSprites = mutableMapOf<Int, ShowdownSpriteCache.SpriteAsset>()"))
         assertTrue(source.contains("private val requestedTeamSprites = mutableMapOf<Int, BattleSpriteRequest>()"))
         assertTrue(source.contains("requestTeamSprite(index, details.species.ifBlank { pokemon }, details.shiny)"))
-        assertTrue(source.contains("teamSprites[index]?.draw("))
+        assertTrue(source.contains("val sprite = teamSprites[index]"))
+        assertTrue(source.contains("teamStaticSprites[index]?.takeUnless { it === sprite }?.draw("))
         assertTrue(source.contains("requestedTeamSprites[index] == request"))
+        assertTrue(source.contains("session.isReplayMode()"))
     }
 
     @Test

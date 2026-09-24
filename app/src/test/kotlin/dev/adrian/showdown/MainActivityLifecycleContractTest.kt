@@ -166,9 +166,12 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(source.contains("spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny)"))
         assertTrue(source.contains("TEAM_STATIC_FALLBACK_DELAY_MILLIS"))
+        assertTrue(source.contains("TEAM_STATIC_FALLBACK_RETRY_DELAY_MILLIS"))
+        assertTrue(source.contains("TEAM_STATIC_FALLBACK_MAX_ATTEMPTS"))
         assertTrue(source.contains("spriteCache.requestPokemon(request)"))
         assertTrue(source.contains("private fun acceptTeamSprite("))
-        assertTrue(source.contains("sprite.isAnimated || teamSprites[index]?.isAnimated != true"))
+        assertTrue(source.contains("private fun acceptStaticTeamSprite("))
+        assertTrue(source.contains("if (teamSprites[index] == null) teamSprites[index] = sprite"))
     }
 
     @Test

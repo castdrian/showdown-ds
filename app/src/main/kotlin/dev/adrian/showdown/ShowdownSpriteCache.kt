@@ -272,6 +272,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         private var animatedFrame: Bitmap? = null
         private var animatedFrameTime = Long.MIN_VALUE
+        private var bitmapHasVisiblePixels: Boolean? = null
+        private var animatedFrameHasVisiblePixels = false
 
         val isAnimated get() = movie != null || streamingGif?.isAnimated == true
 
@@ -318,7 +320,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             flipHorizontally: Boolean = false,
             alpha: Int = 255,
             animate: Boolean = true
-        ) {
+        ): Boolean {
             val scale = min(destination.width() / width, destination.height() / height)
             val drawWidth = width * scale
             val drawHeight = height * scale
@@ -328,14 +330,21 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
             val image = bitmap ?: streamingGif?.frameAt(if (animate) elapsedMillis else 0L) ?: animatedFrameAt(elapsedMillis)
-            if (image == null) {
+            val imageHasVisiblePixels = when {
+                image == null -> false
+                bitmap != null -> bitmapHasVisiblePixels ?: image.hasVisiblePixels().also { bitmapHasVisiblePixels = it }
+                streamingGif != null -> streamingGif.hasVisiblePixels
+                else -> animatedFrameHasVisiblePixels
+            }
+            if (image == null || !imageHasVisiblePixels) {
                 if (alpha < 255) canvas.restore()
                 canvas.restore()
-                return
+                return false
             }
             canvas.drawBitmap(image, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
             if (alpha < 255) canvas.restore()
             canvas.restore()
+            return true
         }
 
         private fun animatedFrameAt(elapsedMillis: Long): Bitmap? {
@@ -350,9 +359,16 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 scale(width / source.width().coerceAtLeast(1).toFloat(), height / source.height().coerceAtLeast(1).toFloat())
                 source.draw(this, 0f, 0f)
             }
+            animatedFrameHasVisiblePixels = frame.hasVisiblePixels()
             animatedFrame = frame
             animatedFrameTime = frameTime
             return frame
+        }
+
+        private fun Bitmap.hasVisiblePixels(): Boolean {
+            val pixels = IntArray(width * height)
+            getPixels(pixels, 0, width, 0, 0, width, height)
+            return pixels.any { it ushr 24 != 0 }
         }
 
         companion object {

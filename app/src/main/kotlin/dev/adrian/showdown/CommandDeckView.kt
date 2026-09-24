@@ -45,6 +45,7 @@ class CommandDeckView(
     private val gimmickBounds = arrayOfNulls<RectF>(7)
     private val targetBounds = arrayOfNulls<RectF>(BattleTargetLayout.MAX_OPTIONS)
     private val teamSprites = mutableMapOf<Int, ShowdownSpriteCache.SpriteAsset>()
+    private val teamStaticSprites = mutableMapOf<Int, ShowdownSpriteCache.SpriteAsset>()
     private val requestedTeamSprites = mutableMapOf<Int, BattleSpriteRequest>()
     private val typeIcons = mutableMapOf<String, Bitmap?>()
     private var activityChatBounds: RectF? = null
@@ -72,12 +73,14 @@ class CommandDeckView(
     fun releaseRetainedResources() {
         stopRetainedAnimations()
         teamSprites.clear()
+        teamStaticSprites.clear()
         requestedTeamSprites.clear()
         postInvalidateOnAnimation()
     }
 
     fun stopRetainedAnimations() {
         teamSprites.values.forEach { it.stopAnimation() }
+        teamStaticSprites.values.forEach { it.stopAnimation() }
     }
 
     fun setAnimationsPaused(paused: Boolean) {
@@ -92,7 +95,7 @@ class CommandDeckView(
         val teamDecision = isTeamDecision()
         val decisionKind = session.decisionKind
         val retainTeamSprites = teamDecision ||
-            (session.panel == BattleSession.Panel.TEAM && (session.isLiveBattleActive() || session.isBattleFinished()))
+            (session.panel == BattleSession.Panel.TEAM && (session.isLiveBattleActive() || session.isBattleFinished() || session.isReplayMode()))
         if (!retainTeamSprites &&
             (teamSprites.isNotEmpty() || requestedTeamSprites.isNotEmpty())
         ) {
@@ -1841,12 +1844,21 @@ class CommandDeckView(
                 content.sprite.right,
                 content.sprite.bottom
             )
-            teamSprites[index]?.draw(
+            val sprite = teamSprites[index]
+            val rendered = sprite?.draw(
                 canvas,
                 spriteBounds,
                 SystemClock.elapsedRealtime(),
                 animate = !animationsPaused
-            )
+            ) == true
+            if (!rendered) {
+                teamStaticSprites[index]?.takeUnless { it === sprite }?.draw(
+                    canvas,
+                    spriteBounds,
+                    SystemClock.elapsedRealtime(),
+                    animate = false
+                )
+            }
             paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
             val displayPokemon = BattleSession.displayPokemonName(pokemon, details.species)
             val headerHeight = content.header.bottom - content.header.top
@@ -1937,12 +1949,18 @@ class CommandDeckView(
         if (requestedTeamSprites[index] == request) return
         requestedTeamSprites[index] = request
         teamSprites.remove(index)?.stopAnimation()
+        teamStaticSprites.remove(index)?.stopAnimation()
         var staticFallbackRequested = false
-        fun requestStaticFallback() {
+        fun requestStaticFallback(attempt: Int = 0) {
             if (staticFallbackRequested || requestedTeamSprites[index] != request) return
             staticFallbackRequested = true
             spriteCache.requestStaticDexSprite(requestedSpecies, request.shiny) { fallback ->
-                acceptTeamSprite(index, request, fallback)
+                if (fallback != null) {
+                    acceptStaticTeamSprite(index, request, fallback)
+                } else if (attempt + 1 < TEAM_STATIC_FALLBACK_MAX_ATTEMPTS && requestedTeamSprites[index] == request) {
+                    staticFallbackRequested = false
+                    postDelayed({ requestStaticFallback(attempt + 1) }, TEAM_STATIC_FALLBACK_RETRY_DELAY_MILLIS)
+                }
             }
         }
         spriteCache.requestPokemon(request) { sprite ->
@@ -1950,7 +1968,7 @@ class CommandDeckView(
             if (sprite == null) requestStaticFallback()
         }
         postDelayed({
-            if (teamSprites[index] == null) requestStaticFallback()
+            requestStaticFallback()
         }, TEAM_STATIC_FALLBACK_DELAY_MILLIS)
     }
 
@@ -1963,10 +1981,27 @@ class CommandDeckView(
             sprite?.stopAnimation()
             return
         }
-        if (sprite != null && (sprite.isAnimated || teamSprites[index]?.isAnimated != true)) {
+        if (sprite != null && sprite.isAnimated) {
             teamSprites[index]?.takeUnless { it === sprite }?.stopAnimation()
             teamSprites[index] = sprite
+        } else if (sprite != null) {
+            acceptStaticTeamSprite(index, request, sprite)
         }
+        postInvalidateOnAnimation()
+    }
+
+    private fun acceptStaticTeamSprite(
+        index: Int,
+        request: BattleSpriteRequest,
+        sprite: ShowdownSpriteCache.SpriteAsset
+    ) {
+        if (requestedTeamSprites[index] != request) {
+            sprite.stopAnimation()
+            return
+        }
+        teamStaticSprites[index]?.takeUnless { it === sprite }?.stopAnimation()
+        teamStaticSprites[index] = sprite
+        if (teamSprites[index] == null) teamSprites[index] = sprite
         postInvalidateOnAnimation()
     }
 
@@ -2304,7 +2339,9 @@ class CommandDeckView(
         const val MAGENTA = 0xFFFF4AB0.toInt()
         const val MUTED = 0xFF97B1D1.toInt()
         const val FAIRY_GLYPH_OPTICAL_OFFSET_PIXELS = 2f
-        const val TEAM_STATIC_FALLBACK_DELAY_MILLIS = 900L
+        const val TEAM_STATIC_FALLBACK_DELAY_MILLIS = 350L
+        const val TEAM_STATIC_FALLBACK_RETRY_DELAY_MILLIS = 800L
+        const val TEAM_STATIC_FALLBACK_MAX_ATTEMPTS = 3
         val BOOST_NAMES = mapOf("atk" to "Atk", "def" to "Def", "spa" to "Sp. Atk", "spd" to "Sp. Def", "spe" to "Speed", "accuracy" to "Accuracy", "evasion" to "Evasion")
     }
 }
