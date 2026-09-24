@@ -570,6 +570,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun teamEditorReturnsToLibraryAfterLibraryEdits() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val teamLibrary = source.substringAfter("private fun showTeamLibrary()").substringBefore("private fun showTeamRemoteLibrary")
+        val teamEditor = source.substringAfter("private fun showTeamEditor(").substringBefore("private fun showTeamFormatPicker")
+
+        assertTrue(teamLibrary.contains("onReturnToLibrary = { showTeamLibrary() }"))
+        assertTrue(teamEditor.contains("onReturnToLibrary: (() -> Unit)? = null"))
+        assertTrue(teamEditor.contains("window.decorView.post"))
+    }
+
+    @Test
     fun controllerNavigationDismissesOpenCustomDialogsBeforeOpeningAnotherSurface() {
         val activitySource = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val dialogSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownDialog.kt").readText()

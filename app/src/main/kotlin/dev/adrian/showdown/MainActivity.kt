@@ -4206,7 +4206,7 @@ class MainActivity : Activity() {
                         gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
                         setOnClickListener {
                             teamDialog?.dismiss()
-                            showTeamEditor(team)
+                            showTeamEditor(team, onReturnToLibrary = { showTeamLibrary() })
                         }
                     }, LinearLayout.LayoutParams(-1, -2).apply {
                         bottomMargin = (8f * density).toInt()
@@ -4272,7 +4272,8 @@ class MainActivity : Activity() {
                 teamDialog?.dismiss()
                 showTeamEditor(
                     initialFolder = activeFolder.orEmpty(),
-                    initialFormat = activeFormat
+                    initialFormat = activeFormat,
+                    onReturnToLibrary = { showTeamLibrary() }
                 )
             }
         }
@@ -4577,7 +4578,12 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showTeamEditor(existing: ShowdownTeam? = null, initialFolder: String = "", initialFormat: String? = null) {
+    private fun showTeamEditor(
+        existing: ShowdownTeam? = null,
+        initialFolder: String = "",
+        initialFormat: String? = null,
+        onReturnToLibrary: (() -> Unit)? = null
+    ) {
         val localId = existing?.id ?: java.util.UUID.randomUUID().toString()
         val name = EditText(this).apply {
             hint = "Team name"
@@ -4878,6 +4884,7 @@ class MainActivity : Activity() {
                     teamLibrary.duplicate(team.id)?.let { copy ->
                         session.setConnectionStatus("Duplicated ${team.name} as ${copy.name}.")
                         teamEditorDialog?.dismiss()
+                        window.decorView.post { if (!isFinishing) onReturnToLibrary?.invoke() }
                     }
                 }
             }
@@ -4953,6 +4960,7 @@ class MainActivity : Activity() {
                         teamLibrary.save(name.text.toString(), teamFormat, teamPacked, localId, folder.text.toString())
                         session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
                         dialog.dismiss()
+                        window.decorView.post { if (!isFinishing) onReturnToLibrary?.invoke() }
                     }
                 }
             }
