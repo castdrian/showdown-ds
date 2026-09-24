@@ -22,6 +22,9 @@ window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
 cpu_cores="${AYN_THOR_CPU_CORES:-1}"
 ram_size_mb="${AYN_THOR_RAM_MB:-1024}"
 vm_heap_size_mb="${AYN_THOR_HEAP_MB:-128}"
+max_cpu_cores=2
+max_ram_size_mb=2048
+max_vm_heap_size_mb=256
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
@@ -80,20 +83,29 @@ case "$gpu_mode" in
         ;;
 esac
 
-if [[ ! "$cpu_cores" =~ ^[1-8]$ ]]; then
-    printf '%s\n' "AYN_THOR_CPU_CORES must be a whole number between 1 and 8."
+if [[ ! "$cpu_cores" =~ ^[1-9][0-9]*$ || "$cpu_cores" -lt 1 || "$cpu_cores" -gt "$max_cpu_cores" ]]; then
+    printf '%s\n' "AYN_THOR_CPU_CORES must be a whole number between 1 and 2."
     exit 1
 fi
 
-if [[ ! "$ram_size_mb" =~ ^[0-9]+$ || "$ram_size_mb" -lt 1024 ]]; then
-    printf '%s\n' "AYN_THOR_RAM_MB must be at least 1024."
+if [[ ! "$ram_size_mb" =~ ^[1-9][0-9]*$ || "$ram_size_mb" -lt 1024 || "$ram_size_mb" -gt "$max_ram_size_mb" ]]; then
+    printf '%s\n' "AYN_THOR_RAM_MB must be between 1024 and 2048."
     exit 1
 fi
 
-if [[ ! "$vm_heap_size_mb" =~ ^[0-9]+$ || "$vm_heap_size_mb" -lt 128 ]]; then
-    printf '%s\n' "AYN_THOR_HEAP_MB must be at least 128."
+if [[ ! "$vm_heap_size_mb" =~ ^[1-9][0-9]*$ || "$vm_heap_size_mb" -lt 128 || "$vm_heap_size_mb" -gt "$max_vm_heap_size_mb" ]]; then
+    printf '%s\n' "AYN_THOR_HEAP_MB must be between 128 and 256."
     exit 1
 fi
+
+validate_emulator_arguments() {
+    if (( $# > 0 )); then
+        printf '%s\n' "Additional emulator arguments are disabled for the resource-safe AYN Thor profile."
+        exit 1
+    fi
+}
+
+validate_emulator_arguments "$@"
 
 if [[ "$(uname -s)" == "Darwin" && -z "${AYN_THOR_AUDIO_BACKEND:-}" ]]; then
     audio_args=(-audio coreaudio)
@@ -337,7 +349,6 @@ stop_emulator() {
     "${audio_args[@]}" \
     "${renderer_feature_args[@]}" \
     "${multidisplay_args[@]}" \
-    "$@" \
     "${snapshot_args[@]}" &
 emulator_pid=$!
 trap stop_emulator EXIT INT TERM

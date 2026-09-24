@@ -112,6 +112,58 @@ class ThorDisplayProfileTest {
     }
 
     @Test
+    fun rejectsEmulatorArgumentsThatCouldBypassTheResourceCap() {
+        val script = File("../scripts/run-ayn-thor-avd.sh").canonicalFile
+        listOf(
+            listOf("-memory", "4096"),
+            listOf("-memory=4096"),
+            listOf("-cores", "8"),
+            listOf("-cores=8"),
+            listOf("-m", "4096"),
+            listOf("-m=4096"),
+            listOf("-qemu"),
+            listOf("-qemu=-m", "4096"),
+            listOf("-fuchsia", "-m", "8192")
+        ).forEach { arguments ->
+            val process = ProcessBuilder(listOf("bash", script.absolutePath) + arguments)
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+
+            assertEquals(1, process.waitFor())
+            assertTrue(output.contains("Additional emulator arguments are disabled for the resource-safe AYN Thor profile."))
+        }
+    }
+
+    @Test
+    fun rejectsOversizedResourceEnvironmentOverridesBeforeLaunchingEmulator() {
+        val script = File("../scripts/run-ayn-thor-avd.sh").canonicalFile
+        listOf(
+            "AYN_THOR_CPU_CORES" to "3",
+            "AYN_THOR_RAM_MB" to "4096",
+            "AYN_THOR_HEAP_MB" to "512",
+            "AYN_THOR_CPU_CORES" to "08",
+            "AYN_THOR_RAM_MB" to "04096",
+            "AYN_THOR_HEAP_MB" to "0512",
+            "AYN_THOR_CPU_CORES" to "0",
+            "AYN_THOR_RAM_MB" to "1023",
+            "AYN_THOR_HEAP_MB" to "127",
+            "AYN_THOR_CPU_CORES" to "not-a-number",
+            "AYN_THOR_RAM_MB" to "not-a-number",
+            "AYN_THOR_HEAP_MB" to "not-a-number"
+        ).forEach { (name, value) ->
+            val process = ProcessBuilder("bash", script.absolutePath)
+                .redirectErrorStream(true)
+            process.environment()[name] = value
+            val runningProcess = process.start()
+            val output = runningProcess.inputStream.bufferedReader().use { it.readText() }
+
+            assertEquals(1, runningProcess.waitFor())
+            assertTrue(output.contains(name))
+        }
+    }
+
+    @Test
     fun keepsThorAvdMetadataAlignedWithTheCurrentRenderer() {
         val baseConfig = File("../config/avd/ayn-thor-base.ini").readText()
         val displayProfile = File("../config/avd/ayn-thor.ini").readText()
@@ -141,10 +193,23 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("30|60|90|120"))
         assertTrue(runScript.contains("set_avd_config \"hw.lcd.vsync\" \"\$vsync_rate\""))
         assertTrue(runScript.contains("cpu_cores=\"\${AYN_THOR_CPU_CORES:-1}\""))
+        assertTrue(runScript.contains("max_cpu_cores=2"))
         assertTrue(runScript.contains("default_gpu_mode=\"auto\""))
         assertTrue(runScript.contains("default_gpu_mode=\"host\""))
         assertTrue(runScript.contains("ram_size_mb=\"\${AYN_THOR_RAM_MB:-1024}\""))
+        assertTrue(runScript.contains("max_ram_size_mb=2048"))
         assertTrue(runScript.contains("vm_heap_size_mb=\"\${AYN_THOR_HEAP_MB:-128}\""))
+        assertTrue(runScript.contains("max_vm_heap_size_mb=256"))
+        assertTrue(runScript.contains("\"\$cpu_cores\" -gt \"\$max_cpu_cores\""))
+        assertTrue(runScript.contains("\"\$ram_size_mb\" -gt \"\$max_ram_size_mb\""))
+        assertTrue(runScript.contains("\"\$vm_heap_size_mb\" -gt \"\$max_vm_heap_size_mb\""))
+        assertTrue(runScript.contains("AYN_THOR_CPU_CORES must be a whole number between 1 and 2."))
+        assertTrue(runScript.contains("AYN_THOR_RAM_MB must be between 1024 and 2048."))
+        assertTrue(runScript.contains("AYN_THOR_HEAP_MB must be between 128 and 256."))
+        assertTrue(runScript.contains("validate_emulator_arguments()"))
+        assertTrue(runScript.contains("if (( $# > 0 )); then"))
+        assertTrue(runScript.contains("Additional emulator arguments are disabled for the resource-safe AYN Thor profile."))
+        assertFalse(runScript.contains("\n    \"\$@\" \\\n"))
         assertTrue(runScript.contains("set_avd_config \"hw.cpu.ncore\" \"\$cpu_cores\""))
         assertTrue(runScript.contains("set_avd_config \"hw.ramSize\" \"\$ram_size_mb\""))
         assertTrue(runScript.contains("set_avd_config \"vm.heapSize\" \"\$vm_heap_size_mb\""))
