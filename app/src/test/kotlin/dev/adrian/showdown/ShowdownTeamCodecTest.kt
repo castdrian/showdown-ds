@@ -231,6 +231,26 @@ Ability: Static
     }
 
     @Test
+    fun rejectsUnsupportedGenderValuesBeforePacking() {
+        val errors = ShowdownTeamCodec.validate(
+            listOf(
+                ShowdownTeamSet(
+                    species = "Pikachu",
+                    gender = "N"
+                )
+            )
+        )
+
+        assertTrue(errors.any { it.contains("invalid gender") })
+    }
+
+    @Test
+    fun acceptsCaseInsensitiveSupportedGenderValues() {
+        assertTrue(ShowdownTeamCodec.validate(listOf(ShowdownTeamSet(species = "Pikachu", gender = "m"))).isEmpty())
+        assertTrue(ShowdownTeamCodec.validate(listOf(ShowdownTeamSet(species = "Pikachu", gender = "F"))).isEmpty())
+    }
+
+    @Test
     fun parsesAndExportsShowdownText() {
         val set = ShowdownTeamCodec.parse(
             """Lead (Gholdengo) (F) @ Leftovers

@@ -102,6 +102,9 @@ object ShowdownTeamCodec {
             if (set.moves.size > 4) errors += "$label can have at most four moves."
             val moveIds = set.moves.map(ShowdownMoveDex::moveId).filter(String::isNotBlank)
             if (moveIds.size != moveIds.distinct().size) errors += "$label contains duplicate moves."
+            if (set.gender.trim().isNotBlank() && set.gender.trim().uppercase() !in setOf("M", "F")) {
+                errors += "$label has an invalid gender; use M or F."
+            }
             if (set.evs.size != 6 || set.evs.any { it !in 0..255 }) errors += "$label has invalid EVs."
             if (set.evs.sum() > 510) errors += "$label has more than 510 total EVs."
             if (set.ivs.size != 6 || set.ivs.any { it !in 0..31 }) errors += "$label has invalid IVs."
