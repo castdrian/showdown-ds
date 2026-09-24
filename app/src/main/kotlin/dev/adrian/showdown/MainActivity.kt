@@ -4779,17 +4779,16 @@ class MainActivity : Activity() {
             }
         }
         refreshTeamSetOrderControls()
-        fun readTeamDraft(): TeamDraft {
+        fun readTeamSets(): Pair<List<ShowdownTeamSet>, String?> {
             val editedSets = setEditors.map(::readTeamSetEditor)
             val editedPacked = ShowdownTeamCodec.pack(editedSets)
             val importedSets = ShowdownTeamCodec.parse(packed.text.toString())
-            val teamPacked = editedPacked.ifBlank { ShowdownTeamCodec.pack(importedSets) }
-            val validation = if (editedPacked.isNotBlank()) {
-                ShowdownTeamCodec.validate(editedSets)
-            } else {
-                ShowdownTeamCodec.validate(importedSets)
-            }
-            return TeamDraft(teamPacked, validation.firstOrNull())
+            val sourceSets = if (editedPacked.isNotBlank()) editedSets else importedSets
+            return sourceSets to ShowdownTeamCodec.validate(sourceSets).firstOrNull()
+        }
+        fun readTeamDraft(): TeamDraft {
+            val (sets, error) = readTeamSets()
+            return TeamDraft(ShowdownTeamCodec.pack(sets), error)
         }
         fun readValidatedTeamDraft(action: String): Pair<String, TeamDraft>? {
             val teamFormat = format.text.toString().trim()
@@ -4891,45 +4890,45 @@ class MainActivity : Activity() {
         val copyButton = Button(this).apply {
             text = "Copy packed team"
             setOnClickListener {
-                val value = ShowdownTeamCodec.pack(setEditors.map(::readTeamSetEditor)).ifBlank {
-                    ShowdownTeamCodec.pack(ShowdownTeamCodec.parse(packed.text.toString()))
-                }
-                if (value.isBlank()) {
-                    session.setConnectionStatus("Add at least one Pokémon before copying the team.")
-                } else {
-                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown packed team", value))
-                    session.setConnectionStatus("Packed team copied to the clipboard.")
+                val (sets, error) = readTeamSets()
+                when {
+                    error != null -> session.setConnectionStatus(error)
+                    sets.isEmpty() -> session.setConnectionStatus("Add at least one Pokémon before copying the team.")
+                    else -> {
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown packed team", ShowdownTeamCodec.pack(sets)))
+                        session.setConnectionStatus("Packed team copied to the clipboard.")
+                    }
                 }
             }
         }
         val copyTextButton = Button(this).apply {
             text = "Copy Showdown export"
             setOnClickListener {
-                val value = ShowdownTeamCodec.toText(setEditors.map(::readTeamSetEditor)).ifBlank {
-                    ShowdownTeamCodec.toText(ShowdownTeamCodec.parse(packed.text.toString()))
-                }
-                if (value.isBlank()) {
-                    session.setConnectionStatus("Add at least one Pokémon before copying the export.")
-                } else {
-                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team export", value))
-                    session.setConnectionStatus("Showdown export copied to the clipboard.")
+                val (sets, error) = readTeamSets()
+                when {
+                    error != null -> session.setConnectionStatus(error)
+                    sets.isEmpty() -> session.setConnectionStatus("Add at least one Pokémon before copying the export.")
+                    else -> {
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown team export", ShowdownTeamCodec.toText(sets)))
+                        session.setConnectionStatus("Showdown export copied to the clipboard.")
+                    }
                 }
             }
         }
         val copyJsonButton = Button(this).apply {
             text = "Copy JSON team"
             setOnClickListener {
-                val editedJson = ShowdownTeamCodec.toJson(setEditors.map(::readTeamSetEditor))
-                val value = editedJson.takeUnless { it == "[]" }
-                    ?: ShowdownTeamCodec.toJson(ShowdownTeamCodec.parse(packed.text.toString()))
-                if (value == "[]") {
-                    session.setConnectionStatus("Add at least one Pokémon before copying the JSON team.")
-                } else {
-                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown JSON team", value))
-                    session.setConnectionStatus("JSON team copied to the clipboard.")
+                val (sets, error) = readTeamSets()
+                when {
+                    error != null -> session.setConnectionStatus(error)
+                    sets.isEmpty() -> session.setConnectionStatus("Add at least one Pokémon before copying the JSON team.")
+                    else -> {
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Showdown JSON team", ShowdownTeamCodec.toJson(sets)))
+                        session.setConnectionStatus("JSON team copied to the clipboard.")
+                    }
                 }
             }
         }
@@ -5011,18 +5010,11 @@ class MainActivity : Activity() {
         dialog.setOnShowListener {
             dialog.getButton(ShowdownDialog.BUTTON_POSITIVE)?.setOnClickListener {
                 val teamFormat = format.text.toString().trim()
-                val editedSets = setEditors.map(::readTeamSetEditor)
-                val editedPacked = ShowdownTeamCodec.pack(editedSets)
-                val importedSets = ShowdownTeamCodec.parse(packed.text.toString())
-                val teamPacked = editedPacked.ifBlank { ShowdownTeamCodec.pack(importedSets) }
-                val validation = if (editedPacked.isNotBlank()) {
-                    ShowdownTeamCodec.validate(editedSets)
-                } else {
-                    ShowdownTeamCodec.validate(importedSets)
-                }
+                val (sets, error) = readTeamSets()
+                val teamPacked = ShowdownTeamCodec.pack(sets)
                 when {
                     teamFormat.isBlank() || teamPacked.isBlank() -> session.setConnectionStatus("Enter a format ID and at least one Pokémon.")
-                    validation.isNotEmpty() -> session.setConnectionStatus(validation.first())
+                    error != null -> session.setConnectionStatus(error)
                     else -> {
                         teamLibrary.save(name.text.toString(), teamFormat, teamPacked, localId, folder.text.toString())
                         session.setConnectionStatus("Saved ${name.text.toString().trim().ifBlank { "Untitled team" }}.")
