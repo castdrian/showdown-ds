@@ -60,8 +60,6 @@ verify_thor_layout_patch() {
     fi
 }
 
-verify_thor_layout_patch
-
 if [[ "$window_scale" != "auto" && ! "$window_scale" =~ ^0\.[1-9][0-9]*$|^1(\.0*)?$ ]]; then
     printf '%s\n' "AYN_THOR_WINDOW_SCALE must be auto or a value between 0.1 and 1.0."
     exit 1
@@ -106,6 +104,8 @@ validate_emulator_arguments() {
 }
 
 validate_emulator_arguments "$@"
+
+verify_thor_layout_patch
 
 if [[ "$(uname -s)" == "Darwin" && -z "${AYN_THOR_AUDIO_BACKEND:-}" ]]; then
     audio_args=(-audio coreaudio)
