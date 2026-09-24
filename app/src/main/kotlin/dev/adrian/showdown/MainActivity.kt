@@ -5531,12 +5531,12 @@ class MainActivity : Activity() {
         gender = editor.gender.text.toString(),
         ivs = editorValues(editor.ivs.fields, 31),
         shiny = editor.shiny.isChecked,
-        level = editor.level.text.toString().toIntOrNull() ?: 100,
-        happiness = editor.happiness.text.toString().toIntOrNull() ?: 255,
+        level = ShowdownTeamEditorValues.optionalInt(editor.level.text.toString(), 100),
+        happiness = ShowdownTeamEditorValues.optionalInt(editor.happiness.text.toString(), 255),
         pokeBall = editor.pokeBall.text.toString(),
         hiddenPowerType = editor.hiddenPowerType.text.toString(),
         gigantamax = editor.gigantamax.isChecked,
-        dynamaxLevel = editor.dynamaxLevel.text.toString().toIntOrNull() ?: 10,
+        dynamaxLevel = ShowdownTeamEditorValues.optionalInt(editor.dynamaxLevel.text.toString(), 10),
         teraType = editor.teraType.text.toString()
     )
 
@@ -5546,9 +5546,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun editorValues(fields: List<EditText>, default: Int): List<Int> = (0 until 6).map { index ->
-        fields.getOrNull(index)?.text?.toString()?.trim()?.toIntOrNull() ?: default
-    }
+    private fun editorValues(fields: List<EditText>, default: Int): List<Int> = ShowdownTeamEditorValues.statValues(
+        fields.map { it.text.toString() },
+        default
+    )
 
     private fun showChatComposer() {
         if (showdownConnection == null) {

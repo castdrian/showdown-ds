@@ -463,7 +463,12 @@ object ShowdownTeamCodec {
         }
     }
 
-    private fun ShowdownTeamSet.hasContent() = listOf(nickname, species, item, ability, nature, gender, pokeBall, hiddenPowerType, teraType).any(String::isNotBlank) || moves.isNotEmpty()
+    private fun ShowdownTeamSet.hasContent(): Boolean {
+        val hasText = listOf(nickname, species, item, ability, nature, gender, pokeBall, hiddenPowerType, teraType).any(String::isNotBlank)
+        val hasStats = evs.any { it != 0 } || ivs.any { it != 31 }
+        val hasDetails = shiny || gigantamax || level != 100 || happiness != 255 || dynamaxLevel != 10
+        return hasText || moves.isNotEmpty() || hasStats || hasDetails
+    }
 
     private fun packedId(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
 

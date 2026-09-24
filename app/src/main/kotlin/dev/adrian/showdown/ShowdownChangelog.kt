@@ -36,6 +36,7 @@ object ShowdownChangelog {
                 "Lightweight battle playback now honors Showdown animation overrides while keeping the displayed move unchanged.",
                 "Team exports now use Showdown's canonical advanced-field order and accept the full 0–255 EV range.",
                 "Team JSON exports now use Showdown's canonical field names, and Hidden Power moves use Showdown's bracketed syntax.",
+                "The team editor now rejects malformed numeric values and unsupported genders instead of silently changing them.",
                 "Constrained Thor profiles now use bounded native animation playback for smoother HD sprites with lower CPU use.",
                 "The optional PBR announcer now covers stat changes and common status effects with matching voice clips.",
                 "Constrained devices now play battle cues from compact PCM assets without creating MP3 decoder bursts.",

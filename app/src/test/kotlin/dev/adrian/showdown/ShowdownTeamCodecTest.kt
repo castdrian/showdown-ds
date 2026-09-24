@@ -251,6 +251,13 @@ Ability: Static
     }
 
     @Test
+    fun advancedOnlySetStillRequiresSpecies() {
+        val errors = ShowdownTeamCodec.validate(listOf(ShowdownTeamSet(shiny = true)))
+
+        assertTrue(errors.any { it.contains("needs a species") })
+    }
+
+    @Test
     fun parsesAndExportsShowdownText() {
         val set = ShowdownTeamCodec.parse(
             """Lead (Gholdengo) (F) @ Leftovers
