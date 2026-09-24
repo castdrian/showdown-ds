@@ -45,8 +45,11 @@ class MainActivityLifecycleContractTest {
         assertTrue(release.contains("battleScene?.releaseRetainedResources()"))
         assertTrue(release.contains("battleScene?.refreshResourceRequests()"))
         assertTrue(release.contains("battleSceneNeedsReload = battleScene != null"))
+        assertTrue(release.contains("showdownMoveEffectsNeedsReload = showdownMoveEffectsNeedsReload || showdownMoveEffects != null"))
+        assertTrue(release.contains("releaseShowdownMoveEffects()"))
         assertTrue(release.contains("commandDeck?.releaseRetainedResources()"))
         assertTrue(release.contains("pokedexSprite?.releaseRetainedResources()"))
+        assertTrue(release.contains("pokedexSpriteRequestToken += 1"))
         assertTrue(release.contains("pokedexSpriteNeedsReload = selectedPokedexEntry != null"))
         assertTrue(source.contains("if (pokedexSpriteNeedsReload) reloadSelectedPokedexSprite()"))
     }
@@ -234,6 +237,39 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun resumesNativeBattleEffectsAfterBackgroundArtworkWasReleased() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
+
+        assertTrue(source.contains("private var showdownMoveEffectsNeedsReload = false"))
+        assertTrue(resume.contains("if (showdownMoveEffectsNeedsReload)"))
+        assertTrue(resume.contains("showdownMoveEffectsNeedsReload = false"))
+        assertTrue(resume.contains("ensureShowdownMoveEffects()"))
+        assertTrue(source.contains("if (showdownMoveEffectsNeedsReload && activityResumed)"))
+        assertTrue(source.contains("if (activityResumed) {\n                ensureShowdownMoveEffects()\n            } else {\n                showdownMoveEffectsNeedsReload = true"))
+    }
+
+    @Test
+    fun dropsStalePokedexArtworkCallbacksAfterBackgroundTrim() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+
+        assertTrue(source.contains("private var pokedexSpriteRequestToken = 0L"))
+        assertTrue(source.contains("val requestToken = ++pokedexSpriteRequestToken"))
+        assertTrue(source.contains("requestToken == pokedexSpriteRequestToken"))
+    }
+
+    @Test
+    fun doesNotRecreateNativeBattleEffectsFromBackgroundPackets() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val protocol = source.substringAfter("private fun applyBattleProtocolToEffects").substringBefore("private fun applyLightweightBattleProtocol")
+
+        assertTrue(protocol.contains("val battleInit = lines.any { it.startsWith(\"|init|battle\") }"))
+        assertTrue(protocol.contains("if (activityResumed)"))
+        assertTrue(protocol.contains("showdownMoveEffectsNeedsReload = true"))
+        assertTrue(protocol.contains("if (!effectsAlreadyCreated && battleInit) return"))
+    }
+
+    @Test
     fun displayCallbacksCannotCreateAThorPresentationWhileTheActivityIsPaused() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val show = source.substringAfter("private fun showSecondaryDisplay()").substringBefore("private fun findThorDisplay")
@@ -253,7 +289,8 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(screenFactory.contains("primaryFrame = it"))
         assertTrue(source.contains("private fun ensureShowdownMoveEffects(): ShowdownMoveEffectsView?"))
-        assertTrue(source.contains("if (lines.any { it.startsWith(\"|init|battle\") }) ensureShowdownMoveEffects()"))
+        assertTrue(source.contains("val battleInit = lines.any { it.startsWith(\"|init|battle\") }"))
+        assertTrue(source.contains("if (battleInit)"))
         assertTrue(source.contains("frame.addView(effects, FrameLayout.LayoutParams(-1, -1))"))
         assertTrue(screenFactory.contains("frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))"))
         assertFalse(screenFactory.contains("ShowdownMoveEffectsView("))
@@ -364,7 +401,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(listener.contains("runOnUiThread {"))
         assertTrue(listener.contains("applyBattleProtocolToEffects(lines)"))
         assertTrue(source.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
-        assertTrue(source.contains("if (!effectsAlreadyCreated && lines.any { it.startsWith(\"|init|battle\") }) return"))
+        assertTrue(source.contains("if (!effectsAlreadyCreated && battleInit) return"))
     }
 
     @Test

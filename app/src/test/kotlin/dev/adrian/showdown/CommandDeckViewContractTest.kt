@@ -31,6 +31,19 @@ class CommandDeckViewContractTest {
     }
 
     @Test
+    fun ignoresLateGimmickArtworkCallbacksAfterResourceRelease() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("private var zPowerSymbolRequestToken = 0L"))
+        assertTrue(source.contains("zPowerSymbolRequestToken += 1"))
+        assertTrue(source.contains("if (requestToken != zPowerSymbolRequestToken) return@requestEffect"))
+        assertTrue(source.contains("zPowerSymbol = null"))
+        assertTrue(source.contains("zPowerSymbolNeedsReload = true"))
+        assertTrue(source.contains("fun refreshResourceRequests()"))
+        assertTrue(source.contains("zPowerSymbolRequestPending"))
+    }
+
+    @Test
     fun moveDetailMetricsAvoidColoredOutlines() {
         val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
         val detailCell = source.substringAfter("private fun drawMoveInfoCell")

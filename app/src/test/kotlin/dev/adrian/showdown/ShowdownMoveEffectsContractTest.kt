@@ -179,4 +179,15 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(enqueueIndex >= 0)
         assertTrue(pauseIndex > enqueueIndex)
     }
+
+    @Test
+    fun releasesNativeWebViewWithABoundedFallback() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+
+        assertTrue(source.contains("private var cleanupCompleted = false"))
+        assertTrue(source.contains("private val releaseFallbackRunnable = Runnable { cleanupOnMainThread() }"))
+        assertTrue(source.contains("mainHandler.postDelayed(releaseFallbackRunnable, RELEASE_FALLBACK_DELAY_MILLIS)"))
+        assertTrue(source.contains("if (cleanupCompleted) return"))
+        assertTrue(source.contains("const val RELEASE_FALLBACK_DELAY_MILLIS = 250L"))
+    }
 }

@@ -55,6 +55,9 @@ class CommandDeckView(
     private var replayPauseBounds: RectF? = null
     private val replaySpeedBounds = arrayOfNulls<RectF>(ReplayControlPresentation.speeds.size)
     private var zPowerSymbol: Bitmap? = null
+    private var zPowerSymbolRequestToken = 0L
+    private var zPowerSymbolNeedsReload = false
+    private var zPowerSymbolRequestPending = false
     private var pressedMoveIndex: Int? = null
     private var pressStartedAt = 0L
     private var releasedMoveIndex: Int? = null
@@ -64,18 +67,36 @@ class CommandDeckView(
     private var animationsPaused = false
 
     init {
-        spriteCache.requestEffect("z-symbol.png") { asset ->
-            zPowerSymbol = asset
-            postInvalidateOnAnimation()
-        }
+        requestZPowerSymbol()
     }
 
     fun releaseRetainedResources() {
         stopRetainedAnimations()
+        zPowerSymbolRequestToken += 1
+        zPowerSymbol = null
+        zPowerSymbolNeedsReload = true
+        zPowerSymbolRequestPending = false
         teamSprites.clear()
         teamStaticSprites.clear()
         requestedTeamSprites.clear()
         postInvalidateOnAnimation()
+    }
+
+    fun refreshResourceRequests() {
+        if (!zPowerSymbolNeedsReload || zPowerSymbolRequestPending) return
+        zPowerSymbolNeedsReload = false
+        requestZPowerSymbol()
+    }
+
+    private fun requestZPowerSymbol() {
+        val requestToken = ++zPowerSymbolRequestToken
+        zPowerSymbolRequestPending = true
+        spriteCache.requestEffect("z-symbol.png") { asset ->
+            if (requestToken != zPowerSymbolRequestToken) return@requestEffect
+            zPowerSymbolRequestPending = false
+            zPowerSymbol = asset
+            postInvalidateOnAnimation()
+        }
     }
 
     fun stopRetainedAnimations() {
@@ -90,6 +111,7 @@ class CommandDeckView(
     }
 
     override fun onDraw(canvas: Canvas) {
+        if (!animationsPaused) refreshResourceRequests()
         val width = width.toFloat()
         val height = height.toFloat()
         val teamDecision = isTeamDecision()

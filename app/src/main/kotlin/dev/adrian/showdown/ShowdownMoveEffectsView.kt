@@ -33,6 +33,8 @@ class ShowdownMoveEffectsView(
     private var playbackSpeed = 1f
     private var battlePerspective = "p1"
     private var released = false
+    private var cleanupCompleted = false
+    private val releaseFallbackRunnable = Runnable { cleanupOnMainThread() }
     private val nativeIdlePauseRunnable = Runnable {
         if (!released && pageLoaded && !playbackPaused) {
             runJavascript("window.ShowdownNativeEffects.pauseWhenIdle();")
@@ -152,7 +154,9 @@ class ShowdownMoveEffectsView(
         if (released) return
         released = true
         mainHandler.removeCallbacks(nativeIdlePauseRunnable)
+        mainHandler.removeCallbacks(releaseFallbackRunnable)
         pendingPackets.clear()
+        mainHandler.postDelayed(releaseFallbackRunnable, RELEASE_FALLBACK_DELAY_MILLIS)
         val cleanup = { cleanupOnMainThread() }
         if (pageLoaded) {
             evaluateJavascript("window.ShowdownNativeEffects.release();") { mainHandler.post(cleanup) }
@@ -193,6 +197,9 @@ class ShowdownMoveEffectsView(
     }
 
     private fun cleanupOnMainThread() {
+        if (cleanupCompleted) return
+        cleanupCompleted = true
+        mainHandler.removeCallbacks(releaseFallbackRunnable)
         pageLoaded = false
         stopLoading()
         destroy()
@@ -203,6 +210,7 @@ class ShowdownMoveEffectsView(
         const val NATIVE_AUDIO_BRIDGE = "ShowdownNativeAudio"
         const val NATIVE_BATTLE_LOG_BRIDGE = "ShowdownNativeBattleLog"
         const val NATIVE_IDLE_CHECK_DELAY_MILLIS = 350L
+        const val RELEASE_FALLBACK_DELAY_MILLIS = 250L
         val DOCUMENT = """
             <!doctype html>
             <html>

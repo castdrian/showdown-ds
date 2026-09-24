@@ -194,7 +194,9 @@ class MainActivity : Activity() {
     private var pokedexSprite: ShowdownPokedexSpriteView? = null
     private var selectedPokedexEntry: ShowdownPokedex.Entry? = null
     private var pokedexSpriteNeedsReload = false
+    private var pokedexSpriteRequestToken = 0L
     private var battleSceneNeedsReload = false
+    private var showdownMoveEffectsNeedsReload = false
     private var pokedexLoading = false
     private var privateMessageDialog: ShowdownDialog? = null
     private var privateMessageTarget: String? = null
@@ -635,6 +637,13 @@ class MainActivity : Activity() {
         activityResumed = true
         configureWindow()
         showSecondaryDisplay()
+        if (showdownMoveEffectsNeedsReload) {
+            showdownMoveEffectsNeedsReload = false
+            if (!lightweightBattlePlayback && ::session.isInitialized && session.isLiveBattleActive()) {
+                ensureShowdownMoveEffects()
+            }
+        }
+        commandDeck?.refreshResourceRequests()
         if (battleSceneNeedsReload) {
             battleSceneNeedsReload = false
             battleScene?.refreshResourceRequests()
@@ -666,8 +675,11 @@ class MainActivity : Activity() {
         battleScene?.releaseRetainedResources()
         battleScene?.refreshResourceRequests()
         battleSceneNeedsReload = battleScene != null
+        showdownMoveEffectsNeedsReload = showdownMoveEffectsNeedsReload || showdownMoveEffects != null
+        releaseShowdownMoveEffects()
         commandDeck?.releaseRetainedResources()
         pokedexSprite?.releaseRetainedResources()
+        pokedexSpriteRequestToken += 1
         pokedexSpriteNeedsReload = selectedPokedexEntry != null
     }
 
@@ -860,6 +872,7 @@ class MainActivity : Activity() {
             battleAudio.updateOptions(session)
         }
         battleScene?.refreshResourceRequests()
+        commandDeck?.refreshResourceRequests()
         displayRefreshScheduler.request()
     }
 
@@ -881,10 +894,21 @@ class MainActivity : Activity() {
     }
 
     private fun applyBattleProtocolToEffects(lines: List<String>) {
+        if (showdownMoveEffectsNeedsReload && activityResumed) {
+            showdownMoveEffectsNeedsReload = false
+            ensureShowdownMoveEffects()
+        }
+        val battleInit = lines.any { it.startsWith("|init|battle") }
+        if (battleInit) battleScene?.resetBattleFeed()
+        if (battleInit) {
+            if (activityResumed) {
+                ensureShowdownMoveEffects()
+            } else {
+                showdownMoveEffectsNeedsReload = true
+            }
+        }
         val effectsAlreadyCreated = showdownMoveEffects != null
-        if (lines.any { it.startsWith("|init|battle") }) battleScene?.resetBattleFeed()
-        if (lines.any { it.startsWith("|init|battle") }) ensureShowdownMoveEffects()
-        if (!effectsAlreadyCreated && lines.any { it.startsWith("|init|battle") }) return
+        if (!effectsAlreadyCreated && battleInit) return
         showdownMoveEffects?.setPerspective(session.battlePlayerSlot())
         showdownMoveEffects?.applyProtocol(lines, session.battleLogGeneration())
     }
@@ -3915,12 +3939,15 @@ class MainActivity : Activity() {
     }
 
     private fun reloadSelectedPokedexSprite() {
+        val requestToken = ++pokedexSpriteRequestToken
         val entry = selectedPokedexEntry ?: return
         val sprite = pokedexSprite ?: return
         pokedexSpriteNeedsReload = false
         sprite.setSprite(null)
         spriteCache.requestDexSprite(entry.name) { asset ->
-            if (selectedPokedexEntry?.id == entry.id) sprite.setSprite(asset)
+            if (!pokedexSpriteNeedsReload && requestToken == pokedexSpriteRequestToken && selectedPokedexEntry?.id == entry.id) {
+                sprite.setSprite(asset)
+            }
         }
     }
 
