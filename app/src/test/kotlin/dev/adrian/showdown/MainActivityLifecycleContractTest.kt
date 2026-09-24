@@ -43,6 +43,9 @@ class MainActivityLifecycleContractTest {
         assertTrue(trim.contains("battleScene?.releaseRetainedResources()"))
         assertTrue(trim.contains("battleScene?.refreshResourceRequests()"))
         assertTrue(trim.contains("commandDeck?.releaseRetainedResources()"))
+        assertTrue(trim.contains("pokedexSprite?.releaseRetainedResources()"))
+        assertTrue(trim.contains("pokedexSpriteNeedsReload = selectedPokedexEntry != null"))
+        assertTrue(source.contains("if (pokedexSpriteNeedsReload) reloadSelectedPokedexSprite()"))
     }
 
     @Test

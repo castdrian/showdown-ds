@@ -193,6 +193,7 @@ class MainActivity : Activity() {
     private var pokedexDetails: TextView? = null
     private var pokedexSprite: ShowdownPokedexSpriteView? = null
     private var selectedPokedexEntry: ShowdownPokedex.Entry? = null
+    private var pokedexSpriteNeedsReload = false
     private var pokedexLoading = false
     private var privateMessageDialog: ShowdownDialog? = null
     private var privateMessageTarget: String? = null
@@ -634,6 +635,7 @@ class MainActivity : Activity() {
         showSecondaryDisplay()
         commandDeck?.setAnimationsPaused(false)
         pokedexSprite?.setAnimationsPaused(false)
+        if (pokedexSpriteNeedsReload) reloadSelectedPokedexSprite()
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()
@@ -654,6 +656,8 @@ class MainActivity : Activity() {
         battleScene?.releaseRetainedResources()
         battleScene?.refreshResourceRequests()
         commandDeck?.releaseRetainedResources()
+        pokedexSprite?.releaseRetainedResources()
+        pokedexSpriteNeedsReload = selectedPokedexEntry != null
     }
 
     override fun onBackPressed() {
@@ -3819,6 +3823,7 @@ class MainActivity : Activity() {
                 sprite.setSprite(null)
                 pokedexSprite = null
                 selectedPokedexEntry = null
+                pokedexSpriteNeedsReload = false
             }
         }
         pokedexDialog = dialog
@@ -3894,9 +3899,17 @@ class MainActivity : Activity() {
     private fun selectPokedexEntry(entry: ShowdownPokedex.Entry) {
         selectedPokedexEntry = entry
         pokedexDetails?.text = formatPokedexEntry(entry)
-        pokedexSprite?.setSprite(null)
+        pokedexSpriteNeedsReload = false
+        reloadSelectedPokedexSprite()
+    }
+
+    private fun reloadSelectedPokedexSprite() {
+        val entry = selectedPokedexEntry ?: return
+        val sprite = pokedexSprite ?: return
+        pokedexSpriteNeedsReload = false
+        sprite.setSprite(null)
         spriteCache.requestDexSprite(entry.name) { asset ->
-            if (selectedPokedexEntry?.id == entry.id) pokedexSprite?.setSprite(asset)
+            if (selectedPokedexEntry?.id == entry.id) sprite.setSprite(asset)
         }
     }
 

@@ -25,6 +25,10 @@ class ShowdownPokedexSpriteView(context: Context) : View(context) {
         invalidate()
     }
 
+    fun releaseRetainedResources() {
+        setSprite(null)
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         paint.color = Color.rgb(8, 25, 39)
