@@ -53,4 +53,37 @@ class ShowdownBattleMovePresentationTest {
             )
         )
     }
+
+    @Test
+    fun parsesExplicitProtocolAnimationEvents() {
+        assertEquals(
+            ShowdownBattleMovePresentation.ProtocolAnimation(
+                actor = "p1a: Pikachu",
+                moveName = "Thunderbolt",
+                target = "p2a: Gyarados",
+                shouldAnimate = true
+            ),
+            ShowdownBattleMovePresentation.protocolAnimation(
+                listOf("", "-anim", "p1a: Pikachu", "Thunderbolt", "p2a: Gyarados", "[anim] Thunderbolt")
+            )
+        )
+    }
+
+    @Test
+    fun preservesStillMarkersOnExplicitProtocolAnimationEvents() {
+        assertEquals(
+            false,
+            ShowdownBattleMovePresentation.protocolAnimation(
+                listOf("", "-anim", "p1a: Pikachu", "Thunderbolt", "p2a: Gyarados", "[still]")
+            )?.shouldAnimate
+        )
+    }
+
+    @Test
+    fun ignoresMalformedProtocolAnimationEvents() {
+        assertEquals(
+            null,
+            ShowdownBattleMovePresentation.protocolAnimation(listOf("", "-anim", "p1a: Pikachu"))
+        )
+    }
 }

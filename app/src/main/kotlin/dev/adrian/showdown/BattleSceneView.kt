@@ -221,6 +221,32 @@ class BattleSceneView(
                     lightweightStatDirection = 0
                     changed = true
                 }
+                "-anim" -> {
+                    val animation = ShowdownBattleMovePresentation.protocolAnimation(fields) ?: return@forEachIndexed
+                    val localActor = session.isLocalBattleSide(animation.actor)
+                    val continuesCurrentMove =
+                        lightweightMoveStartedAtNanos > 0L &&
+                            lightweightMoveName.equals(animation.moveName, true) &&
+                            lightweightMoveActorPlayer == localActor
+                    if (!continuesCurrentMove) {
+                        lightweightMoveStartedAtNanos = if (animation.shouldAnimate) nowNanos else 0L
+                        lightweightMoveActorPlayer = localActor
+                        lightweightMoveTargetPlayer = animation.target?.let(session::isLocalBattleSide)
+                        lightweightImpactAtNanos = 0L
+                        lightweightImpactTargets = emptyList()
+                        lightweightImpactSoundPending = false
+                        lightweightImpactSoundCue = null
+                        lightweightLateImpactSoundCue = null
+                    } else if (animation.target != null) {
+                        lightweightMoveTargetPlayer = session.isLocalBattleSide(animation.target)
+                    }
+                    lightweightMoveAnimationEnabled = animation.shouldAnimate
+                    lightweightMoveName = animation.moveName
+                    lightweightMoveType = session.moveTypeFor(animation.moveName)?.uppercase() ?: inferMoveType(animation.moveName)
+                    lightweightMoveCategory = session.moveInfoFor(animation.moveName)?.category?.uppercase()
+                        ?: inferMoveCategory(animation.moveName)
+                    changed = true
+                }
                 "-damage", "-sethp" -> {
                     val directTargets = directDamageTargetsByLine[lineIndex].orEmpty()
                     val target = BattleDamageCueResolver.healthUpdates(fields)
