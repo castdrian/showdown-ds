@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import dev.adrian.showdown.R
+import kotlin.math.atan2
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
@@ -54,6 +55,7 @@ class BattleSceneView(
     private val playerInspectBounds = RectF()
     private val opponentInspectBounds = RectF()
     private val battleFeedBounds = RectF()
+    private val fieldEffectBounds = RectF()
     private val battleFeedPresentation = BattleFeedPresentation()
     private var cachedBattleFeedText: String? = null
     private var cachedBattleFeedVisibleText: String? = null
@@ -76,6 +78,7 @@ class BattleSceneView(
     private var lightweightMoveName = ""
     private var lightweightMoveType = "NORMAL"
     private var lightweightMoveCategory = "PHYSICAL"
+    private var lightweightMoveStyle = BattleMoveVisualStyle.TYPE_BURST
     private var lightweightStatEffectAtNanos = 0L
     private var lightweightStatDirection = 0
     private var lightweightImpactSoundPending = false
@@ -170,6 +173,7 @@ class BattleSceneView(
         lightweightMoveName = ""
         lightweightMoveType = "NORMAL"
         lightweightMoveCategory = "PHYSICAL"
+        lightweightMoveStyle = BattleMoveVisualStyle.TYPE_BURST
         lightweightStatEffectAtNanos = 0L
         lightweightStatDirection = 0
         lightweightImpactSoundPending = false
@@ -211,12 +215,19 @@ class BattleSceneView(
                     lightweightLateImpactSoundCue = null
                     lightweightMoveName = fields.getOrNull(3).orEmpty()
                     val animationMoveName = ShowdownBattleMovePresentation.animationName(moveArguments, lightweightMoveName)
+                    val originalMoveInfo = session.moveInfoFor(lightweightMoveName)
                     val originalMoveType = session.moveTypeFor(lightweightMoveName)?.uppercase() ?: inferMoveType(lightweightMoveName)
-                    val originalMoveCategory = session.moveInfoFor(lightweightMoveName)?.category?.uppercase()
+                    val originalMoveCategory = originalMoveInfo?.category?.uppercase()
                         ?: inferMoveCategory(lightweightMoveName)
+                    val animationMoveInfo = session.moveInfoFor(animationMoveName) ?: originalMoveInfo
                     lightweightMoveType = session.moveTypeFor(animationMoveName)?.uppercase() ?: originalMoveType
-                    lightweightMoveCategory = session.moveInfoFor(animationMoveName)?.category?.uppercase()
+                    lightweightMoveCategory = animationMoveInfo?.category?.uppercase()
                         ?: originalMoveCategory
+                    lightweightMoveStyle = if (lightweightMoveCategory == "STATUS") {
+                        BattleMoveVisualStyle.STATUS
+                    } else {
+                        BattleMoveVisualStyleResolver.resolve(animationMoveInfo, lightweightMoveType)
+                    }
                     lightweightStatEffectAtNanos = 0L
                     lightweightStatDirection = 0
                     changed = true
@@ -243,8 +254,14 @@ class BattleSceneView(
                     lightweightMoveAnimationEnabled = animation.shouldAnimate
                     lightweightMoveName = animation.moveName
                     lightweightMoveType = session.moveTypeFor(animation.moveName)?.uppercase() ?: inferMoveType(animation.moveName)
-                    lightweightMoveCategory = session.moveInfoFor(animation.moveName)?.category?.uppercase()
+                    val moveInfo = session.moveInfoFor(animation.moveName)
+                    lightweightMoveCategory = moveInfo?.category?.uppercase()
                         ?: inferMoveCategory(animation.moveName)
+                    lightweightMoveStyle = if (lightweightMoveCategory == "STATUS") {
+                        BattleMoveVisualStyle.STATUS
+                    } else {
+                        BattleMoveVisualStyleResolver.resolve(moveInfo, lightweightMoveType)
+                    }
                     changed = true
                 }
                 "-damage", "-sethp" -> {
@@ -343,6 +360,7 @@ class BattleSceneView(
             }
             return
         }
+        val fieldVisuals = BattleFieldVisualComposer.compose(session.battleInfo())
         val playerStatusAlpha = statusCardAlpha(session.playerPokemon, session.playerCondition, nowNanos) *
             BattleSceneTiming.summonStatusCardAlpha(session.playerEntryAtNanos, nowNanos)
         val opponentStatusAlpha = statusCardAlpha(session.opponentPokemon, session.opponentCondition, nowNanos) *
@@ -354,6 +372,7 @@ class BattleSceneView(
             resourcesRequested = true
         }
         drawBackdrop(canvas, width, height)
+        drawFieldVisuals(canvas, width, height, scale, nowNanos, fieldVisuals)
         if (!singles && opponentCombatants.isNotEmpty()) {
             fieldCombatants(opponentCombatants, false).forEachIndexed { index, combatant ->
                 drawCombatant(
@@ -491,6 +510,7 @@ class BattleSceneView(
             opponentSprite?.isAnimated == true ||
             playerCombatants.any { playerActiveSprites[it.slot]?.isAnimated == true } ||
             opponentCombatants.any { opponentActiveSprites[it.slot]?.isAnimated == true } ||
+            fieldVisuals.hasActiveVisuals ||
             lightweightMoveEffectActive(nowNanos)
             ) && !animationsPaused
         ) {
@@ -803,10 +823,9 @@ class BattleSceneView(
         val targetY = if (targetPlayer) playerY else opponentY
         val palette = lightweightMovePalette(lightweightMoveType)
         if (lightweightMoveAnimationEnabled) {
-            if (lightweightMoveCategory == "STATUS") {
-                drawStatusMoveEffect(canvas, targetX, targetY, scale, nowNanos, palette)
-            } else {
-                drawAttackMoveEffect(
+            when (lightweightMoveStyle) {
+                BattleMoveVisualStyle.STATUS -> drawStatusMoveEffect(canvas, targetX, targetY, scale, nowNanos, palette)
+                else -> drawAttackMoveEffect(
                     canvas,
                     width,
                     height,
@@ -822,7 +841,8 @@ class BattleSceneView(
                     targetY,
                     scale,
                     nowNanos,
-                    palette
+                    palette,
+                    lightweightMoveStyle
                 )
             }
         }
@@ -845,7 +865,8 @@ class BattleSceneView(
         targetY: Float,
         scale: Float,
         nowNanos: Long,
-        palette: MoveEffectPalette
+        palette: MoveEffectPalette,
+        style: BattleMoveVisualStyle
     ) {
         val moveProgress = ((nowNanos - lightweightMoveStartedAtNanos).toFloat() / scaledLightweightMoveDurationNanos()).coerceIn(0f, 1f)
         if (impactAt > 0L && nowNanos >= impactAt) {
@@ -858,37 +879,325 @@ class BattleSceneView(
             }
             return
         }
-        val eased = moveProgress * moveProgress * (3f - 2f * moveProgress)
-        val endX = actorX + (targetX - actorX) * eased
-        val endY = actorY + (targetY - actorY) * eased
+        drawTypedMoveEffect(canvas, style, actorX, actorY, targetX, targetY, moveProgress, scale, nowNanos, palette)
+    }
+
+    private fun drawTypedMoveEffect(
+        canvas: Canvas,
+        style: BattleMoveVisualStyle,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        progress: Float,
+        scale: Float,
+        nowNanos: Long,
+        palette: MoveEffectPalette
+    ) {
+        val eased = progress * progress * (3f - 2f * progress)
+        val centerX = actorX + (targetX - actorX) * eased
+        val centerY = actorY + (targetY - actorY) * eased - 42f * scale
+        when (style) {
+            BattleMoveVisualStyle.CONTACT_STRIKE -> drawContactStrikeEffect(canvas, actorX, actorY, targetX, targetY, progress, scale, palette)
+            BattleMoveVisualStyle.GROUND_RIPPLE -> drawGroundRippleEffect(canvas, actorX, actorY, targetX, targetY, progress, scale, palette)
+            BattleMoveVisualStyle.FIRE_BURST -> drawFireBurstEffect(canvas, actorX, actorY, targetX, targetY, progress, scale, palette)
+            BattleMoveVisualStyle.WATER_WAVE -> drawWaterWaveEffect(canvas, centerX, centerY, progress, scale, palette)
+            BattleMoveVisualStyle.ELECTRIC_ARC -> drawElectricArcEffect(canvas, actorX, actorY, targetX, targetY, progress, scale, palette)
+            BattleMoveVisualStyle.ICE_SHARDS -> drawIceShardEffect(canvas, actorX, actorY, targetX, targetY, progress, scale, palette)
+            BattleMoveVisualStyle.LEAF_SPIRAL -> drawLeafSpiralEffect(canvas, actorX, actorY, targetX, targetY, progress, scale, palette)
+            BattleMoveVisualStyle.PSYCHIC_PULSE -> drawPsychicPulseEffect(canvas, centerX, centerY, progress, scale, palette)
+            BattleMoveVisualStyle.WIND_CRESCENT -> drawWindCrescentEffect(canvas, centerX, centerY, progress, scale, palette)
+            BattleMoveVisualStyle.TYPE_BURST -> drawTypeBurstEffect(canvas, centerX, centerY, progress, scale, palette)
+            BattleMoveVisualStyle.STATUS -> Unit
+        }
+        paint.style = Paint.Style.FILL
+        paint.strokeCap = Paint.Cap.BUTT
+        paint.alpha = 255
+    }
+
+    private fun drawContactStrikeEffect(
+        canvas: Canvas,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        val eased = progress * progress * (3f - 2f * progress)
+        val centerX = actorX + (targetX - actorX) * eased
+        val centerY = actorY + (targetY - actorY) * eased - 42f * scale
+        val slashLength = (30f + 38f * sin(progress * Math.PI).toFloat()) * scale
+        val direction = atan2((targetY - actorY).toDouble(), (targetX - actorX).toDouble()).toFloat()
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = 15f * scale
+        paint.color = Color.argb(190, Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
+        canvas.save()
+        canvas.rotate(direction * 180f / Math.PI.toFloat(), centerX, centerY)
+        canvas.drawLine(centerX - slashLength, centerY - 20f * scale, centerX + slashLength, centerY + 20f * scale, paint)
+        paint.strokeWidth = 10f * scale
+        paint.color = Color.argb(235, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+        canvas.drawLine(centerX - slashLength * 0.8f, centerY + 23f * scale, centerX + slashLength * 0.8f, centerY - 23f * scale, paint)
+        canvas.restore()
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawGroundRippleEffect(
+        canvas: Canvas,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        val eased = progress * progress * (3f - 2f * progress)
+        val centerX = actorX + (targetX - actorX) * eased
+        val centerY = actorY + (targetY - actorY) * eased + 22f * scale
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 7f * scale
+        for (index in 0..2) {
+            val radius = (24f + ((progress * 3f + index * 0.28f) % 1f) * 76f) * scale
+            paint.color = Color.argb((190f * (1f - index * 0.2f)).toInt(), Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+            fieldEffectBounds.set(centerX - radius, centerY - radius * 0.22f, centerX + radius, centerY + radius * 0.22f)
+            canvas.drawOval(fieldEffectBounds, paint)
+        }
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(105, Color.red(palette.secondary), Color.green(palette.secondary), Color.blue(palette.secondary))
+        canvas.drawCircle(centerX, centerY, 13f * scale, paint)
+    }
+
+    private fun drawFireBurstEffect(
+        canvas: Canvas,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        val angle = atan2((targetY - actorY).toDouble(), (targetX - actorX).toDouble()).toFloat() * 180f / Math.PI.toFloat() + 90f
+        for (index in 0 until 4) {
+            val particleProgress = (progress - index * 0.075f).coerceIn(0f, 1f)
+            val x = actorX + (targetX - actorX) * particleProgress
+            val y = actorY + (targetY - actorY) * particleProgress - 42f * scale
+            val radius = (9f + (1f - index * 0.12f) * 14f * sin((particleProgress * Math.PI).toFloat())) * scale
+            canvas.save()
+            canvas.rotate(angle, x, y)
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb(220, Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
+            fieldEffectBounds.set(x - radius * 0.62f, y - radius * 1.55f, x + radius * 0.62f, y + radius * 1.3f)
+            canvas.drawOval(fieldEffectBounds, paint)
+            paint.color = Color.argb(230, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+            fieldEffectBounds.inset(radius * 0.2f, radius * 0.3f)
+            canvas.drawOval(fieldEffectBounds, paint)
+            canvas.restore()
+        }
+    }
+
+    private fun drawWaterWaveEffect(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        for (index in 0..2) {
+            val radius = (26f + ((progress * 2.8f + index * 0.31f) % 1f) * 76f) * scale
+            paint.strokeWidth = (12f - index * 2f) * scale
+            paint.color = Color.argb(210 - index * 38, Color.red(palette.secondary), Color.green(palette.secondary), Color.blue(palette.secondary))
+            fieldEffectBounds.set(centerX - radius, centerY - radius * 0.62f, centerX + radius, centerY + radius * 0.62f)
+            canvas.drawArc(fieldEffectBounds, 195f, 148f, false, paint)
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawElectricArcEffect(
+        canvas: Canvas,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        val endProgress = (progress * 1.18f).coerceIn(0f, 1f)
+        val dx = (targetX - actorX) * endProgress
+        val dy = (targetY - actorY) * endProgress
+        val length = maxOf(1f, kotlin.math.sqrt(dx * dx + dy * dy))
+        val normalX = -dy / length
+        val normalY = dx / length
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = 12f * scale
+        paint.color = Color.argb(142, Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
+        var previousX = actorX
+        var previousY = actorY - 42f * scale
+        for (index in 1..6) {
+            val fraction = index / 6f
+            val jitter = sin(progress * 24f + index * 2f) * 27f * scale
+            val x = actorX + dx * fraction + normalX * jitter
+            val y = actorY + dy * fraction - 42f * scale + normalY * jitter
+            canvas.drawLine(previousX, previousY, x, y, paint)
+            previousX = x
+            previousY = y
+        }
+        paint.strokeWidth = 5f * scale
+        paint.color = Color.argb(240, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+        previousX = actorX
+        previousY = actorY - 42f * scale
+        for (index in 1..6) {
+            val fraction = index / 6f
+            val jitter = sin(progress * 24f + index * 2f) * 27f * scale
+            val x = actorX + dx * fraction + normalX * jitter
+            val y = actorY + dy * fraction - 42f * scale + normalY * jitter
+            canvas.drawLine(previousX, previousY, x, y, paint)
+            previousX = x
+            previousY = y
+        }
+        paint.strokeCap = Paint.Cap.BUTT
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawIceShardEffect(
+        canvas: Canvas,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
         val dx = targetX - actorX
         val dy = targetY - actorY
         val length = maxOf(1f, kotlin.math.sqrt(dx * dx + dy * dy))
         val normalX = -dy / length
         val normalY = dx / length
-        val tailProgress = (moveProgress - 0.16f).coerceAtLeast(0f)
-        val tailX = actorX + (targetX - actorX) * tailProgress
-        val tailY = actorY + (targetY - actorY) * tailProgress
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 5f * scale
+        for (index in 0 until 5) {
+            val particleProgress = (progress - index * 0.055f).coerceIn(0f, 1f)
+            val centerX = actorX + dx * particleProgress + normalX * (index - 2) * 35f * scale
+            val centerY = actorY + dy * particleProgress + normalY * (index - 2) * 35f * scale - 42f * scale
+            val size = (14f + index % 3 * 6f) * scale
+            paint.color = Color.argb(220, Color.red(palette.secondary), Color.green(palette.secondary), Color.blue(palette.secondary))
+            canvas.drawLine(centerX, centerY - size, centerX + size * 0.55f, centerY, paint)
+            canvas.drawLine(centerX + size * 0.55f, centerY, centerX, centerY + size, paint)
+            canvas.drawLine(centerX, centerY + size, centerX - size * 0.55f, centerY, paint)
+            canvas.drawLine(centerX - size * 0.55f, centerY, centerX, centerY - size, paint)
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawLeafSpiralEffect(
+        canvas: Canvas,
+        actorX: Float,
+        actorY: Float,
+        targetX: Float,
+        targetY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        val dx = targetX - actorX
+        val dy = targetY - actorY
+        for (index in 0 until 6) {
+            val particleProgress = (progress - index * 0.045f).coerceIn(0f, 1f)
+            val angle = progress * 17f + index * 2.1f
+            val sway = sin(angle) * 52f * scale
+            val x = actorX + dx * particleProgress + sway
+            val y = actorY + dy * particleProgress - 42f * scale + cos(angle) * 32f * scale
+            canvas.save()
+            canvas.rotate(angle * 57.2958f, x, y)
+            paint.style = Paint.Style.FILL
+            paint.color = if (index % 2 == 0) palette.secondary else palette.accent
+            fieldEffectBounds.set(x - 8f * scale, y - 21f * scale, x + 8f * scale, y + 21f * scale)
+            canvas.drawOval(fieldEffectBounds, paint)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 2f * scale
+            paint.color = Color.argb(195, Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
+            canvas.drawLine(x, y - 17f * scale, x, y + 17f * scale, paint)
+            canvas.restore()
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawPsychicPulseEffect(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        paint.style = Paint.Style.STROKE
+        for (index in 0..3) {
+            val phase = (progress * 2.6f + index * 0.27f) % 1f
+            val radius = (18f + phase * 102f) * scale
+            paint.strokeWidth = (9f - phase * 5f) * scale
+            paint.color = Color.argb(((1f - phase) * 205f).toInt(), Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+            canvas.drawCircle(centerX, centerY, radius, paint)
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawWindCrescentEffect(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
         paint.style = Paint.Style.STROKE
         paint.strokeCap = Paint.Cap.ROUND
-        paint.strokeWidth = 34f * scale
-        paint.color = Color.argb(((1f - moveProgress) * 55f).toInt(), Color.red(palette.primary), Color.green(palette.primary), Color.blue(palette.primary))
-        canvas.drawLine(tailX, tailY - 42f * scale, endX, endY - 42f * scale, paint)
-        paint.strokeWidth = 13f * scale
-        paint.color = Color.argb(((1f - moveProgress) * 220f).toInt(), Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
-        canvas.drawLine(tailX, tailY - 42f * scale, endX, endY - 42f * scale, paint)
+        for (index in 0..2) {
+            val radius = (48f + index * 37f + sin(progress * Math.PI).toFloat() * 30f) * scale
+            paint.strokeWidth = (13f - index * 3f) * scale
+            paint.color = Color.argb(205 - index * 48, Color.red(palette.secondary), Color.green(palette.secondary), Color.blue(palette.secondary))
+            fieldEffectBounds.set(centerX - radius, centerY - radius * 0.7f, centerX + radius, centerY + radius * 0.7f)
+            canvas.drawArc(fieldEffectBounds, 195f + index * 9f, 150f, false, paint)
+        }
         paint.strokeCap = Paint.Cap.BUTT
         paint.style = Paint.Style.FILL
-        val orbRadius = (24f + 14f * sin(moveProgress * Math.PI).toFloat()) * scale
-        paint.color = palette.accent
-        canvas.drawCircle(endX, endY - 42f * scale, orbRadius, paint)
-        paint.color = Color.argb(220, 255, 255, 255)
-        canvas.drawCircle(endX - normalX * orbRadius * 0.35f, endY - 42f * scale - normalY * orbRadius * 0.35f, orbRadius * 0.34f, paint)
-        paint.color = Color.argb(((1f - moveProgress) * 180f).toInt(), Color.red(palette.secondary), Color.green(palette.secondary), Color.blue(palette.secondary))
-        for (index in 0 until 3) {
-            val offset = (index - 1) * 34f * scale
-            canvas.drawCircle(endX + normalX * offset, endY - 42f * scale + normalY * offset, (8f + index * 3f) * scale, paint)
+    }
+
+    private fun drawTypeBurstEffect(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        progress: Float,
+        scale: Float,
+        palette: MoveEffectPalette
+    ) {
+        val radius = (18f + 42f * sin(progress * Math.PI).toFloat()) * scale
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = 9f * scale
+        paint.color = Color.argb(220, Color.red(palette.secondary), Color.green(palette.secondary), Color.blue(palette.secondary))
+        for (index in 0 until 8) {
+            val angle = index * Math.PI / 4.0 + progress * Math.PI * 1.5
+            val inner = radius * 0.32f
+            val outer = radius * (0.8f + index % 2 * 0.4f)
+            canvas.drawLine(
+                centerX + cos(angle).toFloat() * inner,
+                centerY + sin(angle).toFloat() * inner,
+                centerX + cos(angle).toFloat() * outer,
+                centerY + sin(angle).toFloat() * outer,
+                paint
+            )
         }
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(centerX, centerY, 12f * scale, paint)
     }
 
     private fun drawStatusMoveEffect(
@@ -1132,6 +1441,240 @@ class BattleSceneView(
             canvas.drawBitmap(it, source, destination, paint)
             paint.alpha = 255
         }
+    }
+
+    private fun drawFieldVisuals(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        nowNanos: Long,
+        visuals: BattleFieldVisuals
+    ) {
+        if (!visuals.hasActiveVisuals) return
+        val timeMillis = (nowNanos / 1_000_000L % 120_000L).toFloat()
+        visuals.terrain?.let { drawTerrainVisual(canvas, width, height, scale, timeMillis, it) }
+        visuals.weather?.let { drawWeatherVisual(canvas, width, height, scale, timeMillis, it) }
+        visuals.overlays.forEach { drawFieldOverlay(canvas, width, height, scale, timeMillis, it) }
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        paint.strokeCap = Paint.Cap.BUTT
+        paint.alpha = 255
+    }
+
+    private fun drawTerrainVisual(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        timeMillis: Float,
+        terrain: BattleTerrainVisual
+    ) {
+        val horizon = height * 0.55f
+        val terrainColor = when (terrain) {
+            BattleTerrainVisual.ELECTRIC -> Color.rgb(62, 132, 255)
+            BattleTerrainVisual.GRASSY -> Color.rgb(61, 198, 102)
+            BattleTerrainVisual.MISTY -> Color.rgb(255, 151, 219)
+            BattleTerrainVisual.PSYCHIC -> Color.rgb(175, 81, 255)
+        }
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(42, Color.red(terrainColor), Color.green(terrainColor), Color.blue(terrainColor))
+        canvas.drawRect(0f, horizon, width, height, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 3f * scale
+        paint.color = Color.argb(96, Color.red(terrainColor), Color.green(terrainColor), Color.blue(terrainColor))
+        when (terrain) {
+            BattleTerrainVisual.ELECTRIC, BattleTerrainVisual.PSYCHIC -> {
+                val centerX = width * 0.5f
+                for (index in 0..12) {
+                    val floorX = width * index / 12f
+                    canvas.drawLine(centerX, horizon, floorX, height, paint)
+                }
+                for (index in 1..5) {
+                    val depth = index / 6f
+                    val y = horizon + (height - horizon) * depth * depth
+                    canvas.drawLine(0f, y, width, y, paint)
+                }
+                if (terrain == BattleTerrainVisual.PSYCHIC) {
+                    paint.strokeWidth = 7f * scale
+                    paint.color = Color.argb(82, 241, 193, 255)
+                    val phase = timeMillis * 0.018f
+                    val pulse = 26f * scale + 12f * scale * sin(phase)
+                    fieldEffectBounds.set(centerX - pulse * 3f, horizon + 20f * scale, centerX + pulse * 3f, horizon + 20f * scale + pulse)
+                    canvas.drawOval(fieldEffectBounds, paint)
+                }
+            }
+            BattleTerrainVisual.GRASSY -> {
+                paint.strokeWidth = 4f * scale
+                paint.color = Color.argb(178, 117, 238, 126)
+                for (index in 0 until 26) {
+                    val x = width * index / 25f
+                    val groundY = horizon + (height - horizon) * (0.36f + (index % 4) * 0.13f)
+                    val sway = sin(timeMillis * 0.002f + index) * 10f * scale
+                    canvas.drawLine(x, groundY, x - 7f * scale + sway, groundY - 23f * scale, paint)
+                    canvas.drawLine(x, groundY, x + 8f * scale + sway, groundY - 19f * scale, paint)
+                }
+            }
+            BattleTerrainVisual.MISTY -> {
+                paint.style = Paint.Style.FILL
+                paint.color = Color.argb(30, 255, 203, 244)
+                fieldEffectBounds.set(-width * 0.2f, horizon - 20f * scale, width * 1.2f, height * 0.82f)
+                canvas.drawOval(fieldEffectBounds, paint)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 12f * scale
+                paint.color = Color.argb(62, 255, 199, 243)
+                for (index in 0..3) {
+                    val y = horizon + (height - horizon) * (0.18f + index * 0.19f)
+                    val sway = sin(timeMillis * 0.0013f + index) * 24f * scale
+                    canvas.drawLine(width * 0.06f + sway, y, width * 0.94f + sway, y, paint)
+                }
+            }
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawWeatherVisual(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        timeMillis: Float,
+        weather: BattleWeatherVisual
+    ) {
+        when (weather) {
+            BattleWeatherVisual.RAIN -> {
+                paint.style = Paint.Style.STROKE
+                paint.strokeCap = Paint.Cap.ROUND
+                paint.strokeWidth = 2.5f * scale
+                for (index in 0 until 36) {
+                    val x = (index * 83f + timeMillis * 0.23f) % (width + 80f) - 40f
+                    val y = (index * 127f + timeMillis * 0.72f) % (height + 80f) - 40f
+                    paint.color = Color.argb(102 + index % 5 * 16, 113, 192, 255)
+                    canvas.drawLine(x, y, x - 11f * scale, y + 34f * scale, paint)
+                }
+            }
+            BattleWeatherVisual.SNOW -> {
+                paint.style = Paint.Style.FILL
+                for (index in 0 until 30) {
+                    val drift = cos(timeMillis * 0.0012f + index) * 32f * scale
+                    val x = ((index * 97f + timeMillis * 0.11f + drift) % (width + 40f)) - 20f
+                    val y = (index * 139f + timeMillis * 0.19f) % (height + 60f) - 30f
+                    paint.color = Color.argb(148 + index % 4 * 22, 229, 248, 255)
+                    canvas.drawCircle(x, y, (2.5f + index % 3) * scale, paint)
+                }
+            }
+            BattleWeatherVisual.SANDSTORM -> {
+                paint.style = Paint.Style.STROKE
+                paint.strokeCap = Paint.Cap.ROUND
+                for (index in 0 until 34) {
+                    val x = (index * 79f + timeMillis * 0.19f) % (width + 100f) - 50f
+                    val y = height * 0.28f + (index * 61f % (height * 0.65f))
+                    paint.strokeWidth = (2f + index % 3) * scale
+                    paint.color = Color.argb(80 + index % 5 * 20, 242, 197, 125)
+                    canvas.drawLine(x, y, x + (18f + index % 5 * 6f) * scale, y - 2f * scale, paint)
+                }
+            }
+            BattleWeatherVisual.SUN -> {
+                paint.style = Paint.Style.FILL
+                paint.color = Color.argb(24, 255, 164, 65)
+                canvas.drawRect(0f, 0f, width, height, paint)
+                val centerX = width * 0.79f
+                val centerY = height * 0.19f
+                val pulse = 8f * scale * sin(timeMillis * 0.0014f)
+                paint.color = Color.argb(44, 255, 199, 92)
+                canvas.drawCircle(centerX, centerY, 82f * scale + pulse, paint)
+                paint.color = Color.argb(78, 255, 220, 126)
+                canvas.drawCircle(centerX, centerY, 36f * scale + pulse * 0.35f, paint)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 5f * scale
+                paint.color = Color.argb(52, 255, 215, 126)
+                for (index in 0 until 8) {
+                    val angle = index * Math.PI / 4.0 + timeMillis * 0.00015
+                    canvas.drawLine(
+                        centerX + cos(angle).toFloat() * 98f * scale,
+                        centerY + sin(angle).toFloat() * 98f * scale,
+                        centerX + cos(angle).toFloat() * 143f * scale,
+                        centerY + sin(angle).toFloat() * 143f * scale,
+                        paint
+                    )
+                }
+            }
+            BattleWeatherVisual.STRONG_WINDS -> {
+                paint.style = Paint.Style.STROKE
+                paint.strokeCap = Paint.Cap.ROUND
+                for (index in 0 until 18) {
+                    val y = height * (0.12f + index % 9 * 0.1f)
+                    val x = (index * 137f + timeMillis * 0.16f) % (width + 240f) - 120f
+                    val length = (70f + index % 4 * 28f) * scale
+                    paint.strokeWidth = (2f + index % 3) * scale
+                    paint.color = Color.argb(35 + index % 4 * 13, 215, 232, 255)
+                    canvas.drawLine(x, y, x + length, y - 8f * scale, paint)
+                }
+            }
+        }
+        paint.style = Paint.Style.FILL
+        paint.strokeCap = Paint.Cap.BUTT
+    }
+
+    private fun drawFieldOverlay(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        timeMillis: Float,
+        overlay: BattleFieldOverlay
+    ) {
+        val centerX = width * 0.5f
+        val centerY = height * 0.54f
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        when (overlay) {
+            BattleFieldOverlay.GRAVITY -> {
+                paint.strokeWidth = 4f * scale
+                paint.color = Color.argb(78, 158, 191, 255)
+                for (index in 0 until 12) {
+                    val x = width * (0.08f + index * 0.076f)
+                    val fall = (timeMillis * 0.2f + index * 73f) % (height * 0.68f)
+                    val y = height * 0.12f + fall
+                    canvas.drawLine(x, y, x, y + 22f * scale, paint)
+                    canvas.drawLine(x, y + 22f * scale, x - 7f * scale, y + 13f * scale, paint)
+                    canvas.drawLine(x, y + 22f * scale, x + 7f * scale, y + 13f * scale, paint)
+                }
+            }
+            BattleFieldOverlay.TRICK_ROOM -> {
+                val angle = timeMillis * 0.012f
+                paint.strokeWidth = 5f * scale
+                paint.color = Color.argb(76, 204, 137, 255)
+                canvas.save()
+                canvas.rotate(angle, centerX, centerY)
+                for (index in 0..2) {
+                    val inset = index * 42f * scale
+                    fieldEffectBounds.set(centerX - width * 0.28f + inset, centerY - height * 0.24f + inset, centerX + width * 0.28f - inset, centerY + height * 0.24f - inset)
+                    canvas.drawRect(fieldEffectBounds, paint)
+                }
+                canvas.restore()
+            }
+            BattleFieldOverlay.MAGIC_ROOM -> {
+                paint.strokeWidth = 5f * scale
+                paint.color = Color.argb(73, 103, 209, 255)
+                for (index in 0..3) {
+                    val radius = (88f + index * 54f + sin(timeMillis * 0.002f + index) * 12f) * scale
+                    canvas.drawCircle(centerX, centerY, radius, paint)
+                }
+            }
+            BattleFieldOverlay.WONDER_ROOM -> {
+                paint.strokeWidth = 6f * scale
+                paint.color = Color.argb(70, 240, 146, 255)
+                for (index in 0..3) {
+                    val widthRadius = (170f + index * 100f) * scale
+                    val heightRadius = (26f + index * 17f + sin(timeMillis * 0.0015f + index) * 5f) * scale
+                    fieldEffectBounds.set(centerX - widthRadius, height * 0.68f - heightRadius, centerX + widthRadius, height * 0.68f + heightRadius)
+                    canvas.drawOval(fieldEffectBounds, paint)
+                }
+            }
+        }
+        paint.style = Paint.Style.FILL
+        paint.strokeCap = Paint.Cap.BUTT
     }
 
     private fun drawLobby(canvas: Canvas, width: Float, height: Float, scale: Float) {

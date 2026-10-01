@@ -322,7 +322,8 @@ class BattleSession {
         val power: String,
         val accuracy: String,
         val category: String = "Status",
-        val fixedGimmickPower: Boolean = false
+        val fixedGimmickPower: Boolean = false,
+        val contact: Boolean = false
     )
 
     data class TargetOption(

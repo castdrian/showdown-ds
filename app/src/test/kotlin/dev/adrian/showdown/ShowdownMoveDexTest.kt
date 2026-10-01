@@ -82,6 +82,16 @@ class ShowdownMoveDexTest {
     }
 
     @Test
+    fun parsesContactFlagsForMeleeMoveAnimation() {
+        val info = ShowdownMoveDex.parseMoveInfo(
+            """{"tackle":{"category":"Physical","basePower":40,"accuracy":100,"flags":{"contact":1}},"earthquake":{"category":"Physical","basePower":100,"accuracy":100,"flags":{"contact":0}}}"""
+        )
+
+        assertTrue(info["tackle"]?.contact == true)
+        assertFalse(info["earthquake"]?.contact == true)
+    }
+
+    @Test
     fun identifiesFixedGimmickMovePower() {
         val info = ShowdownMoveDex.parseMoveInfo(
             """{"catastropika":{"isZ":"pikaniumz","category":"Physical","basePower":210,"accuracy":true},"maxflare":{"isMax":true,"category":"Physical","basePower":100,"accuracy":true},"gmaxdrumsolo":{"isMax":"Rillaboom","category":"Physical","basePower":160,"accuracy":true}}"""

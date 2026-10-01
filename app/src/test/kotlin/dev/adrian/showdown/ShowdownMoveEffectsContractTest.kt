@@ -7,6 +7,17 @@ import org.junit.Test
 
 class ShowdownMoveEffectsContractTest {
     @Test
+    fun fullShowdownSceneKeepsWeatherAndTerrainLayersVisible() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val hideChrome = source.substringAfter("function hideChrome()").substringBefore("function observeChrome()")
+        val hiddenElements = hideChrome.substringBefore("].forEach(function (element)")
+
+        assertFalse(hiddenElements.contains("scene.\${'$'}weather"))
+        assertFalse(hiddenElements.contains("scene.\${'$'}terrain"))
+        assertTrue(hideChrome.contains("scene.\${'$'}terrain, scene.\${'$'}weather"))
+    }
+
+    @Test
     fun incrementalBattleStartsPausedAndUsesTheNativePlaybackClock() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
 

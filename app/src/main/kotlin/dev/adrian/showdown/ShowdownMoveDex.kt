@@ -185,7 +185,9 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                         val maxMode = move.opt("isMax")
                         val isFixedGimmickPower = (isZMove && power.toIntOrNull()?.let { it > 1 } == true) ||
                             (maxMode is String && power.toIntOrNull()?.let { it > 10 } == true)
-                        put(id, BattleSession.MoveInfo(power, accuracy, category, isFixedGimmickPower))
+                        val flags = move.optJSONObject("flags")
+                        val contact = flags?.optInt("contact", 0) == 1 || flags?.optBoolean("contact", false) == true
+                        put(id, BattleSession.MoveInfo(power, accuracy, category, isFixedGimmickPower, contact))
                     }
                 }
             }.getOrDefault(emptyMap())
