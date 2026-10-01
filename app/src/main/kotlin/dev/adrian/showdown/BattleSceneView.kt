@@ -13,6 +13,8 @@ import android.graphics.Shader
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityNodeProvider
 import dev.adrian.showdown.R
 import kotlin.math.atan2
 import kotlin.math.abs
@@ -87,6 +89,7 @@ class BattleSceneView(
     private var lightweightLateImpactSoundCue: BattleAudioCue? = null
     private var lightweightLateImpactSoundListener: ((BattleAudioCue) -> Unit)? = null
     private var lightweightPausedAtNanos = 0L
+    private var accessibilityNodeProvider: CanvasAccessibilityNodeProvider? = null
 
     private data class InspectTarget(val player: Boolean, val slot: String?)
 
@@ -96,6 +99,17 @@ class BattleSceneView(
 
     init {
         setWillNotDraw(false)
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+    }
+
+    override fun getAccessibilityNodeProvider(): AccessibilityNodeProvider = accessibilityProvider()
+
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.contentDescription = accessibilityDescription()
+        info.isFocusable = true
+        info.isClickable = false
+        accessibilityProvider().addVirtualChildren(info)
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -339,11 +353,13 @@ class BattleSceneView(
         if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
+            accessibilityNodeProvider?.refreshIfChanged()
             return
         }
         if (!session.isLiveBattleActive() && !session.isBattleFinished() && !teamPreview && !publicTeamPreview) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
+            accessibilityNodeProvider?.refreshIfChanged()
             return
         }
         if (teamPreview || publicTeamPreview) {
@@ -358,6 +374,7 @@ class BattleSceneView(
             if (!animationsPaused && previewSprites.values.any { it?.isAnimated == true }) {
                 postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
             }
+            accessibilityNodeProvider?.refreshIfChanged()
             return
         }
         val fieldVisuals = BattleFieldVisualComposer.compose(session.battleInfo())
@@ -517,6 +534,227 @@ class BattleSceneView(
             postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
         }
         if (session.battleClockSeconds() != null && !animationsPaused) postInvalidateDelayed(1_000L)
+        accessibilityNodeProvider?.refreshIfChanged()
+    }
+
+    private fun accessibilityProvider() = accessibilityNodeProvider ?: CanvasAccessibilityNodeProvider(
+        this,
+        ::accessibilityDescription,
+        ::accessibilityNodes
+    ).also { accessibilityNodeProvider = it }
+
+    private fun accessibilityDescription(): String {
+        if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) return "Showdown replay. Loading battle."
+        if (!session.isLiveBattleActive() && !session.isBattleFinished() && session.battlePhase != BattleSession.BattlePhase.TEAM_PREVIEW && !shouldShowPublicTeamPreview()) {
+            return "Showdown lobby. ${session.status}"
+        }
+        if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || shouldShowPublicTeamPreview()) {
+            val opponentCount = session.opponentPartyDetails().size
+            return "Pokémon team preview. Opponent team: $opponentCount Pokémon."
+        }
+        val player = BattleSession.displayPokemonName(session.playerDetails().name, session.playerDetails().species)
+        val opponent = BattleSession.displayPokemonName(session.opponentDetails().name, session.opponentDetails().species)
+        val log = cachedBattleFeedVisibleText?.takeIf(String::isNotBlank)?.let { "Battle log: $it" }
+        return listOfNotNull("Battle. $player versus $opponent.", session.status, log).joinToString(" ")
+    }
+
+    private fun accessibilityNodes(): List<CanvasAccessibilityNode> {
+        val width = width.toFloat()
+        val height = height.toFloat()
+        if (width <= 0f || height <= 0f) return emptyList()
+        if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) return emptyList()
+        val teamPreview = session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || shouldShowPublicTeamPreview()
+        if (!session.isLiveBattleActive() && !session.isBattleFinished() && !teamPreview) return emptyList()
+        if (teamPreview) return opponentTeamPreviewAccessibilityNodes(width, height)
+        if (inspectedPlayer != null) return inspectSheetAccessibilityNodes(width, height)
+
+        val nodes = mutableListOf<CanvasAccessibilityNode>()
+        val scale = min(width / 1920f, height / 1080f)
+        if (session.isSinglesBattle()) {
+            val player = session.playerDetails()
+            val opponent = session.opponentDetails()
+            addAccessibilityNode(
+                nodes,
+                ACCESSIBLE_PLAYER_ID,
+                "Your active Pokémon, ${pokemonAccessibilitySummary(player)}",
+                RectF(
+                    width * ShowdownBattleLayout.SINGLE_CARD_LEFT_FRACTION,
+                    height * 0.80f,
+                    ShowdownBattleLayout.singlePlayerCardRight(width, scale),
+                    height * 0.98f
+                ),
+                selected = inspectedPlayer == true
+            ) {
+                selectInspectedPokemon(true, null)
+            }
+            addAccessibilityNode(
+                nodes,
+                ACCESSIBLE_OPPONENT_ID,
+                "Opponent's active Pokémon, ${pokemonAccessibilitySummary(opponent)}",
+                RectF(
+                    ShowdownBattleLayout.singleOpponentCardLeft(width, scale),
+                    height * 0.02f,
+                    width * ShowdownBattleLayout.SINGLE_CARD_RIGHT_FRACTION,
+                    height * 0.20f
+                ),
+                selected = inspectedPlayer == false
+            ) {
+                selectInspectedPokemon(false, null)
+            }
+        } else {
+            addMultiCombatantAccessibilityNodes(nodes, width, height, scale, true)
+            addMultiCombatantAccessibilityNodes(nodes, width, height, scale, false)
+        }
+        if (!battleFeedBounds.isEmpty && !cachedBattleFeedVisibleText.isNullOrBlank()) {
+            addAccessibilityNode(
+                nodes,
+                ACCESSIBLE_BATTLE_LOG_ID,
+                "Battle log. $cachedBattleFeedVisibleText",
+                RectF(battleFeedBounds),
+                role = CanvasAccessibilityNode.Role.BUTTON
+            ) {
+                battleFeedPresentation.advanceOnTap(SystemClock.elapsedRealtime())
+                invalidate()
+                performClick()
+            }
+        }
+        return nodes
+    }
+
+    private fun opponentTeamPreviewAccessibilityNodes(width: Float, height: Float): List<CanvasAccessibilityNode> {
+        val party = session.opponentPartyDetails().take(6)
+        return BattleTeamPreviewLayout.slots(width, height, party.size).mapIndexed { index, slot ->
+            val details = party[index]
+            val name = BattleSession.displayPokemonName(details.name, details.species)
+            val pokemonSummary = BattleAccessibilityText.pokemon(
+                name,
+                details.level,
+                details.gender,
+                details.hp,
+                details.condition
+            )
+            val typeSummary = details.types.takeIf { it.isNotEmpty() }?.joinToString()?.let { ", types $it" }.orEmpty()
+            CanvasAccessibilityNode(
+                ACCESSIBLE_TEAM_PREVIEW_BASE + index,
+                "Opponent Pokémon, $pokemonSummary$typeSummary",
+                Rect().apply {
+                    RectF(slot.left, slot.top, slot.right, slot.bottom).roundOut(this)
+                }.toCanvasAccessibilityBounds(),
+                role = CanvasAccessibilityNode.Role.TEXT
+            )
+        }
+    }
+
+    private fun inspectSheetAccessibilityNodes(width: Float, height: Float): List<CanvasAccessibilityNode> {
+        val playerSide = inspectedPlayer ?: return emptyList()
+        val details = inspectedSlot?.let { session.detailsForActiveCombatant(playerSide, it) }
+            ?: if (playerSide) session.playerDetails() else session.opponentDetails()
+        val combatants = inspectedSlot?.let { slot ->
+            (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+                .filter { it.slot == slot }
+        } ?: (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+        val effects = combatants.flatMap { it.volatileEffects + it.turnEffects + it.moveEffects }.distinct()
+        val name = BattleSession.displayPokemonName(details.name, details.species)
+        val summary = buildList {
+            add(BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, details.condition))
+            if (details.types.isNotEmpty()) add("types ${details.types.joinToString()}")
+            add("ability ${details.ability}")
+            add("item ${BattleItemPresentation.visibleName(details.item) ?: "Unknown item"}")
+            if (details.moves.isNotEmpty()) add("moves ${details.moves.joinToString()}")
+            if (effects.isNotEmpty()) add("active effects ${effects.joinToString()}")
+        }.joinToString(". ")
+        val bounds = inspectSheetBounds(width, height, playerSide)
+        return listOf(
+            CanvasAccessibilityNode(
+                ACCESSIBLE_INSPECT_DETAILS_ID,
+                "Pokémon details for $name. $summary. Activate to close details.",
+                Rect().apply { bounds.roundOut(this) }.toCanvasAccessibilityBounds(),
+                role = CanvasAccessibilityNode.Role.BUTTON,
+                onClick = {
+                    inspectedPlayer = null
+                    inspectedSlot = null
+                    invalidate()
+                    performClick()
+                }
+            )
+        )
+    }
+
+    private fun addMultiCombatantAccessibilityNodes(
+        nodes: MutableList<CanvasAccessibilityNode>,
+        width: Float,
+        height: Float,
+        scale: Float,
+        player: Boolean
+    ) {
+        val combatants = fieldCombatants(
+            if (player) session.playerActiveCombatants() else session.opponentActiveCombatants(),
+            player
+        )
+        val centerY = height * if (player) 0.67f else 0.42f
+        combatants.forEachIndexed { index, combatant ->
+            val details = session.detailsForActiveCombatant(player, combatant.slot) ?: return@forEachIndexed
+            val centerX = multiCombatantX(width, player, index, combatants.size)
+            val bounds = RectF(
+                centerX - 220f * scale,
+                centerY - 360f * scale,
+                centerX + 220f * scale,
+                centerY + 160f * scale
+            )
+            val cardBounds = BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF()
+            bounds.union(cardBounds)
+            val name = BattleSession.displayPokemonName(details.name, details.species)
+            val idBase = if (player) ACCESSIBLE_PLAYER_PARTY_BASE else ACCESSIBLE_OPPONENT_PARTY_BASE
+            addAccessibilityNode(
+                nodes,
+                idBase + index,
+                "${if (player) "Your" else "Opponent's"} active Pokémon, ${pokemonAccessibilitySummary(details)}",
+                bounds,
+                selected = inspectedPlayer == player && inspectedSlot == combatant.slot
+            ) {
+                selectInspectedPokemon(player, combatant.slot)
+            }
+        }
+    }
+
+    private fun selectInspectedPokemon(player: Boolean, slot: String?) {
+        inspectedPlayer = player
+        inspectedSlot = slot
+        invalidate()
+        performClick()
+    }
+
+    private fun pokemonAccessibilitySummary(details: BattleSession.PokemonDetails): String {
+        val name = BattleSession.displayPokemonName(details.name, details.species)
+        return BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, details.condition)
+    }
+
+    private fun inspectSheetBounds(width: Float, height: Float, player: Boolean) = if (player) {
+        RectF(width * 0.025f, height * 0.14f, width * 0.49f, height * 0.85f)
+    } else {
+        RectF(width * 0.51f, height * 0.16f, width * 0.975f, height * 0.87f)
+    }
+
+    private fun addAccessibilityNode(
+        nodes: MutableList<CanvasAccessibilityNode>,
+        id: Int,
+        label: String,
+        bounds: RectF,
+        role: CanvasAccessibilityNode.Role = CanvasAccessibilityNode.Role.BUTTON,
+        selected: Boolean = false,
+        action: () -> Unit
+    ) {
+        if (bounds.isEmpty) return
+        val screenBounds = Rect()
+        bounds.roundOut(screenBounds)
+        nodes += CanvasAccessibilityNode(
+            id,
+            label,
+            screenBounds.toCanvasAccessibilityBounds(),
+            role,
+            selected = selected,
+            onClick = action
+        )
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -2591,6 +2829,13 @@ class BattleSceneView(
     private companion object {
         val SHOWDOWN_EFFECTS = listOf("pokeball.png")
         const val TEAM_PREVIEW_STATIC_FALLBACK_DELAY_MILLIS = 900L
+        const val ACCESSIBLE_PLAYER_ID = 1
+        const val ACCESSIBLE_OPPONENT_ID = 2
+        const val ACCESSIBLE_BATTLE_LOG_ID = 3
+        const val ACCESSIBLE_TEAM_PREVIEW_BASE = 100
+        const val ACCESSIBLE_INSPECT_DETAILS_ID = 200
+        const val ACCESSIBLE_PLAYER_PARTY_BASE = 300
+        const val ACCESSIBLE_OPPONENT_PARTY_BASE = 400
         const val INK = 0xFFF0F7FF.toInt()
         const val CYAN = 0xFF4AE7FF.toInt()
         const val MAGENTA = 0xFFFF49B0.toInt()

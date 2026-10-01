@@ -15,6 +15,8 @@ import android.graphics.Shader
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityNodeProvider
 import kotlin.math.roundToInt
 
 class CommandDeckView(
@@ -24,6 +26,12 @@ class CommandDeckView(
     private val interactionListener: InteractionListener
 ) : View(context) {
     private data class MovePalette(val highlight: Int, val base: Int, val shadow: Int, val edge: Int)
+    private data class ActivityLineRegion(
+        val messageIndex: Int,
+        val text: String,
+        val baseline: Float,
+        val bounds: RectF
+    )
 
     interface InteractionListener {
         fun onNavigation()
@@ -65,9 +73,21 @@ class CommandDeckView(
     private var lastRenderedTeamDecision = false
     private var lastRenderedDecisionKind: BattleSession.DecisionKind? = null
     private var animationsPaused = false
+    private var accessibilityNodeProvider: CanvasAccessibilityNodeProvider? = null
 
     init {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         requestZPowerSymbol()
+    }
+
+    override fun getAccessibilityNodeProvider(): AccessibilityNodeProvider = accessibilityProvider()
+
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.contentDescription = accessibilityDescription()
+        info.isFocusable = false
+        info.isClickable = false
+        accessibilityProvider().addVirtualChildren(info)
     }
 
     fun releaseRetainedResources() {
@@ -145,6 +165,7 @@ class CommandDeckView(
         }
         lastRenderedTeamDecision = teamDecision
         lastRenderedDecisionKind = decisionKind
+        accessibilityNodeProvider?.refreshIfChanged()
         val visibleAnimatedTeamSprite = (teamDecision || session.panel == BattleSession.Panel.TEAM) &&
             teamSprites.values.any { it.isAnimated } && !animationsPaused
         if (pressedMoveIndex != null || releasedMoveIndex != null || session.selectedGimmick != null || visibleAnimatedTeamSprite) {
@@ -275,6 +296,216 @@ class CommandDeckView(
             return true
         }
         return true
+    }
+
+    private fun accessibilityProvider() = accessibilityNodeProvider ?: CanvasAccessibilityNodeProvider(
+        this,
+        ::accessibilityDescription,
+        ::accessibilityNodes
+    ).also { accessibilityNodeProvider = it }
+
+    private fun accessibilityDescription(): String {
+        val panel = when {
+            isTeamDecision() -> if (session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW) "Team preview" else "Switch Pokémon"
+            shouldShowPublicTeamPreview() -> "Public team preview"
+            else -> tabName(session.panel)
+        }
+        return "Showdown controls. $panel. ${session.status}"
+    }
+
+    private fun accessibilityNodes(): List<CanvasAccessibilityNode> {
+        refreshTouchBoundsForCurrentState()
+        val nodes = mutableListOf<CanvasAccessibilityNode>()
+        if (!isTeamDecision()) {
+            TABS.forEachIndexed { index, panel ->
+                addAccessibilityNode(
+                    nodes,
+                    ACCESSIBLE_TAB_BASE + index,
+                    "${tabName(panel)} tab",
+                    tabBounds[index],
+                    selected = session.panel == panel
+                ) {
+                    session.selectPanel(panel)
+                    interactionListener.onNavigation()
+                }
+            }
+        }
+        when {
+            isTeamDecision() || session.panel == BattleSession.Panel.TEAM || shouldShowPublicTeamPreview() -> {
+                val publicPreview = shouldShowPublicTeamPreview() && !isTeamDecision() && session.panel != BattleSession.Panel.TEAM
+                if (publicPreview) {
+                    val scale = minOf(
+                        width.toFloat() / ThorDisplayProfile.LOWER_WIDTH_PIXELS,
+                        height.toFloat() / ThorDisplayProfile.LOWER_HEIGHT_PIXELS
+                    )
+                    layoutTeamTouchBounds(width.toFloat(), height.toFloat(), scale, false)
+                }
+                session.team().forEachIndexed { index, pokemon ->
+                    val details = session.teamMemberDetails(index)
+                    val name = BattleSession.displayPokemonName(pokemon, details.species)
+                    val status = session.teamCardStatus(index)
+                    addAccessibilityNode(
+                        nodes,
+                        ACCESSIBLE_TEAM_BASE + index,
+                        BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, status),
+                        teamBounds.getOrNull(index),
+                        selected = session.focusedTeam == index,
+                        role = if (publicPreview) CanvasAccessibilityNode.Role.TEXT else CanvasAccessibilityNode.Role.BUTTON
+                    ) {
+                        session.selectTeamWithTouch(index)
+                        interactionListener.onConfirmation()
+                    }
+                }
+            }
+            session.panel == BattleSession.Panel.MOVES -> {
+                if (hasReplayControls()) {
+                    val paused = interactionListener.isReplayPaused()
+                    addAccessibilityNode(
+                        nodes,
+                        ACCESSIBLE_REPLAY_PAUSE_ID,
+                        ReplayControlPresentation.pauseLabel(paused),
+                        replayPauseBounds
+                    ) {
+                        interactionListener.onReplayPauseToggled()
+                        interactionListener.onConfirmation()
+                    }
+                    ReplayControlPresentation.speeds.forEachIndexed { index, speed ->
+                        val selected = BattlePlaybackSpeed.coerce(speed) == BattlePlaybackSpeed.coerce(interactionListener.replaySpeed())
+                        addAccessibilityNode(
+                            nodes,
+                            ACCESSIBLE_REPLAY_SPEED_BASE + index,
+                            "Playback speed ${ReplayControlPresentation.speedLabel(speed)}",
+                            replaySpeedBounds[index],
+                            selected = selected
+                        ) {
+                            interactionListener.onReplaySpeedSelected(speed)
+                            interactionListener.onConfirmation()
+                        }
+                    }
+                } else {
+                    addAccessibilityNode(nodes, ACCESSIBLE_SHIFT_ID, "Shift position", shiftBounds) {
+                        session.selectShiftWithTouch()
+                        interactionListener.onConfirmation()
+                    }
+                    addAccessibilityNode(nodes, ACCESSIBLE_TEST_FIGHT_ID, "Test fight", testFightBounds) {
+                        session.selectTestFightWithTouch()
+                        interactionListener.onConfirmation()
+                    }
+                    addAccessibilityNode(nodes, ACCESSIBLE_CANCEL_CHOICE_ID, "Cancel move choice", cancelChoiceBounds) {
+                        if (session.canCancelChoice()) interactionListener.onCancelChoice()
+                    }
+                    session.moves().forEachIndexed { index, move ->
+                        addAccessibilityNode(
+                            nodes,
+                            ACCESSIBLE_MOVE_BASE + index,
+                            BattleAccessibilityText.move(
+                                move.name,
+                                move.type,
+                                move.pp,
+                                move.maxPp,
+                                move.category,
+                                move.power,
+                                move.accuracy.takeUnless { it == "—" }?.let { "$it%" } ?: "—",
+                                move.disabled
+                            ),
+                            moveBounds.getOrNull(index),
+                            selected = session.focusedMove == index,
+                            enabled = !move.disabled
+                        ) {
+                            session.selectMoveWithTouch(index)
+                            interactionListener.onConfirmation()
+                        }
+                    }
+                    session.availableGimmicks().forEachIndexed { index, gimmick ->
+                        addAccessibilityNode(
+                            nodes,
+                            ACCESSIBLE_GIMMICK_BASE + index,
+                            BattleAccessibilityText.gimmick(
+                                session.gimmickLabel(gimmick),
+                                session.terastallizeType().takeIf { gimmick == BattleSession.BattleGimmick.TERASTALLIZATION }
+                            ),
+                            gimmickBounds.getOrNull(index),
+                            selected = session.selectedGimmick == gimmick
+                        ) {
+                            session.availableGimmicks().getOrNull(index)?.let(session::selectGimmick)
+                            interactionListener.onConfirmation()
+                        }
+                    }
+                    session.targetOptions().forEachIndexed { index, target ->
+                        addAccessibilityNode(
+                            nodes,
+                            ACCESSIBLE_TARGET_BASE + index,
+                            BattleAccessibilityText.target(target.label),
+                            targetBounds.getOrNull(index),
+                            selected = session.status == "Target: ${target.label}"
+                        ) {
+                            session.selectTargetWithTouch(index)
+                            interactionListener.onConfirmation()
+                        }
+                    }
+                }
+            }
+            session.panel == BattleSession.Panel.MENU -> {
+                session.menuItems().forEachIndexed { index, item ->
+                    addAccessibilityNode(
+                        nodes,
+                        ACCESSIBLE_MENU_BASE + index,
+                        menuLabel(index, item),
+                        menuBounds.getOrNull(index),
+                        selected = session.focusedMenuItem == index
+                    ) {
+                        session.selectMenuItem(index)
+                        session.confirmSelection()
+                        interactionListener.onConfirmation()
+                    }
+                }
+            }
+            session.panel == BattleSession.Panel.ACTIVITY -> {
+                val scale = minOf(
+                    width.toFloat() / ThorDisplayProfile.LOWER_WIDTH_PIXELS,
+                    height.toFloat() / ThorDisplayProfile.LOWER_HEIGHT_PIXELS
+                )
+                activityLineRegions(width.toFloat(), height.toFloat(), scale).forEachIndexed { index, line ->
+                    addAccessibilityNode(
+                        nodes,
+                        ACCESSIBLE_ACTIVITY_BASE + index,
+                        line.text,
+                        line.bounds,
+                        selected = line.messageIndex == session.focusedMessage,
+                        role = CanvasAccessibilityNode.Role.TEXT
+                    )
+                }
+                addAccessibilityNode(nodes, ACCESSIBLE_CHAT_ID, "Send a message", activityChatBounds) {
+                    session.openChatComposer()
+                    interactionListener.onConfirmation()
+                }
+            }
+        }
+        return nodes
+    }
+
+    private fun addAccessibilityNode(
+        nodes: MutableList<CanvasAccessibilityNode>,
+        id: Int,
+        label: String,
+        bounds: RectF?,
+        selected: Boolean = false,
+        enabled: Boolean = true,
+        role: CanvasAccessibilityNode.Role = CanvasAccessibilityNode.Role.BUTTON,
+        action: () -> Unit = {}
+    ) {
+        if (bounds == null || bounds.isEmpty) return
+        val screenBounds = Rect()
+        bounds.roundOut(screenBounds)
+        nodes += CanvasAccessibilityNode(
+            id,
+            label,
+            screenBounds.toCanvasAccessibilityBounds(),
+            role = role,
+            enabled = enabled,
+            selected = selected,
+            onClick = action.takeIf { role == CanvasAccessibilityNode.Role.BUTTON && enabled }
+        )
     }
 
     private fun drawBackground(canvas: Canvas, width: Float, height: Float) {
@@ -622,6 +853,7 @@ class CommandDeckView(
     }
 
     private fun drawMoves(canvas: Canvas, width: Float, height: Float, scale: Float) {
+        cancelChoiceBounds = null
         if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) {
             moveBounds.fill(null)
             gimmickBounds.fill(null)
@@ -2163,7 +2395,6 @@ class CommandDeckView(
     }
 
     private fun drawActivity(canvas: Canvas, width: Float, height: Float, scale: Float) {
-        val messages = session.activityMessages()
         val left = 44f * scale
         val top = 236f * scale
         val buttonHeight = 88f * scale
@@ -2177,28 +2408,15 @@ class CommandDeckView(
         canvas.drawText("Activity", left + 28f * scale, top + 45f * scale, paint)
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         paint.textSize = readableTextSize(34f, scale, 29f)
-        val textLeft = left + 28f * scale
-        val textWidth = width - left * 2f - 56f * scale
-        val rowTop = top + 94f * scale
-        val rowBottom = bottom - 20f * scale
-        val rowHeight = 72f * scale
-        val maxLines = ((rowBottom - rowTop) / rowHeight).toInt().coerceAtLeast(1)
-        val lines = BattleFeedText.activityWindow(
-            messages,
-            session.focusedMessage,
-            maxLines,
-            textWidth
-        ) { value -> paint.measureText(value) }
-        var rowY = rowTop
-        lines.forEach { line ->
+        activityLineRegions(width, height, scale).forEach { line ->
+            val rowY = line.baseline
             val focused = line.messageIndex == session.focusedMessage
             if (focused) {
                 paint.color = Color.rgb(20, 119, 126)
-                canvas.drawRoundRect(RectF(left + 14f * scale, rowY - 29f * scale, width - left - 14f * scale, rowY + 14f * scale), 10f * scale, 10f * scale, paint)
+                canvas.drawRoundRect(line.bounds, 10f * scale, 10f * scale, paint)
             }
             paint.color = if (focused || line.messageIndex % 2 == 0) PAPER else MUTED
-            canvas.drawText(line.text, textLeft, rowY, paint)
-            rowY += rowHeight
+            canvas.drawText(line.text, left + 28f * scale, rowY, paint)
         }
         activityChatBounds = RectF(left, height - buttonHeight - 28f * scale, width - left, height - 28f * scale)
         paint.shader = LinearGradient(
@@ -2218,6 +2436,36 @@ class CommandDeckView(
         paint.color = PAPER
         canvas.drawText("Send a message", activityChatBounds!!.centerX(), activityChatBounds!!.centerY() + 10f * scale, paint)
         paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun activityLineRegions(width: Float, height: Float, scale: Float): List<ActivityLineRegion> {
+        val left = 44f * scale
+        val top = 236f * scale
+        val buttonHeight = 88f * scale
+        val bottom = height - buttonHeight - 58f * scale
+        val textLeft = left + 28f * scale
+        val textWidth = width - left * 2f - 56f * scale
+        val rowTop = top + 94f * scale
+        val rowBottom = bottom - 20f * scale
+        val rowHeight = 72f * scale
+        val maxLines = ((rowBottom - rowTop) / rowHeight).toInt().coerceAtLeast(1)
+        paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        paint.textSize = readableTextSize(34f, scale, 29f)
+        val lines = BattleFeedText.activityWindow(
+            session.activityMessages(),
+            session.focusedMessage,
+            maxLines,
+            textWidth
+        ) { value -> paint.measureText(value) }
+        return lines.mapIndexed { index, line ->
+            val baseline = rowTop + index * rowHeight
+            ActivityLineRegion(
+                line.messageIndex,
+                line.text,
+                baseline,
+                RectF(left + 14f * scale, baseline - 29f * scale, width - left - 14f * scale, baseline + 14f * scale)
+            )
+        }
     }
 
     private fun drawMenu(canvas: Canvas, width: Float, height: Float, scale: Float) {
@@ -2426,6 +2674,19 @@ class CommandDeckView(
         const val TEAM_STATIC_FALLBACK_DELAY_MILLIS = 350L
         const val TEAM_STATIC_FALLBACK_RETRY_DELAY_MILLIS = 800L
         const val TEAM_STATIC_FALLBACK_MAX_ATTEMPTS = 3
+        const val ACCESSIBLE_TAB_BASE = 100
+        const val ACCESSIBLE_MOVE_BASE = 200
+        const val ACCESSIBLE_TEAM_BASE = 300
+        const val ACCESSIBLE_MENU_BASE = 400
+        const val ACCESSIBLE_GIMMICK_BASE = 500
+        const val ACCESSIBLE_TARGET_BASE = 600
+        const val ACCESSIBLE_REPLAY_SPEED_BASE = 700
+        const val ACCESSIBLE_SHIFT_ID = 800
+        const val ACCESSIBLE_TEST_FIGHT_ID = 801
+        const val ACCESSIBLE_CANCEL_CHOICE_ID = 802
+        const val ACCESSIBLE_REPLAY_PAUSE_ID = 803
+        const val ACCESSIBLE_CHAT_ID = 804
+        const val ACCESSIBLE_ACTIVITY_BASE = 900
         val BOOST_NAMES = mapOf("atk" to "Atk", "def" to "Def", "spa" to "Sp. Atk", "spd" to "Sp. Def", "spe" to "Speed", "accuracy" to "Accuracy", "evasion" to "Evasion")
     }
 }
