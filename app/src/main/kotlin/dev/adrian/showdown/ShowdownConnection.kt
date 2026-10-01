@@ -33,8 +33,10 @@ class ShowdownConnection(
     private var transportReady = false
     private var usesSockJs = false
     private var acceptingCommands = false
+    private var connectionState = State.DISCONNECTED
     private val pendingMessages = ArrayDeque<String>()
     private val sendLock = Any()
+    private val connectLock = Any()
     private val watchdog = Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "showdown-connection-watchdog").apply { isDaemon = true }
     }
@@ -49,30 +51,42 @@ class ShowdownConnection(
     }
 
     fun connect() {
-        val request = Request.Builder().url(endpoint.webSocketUrl).build()
-        val (previousSocket, generation) = synchronized(sendLock) {
-            val previous = socket
-            socket = null
-            closedSocket = previous
-            transportReady = false
-            usesSockJs = false
-            acceptingCommands = true
-            pendingMessages.clear()
-            cancelTransportReadyTimeoutLocked()
-            activeGeneration += 1
-            val generation = activeGeneration
-            socket = httpClient.newWebSocket(request, SocketListener(generation))
-            if (!transportReady) {
-                transportReadyTimeout = watchdog.schedule(
-                    { failTransportReadiness(generation) },
-                    transportReadyTimeoutMillis.coerceAtLeast(1L),
-                    TimeUnit.MILLISECONDS
-                )
+        synchronized(connectLock) {
+            val request = Request.Builder().url(endpoint.webSocketUrl).build()
+            val (previousSocket, generation) = synchronized(sendLock) {
+                val previous = socket
+                socket = null
+                closedSocket = previous
+                transportReady = false
+                usesSockJs = false
+                acceptingCommands = true
+                connectionState = State.CONNECTING
+                pendingMessages.clear()
+                cancelTransportReadyTimeoutLocked()
+                activeGeneration += 1
+                val generation = activeGeneration
+                previous to generation
             }
-            previous to generation
+            previousSocket?.close(1000, "Client reconnecting")
+            val shouldStartSocket = synchronized(sendLock) {
+                activeGeneration == generation && acceptingCommands
+            }
+            if (shouldStartSocket) {
+                listener.onConnectionStateChanged(State.CONNECTING)
+                synchronized(sendLock) {
+                    if (activeGeneration == generation && acceptingCommands) {
+                        socket = httpClient.newWebSocket(request, SocketListener(generation))
+                        if (!transportReady) {
+                            transportReadyTimeout = watchdog.schedule(
+                                { failTransportReadiness(generation) },
+                                transportReadyTimeoutMillis.coerceAtLeast(1L),
+                                TimeUnit.MILLISECONDS
+                            )
+                        }
+                    }
+                }
+            }
         }
-        previousSocket?.close(1000, "Client reconnecting")
-        listener.onConnectionStateChanged(State.CONNECTING)
     }
 
     fun disconnect() {
@@ -83,6 +97,7 @@ class ShowdownConnection(
             transportReady = false
             usesSockJs = false
             acceptingCommands = false
+            connectionState = State.DISCONNECTED
             pendingMessages.clear()
             cancelTransportReadyTimeoutLocked()
             activeGeneration += 1
@@ -102,6 +117,8 @@ class ShowdownConnection(
     }
 
     fun isTransportReady(): Boolean = synchronized(sendLock) { transportReady }
+
+    fun isCurrentState(state: State): Boolean = synchronized(sendLock) { connectionState == state }
 
     fun close() {
         disconnect()
@@ -156,8 +173,14 @@ class ShowdownConnection(
                 }
             }
             when (result) {
-                TransportReadyResult.READY -> stateToReport = State.CONNECTED to ""
-                TransportReadyResult.FAILED -> stateToReport = State.FAILED to "The Showdown connection could not send queued commands."
+                TransportReadyResult.READY -> {
+                    connectionState = State.CONNECTED
+                    stateToReport = State.CONNECTED to ""
+                }
+                TransportReadyResult.FAILED -> {
+                    connectionState = State.FAILED
+                    stateToReport = State.FAILED to "The Showdown connection could not send queued commands."
+                }
                 else -> Unit
             }
             result
@@ -202,6 +225,7 @@ class ShowdownConnection(
                 closedSocket = webSocket
                 transportReady = false
                 acceptingCommands = false
+                connectionState = State.DISCONNECTED
                 pendingMessages.clear()
                 cancelTransportReadyTimeoutLocked()
                 activeGeneration += 1
@@ -224,6 +248,7 @@ class ShowdownConnection(
                 transportReady = false
                 usesSockJs = false
                 acceptingCommands = false
+                connectionState = State.FAILED
                 pendingMessages.clear()
                 cancelTransportReadyTimeoutLocked()
                 activeGeneration += 1
@@ -289,6 +314,7 @@ class ShowdownConnection(
                     closedSocket = webSocket
                     transportReady = false
                     acceptingCommands = false
+                    connectionState = State.FAILED
                     pendingMessages.clear()
                     cancelTransportReadyTimeoutLocked()
                     activeGeneration += 1

@@ -11,6 +11,7 @@ import java.net.Socket
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -26,6 +27,149 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShowdownConnectionLifecycleTest {
+    @Test
+    fun reportsConnectingBeforeStartingTheSocket() {
+        val listener = RecordingListener()
+        val client = StateCheckingWebSocketClient(onWebSocketStartup = {
+            assertEquals(ShowdownConnection.State.CONNECTING, listener.states.lastOrNull()?.first)
+        })
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://loopback.invalid/showdown/websocket"),
+            listener,
+            client
+        )
+        try {
+            connection.connect()
+
+            assertEquals(listOf(ShowdownConnection.State.CONNECTING), listener.states.map { it.first })
+            assertTrue(connection.isCurrentState(ShowdownConnection.State.CONNECTING))
+            client.listener.onMessage(client.socket, "o")
+            assertTrue(listener.connected.await(2, TimeUnit.SECONDS))
+            assertTrue(connection.isCurrentState(ShowdownConnection.State.CONNECTED))
+            assertEquals(
+                listOf(ShowdownConnection.State.CONNECTING, ShowdownConnection.State.CONNECTED),
+                listener.states.map { it.first }
+            )
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun suppressesStaleConnectingStateWhenDisconnectedDuringReconnect() {
+        val listener = RecordingListener()
+        lateinit var connection: ShowdownConnection
+        val client = StateCheckingWebSocketClient(
+            onWebSocketStartup = {},
+            onReplacedSocketClose = { connection.disconnect() }
+        )
+        connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://loopback.invalid/showdown/websocket"),
+            listener,
+            client
+        )
+        try {
+            connection.connect()
+            connection.connect()
+
+            assertEquals(listOf(ShowdownConnection.State.CONNECTING), listener.states.map { it.first })
+            assertTrue(connection.isCurrentState(ShowdownConnection.State.DISCONNECTED))
+            assertEquals(1, client.startCount)
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun concurrentConnectsDoNotPublishStaleConnectingState() {
+        val firstConnectingEntered = CountDownLatch(1)
+        val releaseFirstConnecting = CountDownLatch(1)
+        val secondConnectingEntered = CountDownLatch(1)
+        val connectingThreads = CopyOnWriteArrayList<String>()
+        val listener = object : ShowdownConnection.Listener {
+            override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
+                if (state != ShowdownConnection.State.CONNECTING) return
+                when (Thread.currentThread().name) {
+                    "first-connect" -> {
+                        firstConnectingEntered.countDown()
+                        assertTrue(releaseFirstConnecting.await(2, TimeUnit.SECONDS))
+                    }
+                    "second-connect" -> secondConnectingEntered.countDown()
+                }
+                connectingThreads += Thread.currentThread().name
+            }
+
+            override fun onProtocol(roomId: String?, lines: List<String>) = Unit
+        }
+        val client = StateCheckingWebSocketClient(onWebSocketStartup = {})
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://loopback.invalid/showdown/websocket"),
+            listener,
+            client
+        )
+        try {
+            val firstConnect = thread(start = true, name = "first-connect", isDaemon = true) {
+                connection.connect()
+            }
+            assertTrue(firstConnectingEntered.await(2, TimeUnit.SECONDS))
+            val secondStarted = CountDownLatch(1)
+            val secondConnect = thread(start = true, name = "second-connect", isDaemon = true) {
+                secondStarted.countDown()
+                connection.connect()
+            }
+            assertTrue(secondStarted.await(2, TimeUnit.SECONDS))
+            assertFalse(secondConnectingEntered.await(100, TimeUnit.MILLISECONDS))
+
+            releaseFirstConnecting.countDown()
+            firstConnect.join(2_000)
+            secondConnect.join(2_000)
+
+            assertFalse(firstConnect.isAlive)
+            assertFalse(secondConnect.isAlive)
+            assertEquals(listOf("first-connect", "second-connect"), connectingThreads)
+            assertEquals(2, client.startCount)
+        } finally {
+            releaseFirstConnecting.countDown()
+            connection.close()
+        }
+    }
+
+    @Test
+    fun connectingListenerDoesNotBlockConcurrentDisconnect() {
+        lateinit var connection: ShowdownConnection
+        val disconnected = java.util.concurrent.CountDownLatch(1)
+        val states = CopyOnWriteArrayList<ShowdownConnection.State>()
+        val listener = object : ShowdownConnection.Listener {
+            override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
+                if (state == ShowdownConnection.State.CONNECTING) {
+                    thread(start = true, isDaemon = true) {
+                        connection.disconnect()
+                        disconnected.countDown()
+                    }
+                    assertTrue(disconnected.await(2, TimeUnit.SECONDS))
+                }
+                if (connection.isCurrentState(state)) states += state
+            }
+
+            override fun onProtocol(roomId: String?, lines: List<String>) = Unit
+        }
+        val client = StateCheckingWebSocketClient(onWebSocketStartup = {})
+        connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://loopback.invalid/showdown/websocket"),
+            listener,
+            client
+        )
+        try {
+            connection.connect()
+
+            assertTrue(states.isEmpty())
+            assertTrue(connection.isCurrentState(ShowdownConnection.State.DISCONNECTED))
+            assertEquals(0, client.startCount)
+        } finally {
+            connection.close()
+        }
+    }
+
     @Test
     fun dispatchesRawRoomsAndSendsGlobalCommandsAfterReadiness() {
         val server = LoopbackWebSocketServer()
@@ -345,6 +489,44 @@ class ShowdownConnectionLifecycleTest {
             this.listener = listener
             return socket
         }
+    }
+
+    private class StateCheckingWebSocketClient(
+        private val onWebSocketStartup: () -> Unit,
+        private val onReplacedSocketClose: () -> Unit = {}
+    ) : OkHttpClient() {
+        lateinit var listener: WebSocketListener
+        lateinit var socket: SuccessfulWebSocket
+        var startCount = 0
+
+        override fun newWebSocket(request: Request, listener: WebSocketListener): WebSocket {
+            this.listener = listener
+            startCount += 1
+            onWebSocketStartup()
+            socket = SuccessfulWebSocket { reason ->
+                if (reason == "Client reconnecting") onReplacedSocketClose()
+            }
+            return socket
+        }
+    }
+
+    private class SuccessfulWebSocket(
+        private val onClose: (String?) -> Unit = {}
+    ) : WebSocket {
+        override fun request() = Request.Builder().url("ws://loopback.invalid/showdown/websocket").build()
+
+        override fun queueSize() = 0L
+
+        override fun send(text: String) = true
+
+        override fun send(bytes: ByteString) = true
+
+        override fun close(code: Int, reason: String?): Boolean {
+            onClose(reason)
+            return true
+        }
+
+        override fun cancel() = Unit
     }
 
     private class FailingWebSocket : WebSocket {

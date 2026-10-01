@@ -2715,7 +2715,7 @@ class MainActivity : Activity() {
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
                 runOnUiThread {
-                    if (showdownConnection !== connection) return@runOnUiThread
+                    if (showdownConnection !== connection || !connection.isCurrentState(state)) return@runOnUiThread
                     if (state == ShowdownConnection.State.DISCONNECTED || state == ShowdownConnection.State.FAILED) {
                         reconnectHandler.removeCallbacks(sessionRestoreTimeout)
                         sessionRestorePending = false
