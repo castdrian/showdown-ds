@@ -35,6 +35,9 @@ jobs:
       - name: Validate README screenshots
         run: go run scripts/validate-readme-media.go
 
+      - name: Test README screenshot validation
+        run: go test scripts/*.go
+
       - name: Set up Java
         uses: actions/setup-java@v6
         with:

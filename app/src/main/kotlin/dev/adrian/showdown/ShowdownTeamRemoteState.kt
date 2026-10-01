@@ -23,12 +23,31 @@ object ShowdownTeamRemotePage {
     }
 
     fun exportText(html: String): String? {
-        val source = Regex(
+        val fullTeamLink = Regex(
             "<a\\b[^>]*>\\s*View full team\\s*</a>",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
-        ).find(html)?.let { html.substring(it.range.last + 1) } ?: html
+        ).find(html)
+        val source = fullTeamLink?.let { html.substring(it.range.last + 1) } ?: html
         val text = readableText(source)
-        return text.takeIf { ShowdownTeamCodec.parse(it).isNotEmpty() }
+        return text.takeIf {
+            if (fullTeamLink == null && !looksLikeTeamExportText(it)) {
+                false
+            } else {
+                val sets = ShowdownTeamCodec.parseImport(it)
+                sets.isNotEmpty() && ShowdownTeamCodec.validateImport(sets).isEmpty()
+            }
+        }
+    }
+
+    private fun looksLikeTeamExportText(value: String): Boolean = value.lineSequence().any { line ->
+        val trimmed = line.trim()
+        trimmed.contains(" @ ") ||
+            trimmed.startsWith("Ability:", true) ||
+            trimmed.startsWith("Trait:", true) ||
+            trimmed.startsWith("- ") ||
+            trimmed.startsWith("~ ") ||
+            trimmed.startsWith("EVs:", true) ||
+            trimmed.startsWith("IVs:", true)
     }
 
     fun readableText(html: String): String = html
@@ -98,13 +117,14 @@ class ShowdownTeamRemoteState {
                     val readable = toReadableText(html)
                     val teams = parsePreviews(html)
                     val selected = teams.firstOrNull()
-                    val packed = parseTeamExport(html, readable).takeIf { it.isNotEmpty() }?.let(ShowdownTeamCodec::pack)
+                    val importedSets = parseTeamExport(html)
+                    val packed = importedSets.takeIf { it.isNotEmpty() }?.let(ShowdownTeamCodec::pack)
                     current = current.copy(
                         text = readable,
                         teams = teams,
                         selectedTeam = selected,
                         packed = packed,
-                        error = null
+                        error = if (packed == null) "The remote team export is invalid or unavailable." else null
                     )
                     changed = true
                 }
@@ -135,10 +155,12 @@ class ShowdownTeamRemoteState {
         )
     }.distinctBy { it.remoteId }.toList()
 
-    private fun parseTeamExport(html: String, readable: String): List<ShowdownTeamSet> {
+    private fun parseTeamExport(html: String): List<ShowdownTeamSet> {
         val export = ShowdownTeamRemotePage.exportText(html)
-            ?.let(ShowdownTeamCodec::parse)
-        return export ?: ShowdownTeamCodec.parse(readable)
+            ?.let(ShowdownTeamCodec::parseImport)
+        return listOfNotNull(export)
+            .firstOrNull { it.isNotEmpty() && ShowdownTeamCodec.validateImport(it).isEmpty() }
+            .orEmpty()
     }
 
     private fun toReadableText(html: String): String = ShowdownTeamRemotePage.readableText(html)

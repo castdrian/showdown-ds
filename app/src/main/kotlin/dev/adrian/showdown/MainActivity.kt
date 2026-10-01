@@ -4739,13 +4739,19 @@ class MainActivity : Activity() {
             orientation = android.widget.LinearLayout.VERTICAL
             val density = resources.displayMetrics.density
             setPadding((24f * density).toInt(), (8f * density).toInt(), (24f * density).toInt(), 0)
-            for (index in 0 until 6) {
+            for (index in 0 until maxOf(6, sets.size)) {
                 setEditors += createTeamSetEditor(
                     this,
                     index,
                     resolveTeamSetForEditor(sets.getOrNull(index) ?: ShowdownTeamSet()),
                     index == firstExpandedIndex
                 )
+            }
+        }
+        fun ensureTeamSetEditors(count: Int) {
+            while (setEditors.size < count) {
+                val index = setEditors.size
+                setEditors += createTeamSetEditor(setFields, index, ShowdownTeamSet(), false)
             }
         }
         ensureMoveDexLoaded()
@@ -4782,7 +4788,7 @@ class MainActivity : Activity() {
         fun readTeamSets(): Pair<List<ShowdownTeamSet>, String?> {
             val editedSets = setEditors.map(::readTeamSetEditor)
             val editedPacked = ShowdownTeamCodec.pack(editedSets)
-            val importedSets = ShowdownTeamCodec.parse(packed.text.toString())
+            val importedSets = ShowdownTeamCodec.parseImport(packed.text.toString())
             val sourceSets = if (editedPacked.isNotBlank()) editedSets else importedSets
             return sourceSets to ShowdownTeamCodec.validate(sourceSets).firstOrNull()
         }
@@ -4874,12 +4880,27 @@ class MainActivity : Activity() {
         val importButton = Button(this).apply {
             text = "Load Showdown export into editor"
             setOnClickListener {
-                val imported = ShowdownTeamCodec.parse(packed.text.toString())
-                if (imported.isEmpty()) {
-                    session.setConnectionStatus("Enter a valid packed team or Showdown export before loading it.")
-                } else {
-                    setEditors.forEachIndexed { index, editor -> populateTeamSetEditor(editor, imported.getOrNull(index) ?: ShowdownTeamSet()) }
-                    session.setConnectionStatus("Loaded ${imported.size} Pokémon into the editor.")
+                val imported = ShowdownTeamCodec.parseImport(packed.text.toString())
+                val error = ShowdownTeamCodec.validateImport(imported).firstOrNull()
+                when {
+                    imported.isEmpty() -> {
+                        session.setConnectionStatus("Enter a valid packed team or Showdown export before loading it.")
+                    }
+                    error != null -> session.setConnectionStatus(error)
+                    else -> {
+                        ensureTeamSetEditors(imported.size)
+                        setEditors.forEach { editor ->
+                            editor.moveUpButton.setOnClickListener {
+                                moveTeamSet(setEditors.indexOf(editor), -1)
+                            }
+                            editor.moveDownButton.setOnClickListener {
+                                moveTeamSet(setEditors.indexOf(editor), 1)
+                            }
+                        }
+                        setEditors.forEachIndexed { index, editor -> populateTeamSetEditor(editor, imported.getOrNull(index) ?: ShowdownTeamSet()) }
+                        refreshTeamSetOrderControls()
+                        session.setConnectionStatus("Loaded ${imported.size} Pokémon into the editor with all imported moves preserved.")
+                    }
                 }
             }
         }
@@ -5074,7 +5095,7 @@ class MainActivity : Activity() {
         val species: EditText,
         val item: EditText,
         val ability: EditText,
-        val moves: List<AutoCompleteTextView>,
+        val moves: MutableList<AutoCompleteTextView>,
         val movesContainer: LinearLayout,
         val nature: EditText,
         val evs: TeamStatEditor,
@@ -5139,14 +5160,14 @@ class MainActivity : Activity() {
         val species = teamAutocompleteField("Species", set.species, emptyList())
         val item = teamAutocompleteField("Item", set.item, emptyList())
         val ability = teamAutocompleteField("Ability", set.ability, emptyList())
-        val moves = (0 until 4).map { moveIndex ->
+        val moves = (0 until maxOf(4, set.moves.size)).map { moveIndex ->
             teamAutocompleteField("Move ${moveIndex + 1}", set.moves.getOrNull(moveIndex).orEmpty(), emptyList())
-        }
+        }.toMutableList()
         val movesContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, (8f * density).toInt(), 0, (4f * density).toInt())
             addView(TextView(this@MainActivity).apply {
-                text = "Moves · choose up to four"
+                text = "Moves · up to four for standard battles"
                 setTextSize(15f)
                 setTextColor(0xffa9e8e2.toInt())
                 setPadding((2f * density).toInt(), 0, 0, (6f * density).toInt())
@@ -5159,7 +5180,7 @@ class MainActivity : Activity() {
         }
         val nature = teamAutocompleteField("Nature", set.nature, emptyList())
         val evs = teamStatEditor("EVs · max 255 each / 510 total", set.evs, 0)
-        val gender = teamField("Gender M or F", set.gender)
+        val gender = teamField("Gender M, F, or N", set.gender)
         val ivs = teamStatEditor("IVs · max 31", set.ivs, 31)
         val shiny = CheckBox(this).apply { text = "Shiny"; isChecked = set.shiny }
         val level = teamField("Level", set.level.takeUnless { it == 100 }?.toString().orEmpty())
@@ -5244,7 +5265,7 @@ class MainActivity : Activity() {
         details.addView(editor.advancedFields)
         editor.section.addView(slotHeader, LinearLayout.LayoutParams(-1, -2))
         editor.section.addView(details, LinearLayout.LayoutParams(-1, -2))
-        val suggestionFields = editor.moves + listOf(
+        val suggestionFields = listOf(
             editor.species,
             editor.item,
             editor.ability,
@@ -5257,6 +5278,7 @@ class MainActivity : Activity() {
                 if (hasFocus) ensureTeamEditorSuggestions(editor)
             }
         }
+        editor.moves.forEach { field -> bindTeamMoveField(editor, field) }
         slotHeader.setOnClickListener {
             details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             if (details.visibility == View.VISIBLE) ensureTeamEditorSuggestions(editor)
@@ -5274,7 +5296,7 @@ class MainActivity : Activity() {
             hiddenPowerType,
             dynamaxLevel,
             teraType
-        ) + moves + evs.fields + ivs.fields
+        ) + evs.fields + ivs.fields
         summaryFields
             .forEach { field ->
                 field.addTextChangedListener(object : TextWatcher {
@@ -5463,6 +5485,32 @@ class MainActivity : Activity() {
         moveDex.load { updateTeamEditorSuggestions(editor) }
     }
 
+    private fun bindTeamMoveField(editor: TeamSetEditor, field: AutoCompleteTextView) {
+        field.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) ensureTeamEditorSuggestions(editor)
+        }
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                updateTeamSetSummary(editor)
+            }
+            override fun afterTextChanged(editable: Editable?) = Unit
+        })
+    }
+
+    private fun ensureTeamMoveFields(editor: TeamSetEditor, count: Int) {
+        val density = resources.displayMetrics.density
+        while (editor.moves.size < count) {
+            val index = editor.moves.size
+            val field = teamAutocompleteField("Move ${index + 1}", "", emptyList())
+            editor.moves += field
+            editor.movesContainer.addView(labeledTeamField("Move ${index + 1}", field), LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = (6f * density).toInt()
+            })
+            bindTeamMoveField(editor, field)
+        }
+    }
+
     private fun styleTeamSuggestions(field: AutoCompleteTextView, suggestions: List<String>) {
         field.setAdapter(ShowdownSuggestionAdapter(this, suggestions))
         field.setDropDownBackgroundDrawable(GradientDrawable().apply {
@@ -5475,6 +5523,7 @@ class MainActivity : Activity() {
 
     private fun populateTeamSetEditor(editor: TeamSetEditor, set: ShowdownTeamSet) {
         val resolvedSet = resolveTeamSetForEditor(set)
+        ensureTeamMoveFields(editor, resolvedSet.moves.size)
         editor.nickname.setText(resolvedSet.nickname)
         editor.species.setText(resolvedSet.species)
         editor.item.setText(resolvedSet.item)

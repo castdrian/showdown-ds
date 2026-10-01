@@ -131,6 +131,16 @@ class ShowdownTeamRemoteTest {
     }
 
     @Test
+    fun reportsInvalidRemoteTeamExports() {
+        val state = ShowdownTeamRemoteState()
+
+        assertTrue(state.applyProtocol("view-teams-all", listOf("|pagehtml|<div>not a team export</div>")))
+
+        assertEquals("The remote team export is invalid or unavailable.", state.snapshot.error)
+        assertNull(state.snapshot.packed)
+    }
+
+    @Test
     fun derivesShowdownFormatIdsFromServerLabels() {
         assertEquals("gen9ou", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] OU"))
         assertEquals("gen9randombattle", ShowdownTeamRemoteState.formatIdFromLabel("[Gen 9] Random Battle"))

@@ -26,6 +26,43 @@ class ShowdownTeamCodecTest {
     }
 
     @Test
+    fun preservesInvalidPackedNumbersForValidation() {
+        val packed = listOf(
+            "Pikachu",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "101",
+            "300,,pokeball,,11"
+        ).joinToString("|")
+
+        val team = ShowdownTeamCodec.unpack(packed).single()
+
+        assertEquals(101, team.level)
+        assertEquals(300, team.happiness)
+        assertEquals(11, team.dynamaxLevel)
+        val errors = ShowdownTeamCodec.validate(listOf(team))
+        assertTrue(errors.any { it.contains("invalid level") })
+        assertTrue(errors.any { it.contains("invalid happiness") })
+        assertTrue(errors.any { it.contains("invalid Dynamax level") })
+    }
+
+    @Test
+    fun rejectsMalformedPackedBooleanAndAdvancedFields() {
+        val packed = listOf("Pikachu", "", "", "", "", "", "", "", "", "X", "", "").joinToString("|")
+        val advanced = listOf("Pikachu", "", "", "", "", "", "", "", "", "", "", "100,Ice,pokeball,,10,Electric,extra").joinToString("|")
+
+        assertTrue(ShowdownTeamCodec.validateImport(ShowdownTeamCodec.unpack(packed)).isNotEmpty())
+        assertTrue(ShowdownTeamCodec.validateImport(ShowdownTeamCodec.unpack(advanced)).isNotEmpty())
+    }
+
+    @Test
     fun preservesOfficialAbilitySlotsWhenRepacking() {
         val team = ShowdownTeamCodec.unpack(
             "Pikachu|Pikachu||h|thunderbolt||||||||"
@@ -101,6 +138,32 @@ class ShowdownTeamCodecTest {
         assertTrue(packed.contains("255,255,,,,"))
         assertEquals(set.evs, ShowdownTeamCodec.unpack(packed).single().evs)
         assertTrue(ShowdownTeamCodec.validate(listOf(set)).isEmpty())
+    }
+
+    @Test
+    fun preservesMalformedPackedStatValuesForValidation() {
+        val packed = listOf(
+            "Pikachu",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "invalid,,,,,",
+            "",
+            "40,,,,,",
+            "",
+            "",
+            ""
+        ).joinToString("|")
+
+        val team = ShowdownTeamCodec.unpack(packed).single()
+
+        assertEquals(-1, team.evs[0])
+        assertEquals(40, team.ivs[0])
+        val errors = ShowdownTeamCodec.validate(listOf(team))
+        assertTrue(errors.any { it.contains("invalid EVs") })
+        assertTrue(errors.any { it.contains("invalid IVs") })
     }
 
     @Test
@@ -245,6 +308,17 @@ Ability: Static
     }
 
     @Test
+    fun preservesGenderlessOfficialImports() {
+        val set = ShowdownTeamSet(species = "Magnemite", gender = "N")
+
+        val restored = ShowdownTeamCodec.unpack(ShowdownTeamCodec.pack(listOf(set))).single()
+
+        assertEquals("N", restored.gender)
+        assertTrue(ShowdownTeamCodec.validateImport(listOf(restored)).isEmpty())
+        assertEquals("N", ShowdownTeamCodec.parse(ShowdownTeamCodec.toText(listOf(set))).single().gender)
+    }
+
+    @Test
     fun acceptsCaseInsensitiveSupportedGenderValues() {
         assertTrue(ShowdownTeamCodec.validate(listOf(ShowdownTeamSet(species = "Pikachu", gender = "m"))).isEmpty())
         assertTrue(ShowdownTeamCodec.validate(listOf(ShowdownTeamSet(species = "Pikachu", gender = "F"))).isEmpty())
@@ -286,6 +360,69 @@ Tera Type: Steel
         assertEquals("Lead (Gholdengo) (F) @ Leftovers", text.lineSequence().first())
         assertTrue(text.contains("Tera Type: Steel"))
         assertEquals(1, ShowdownTeamCodec.parse(text).size)
+    }
+
+    @Test
+    fun preservesMalformedTextStatClausesForValidation() {
+        val set = ShowdownTeamCodec.parse(
+            """Pikachu
+EVs: invalid
+IVs: 31 Unknown"""
+        ).single()
+
+        assertEquals(-1, set.evs[0])
+        assertEquals(-1, set.ivs[0])
+        val errors = ShowdownTeamCodec.validate(listOf(set))
+        assertTrue(errors.any { it.contains("invalid EVs") })
+        assertTrue(errors.any { it.contains("invalid IVs") })
+    }
+
+    @Test
+    fun preservesInvalidTextNumbersForValidation() {
+        val set = ShowdownTeamCodec.parse(
+            """Pikachu
+Level: 101
+Happiness: invalid
+Dynamax Level: 11"""
+        ).single()
+
+        assertEquals(101, set.level)
+        assertEquals(-1, set.happiness)
+        assertEquals(11, set.dynamaxLevel)
+        val errors = ShowdownTeamCodec.validate(listOf(set))
+        assertTrue(errors.any { it.contains("invalid level") })
+        assertTrue(errors.any { it.contains("invalid happiness") })
+        assertTrue(errors.any { it.contains("invalid Dynamax level") })
+    }
+
+    @Test
+    fun rejectsBlankSpecifiedTextValuesInsteadOfDefaultingThem() {
+        val set = ShowdownTeamCodec.parse(
+            """Pikachu
+Level:
+Happiness:
+Dynamax Level:
+EVs:
+IVs:"""
+        ).single()
+
+        assertEquals(-1, set.level)
+        assertEquals(-1, set.happiness)
+        assertEquals(-1, set.dynamaxLevel)
+        assertEquals(-1, set.evs[0])
+        assertEquals(-1, set.ivs[0])
+        assertTrue(ShowdownTeamCodec.validateImport(listOf(set)).isNotEmpty())
+    }
+
+    @Test
+    fun rejectsMalformedTextBooleanValues() {
+        val set = ShowdownTeamCodec.parse(
+            """Pikachu
+Shiny: maybe
+Gigantamax: sometimes"""
+        ).single()
+
+        assertTrue(ShowdownTeamCodec.validateImport(listOf(set)).isNotEmpty())
     }
 
     @Test
@@ -350,6 +487,61 @@ IVs: 30 SpA / 30 SpD"""
         assertTrue(exported.contains("\"dynamaxLevel\":4"))
         assertTrue(exported.contains("\"teraType\":\"Electric\""))
         assertEquals(set, ShowdownTeamCodec.parse(exported).single())
+    }
+
+    @Test
+    fun preservesInvalidJsonNumbersForValidation() {
+        val set = ShowdownTeamCodec.parse(
+            """[{"species":"Pikachu","level":"invalid","happiness":300,"dynamaxLevel":"invalid","evs":{"hp":"invalid"},"ivs":{"atk":40}}]"""
+        ).single()
+
+        assertEquals(-1, set.level)
+        assertEquals(300, set.happiness)
+        assertEquals(-1, set.dynamaxLevel)
+        assertEquals(-1, set.evs[0])
+        assertEquals(40, set.ivs[1])
+        val errors = ShowdownTeamCodec.validate(listOf(set))
+        assertTrue(errors.any { it.contains("invalid level") })
+        assertTrue(errors.any { it.contains("invalid happiness") })
+        assertTrue(errors.any { it.contains("invalid Dynamax level") })
+        assertTrue(errors.any { it.contains("invalid EVs") })
+        assertTrue(errors.any { it.contains("invalid IVs") })
+    }
+
+    @Test
+    fun rejectsNonIntegralJsonNumbersInsteadOfTruncatingThem() {
+        val set = ShowdownTeamCodec.parse(
+            """[{"species":"Pikachu","level":50.5,"evs":{"hp":1.5},"ivs":{"atk":30.5},"dynamaxLevel":4.5}]"""
+        ).single()
+
+        assertEquals(-1, set.level)
+        assertEquals(-1, set.evs[0])
+        assertEquals(-1, set.ivs[1])
+        assertEquals(-1, set.dynamaxLevel)
+    }
+
+    @Test
+    fun rejectsNonObjectJsonEntriesInsteadOfSilentlyDroppingThem() {
+        val sets = ShowdownTeamCodec.parse("""[{"species":"Pikachu"},"invalid"]""")
+
+        assertEquals(2, sets.size)
+        assertTrue(ShowdownTeamCodec.validateImport(sets).isNotEmpty())
+    }
+
+    @Test
+    fun rejectsMalformedJsonFieldTypesInsteadOfDefaultingThem() {
+        val sets = ShowdownTeamCodec.parse(
+            """[{"species":"Pikachu","moves":"Thunderbolt","shiny":"yes","evs":[],"ivs":{"hp":31}}]"""
+        )
+
+        assertTrue(ShowdownTeamCodec.validateImport(sets).isNotEmpty())
+    }
+
+    @Test
+    fun rejectsTruncatedPackedImports() {
+        val sets = ShowdownTeamCodec.parseImport("Pikachu|||thunderbolt")
+
+        assertTrue(ShowdownTeamCodec.validateImport(sets).isNotEmpty())
     }
 
     @Test

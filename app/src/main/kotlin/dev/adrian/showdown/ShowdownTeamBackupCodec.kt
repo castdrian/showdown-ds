@@ -24,8 +24,8 @@ object ShowdownTeamBackupCodec {
         val readableTeams = parseReadable(input)
         if (readableTeams.isNotEmpty()) return readableTeams
 
-        val sets = ShowdownTeamCodec.parse(input)
-        if (sets.isEmpty()) return emptyList()
+        val sets = ShowdownTeamCodec.parseImport(input)
+        if (sets.isEmpty() || ShowdownTeamCodec.validateImport(sets).isNotEmpty()) return emptyList()
         return listOf(ShowdownTeam(UUID.randomUUID().toString(), fallbackName, fallbackFormat, ShowdownTeamCodec.pack(sets)))
     }
 
@@ -48,9 +48,14 @@ object ShowdownTeamBackupCodec {
         return closeBracket > 0 && pipe > closeBracket
     }
 
-    private fun isValidPackedTeam(packed: String): Boolean = packed.split(']').all { set ->
-        val fields = set.split('|')
-        fields.size >= 5 && (fields.getOrNull(0).orEmpty().isNotBlank() || fields.getOrNull(1).orEmpty().isNotBlank())
+    private fun isValidPackedTeam(packed: String): Boolean {
+        if (packed.isBlank()) return false
+        if (packed.split(']').any { set ->
+                val fields = set.split('|')
+                fields.size < 12 || fields.getOrNull(0).orEmpty().isBlank() && fields.getOrNull(1).orEmpty().isBlank()
+            }) return false
+        val sets = ShowdownTeamCodec.unpack(packed)
+        return sets.isNotEmpty() && ShowdownTeamCodec.validateImport(sets).isEmpty()
     }
 
     private fun normalizeMetadata(team: ShowdownTeam): TeamMetadata {
@@ -66,12 +71,13 @@ object ShowdownTeamBackupCodec {
 
     private fun parseReadable(input: String): List<ShowdownTeam> {
         val teams = mutableListOf<ShowdownTeam>()
+        var invalidTeam = false
         var header: TeamMetadata? = null
         val body = mutableListOf<String>()
         fun flush() {
             val current = header ?: return
-            val sets = ShowdownTeamCodec.parse(body.joinToString("\n").trim())
-            if (sets.isNotEmpty()) {
+            val sets = ShowdownTeamCodec.parseImport(body.joinToString("\n").trim())
+            if (sets.isNotEmpty() && ShowdownTeamCodec.validateImport(sets).isEmpty()) {
                 teams += ShowdownTeam(
                     UUID.randomUUID().toString(),
                     current.path.substringAfterLast('/'),
@@ -79,6 +85,8 @@ object ShowdownTeamBackupCodec {
                     ShowdownTeamCodec.pack(sets),
                     folder = current.path.substringBeforeLast('/', "")
                 )
+            } else {
+                invalidTeam = true
             }
             body.clear()
         }
@@ -92,7 +100,7 @@ object ShowdownTeamBackupCodec {
             }
         }
         flush()
-        return teams
+        return teams.takeUnless { invalidTeam }.orEmpty()
     }
 
     private fun parseReadableHeader(line: String): TeamMetadata {

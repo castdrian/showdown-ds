@@ -20,17 +20,21 @@ data class ShowdownTeamSet(
     val hiddenPowerType: String = "",
     val gigantamax: Boolean = false,
     val dynamaxLevel: Int = 10,
-    val teraType: String = ""
+    val teraType: String = "",
+    val malformed: Boolean = false
 )
 
 object ShowdownTeamCodec {
+    private const val INVALID_NUMBER = -1
+
     private data class PackedAdvanced(
         val happiness: Int = 255,
         val pokeBall: String = "",
         val hiddenPowerType: String = "",
         val gigantamax: Boolean = false,
         val dynamaxLevel: Int = 10,
-        val teraType: String = ""
+        val teraType: String = "",
+        val malformed: Boolean = false
     )
 
     private val hiddenPowerTypeIds = setOf(
@@ -92,23 +96,44 @@ object ShowdownTeamCodec {
     )
 
     fun validate(sets: List<ShowdownTeamSet>): List<String> {
+        val errors = validateSetFields(sets, 6, 4, 100, allowGenderless = false)
+        val populated = sets.filter { it.hasContent() }
+        populated.forEachIndexed { index, set ->
+            val label = "Pokémon ${index + 1}"
+            val moveIds = set.moves.map(ShowdownMoveDex::moveId).filter(String::isNotBlank)
+            if (moveIds.size != moveIds.distinct().size) errors += "$label contains duplicate moves."
+            if (set.evs.sum() > 510) errors += "$label has more than 510 total EVs."
+        }
+        return errors
+    }
+
+    fun validateImport(sets: List<ShowdownTeamSet>): List<String> = validateSetFields(sets, 24, 24, 9999, allowGenderless = true)
+
+    private fun validateSetFields(
+        sets: List<ShowdownTeamSet>,
+        maximumSets: Int,
+        maximumMoves: Int,
+        maximumLevel: Int,
+        allowGenderless: Boolean
+    ): MutableList<String> {
         val errors = mutableListOf<String>()
         val populated = sets.filter { it.hasContent() }
-        if (populated.isEmpty()) return listOf("Add at least one Pokémon to the team.")
-        if (populated.size > 6) errors += "A team can contain at most six Pokémon."
+        if (populated.isEmpty()) return mutableListOf("Add at least one Pokémon to the team.")
+        val setLimit = if (maximumSets == 6) "six" else maximumSets.toString()
+        val moveLimit = if (maximumMoves == 4) "four" else maximumMoves.toString()
+        if (populated.size > maximumSets) errors += "A team can contain at most $setLimit Pokémon."
         populated.forEachIndexed { index, set ->
             val label = "Pokémon ${index + 1}"
             if (set.species.isBlank() && set.nickname.isBlank()) errors += "$label needs a species."
-            if (set.moves.size > 4) errors += "$label can have at most four moves."
-            val moveIds = set.moves.map(ShowdownMoveDex::moveId).filter(String::isNotBlank)
-            if (moveIds.size != moveIds.distinct().size) errors += "$label contains duplicate moves."
-            if (set.gender.trim().isNotBlank() && set.gender.trim().uppercase() !in setOf("M", "F")) {
-                errors += "$label has an invalid gender; use M or F."
+            if (set.malformed) errors += "$label contains malformed fields."
+            if (set.moves.size > maximumMoves) errors += "$label can have at most $moveLimit moves."
+            val supportedGenders = if (allowGenderless) setOf("M", "F", "N") else setOf("M", "F")
+            if (set.gender.trim().isNotBlank() && set.gender.trim().uppercase() !in supportedGenders) {
+                errors += "$label has an invalid gender; use M or F${if (allowGenderless) ", or N" else ""}."
             }
             if (set.evs.size != 6 || set.evs.any { it !in 0..255 }) errors += "$label has invalid EVs."
-            if (set.evs.sum() > 510) errors += "$label has more than 510 total EVs."
             if (set.ivs.size != 6 || set.ivs.any { it !in 0..31 }) errors += "$label has invalid IVs."
-            if (set.level !in 1..100) errors += "$label has an invalid level."
+            if (set.level !in 1..maximumLevel) errors += "$label has an invalid level."
             if (set.happiness !in 0..255) errors += "$label has invalid happiness."
             if (set.dynamaxLevel !in 0..10) errors += "$label has an invalid Dynamax level."
         }
@@ -129,6 +154,18 @@ object ShowdownTeamCodec {
         }
     }
 
+    fun parseImport(value: String): List<ShowdownTeamSet> {
+        val input = value.trim()
+        if (input.isBlank()) return emptyList()
+        if ('|' !in input) return parse(input)
+        if (input.startsWith("[") || input.startsWith("{")) return parse(input)
+        return if (input.split(']').all { it.split('|').size >= 12 }) {
+            unpack(input)
+        } else {
+            listOf(ShowdownTeamSet(level = INVALID_NUMBER))
+        }
+    }
+
     fun pack(sets: List<ShowdownTeamSet>): String = sets
         .filter { it.hasContent() }
         .joinToString("]", transform = ::packSet)
@@ -142,8 +179,11 @@ object ShowdownTeamCodec {
     }.toString()
 
     private fun unpackSet(packed: String): ShowdownTeamSet {
-        val fields = packed.split('|', limit = 12)
+        val rawFields = packed.split('|')
+        if (rawFields.size > 12 && rawFields.drop(12).any(String::isNotBlank)) return ShowdownTeamSet(level = INVALID_NUMBER, malformed = true)
+        val fields = rawFields.take(12)
         val advanced = unpackAdvanced(fields.value(11))
+        val shinyValue = fields.value(9)
         return ShowdownTeamSet(
             nickname = fields.value(0),
             species = fields.value(1).ifBlank { fields.value(0) },
@@ -151,33 +191,36 @@ object ShowdownTeamCodec {
             ability = fields.value(3),
             moves = fields.value(4).split(',').filter(String::isNotBlank),
             nature = fields.value(5),
-            evs = parseValues(fields.value(6), 0, 0, 255),
+            evs = parseValues(fields.value(6), 0),
             gender = fields.value(7),
-            ivs = parseValues(fields.value(8), 31, 0, 31),
-            shiny = fields.value(9) == "S",
-            level = fields.value(10).toIntOrNull()?.coerceIn(1, 100) ?: 100,
+            ivs = parseValues(fields.value(8), 31),
+            shiny = shinyValue == "S",
+            level = parseOptionalInt(fields.value(10), 100),
             happiness = advanced.happiness,
             pokeBall = advanced.pokeBall,
             hiddenPowerType = advanced.hiddenPowerType,
             gigantamax = advanced.gigantamax,
             dynamaxLevel = advanced.dynamaxLevel,
-            teraType = advanced.teraType
+            teraType = advanced.teraType,
+            malformed = advanced.malformed || shinyValue.isNotBlank() && shinyValue != "S"
         )
     }
 
     private fun unpackAdvanced(value: String): PackedAdvanced {
         if (value.isBlank()) return PackedAdvanced()
-        val values = value.split(',', limit = 6)
+        val rawValues = value.split(',')
+        val values = rawValues.take(6)
         val legacyOrder = isLegacyAdvancedOrder(values)
         val pokeBallIndex = if (legacyOrder) 1 else 2
         val hiddenPowerIndex = if (legacyOrder) 2 else 1
         return PackedAdvanced(
-            happiness = values.value(0).toIntOrNull()?.coerceIn(0, 255) ?: 255,
+            happiness = parseOptionalInt(values.value(0), 255),
             pokeBall = values.value(pokeBallIndex),
             hiddenPowerType = values.value(hiddenPowerIndex),
             gigantamax = values.value(3) == "G",
-            dynamaxLevel = values.value(4).toIntOrNull()?.coerceIn(0, 10) ?: 10,
-            teraType = values.value(5)
+            dynamaxLevel = parseOptionalInt(values.value(4), 10),
+            teraType = values.value(5),
+            malformed = rawValues.drop(6).any(String::isNotBlank) || values.value(3).isNotBlank() && values.value(3) != "G"
         )
     }
 
@@ -203,13 +246,13 @@ object ShowdownTeamCodec {
             species,
             packedId(set.item),
             packedAbility(set.ability),
-            set.moves.map(::packedId).filter(String::isNotBlank).take(4).joinToString(","),
+            set.moves.map(::packedId).filter(String::isNotBlank).joinToString(","),
             set.nature.trim(),
-            packValues(set.evs, 0, 255),
-            set.gender.trim().uppercase().takeIf { it == "M" || it == "F" }.orEmpty(),
-            packValues(set.ivs, 31, 31),
+            packValues(set.evs, 0),
+            set.gender.trim().uppercase().takeIf { it in setOf("M", "F", "N") }.orEmpty(),
+            packValues(set.ivs, 31),
             if (set.shiny) "S" else "",
-            set.level.coerceIn(1, 100).takeUnless { it == 100 }?.toString().orEmpty(),
+            set.level.takeUnless { it == 100 }?.toString().orEmpty(),
             packAdvanced(set)
         )
         return fields.joinToString("|")
@@ -217,11 +260,11 @@ object ShowdownTeamCodec {
 
     private fun packAdvanced(set: ShowdownTeamSet): String {
         val values = listOf(
-            set.happiness.coerceIn(0, 255).takeUnless { it == 255 }?.toString().orEmpty(),
+            set.happiness.takeUnless { it == 255 }?.toString().orEmpty(),
             set.hiddenPowerType.trim(),
             packedId(set.pokeBall),
             if (set.gigantamax) "G" else "",
-            set.dynamaxLevel.coerceIn(0, 10).takeUnless { it == 10 }?.toString().orEmpty(),
+            set.dynamaxLevel.takeUnless { it == 10 }?.toString().orEmpty(),
             set.teraType.trim()
         )
         return values.joinToString(",").trimEnd(',')
@@ -245,12 +288,15 @@ object ShowdownTeamCodec {
         val values = if (input.startsWith("[")) JSONArray(input) else JSONArray().put(JSONObject(input))
         buildList {
             for (index in 0 until values.length()) {
-                values.optJSONObject(index)?.let(::parseJsonSet)?.let(::add)
+                values.optJSONObject(index)?.let(::parseJsonSet)?.let { set ->
+                    add(set.takeIf { it.hasContent() } ?: ShowdownTeamSet(level = INVALID_NUMBER))
+                } ?: add(ShowdownTeamSet(level = INVALID_NUMBER))
             }
         }
     }.getOrDefault(emptyList())
 
     private fun parseJsonSet(value: JSONObject): ShowdownTeamSet {
+        if (hasInvalidJsonTypes(value)) return ShowdownTeamSet(level = INVALID_NUMBER)
         val nickname = value.optString("name")
         val species = value.optString("species").ifBlank { nickname }
         return ShowdownTeamSet(
@@ -268,8 +314,8 @@ object ShowdownTeamCodec {
             gender = value.optString("gender"),
             ivs = jsonStatValues(value.optJSONObject("ivs"), 31),
             shiny = value.optBoolean("shiny"),
-            level = value.optInt("level", 100),
-            happiness = value.optInt("happiness", 255),
+            level = jsonInt(value, "level", 100),
+            happiness = jsonInt(value, "happiness", 255),
             pokeBall = value.optString("pokeball", value.optString("pokeBall")),
             hiddenPowerType = value.optString(
                 "hiddenpowertype",
@@ -279,14 +325,63 @@ object ShowdownTeamCodec {
                 )
             ),
             gigantamax = value.optBoolean("gigantamax"),
-            dynamaxLevel = value.optInt("dynamaxlevel", value.optInt("dynamaxLevel", 10)),
+            dynamaxLevel = when {
+                value.has("dynamaxlevel") -> jsonInt(value, "dynamaxlevel", 10)
+                else -> jsonInt(value, "dynamaxLevel", 10)
+            },
             teraType = value.optString("teratype", value.optString("teraType"))
         )
     }
 
+    private fun hasInvalidJsonTypes(value: JSONObject): Boolean {
+        val textFields = listOf(
+            "name",
+            "species",
+            "item",
+            "ability",
+            "nature",
+            "gender",
+            "pokeball",
+            "pokeBall",
+            "hiddenpowertype",
+            "hpType",
+            "hiddenpower",
+            "hiddenPower",
+            "teratype",
+            "teraType"
+        )
+        if (textFields.any { value.has(it) && value.opt(it) !is String }) return true
+        if (value.has("moves")) {
+            val moves = value.optJSONArray("moves") ?: return true
+            if ((0 until moves.length()).any { index ->
+                    val move = moves.opt(index)
+                    move !is String || move.isBlank()
+                }) return true
+        }
+        if (listOf("evs", "ivs").any { value.has(it) && value.optJSONObject(it) == null }) return true
+        if (listOf("shiny", "gigantamax").any { value.has(it) && value.opt(it) !is Boolean }) return true
+        return false
+    }
+
     private fun jsonStatValues(value: JSONObject?, default: Int): List<Int> {
         val names = listOf("hp", "atk", "def", "spa", "spd", "spe")
-        return names.map { name -> value?.optInt(name, default) ?: default }
+        return names.map { name -> value?.let { jsonInt(it, name, default) } ?: default }
+    }
+
+    private fun jsonInt(value: JSONObject, name: String, default: Int): Int {
+        if (!value.has(name)) return default
+        return when (val raw = value.opt(name)) {
+            is Number -> {
+                val numeric = raw.toDouble()
+                if (!numeric.isFinite() || numeric % 1.0 != 0.0 || numeric < Int.MIN_VALUE || numeric > Int.MAX_VALUE) {
+                    INVALID_NUMBER
+                } else {
+                    numeric.toInt()
+                }
+            }
+            is String -> raw.trim().toIntOrNull() ?: INVALID_NUMBER
+            else -> INVALID_NUMBER
+        }
     }
 
     private fun jsonSet(set: ShowdownTeamSet) = JSONObject().apply {
@@ -294,18 +389,18 @@ object ShowdownTeamCodec {
         if (set.species.isNotBlank()) put("species", set.species.trim())
         if (set.item.isNotBlank()) put("item", set.item.trim())
         if (set.ability.isNotBlank()) put("ability", set.ability.trim())
-        if (set.moves.isNotEmpty()) put("moves", JSONArray(set.moves.take(4)))
+        if (set.moves.isNotEmpty()) put("moves", JSONArray(set.moves))
         if (set.nature.isNotBlank()) put("nature", set.nature.trim())
         put("evs", jsonStats(set.evs, 0))
         if (set.gender.isNotBlank()) put("gender", set.gender.trim())
         put("ivs", jsonStats(set.ivs, 31))
         if (set.shiny) put("shiny", true)
-        if (set.level != 100) put("level", set.level.coerceIn(1, 100))
-        if (set.happiness != 255) put("happiness", set.happiness.coerceIn(0, 255))
+        if (set.level != 100) put("level", set.level)
+        if (set.happiness != 255) put("happiness", set.happiness)
         if (set.pokeBall.isNotBlank()) put("pokeball", set.pokeBall.trim())
         if (set.hiddenPowerType.isNotBlank()) put("hpType", set.hiddenPowerType.trim())
         if (set.gigantamax) put("gigantamax", true)
-        if (set.dynamaxLevel != 10) put("dynamaxLevel", set.dynamaxLevel.coerceIn(0, 10))
+        if (set.dynamaxLevel != 10) put("dynamaxLevel", set.dynamaxLevel)
         if (set.teraType.isNotBlank()) put("teraType", set.teraType.trim())
     }
 
@@ -320,8 +415,8 @@ object ShowdownTeamCodec {
         val header = lines.firstOrNull() ?: return null
         var item = header.substringAfter(" @ ", "").trim()
         val subject = header.substringBefore(" @ ").trim()
-        val gender = Regex("\\s\\(([MF])\\)$").find(subject)?.groupValues?.get(1).orEmpty()
-        val withoutGender = subject.replace(Regex("\\s\\([MF]\\)$"), "").trim()
+        val gender = Regex("\\s\\(([MFN])\\)$").find(subject)?.groupValues?.get(1).orEmpty()
+        val withoutGender = subject.replace(Regex("\\s\\([MFN]\\)$"), "").trim()
         val speciesMatch = Regex("^(.+) \\(([^()]*)\\)$").matchEntire(withoutGender)
         val nickname = speciesMatch?.groupValues?.get(1).orEmpty()
         val species = speciesMatch?.groupValues?.get(2).orEmpty().ifBlank { withoutGender }
@@ -337,6 +432,7 @@ object ShowdownTeamCodec {
         var gigantamax = false
         var dynamaxLevel = 10
         var teraType = ""
+        var malformed = false
         var evs = List(6) { 0 }
         var ivs = List(6) { 31 }
         lines.drop(1).forEach { line ->
@@ -348,15 +444,27 @@ object ShowdownTeamCodec {
                 }
                 line.startsWith("Ability:", true) || line.startsWith("Trait:", true) -> ability = line.substringAfter(':').trim()
                 line.endsWith(" Nature", true) -> nature = line.removeSuffix(" Nature").trim()
-                line.startsWith("Level:", true) -> level = line.substringAfter(':').trim().toIntOrNull() ?: 100
+                line.startsWith("Level:", true) -> level = parseSpecifiedInt(line.substringAfter(':'))
                 line.startsWith("Happiness:", true) -> {
-                    happiness = line.substringAfter(':').trim().toIntOrNull() ?: 255
+                    happiness = parseSpecifiedInt(line.substringAfter(':'))
                     happinessSpecified = true
                 }
-                line.startsWith("Shiny:", true) -> shiny = line.substringAfter(':').trim().equals("yes", true)
+                line.startsWith("Shiny:", true) -> {
+                    when (line.substringAfter(':').trim().lowercase()) {
+                        "yes" -> shiny = true
+                        "no" -> shiny = false
+                        else -> malformed = true
+                    }
+                }
                 line.startsWith("Hidden Power:", true) -> hiddenPowerType = line.substringAfter(':').trim()
-                line.startsWith("Gigantamax:", true) -> gigantamax = line.substringAfter(':').trim().equals("yes", true)
-                line.startsWith("Dynamax Level:", true) -> dynamaxLevel = line.substringAfter(':').trim().toIntOrNull() ?: 10
+                line.startsWith("Gigantamax:", true) -> {
+                    when (line.substringAfter(':').trim().lowercase()) {
+                        "yes" -> gigantamax = true
+                        "no" -> gigantamax = false
+                        else -> malformed = true
+                    }
+                }
+                line.startsWith("Dynamax Level:", true) -> dynamaxLevel = parseSpecifiedInt(line.substringAfter(':'))
                 line.startsWith("Tera Type:", true) -> teraType = line.substringAfter(':').trim()
                 line.startsWith("Poké Ball:", true) || line.startsWith("Pokeball:", true) -> pokeBall = line.substringAfter(':').trim()
                 line.startsWith("EVs:", true) -> {
@@ -391,18 +499,31 @@ object ShowdownTeamCodec {
             hiddenPowerType = hiddenPowerType,
             gigantamax = gigantamax,
             dynamaxLevel = dynamaxLevel,
-            teraType = teraType
+            teraType = teraType,
+            malformed = malformed
         )
     }
 
     private fun parseStatValues(value: String, default: () -> Int): List<Int> {
         val names = mapOf("HP" to 0, "Atk" to 1, "Def" to 2, "SpA" to 3, "SpD" to 4, "Spe" to 5)
         val values = MutableList(6) { default() }
+        var invalidClause = false
         value.split('/').forEach { part ->
-            val match = Regex("^(\\d+\\+?|[-+])\\s+(.+)$").matchEntire(part.substringBefore('(').trim()) ?: return@forEach
-            val index = names[match.groupValues[2].trim()] ?: return@forEach
-            values[index] = match.groupValues[1].removeSuffix("+").toIntOrNull() ?: 0
+            val normalized = part.substringBefore('(').trim()
+            if (normalized.isBlank()) {
+                invalidClause = true
+                return@forEach
+            }
+            val stat = normalized.substringAfterLast(' ', "").trim()
+            val index = names[stat]
+            if (index == null) {
+                invalidClause = true
+                return@forEach
+            }
+            val number = normalized.removeSuffix(stat).trim().removeSuffix("+")
+            values[index] = if (number == "-") 0 else number.toIntOrNull() ?: INVALID_NUMBER
         }
+        if (value.trim().isBlank() || invalidClause) values[0] = INVALID_NUMBER
         return values
     }
 
@@ -412,7 +533,7 @@ object ShowdownTeamCodec {
             set.species.isNotBlank() -> set.species.trim()
             else -> set.nickname.trim()
         }
-        val gender = set.gender.trim().uppercase().takeIf { it == "M" || it == "F" }?.let { " ($it)" }.orEmpty()
+        val gender = set.gender.trim().uppercase().takeIf { it in setOf("M", "F", "N") }?.let { " ($it)" }.orEmpty()
         val header = buildString {
             append(subject)
             append(gender)
@@ -420,12 +541,12 @@ object ShowdownTeamCodec {
         }
         val lines = mutableListOf(header)
         if (set.ability.isNotBlank()) lines += "Ability: ${set.ability.trim()}"
-        if (set.level != 100) lines += "Level: ${set.level.coerceIn(1, 100)}"
+        if (set.level != 100) lines += "Level: ${set.level}"
         if (set.shiny) lines += "Shiny: Yes"
-        if (set.happiness != 255) lines += "Happiness: ${set.happiness.coerceIn(0, 255)}"
+        if (set.happiness != 255) lines += "Happiness: ${set.happiness}"
         if (set.pokeBall.isNotBlank()) lines += "Pokeball: ${set.pokeBall.trim()}"
         if (set.hiddenPowerType.isNotBlank()) lines += "Hidden Power: ${set.hiddenPowerType.trim()}"
-        if (set.dynamaxLevel != 10) lines += "Dynamax Level: ${set.dynamaxLevel.coerceIn(0, 10)}"
+        if (set.dynamaxLevel != 10) lines += "Dynamax Level: ${set.dynamaxLevel}"
         if (set.gigantamax) lines += "Gigantamax: Yes"
         if (set.teraType.isNotBlank()) lines += "Tera Type: ${set.teraType.trim()}"
         val evText = formatStatValues(set.evs, 0)
@@ -433,7 +554,7 @@ object ShowdownTeamCodec {
         if (set.nature.isNotBlank()) lines += "${set.nature.trim()} Nature"
         val ivText = formatStatValues(set.ivs, 31)
         if (ivText.isNotBlank()) lines += "IVs: $ivText"
-        set.moves.take(4).mapTo(lines) { "- ${exportMoveName(it)}" }
+        set.moves.mapTo(lines) { "- ${exportMoveName(it)}" }
         return lines.joinToString("\n")
     }
 
@@ -450,24 +571,34 @@ object ShowdownTeamCodec {
         return values.mapIndexedNotNull { index, value -> value.takeUnless { it == default }?.let { "$it ${names[index]}" } }.joinToString(" / ")
     }
 
-    private fun packValues(values: List<Int>, default: Int, maximum: Int): String {
-        val normalized = (0 until 6).map { values.getOrNull(it)?.coerceIn(0, maximum) ?: default }
+    private fun packValues(values: List<Int>, default: Int): String {
+        val normalized = (0 until 6).map { values.getOrNull(it) ?: default }
         if (normalized.all { it == default }) return ""
         return normalized.joinToString(",") { value -> value.takeUnless { it == default }?.toString().orEmpty() }
     }
 
-    private fun parseValues(value: String, default: Int, minimum: Int, maximum: Int): List<Int> {
+    private fun parseValues(value: String, default: Int): List<Int> {
         if (value.isBlank()) return List(6) { default }
         return value.split(',', limit = 6).let { values ->
-            (0 until 6).map { index -> values.getOrNull(index)?.toIntOrNull()?.coerceIn(minimum, maximum) ?: default }
+            (0 until 6).map { index ->
+                val current = values.getOrNull(index).orEmpty().trim()
+                if (current.isBlank()) default else current.toIntOrNull() ?: INVALID_NUMBER
+            }
         }
     }
+
+    private fun parseOptionalInt(value: String, default: Int): Int {
+        val normalized = value.trim()
+        return if (normalized.isBlank()) default else normalized.toIntOrNull() ?: INVALID_NUMBER
+    }
+
+    private fun parseSpecifiedInt(value: String): Int = value.trim().toIntOrNull() ?: INVALID_NUMBER
 
     private fun ShowdownTeamSet.hasContent(): Boolean {
         val hasText = listOf(nickname, species, item, ability, nature, gender, pokeBall, hiddenPowerType, teraType).any(String::isNotBlank)
         val hasStats = evs.any { it != 0 } || ivs.any { it != 31 }
         val hasDetails = shiny || gigantamax || level != 100 || happiness != 255 || dynamaxLevel != 10
-        return hasText || moves.isNotEmpty() || hasStats || hasDetails
+        return malformed || hasText || moves.isNotEmpty() || hasStats || hasDetails
     }
 
     private fun packedId(value: String) = value.lowercase().filter(Char::isLetterOrDigit)

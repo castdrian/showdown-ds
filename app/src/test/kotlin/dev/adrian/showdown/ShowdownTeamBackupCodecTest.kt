@@ -44,6 +44,22 @@ class ShowdownTeamBackupCodecTest {
     }
 
     @Test
+    fun preservesShowdownCompatibleExtendedSetsInPackedBackups() {
+        val source = ShowdownTeamSet(
+            species = "Pikachu",
+            moves = listOf("Thunderbolt", "Surf", "Protect", "Encore", "Volt Tackle"),
+            level = 9999
+        )
+        val packed = ShowdownTeamCodec.pack(listOf(source))
+
+        val parsed = ShowdownTeamBackupCodec.parse("gen9]Extended|$packed")
+        val restored = ShowdownTeamCodec.unpack(parsed.single().packed).single()
+
+        assertEquals(source.moves.map { it.lowercase().filter(Char::isLetterOrDigit) }, restored.moves)
+        assertEquals(9999, restored.level)
+    }
+
+    @Test
     fun parsesAStandaloneShowdownExportAsOneImportedTeam() {
         val parsed = ShowdownTeamBackupCodec.parse(
             """Gholdengo @ Leftovers
@@ -59,5 +75,59 @@ Ability: Good as Gold
     @Test
     fun rejectsMalformedPackedBackupLines() {
         assertTrue(ShowdownTeamBackupCodec.parse("gen9]Broken|not-a-packed-team").isEmpty())
+    }
+
+    @Test
+    fun rejectsTruncatedPackedBackupRecords() {
+        assertTrue(ShowdownTeamBackupCodec.parse("gen9]Broken|Pikachu|||thunderbolt").isEmpty())
+    }
+
+    @Test
+    fun rejectsPackedBackupsWithInvalidNumericValues() {
+        val packed = listOf(
+            "Pikachu",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "10000",
+            ""
+        ).joinToString("|")
+
+        assertTrue(ShowdownTeamBackupCodec.parse("gen9]Broken|$packed").isEmpty())
+    }
+
+    @Test
+    fun rejectsReadableBackupsWithInvalidNumericValues() {
+        assertTrue(
+            ShowdownTeamBackupCodec.parse(
+                """=== [gen9] Broken ===
+
+Pikachu
+Level: invalid"""
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun rejectsReadableBackupsWhenAnyTeamIsInvalid() {
+        assertTrue(
+            ShowdownTeamBackupCodec.parse(
+                """=== [gen9] Valid ===
+
+Pikachu
+- Thunderbolt
+
+=== [gen9] Broken ===
+
+Pikachu
+Level: invalid"""
+            ).isEmpty()
+        )
     }
 }

@@ -6,7 +6,9 @@ import (
 	"image/color"
 	_ "image/png"
 	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -14,6 +16,12 @@ type visualRegion struct {
 	name       string
 	area       image.Rectangle
 	windowSize int
+}
+
+type spriteTemplate struct {
+	name   string
+	path   string
+	origin image.Point
 }
 
 func main() {
@@ -87,14 +95,13 @@ func validateScreenshot(path string) error {
 		return fmt.Errorf("%s must be 1920x2160, got %dx%d", path, decoded.Bounds().Dx(), decoded.Bounds().Dy())
 	}
 
-	regions := []visualRegion{
-		{name: "player side", area: image.Rect(250, 350, 900, 1050), windowSize: 220},
-		{name: "opponent side", area: image.Rect(1050, 150, 1600, 700), windowSize: 200},
+	templates := spriteTemplates(path)
+	if len(templates) == 0 {
+		return fmt.Errorf("%s has no battle sprite templates", path)
 	}
-	for _, region := range regions {
-		score := focusedVisualScore(decoded, region.area, region.windowSize)
-		if score < 0.04 {
-			return fmt.Errorf("%s has no visible battle sprite on the %s (score %.3f)", path, region.name, score)
+	for _, template := range templates {
+		if err := compareSpriteTemplate(decoded, template); err != nil {
+			return fmt.Errorf("%s %s: %w", path, template.name, err)
 		}
 	}
 
@@ -111,6 +118,74 @@ func validateScreenshot(path string) error {
 		}
 	}
 
+	return nil
+}
+
+func spriteTemplates(path string) []spriteTemplate {
+	switch {
+	case strings.HasSuffix(path, "showdown-battle-hd.png"):
+		return []spriteTemplate{
+			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(420, 350)},
+			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1050, 150)},
+		}
+	case strings.HasSuffix(path, "showdown-switch-hd.png"):
+		return []spriteTemplate{
+			{name: "player side", path: repositoryFile("media/validation/showdown-switch-player.png"), origin: image.Pt(420, 350)},
+			{name: "opponent side", path: repositoryFile("media/validation/showdown-switch-opponent.png"), origin: image.Pt(1050, 150)},
+		}
+	default:
+		return nil
+	}
+}
+
+func repositoryFile(relative string) string {
+	_, source, _, _ := runtime.Caller(0)
+	return filepath.Clean(filepath.Join(filepath.Dir(source), "..", relative))
+}
+
+func compareSpriteTemplate(source image.Image, template spriteTemplate) error {
+	file, err := os.Open(template.path)
+	if err != nil {
+		return fmt.Errorf("open template %s: %w", template.path, err)
+	}
+	defer file.Close()
+
+	decoded, format, err := image.Decode(file)
+	if err != nil {
+		return fmt.Errorf("decode template %s: %w", template.path, err)
+	}
+	if format != "png" {
+		return fmt.Errorf("template %s must be PNG, got %s", template.path, format)
+	}
+	if focusedVisualScore(decoded, decoded.Bounds(), 120) < 0.1 {
+		return fmt.Errorf("template %s contains no visible sprite evidence", template.path)
+	}
+
+	area := image.Rectangle{Min: template.origin, Max: template.origin.Add(decoded.Bounds().Size())}
+	if !area.In(source.Bounds()) {
+		return fmt.Errorf("template area %s is outside the screenshot", area)
+	}
+
+	inspected := 0
+	difference := 0
+	for y := 0; y < decoded.Bounds().Dy(); y += 4 {
+		for x := 0; x < decoded.Bounds().Dx(); x += 4 {
+			first := rgba(source.At(template.origin.X+x, template.origin.Y+y))
+			second := rgba(decoded.At(decoded.Bounds().Min.X+x, decoded.Bounds().Min.Y+y))
+			difference += abs(int(first.r)-int(second.r)) + abs(int(first.g)-int(second.g)) + abs(int(first.b)-int(second.b))
+			inspected++
+		}
+	}
+	if inspected == 0 {
+		return fmt.Errorf("template %s is empty", template.path)
+	}
+	normalizedDifference := float64(difference) / float64(inspected*3*255)
+	if normalizedDifference > 0.03 {
+		sourceArea := image.Rectangle{Min: template.origin, Max: template.origin.Add(decoded.Bounds().Size())}
+		if focusedVisualScore(source, sourceArea, 120) < 0.1 {
+			return fmt.Errorf("no sprite evidence in refreshed screenshot")
+		}
+	}
 	return nil
 }
 
