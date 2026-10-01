@@ -140,9 +140,10 @@ class ThorDisplayProfileTest {
         val script = File("../scripts/run-ayn-thor-avd.sh").canonicalFile
         listOf(
             "AYN_THOR_CPU_CORES" to "3",
-            "AYN_THOR_CPU_CORES" to "2",
+            "AYN_THOR_CPU_CORES" to "1",
             "AYN_THOR_RAM_MB" to "4096",
             "AYN_THOR_RAM_MB" to "2048",
+            "AYN_THOR_RAM_MB" to "2049",
             "AYN_THOR_RAM_MB" to "1537",
             "AYN_THOR_RAM_MB" to "1535",
             "AYN_THOR_RAM_MB" to "1024",
@@ -161,6 +162,7 @@ class ThorDisplayProfileTest {
         ).forEach { (name, value) ->
             val process = ProcessBuilder("bash", script.absolutePath)
                 .redirectErrorStream(true)
+            process.environment()["ANDROID_SDK_ROOT"] = "/nonexistent-test-sdk"
             process.environment()[name] = value
             val runningProcess = process.start()
             val output = runningProcess.inputStream.bufferedReader().use { it.readText() }
@@ -188,6 +190,7 @@ class ThorDisplayProfileTest {
     fun keepsThorAvdMetadataAlignedWithTheCurrentRenderer() {
         val baseConfig = File("../config/avd/ayn-thor-base.ini").readText()
         val displayProfile = File("../config/avd/ayn-thor.ini").readText()
+        val setupScript = File("../scripts/setup-android.sh").readText()
         val createScript = File("../scripts/create-ayn-thor-avd.sh").readText()
         val runScript = File("../scripts/run-ayn-thor-avd.sh").readText()
         val buildScript = File("../scripts/build-ayn-thor-emulator-overlay.sh").readText()
@@ -196,14 +199,21 @@ class ThorDisplayProfileTest {
 
         assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
         assertTrue(baseConfig.contains("hw.gpu.mode = auto"))
-        assertTrue(baseConfig.contains("hw.cpu.ncore = 1"))
+        assertTrue(baseConfig.contains("hw.cpu.ncore = 2"))
         assertTrue(baseConfig.contains("hw.ramSize = 1536"))
         assertTrue(baseConfig.contains("vm.heapSize = 128"))
+        assertTrue(baseConfig.contains("image.sysdir.1 = system-images/android-34/default/arm64-v8a/"))
+        assertTrue(baseConfig.contains("tag.display = Default Android System Image"))
+        assertTrue(baseConfig.contains("tag.id = default"))
         assertTrue(baseConfig.contains("hw.display1.yOffset = 0"))
         assertTrue(displayProfile.contains("hw.gpu.mode=auto"))
-        assertTrue(displayProfile.contains("hw.cpu.ncore=1"))
+        assertTrue(displayProfile.contains("hw.cpu.ncore=2"))
         assertTrue(displayProfile.contains("hw.ramSize=1536"))
         assertTrue(displayProfile.contains("hw.display1.yOffset=0"))
+        assertTrue(setupScript.contains("system-images;android-34;default;\$system_image_abi"))
+        assertTrue(createScript.contains("system-images;android-34;default;\$system_image_abi"))
+        assertTrue(createScript.contains("tag_display=\"Default Android System Image\""))
+        assertTrue(createScript.contains("tag_id=\"default\""))
         assertTrue(createScript.contains("avd_name=\"AYN_Thor_API_34\""))
         assertTrue(runScript.contains("-feature MultiDisplay"))
         assertTrue(runScript.contains("-feature Vulkan"))
@@ -213,12 +223,12 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("vsync_rate=\"\${AYN_THOR_VSYNC_RATE:-30}\""))
         assertTrue(runScript.contains("AYN_THOR_VSYNC_RATE must remain at 30 Hz for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("set_avd_config \"hw.lcd.vsync\" \"\$vsync_rate\""))
-        assertTrue(runScript.contains("cpu_cores=\"\${AYN_THOR_CPU_CORES:-1}\""))
+        assertTrue(runScript.contains("cpu_cores=\"\${AYN_THOR_CPU_CORES:-2}\""))
         assertTrue(runScript.contains("default_gpu_mode=\"auto\""))
         assertTrue(runScript.contains("default_gpu_mode=\"host\""))
         assertTrue(runScript.contains("ram_size_mb=\"\${AYN_THOR_RAM_MB:-1536}\""))
         assertTrue(runScript.contains("vm_heap_size_mb=\"\${AYN_THOR_HEAP_MB:-128}\""))
-        assertTrue(runScript.contains("AYN_THOR_CPU_CORES must remain at 1 for the resource-limited AYN Thor profile."))
+        assertTrue(runScript.contains("AYN_THOR_CPU_CORES must remain at 2 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("AYN_THOR_RAM_MB must remain at 1536 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("AYN_THOR_HEAP_MB must remain at 128 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("validate_emulator_arguments()"))
@@ -271,6 +281,7 @@ class ThorDisplayProfileTest {
         val readme = File("../README.md").readText()
         assertTrue(readme.contains("30 Hz guest display refresh"))
         assertTrue(readme.contains("1,536 MB of guest RAM"))
+        assertTrue(readme.contains("2 virtual CPUs"))
         assertTrue(readme.contains("2,560 MB process memory limit"))
         assertTrue(readme.contains("it is not a fixed host CPU quota"))
         assertFalse(readme.contains("30 Hz host frame cap"))

@@ -20,7 +20,7 @@ case "$(uname -m)" in
         ;;
 esac
 
-system_image="system-images;android-34;google_apis;$system_image_abi"
+system_image="system-images;android-34;default;$system_image_abi"
 
 if command -v sdkmanager >/dev/null 2>&1; then
     sdkmanager="$(command -v sdkmanager)"

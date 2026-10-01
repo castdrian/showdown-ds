@@ -19,7 +19,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 gpu_mode="${AYN_THOR_GPU_MODE:-$default_gpu_mode}"
 window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
-cpu_cores="${AYN_THOR_CPU_CORES:-1}"
+cpu_cores="${AYN_THOR_CPU_CORES:-2}"
 ram_size_mb="${AYN_THOR_RAM_MB:-1536}"
 vm_heap_size_mb="${AYN_THOR_HEAP_MB:-128}"
 host_memory_limit_mb=2560
@@ -77,8 +77,8 @@ case "$gpu_mode" in
         ;;
 esac
 
-if [[ "$cpu_cores" != "1" ]]; then
-    printf '%s\n' "AYN_THOR_CPU_CORES must remain at 1 for the resource-limited AYN Thor profile."
+if [[ "$cpu_cores" != "2" ]]; then
+    printf '%s\n' "AYN_THOR_CPU_CORES must remain at 2 for the resource-limited AYN Thor profile."
     exit 1
 fi
 

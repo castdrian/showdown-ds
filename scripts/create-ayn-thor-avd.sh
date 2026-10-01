@@ -24,13 +24,13 @@ case "$(uname -m)" in
 esac
 
 avd_name="AYN_Thor_API_34"
-system_image="system-images;android-34;google_apis;$system_image_abi"
-system_image_dir="$sdk_root/system-images/android-34/google_apis/$system_image_abi"
-image_sysdir="system-images/android-34/google_apis/$system_image_abi/"
+system_image="system-images;android-34;default;$system_image_abi"
+system_image_dir="$sdk_root/system-images/android-34/default/$system_image_abi"
+image_sysdir="system-images/android-34/default/$system_image_abi/"
 profile="$repo_root/config/avd/ayn-thor.ini"
 target="android-34"
-tag_display="Google APIs"
-tag_id="google_apis"
+tag_display="Default Android System Image"
+tag_id="default"
 
 if [[ ! -f "$base_config" ]]; then
     printf '%s\n' "The base AVD configuration is missing: $base_config"
