@@ -51,7 +51,7 @@ func main() {
 }
 
 func validateReadme(readme string) error {
-	for _, asset := range []string{"media/showdown-battle-hd.png", "media/showdown-switch-hd.png"} {
+	for _, asset := range []string{"media/showdown-battle-hd-both-sides.png", "media/showdown-switch-hd-both-sides.png"} {
 		if !strings.Contains(readme, asset) {
 			return fmt.Errorf("README.md does not embed %s", asset)
 		}
@@ -105,7 +105,7 @@ func validateScreenshot(path string) error {
 		}
 	}
 
-	if strings.HasSuffix(strings.ToLower(path), "showdown-switch-hd.png") {
+	if strings.HasSuffix(strings.ToLower(path), "showdown-switch-hd-both-sides.png") {
 		teamPreviewRegions := []visualRegion{
 			{name: "player team preview", area: image.Rect(390, 1310, 650, 1600), windowSize: 120},
 			{name: "opponent team preview", area: image.Rect(950, 1310, 1260, 1600), windowSize: 120},
@@ -123,12 +123,12 @@ func validateScreenshot(path string) error {
 
 func spriteTemplates(path string) []spriteTemplate {
 	switch {
-	case strings.HasSuffix(path, "showdown-battle-hd.png"):
+	case strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"):
 		return []spriteTemplate{
 			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(420, 350)},
 			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1050, 150)},
 		}
-	case strings.HasSuffix(path, "showdown-switch-hd.png"):
+	case strings.HasSuffix(path, "showdown-switch-hd-both-sides.png"):
 		return []spriteTemplate{
 			{name: "player side", path: repositoryFile("media/validation/showdown-switch-player.png"), origin: image.Pt(420, 350)},
 			{name: "opponent side", path: repositoryFile("media/validation/showdown-switch-opponent.png"), origin: image.Pt(1050, 150)},
