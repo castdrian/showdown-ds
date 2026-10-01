@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,10 +23,11 @@ func TestREADMEAssetsRejectMissingBattleSprites(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		origin image.Point
+		side   string
 		source string
 	}{
-		{name: "missing player sprite", origin: image.Pt(420, 350), source: "../media/showdown-switch-hd-both-sides.png"},
-		{name: "missing opponent sprite", origin: image.Pt(1050, 150), source: "../media/showdown-switch-hd-both-sides.png"},
+		{name: "missing player sprite", origin: image.Pt(420, 350), side: "player side", source: "../media/showdown-switch-hd-both-sides.png"},
+		{name: "missing opponent sprite", origin: image.Pt(1050, 150), side: "opponent side", source: "../media/showdown-switch-hd-both-sides.png"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			file, err := os.Open(test.source)
@@ -52,8 +54,12 @@ func TestREADMEAssetsRejectMissingBattleSprites(t *testing.T) {
 			if err := output.Close(); err != nil {
 				t.Fatal(err)
 			}
-			if err := validateScreenshot(path); err == nil {
+			err = validateScreenshot(path)
+			if err == nil {
 				t.Fatal("validateScreenshot accepted a screenshot with a missing battle sprite")
+			}
+			if !strings.Contains(err.Error(), test.side) {
+				t.Fatalf("validateScreenshot rejected the screenshot without identifying the missing %s: %v", test.side, err)
 			}
 		})
 	}
