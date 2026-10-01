@@ -71,10 +71,10 @@ jobs:
               currentPullRequest.user?.login !== 'dependabot[bot]'
             ) return
 
-            const { data: workflow } = await github.rest.actions.getWorkflowByFileName({
+            const { data: workflow } = await github.rest.actions.getWorkflow({
               owner,
               repo,
-              file_name: 'android-ci.yml'
+              workflow_id: 'android-ci.yml'
             })
             const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
               owner,
