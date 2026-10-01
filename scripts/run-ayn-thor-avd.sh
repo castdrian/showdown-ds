@@ -20,9 +20,9 @@ fi
 gpu_mode="${AYN_THOR_GPU_MODE:-$default_gpu_mode}"
 window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
 cpu_cores="${AYN_THOR_CPU_CORES:-1}"
-ram_size_mb="${AYN_THOR_RAM_MB:-1024}"
+ram_size_mb="${AYN_THOR_RAM_MB:-1536}"
 vm_heap_size_mb="${AYN_THOR_HEAP_MB:-128}"
-host_memory_limit_mb=2048
+host_memory_limit_mb=2560
 macos_resource_policy_args=()
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
@@ -82,8 +82,8 @@ if [[ "$cpu_cores" != "1" ]]; then
     exit 1
 fi
 
-if [[ "$ram_size_mb" != "1024" ]]; then
-    printf '%s\n' "AYN_THOR_RAM_MB must remain at 1024 for the resource-limited AYN Thor profile."
+if [[ "$ram_size_mb" != "1536" ]]; then
+    printf '%s\n' "AYN_THOR_RAM_MB must remain at 1536 for the resource-limited AYN Thor profile."
     exit 1
 fi
 

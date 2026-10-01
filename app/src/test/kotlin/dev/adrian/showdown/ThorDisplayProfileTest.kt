@@ -143,6 +143,9 @@ class ThorDisplayProfileTest {
             "AYN_THOR_CPU_CORES" to "2",
             "AYN_THOR_RAM_MB" to "4096",
             "AYN_THOR_RAM_MB" to "2048",
+            "AYN_THOR_RAM_MB" to "1537",
+            "AYN_THOR_RAM_MB" to "1535",
+            "AYN_THOR_RAM_MB" to "1024",
             "AYN_THOR_HEAP_MB" to "512",
             "AYN_THOR_HEAP_MB" to "256",
             "AYN_THOR_VSYNC_RATE" to "60",
@@ -194,12 +197,12 @@ class ThorDisplayProfileTest {
         assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
         assertTrue(baseConfig.contains("hw.gpu.mode = auto"))
         assertTrue(baseConfig.contains("hw.cpu.ncore = 1"))
-        assertTrue(baseConfig.contains("hw.ramSize = 1024"))
+        assertTrue(baseConfig.contains("hw.ramSize = 1536"))
         assertTrue(baseConfig.contains("vm.heapSize = 128"))
         assertTrue(baseConfig.contains("hw.display1.yOffset = 0"))
         assertTrue(displayProfile.contains("hw.gpu.mode=auto"))
         assertTrue(displayProfile.contains("hw.cpu.ncore=1"))
-        assertTrue(displayProfile.contains("hw.ramSize=1024"))
+        assertTrue(displayProfile.contains("hw.ramSize=1536"))
         assertTrue(displayProfile.contains("hw.display1.yOffset=0"))
         assertTrue(createScript.contains("avd_name=\"AYN_Thor_API_34\""))
         assertTrue(runScript.contains("-feature MultiDisplay"))
@@ -213,10 +216,10 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("cpu_cores=\"\${AYN_THOR_CPU_CORES:-1}\""))
         assertTrue(runScript.contains("default_gpu_mode=\"auto\""))
         assertTrue(runScript.contains("default_gpu_mode=\"host\""))
-        assertTrue(runScript.contains("ram_size_mb=\"\${AYN_THOR_RAM_MB:-1024}\""))
+        assertTrue(runScript.contains("ram_size_mb=\"\${AYN_THOR_RAM_MB:-1536}\""))
         assertTrue(runScript.contains("vm_heap_size_mb=\"\${AYN_THOR_HEAP_MB:-128}\""))
         assertTrue(runScript.contains("AYN_THOR_CPU_CORES must remain at 1 for the resource-limited AYN Thor profile."))
-        assertTrue(runScript.contains("AYN_THOR_RAM_MB must remain at 1024 for the resource-limited AYN Thor profile."))
+        assertTrue(runScript.contains("AYN_THOR_RAM_MB must remain at 1536 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("AYN_THOR_HEAP_MB must remain at 128 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("validate_emulator_arguments()"))
         assertTrue(runScript.contains("if (( $# > 0 )); then"))
@@ -227,7 +230,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("set_avd_config \"vm.heapSize\" \"\$vm_heap_size_mb\""))
         assertTrue(runScript.contains("-memory \"\$ram_size_mb\""))
         assertTrue(runScript.contains("low_ram_args=(-lowram)"))
-        assertTrue(runScript.contains("host_memory_limit_mb=2048"))
+        assertTrue(runScript.contains("host_memory_limit_mb=2560"))
         assertTrue(runScript.contains("macos_resource_policy_args=(\"\$taskpolicy_binary\" -c background -b -m \"\$host_memory_limit_mb\" -P throttle)"))
         assertTrue(runScript.contains("\"\${macos_resource_policy_args[@]}\" \"\$emulator\""))
         assertTrue(runScript.contains("macOS taskpolicy is required to enforce the AYN Thor host resource limit."))
@@ -267,7 +270,8 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("while (( attempt < secondary_display_attempts )); do"))
         val readme = File("../README.md").readText()
         assertTrue(readme.contains("30 Hz guest display refresh"))
-        assertTrue(readme.contains("2,048 MB process memory limit"))
+        assertTrue(readme.contains("1,536 MB of guest RAM"))
+        assertTrue(readme.contains("2,560 MB process memory limit"))
         assertTrue(readme.contains("it is not a fixed host CPU quota"))
         assertFalse(readme.contains("30 Hz host frame cap"))
         assertTrue(buildScript.contains("apply --unidiff-zero --reverse --check"))
