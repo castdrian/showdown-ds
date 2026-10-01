@@ -22,9 +22,8 @@ window_scale="${AYN_THOR_WINDOW_SCALE:-auto}"
 cpu_cores="${AYN_THOR_CPU_CORES:-1}"
 ram_size_mb="${AYN_THOR_RAM_MB:-1024}"
 vm_heap_size_mb="${AYN_THOR_HEAP_MB:-128}"
-max_cpu_cores=2
-max_ram_size_mb=2048
-max_vm_heap_size_mb=256
+host_memory_limit_mb=2048
+macos_resource_policy_args=()
 thor_preview_width_millimetres="132.83"
 boot_animation_args=()
 snapshot_args=(-no-snapshot)
@@ -65,13 +64,10 @@ if [[ "$window_scale" != "auto" && ! "$window_scale" =~ ^0\.[1-9][0-9]*$|^1(\.0*
     exit 1
 fi
 
-case "$vsync_rate" in
-    30|60|90|120) ;;
-    *)
-        printf '%s\n' "AYN_THOR_VSYNC_RATE must be 30, 60, 90, or 120."
-        exit 1
-        ;;
-esac
+if [[ "$vsync_rate" != "30" ]]; then
+    printf '%s\n' "AYN_THOR_VSYNC_RATE must remain at 30 Hz for the resource-limited AYN Thor profile."
+    exit 1
+fi
 
 case "$gpu_mode" in
     auto|host|software|swiftshader|swangle) ;;
@@ -81,18 +77,18 @@ case "$gpu_mode" in
         ;;
 esac
 
-if [[ ! "$cpu_cores" =~ ^[1-9][0-9]*$ || "$cpu_cores" -lt 1 || "$cpu_cores" -gt "$max_cpu_cores" ]]; then
-    printf '%s\n' "AYN_THOR_CPU_CORES must be a whole number between 1 and 2."
+if [[ "$cpu_cores" != "1" ]]; then
+    printf '%s\n' "AYN_THOR_CPU_CORES must remain at 1 for the resource-limited AYN Thor profile."
     exit 1
 fi
 
-if [[ ! "$ram_size_mb" =~ ^[1-9][0-9]*$ || "$ram_size_mb" -lt 1024 || "$ram_size_mb" -gt "$max_ram_size_mb" ]]; then
-    printf '%s\n' "AYN_THOR_RAM_MB must be between 1024 and 2048."
+if [[ "$ram_size_mb" != "1024" ]]; then
+    printf '%s\n' "AYN_THOR_RAM_MB must remain at 1024 for the resource-limited AYN Thor profile."
     exit 1
 fi
 
-if [[ ! "$vm_heap_size_mb" =~ ^[1-9][0-9]*$ || "$vm_heap_size_mb" -lt 128 || "$vm_heap_size_mb" -gt "$max_vm_heap_size_mb" ]]; then
-    printf '%s\n' "AYN_THOR_HEAP_MB must be between 128 and 256."
+if [[ "$vm_heap_size_mb" != "128" ]]; then
+    printf '%s\n' "AYN_THOR_HEAP_MB must remain at 128 for the resource-limited AYN Thor profile."
     exit 1
 fi
 
@@ -106,6 +102,15 @@ validate_emulator_arguments() {
 validate_emulator_arguments "$@"
 
 verify_thor_layout_patch
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    taskpolicy_binary="$(command -v taskpolicy || true)"
+    if [[ -z "$taskpolicy_binary" ]]; then
+        printf '%s\n' "macOS taskpolicy is required to enforce the AYN Thor host resource limit."
+        exit 1
+    fi
+    macos_resource_policy_args=("$taskpolicy_binary" -c background -b -m "$host_memory_limit_mb" -P throttle)
+fi
 
 if [[ "$(uname -s)" == "Darwin" && -z "${AYN_THOR_AUDIO_BACKEND:-}" ]]; then
     audio_args=(-audio coreaudio)
@@ -339,7 +344,7 @@ stop_emulator() {
     fi
 }
 
-"$emulator" \
+"${macos_resource_policy_args[@]}" "$emulator" \
     -avd "$avd_name" \
     -memory "$ram_size_mb" \
     "${low_ram_args[@]}" \
