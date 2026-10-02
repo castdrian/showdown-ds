@@ -2333,10 +2333,8 @@ class BattleSession {
                 )
                 if (index != null && index >= 0) {
                     teamDetails[index] = updatedDetails
-                    if (isIllusionReplacement) {
-                        if (index in team.indices) team[index] = activeName
-                        if (index in playerPartyIdentifiers.indices) playerPartyIdentifiers[index] = activeName
-                    }
+                    if (index in team.indices) team[index] = activeName
+                    if (index in playerPartyIdentifiers.indices) playerPartyIdentifiers[index] = activeName
                 }
                 playerActiveCombatants[slot] = ActiveCombatant(
                     slot,

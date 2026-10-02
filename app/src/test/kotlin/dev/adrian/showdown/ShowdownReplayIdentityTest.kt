@@ -112,4 +112,25 @@ class ShowdownReplayIdentityTest {
         assertTrue(session.battleLog().contains("The opposing Rotom used Hex!"))
         assertEquals("The opposing Rotom used Hex!", session.latestMoveEvent)
     }
+
+    @Test
+    fun updatesPlayerReplayRosterNameWhenSwitchRevealsNickname() {
+        val session = BattleSession().apply {
+            setLocalUsername("DoerreKong")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|DoerreKong|156|1510",
+                "|player|p2|froonk53|101|1189",
+                "|poke|p1|Rotom-Wash|",
+                "|switch|p1a: Rotom|Rotom-Wash, L50|100/100"
+            )
+        )
+
+        assertEquals(listOf("Rotom"), session.team())
+        assertEquals("Rotom", session.playerPartyDetails().single().name)
+        assertEquals("Rotom-Wash", session.playerPartyDetails().single().species)
+        assertEquals("Rotom", session.playerActiveCombatants().single().name)
+    }
 }
