@@ -299,15 +299,15 @@ class OfficialBattleTranscriptTest {
                 "(Fairy Lock started!)",
                 "But it failed!",
                 "But there was no target...",
-                "Magikarp avoided the attack!",
+                "The opposing Magikarp avoided the attack!",
                 "Mewtwo's attack missed!",
-                "It doesn't affect Magikarp...",
+                "It doesn't affect the opposing Magikarp...",
                 "But it had no effect!",
                 "The two moves have become one! It's a combined move!",
                 "Splash activated.",
                 "Mewtwo surrounded itself with its Z-Power!",
                 "Mewtwo couldn't fully protect itself and got hurt!",
-                "Mewtwo is waiting for Magikarp's move..."
+                "Mewtwo is waiting for the opposing Magikarp's move..."
             ),
             session.battleLog().takeLast(12)
         )
@@ -381,9 +381,9 @@ class OfficialBattleTranscriptTest {
         assertTrue(session.battleLog().contains("Mewtwo's HP is full!"))
         assertTrue(session.battleLog().contains("Mewtwo is already burned!"))
         assertTrue(session.battleLog().contains("Mewtwo shook its head. It seems like it can't use this move..."))
-        assertTrue(session.battleLog().contains("It's extremely effective on Magikarp!"))
-        assertTrue(session.battleLog().contains("It's not very effective on Magikarp."))
-        assertTrue(session.battleLog().contains("A critical hit on Magikarp!"))
+        assertTrue(session.battleLog().contains("It's extremely effective on the opposing Magikarp!"))
+        assertTrue(session.battleLog().contains("It's not very effective on the opposing Magikarp."))
+        assertTrue(session.battleLog().contains("A critical hit on the opposing Magikarp!"))
         assertTrue(session.battleLog().contains("Mewtwo transformed!"))
         assertFalse(session.battleLog().contains("It's a one-hit KO!"))
     }
@@ -411,9 +411,27 @@ class OfficialBattleTranscriptTest {
 
         assertTrue(session.battleLog().contains("Charizard's Charizardite X is reacting to the Key Stone!"))
         assertTrue(session.battleLog().contains("Charizard has Mega Evolved into Mega Charizard!"))
-        assertTrue(session.battleLog().contains("Kyogre's Primal Reversion! It reverted to its primal state!"))
+        assertTrue(session.battleLog().contains("The opposing Kyogre's Primal Reversion! It reverted to its primal state!"))
         assertEquals("Charizardite X", session.playerDetails().item)
         assertEquals("Blue Orb", session.opponentDetails().item)
+    }
+
+    @Test
+    fun keepsOpponentPerspectiveOutOfMegaSpeciesName() {
+        val session = BattleSession().apply {
+            setLocalUsername("Red")
+            applyProtocolPacket(
+                listOf(
+                    "|player|p1|Red||",
+                    "|player|p2|Blue||",
+                    "|switch|p2a: Blazer|Charizard, L50|100/100"
+                )
+            )
+        }
+
+        session.applyProtocolPacket(listOf("|-mega|p2a: Blazer|Charizardite X"))
+
+        assertTrue(session.battleLog().contains("The opposing Blazer has Mega Evolved into Mega Charizard!"))
     }
 
     @Test
@@ -556,7 +574,7 @@ class OfficialBattleTranscriptTest {
         )
 
         assertTrue(session.battleLog().any { it.contains("Quick Guard protected Gholdengo!") })
-        assertTrue(session.battleLog().any { it.contains("Wide Guard protected Gliscor!") })
+        assertTrue(session.battleLog().any { it.contains("Wide Guard protected the opposing Gliscor!") })
         assertTrue(session.battleLog().any { it.contains("Crafty Shield protected Gholdengo!") })
         assertTrue(session.battleLog().any { it.contains("Earthquake was blocked by the kicked-up mat!") })
         assertTrue(session.battleLog().any { it.contains("Gholdengo is not affected by Spore thanks to its Safety Goggles!") })
@@ -645,7 +663,7 @@ class OfficialBattleTranscriptTest {
         )
 
         assertTrue(session.battleLog().contains("Mewtwo was burned!"))
-        assertTrue(session.battleLog().contains("Magikarp is paralyzed, so it may be unable to move!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp is paralyzed, so it may be unable to move!"))
         assertTrue(session.battleLog().contains("Mewtwo was badly poisoned!"))
     }
 

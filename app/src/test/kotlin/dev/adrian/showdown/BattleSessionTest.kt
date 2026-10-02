@@ -3469,8 +3469,8 @@ class BattleSessionTest {
         )
 
         assertEquals("Spectating battle", session.status)
-        assertEquals("Go! Pikachu!", session.battleLog().last())
-        assertEquals("Go! Pikachu!", session.latestBattleFeedEntry())
+        assertEquals("Player 1 sent out Pikachu!", session.battleLog().last())
+        assertEquals("Player 1 sent out Pikachu!", session.latestBattleFeedEntry())
     }
 
     @Test

@@ -1439,8 +1439,12 @@ class BattleSession {
         notifyListeners()
     }
 
-    fun sendOutMessage(pokemon: String, playerSide: Boolean) =
-        if (playerSide) "Go! ${displayPokemonName(pokemon)}!" else "$opponentName sent out ${displayPokemonName(pokemon)}!"
+    fun sendOutMessage(pokemon: String, playerSide: Boolean, species: String = pokemon, actor: String? = null): String {
+        val fullName = fullBattlePokemonName(pokemon, species)
+        val trainer = actor?.let(::battleTrainer) ?: if (playerSide) playerName else opponentName
+        val isViewerPokemon = actor?.let { targetSlot(it).take(2).equals(playerSlot, true) } ?: playerSide
+        return if (isViewerPokemon && !spectatorMode) "Go! $fullName!" else "$trainer sent out $fullName!"
+    }
 
     fun setMatchFormat(format: MatchFormat) {
         matchFormat = ShowdownFormatCompatibility.canonical(format)
@@ -2408,10 +2412,11 @@ class BattleSession {
             }
         }
         refreshVisibleBoosts()
+        val nickname = fields[2].substringAfter(':').trim()
         val message = if (replacingIllusion) {
-            "${displayPokemonName(fields[2].substringAfter(':').trim(), pokemon)} was revealed as ${displayPokemonName(pokemon)}."
+            "${battleActor(fields[2])} was revealed as ${displayPokemonName(pokemon)}."
         } else {
-            sendOutMessage(pokemon, playerSide)
+            sendOutMessage(nickname, playerSide, pokemon, fields[2])
         }
         appendLog(message)
         if (!replacingIllusion) {
@@ -2723,8 +2728,9 @@ class BattleSession {
     private fun applyMove(fields: List<String>) {
         if (fields.size <= 3) return
         clearMoveEffects(fields[2])
-        val actor = fields[2].substringAfter(':').trim()
-        val event = "${displayPokemonName(actor)} used ${fields[3]}!"
+        val actorId = fields[2]
+        val actor = actorId.substringAfter(':').trim()
+        val event = capitalizeBattleActorAtSentenceStart("${battleActor(actorId)} used ${fields[3]}!")
         latestMoveEvent = event
         latestMoveEventAtNanos = System.nanoTime()
         appendLog(event)
@@ -2838,8 +2844,7 @@ class BattleSession {
     }
 
     private fun healthActor(actor: String): String {
-        val name = battleActor(actor)
-        return if (isPlayerSide(actor)) name else "The opposing $name"
+        return battleActor(actor)
     }
 
     private fun healthLossPercent(transition: HealthTransition): Int? {
@@ -2879,7 +2884,7 @@ class BattleSession {
         }
         if (isPlayerSide(actor)) playerBoostsBySlot.remove(slot) else opponentBoostsBySlot.remove(slot)
         refreshVisibleBoosts()
-        appendLog("${displayPokemonName(pokemon)} fainted.")
+        appendLog("${battleActor(actor)} fainted!")
     }
 
     private fun applyStatus(fields: List<String>, cured: Boolean = false) {
@@ -3996,7 +4001,9 @@ class BattleSession {
                 "$actorName's $item is reacting to the Key Stone!"
             }
             appendProtocolAnnouncement(fields, activation)
-            val species = speciesField?.takeUnless { it.equals(itemField, true) } ?: actorName
+            val species = speciesField?.takeUnless { it.equals(itemField, true) }
+                ?.let(::displayPokemonName)
+                ?: activeSpeciesName(actor)
             appendProtocolAnnouncement(fields, "$actorName has Mega Evolved into Mega $species!")
         } else {
             appendProtocolAnnouncement(fields, "$actorName's Primal Reversion! It reverted to its primal state!")
@@ -4253,7 +4260,32 @@ class BattleSession {
         opponentBoosts.putAll(visible(opponentActiveCombatants, opponentBoostsBySlot))
     }
 
-    private fun battleActor(value: String?) = displayPokemonName(value.orEmpty().substringAfter(':').trim().ifBlank { "Pokémon" })
+    private fun battleActor(value: String?): String {
+        val actor = value.orEmpty()
+        val name = displayPokemonName(actor.substringAfter(':').trim().ifBlank { "Pokémon" })
+        if (!isProtocolActor(actor)) return name
+        if (spectatorMode) return "${battleTrainer(actor)}'s $name"
+        return if (isPlayerSide(actor)) name else "the opposing $name"
+    }
+
+    private fun battleTrainer(actor: String): String {
+        val side = targetSlot(actor).take(2)
+        return sideNames[side]?.takeIf { it.isNotBlank() }?.trim()
+            ?: side.removePrefix("p").toIntOrNull()?.let { "Player $it" }
+            ?: "Player"
+    }
+
+    private fun fullBattlePokemonName(nickname: String, species: String): String {
+        val displaySpecies = displayPokemonName(species)
+        val displayNickname = displayPokemonName(nickname, species)
+        return if (displayNickname.equals(displaySpecies, true)) displaySpecies else "$displayNickname ($displaySpecies)"
+    }
+
+    private fun activeSpeciesName(actor: String): String {
+        val slot = targetSlot(actor)
+        val species = if (isPlayerSide(actor)) playerActiveCombatants[slot]?.species else opponentActiveCombatants[slot]?.species
+        return displayPokemonName(species?.takeIf { it.isNotBlank() } ?: actor.substringAfter(':').trim())
+    }
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
 
@@ -4880,18 +4912,30 @@ class BattleSession {
         battleFeedEntriesCache.clear()
     }
 
+    private fun capitalizeBattleActorAtSentenceStart(entry: String): String {
+        val prefixLength = entry.takeWhile { it.isWhitespace() || it in "([{" }.length
+        val leading = entry.substring(0, prefixLength)
+        val content = entry.substring(prefixLength)
+        val opposingPrefix = "the opposing"
+        if (!content.startsWith(opposingPrefix, true) || content.getOrNull(opposingPrefix.length)?.isWhitespace() != true) {
+            return entry
+        }
+        return "$leading${opposingPrefix.replaceFirstChar(Char::uppercase)}${content.substring(opposingPrefix.length)}"
+    }
+
     private fun appendLog(entry: String) {
         if (protocolLogSuppressed) return
-        if (battleLog.lastOrNull() == entry) return
+        val message = capitalizeBattleActorAtSentenceStart(entry)
+        if (battleLog.lastOrNull() == message) return
         battleFeedVisible = true
-        battleLog += entry
+        battleLog += message
         if (battleLog.size > 32) battleLog.removeAt(0)
         battleLogGeneration += 1L
         battleFeedEntriesCache.clear()
         nativeBattleLogPending = true
-        appendActivity(entry, ActivityOrigin.PROTOCOL)
-        protocolEventCollector?.add(entry) ?: run {
-            latestBattleEvent = entry
+        appendActivity(message, ActivityOrigin.PROTOCOL)
+        protocolEventCollector?.add(message) ?: run {
+            latestBattleEvent = message
             latestBattleEventAtNanos = System.nanoTime()
         }
     }
