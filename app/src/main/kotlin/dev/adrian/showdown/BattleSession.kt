@@ -2097,7 +2097,7 @@ class BattleSession {
                 val secret = lines.getOrNull(index + 1)
                 val shared = lines.getOrNull(index + 2)
                 if (side != null) {
-                    val selected = if (isPlayerSide("p$side")) secret else shared
+                    val selected = if (!replayMode && !spectatorMode && playerSlot.equals("p$side", true)) secret else shared
                     selected?.takeIf(String::isNotBlank)?.let(visible::add)
                     index += when {
                         shared != null -> 3

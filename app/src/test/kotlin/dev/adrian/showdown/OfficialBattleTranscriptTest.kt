@@ -112,6 +112,50 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun exposesSplitPrivateLinesOnlyToTheExactLivePlayer() {
+        val packet = listOf(
+            "|gametype|multi",
+            "|player|p1|RED||",
+            "|player|p2|BLUE||",
+            "|player|p3|GREEN||",
+            "|player|p4|YELLOW||",
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|switch|p3a: Raichu|Raichu, L50|100/100",
+            "|switch|p4a: Pidgeot|Pidgeot, L50|100/100",
+            "|split|p1",
+            "|-damage|p1a: Pikachu|90/100",
+            "|-damage|p1a: Pikachu|80/100",
+            "|split|p2",
+            "|-damage|p2a: Eevee|90/100",
+            "|-damage|p2a: Eevee|80/100",
+            "|split|p3",
+            "|-damage|p3a: Raichu|90/100",
+            "|-damage|p3a: Raichu|80/100",
+            "|split|p4",
+            "|-damage|p4a: Pidgeot|90/100",
+            "|-damage|p4a: Pidgeot|80/100"
+        )
+        val replay = BattleSession().apply { setReplayMode(true) }
+        val spectator = BattleSession().apply { setSpectatorMode(true) }
+        val livePlayer = BattleSession().apply { setLocalUsername("RED") }
+
+        listOf(replay, spectator, livePlayer).forEach { it.applyProtocolPacket(packet) }
+
+        fun activeHpBySlot(session: BattleSession) =
+            (session.playerActiveCombatants() + session.opponentActiveCombatants()).associate { it.slot to it.hp }
+
+        val sharedHp = mapOf("p1a" to "80/100", "p2a" to "80/100", "p3a" to "80/100", "p4a" to "80/100")
+
+        assertEquals(sharedHp, activeHpBySlot(replay))
+        assertEquals(sharedHp, activeHpBySlot(spectator))
+        assertEquals(
+            mapOf("p1a" to "90/100", "p2a" to "80/100", "p3a" to "80/100", "p4a" to "80/100"),
+            activeHpBySlot(livePlayer)
+        )
+    }
+
+    @Test
     fun keepsTheViewerSideAsThePlayerWhenTheViewerIsP2() {
         val session = BattleSession().apply { setLocalUsername("OPPONENT") }
         session.applyProtocolPacket(
