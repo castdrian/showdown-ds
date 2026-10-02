@@ -4186,7 +4186,7 @@ class MainActivity : Activity() {
 
     private fun showTeamLibrary() {
         if (teamLibraryDialog?.isShowing == true) return
-        val teams = teamLibrary.teams()
+        var teams = teamLibrary.teams()
         val density = resources.displayMetrics.density
         val search = EditText(this).apply {
             hint = "Search teams, Pokémon, or moves"
@@ -4209,6 +4209,7 @@ class MainActivity : Activity() {
         }
         var activeFolder: String? = null
         var activeFormat: String? = null
+        var moveFocusTarget: Pair<String, Int>? = null
         fun formatLabel(format: String): String = readableFormatLabel(format)
         var teamDialog: ShowdownDialog? = null
         fun styleTeamButton(button: Button, compact: Boolean = false, selected: Boolean = false) = button.apply {
@@ -4256,13 +4257,14 @@ class MainActivity : Activity() {
                     setPadding((12f * density).toInt(), (12f * density).toInt(), (12f * density).toInt(), (12f * density).toInt())
                 })
             } else {
-                visibleTeams.forEach { team ->
+                val visibleTeamIds = visibleTeams.map(ShowdownTeam::id)
+                visibleTeams.forEachIndexed { visibleIndex, team ->
                     val remoteState = when {
                         team.remoteNeedsUpload -> " · Upload needed"
                         team.remoteId != null -> " · Uploaded"
                         else -> ""
                     }
-                    resultList.addView(styleTeamButton(Button(this)).apply {
+                    val teamButton = styleTeamButton(Button(this)).apply {
                         text = buildString {
                             append(team.name)
                             append("\n${formatLabel(team.format)}")
@@ -4274,9 +4276,52 @@ class MainActivity : Activity() {
                             teamDialog?.dismiss()
                             showTeamEditor(team, onReturnToLibrary = { showTeamLibrary() })
                         }
-                    }, LinearLayout.LayoutParams(-1, -2).apply {
+                    }
+                    fun moveButton(direction: Int) = styleTeamButton(Button(this), compact = true).apply {
+                        text = if (direction < 0) "↑" else "↓"
+                        contentDescription = "Move ${team.name} ${if (direction < 0) "up" else "down"} in team list"
+                        setTextSize(20f)
+                        minWidth = (48f * density).toInt()
+                        minimumWidth = minWidth
+                        minHeight = (48f * density).toInt()
+                        minimumHeight = minHeight
+                        setPadding(0, 0, 0, 0)
+                        isEnabled = visibleIndex + direction in visibleTeams.indices
+                        alpha = if (isEnabled) 1f else 0.45f
+                        setOnClickListener {
+                            if (!teamLibrary.move(team.id, visibleTeamIds, direction)) return@setOnClickListener
+                            teams = teamLibrary.teams()
+                            moveFocusTarget = team.id to direction
+                            renderResults()
+                        }
+                    }
+                    val moveUpButton = moveButton(-1)
+                    val moveDownButton = moveButton(1)
+                    val reorderControls = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        addView(moveUpButton, LinearLayout.LayoutParams((48f * density).toInt(), -2).apply {
+                            rightMargin = (6f * density).toInt()
+                        })
+                        addView(moveDownButton, LinearLayout.LayoutParams((48f * density).toInt(), -2))
+                    }
+                    val teamRow = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        addView(teamButton, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                            rightMargin = (8f * density).toInt()
+                        })
+                        addView(reorderControls, LinearLayout.LayoutParams(-2, -2))
+                    }
+                    val focusTarget = when (moveFocusTarget?.takeIf { it.first == team.id }?.second) {
+                        -1 -> moveUpButton.takeIf { it.isEnabled } ?: teamButton
+                        1 -> moveDownButton.takeIf { it.isEnabled } ?: teamButton
+                        else -> null
+                    }
+                    if (focusTarget != null) moveFocusTarget = null
+                    resultList.addView(teamRow, LinearLayout.LayoutParams(-1, -2).apply {
                         bottomMargin = (8f * density).toInt()
                     })
+                    focusTarget?.post { focusTarget.requestFocus() }
                 }
             }
             teamDialog?.setTitle("Team library · ${visibleTeams.size}/${teams.size}")

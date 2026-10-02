@@ -59,7 +59,8 @@ class ShowdownTeamLibrary(context: Context) {
         id: String = UUID.randomUUID().toString(),
         folder: String? = null
     ): ShowdownTeam {
-        val previous = teams().firstOrNull { it.id == id }
+        val storedTeams = teams()
+        val previous = storedTeams.firstOrNull { it.id == id }
         val team = ShowdownTeam(
             id = id,
             name = name.trim().ifBlank { "Untitled team" },
@@ -72,9 +73,16 @@ class ShowdownTeamLibrary(context: Context) {
             uploadedFormat = previous?.uploadedFormat,
             folder = folder?.trim()?.trim('/') ?: previous?.folder.orEmpty()
         )
-        val updated = teams().filterNot { it.id == team.id } + team
-        write(updated)
+        write(ShowdownTeamLibraryOrder.save(storedTeams, team))
         return team
+    }
+
+    fun move(id: String, visibleTeamIds: List<String>, direction: Int): Boolean {
+        val storedTeams = teams()
+        val reordered = ShowdownTeamLibraryOrder.move(storedTeams, visibleTeamIds, id, direction)
+        if (reordered === storedTeams) return false
+        write(reordered)
+        return true
     }
 
     fun duplicate(id: String): ShowdownTeam? {
