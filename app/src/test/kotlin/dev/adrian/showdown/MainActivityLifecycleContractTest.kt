@@ -73,6 +73,17 @@ class MainActivityLifecycleContractTest {
     }
 
     @Test
+    fun loadsBattleMoveDetailsOnBattleRequestsAsWellAsBattleInitialization() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val listener = source.substringAfter("private val protocolListener =").substringBefore("private val decisionListener")
+        val onCreate = source.substringAfter("override fun onCreate(savedInstanceState: Bundle?) {").substringBefore("override fun onNewIntent")
+
+        assertTrue(onCreate.contains("moveDex.loadMoveInfo(::bindMoveDexResolvers)"))
+        assertTrue(listener.contains("it.startsWith(\"|init|battle\") || it.startsWith(\"|request|\")"))
+        assertTrue(listener.contains("ensureBattleMoveInfoLoaded()"))
+    }
+
+    @Test
     fun replaySpeedIsPropagatedToBattleAudio() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
 
@@ -376,7 +387,8 @@ class MainActivityLifecycleContractTest {
         val battleLoader = source.substringAfter("private fun ensureBattleMoveInfoLoaded()").substringBefore("private fun applyBattleProtocolToEffects")
         val teamEditor = source.substringAfter("private fun showTeamEditor").substringBefore("private fun showTeamFormatPicker")
 
-        assertFalse(onCreate.contains("moveDex.load"))
+        assertTrue(onCreate.contains("moveDex.loadMoveInfo(::bindMoveDexResolvers)"))
+        assertFalse(onCreate.contains("moveDex.load("))
         assertTrue(source.contains("private fun bindMoveDexResolvers()"))
         assertTrue(source.contains("private fun ensureMoveDexLoaded()"))
         assertTrue(source.contains("private fun ensureBattleMoveInfoLoaded()"))

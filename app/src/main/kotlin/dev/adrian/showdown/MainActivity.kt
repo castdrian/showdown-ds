@@ -278,7 +278,9 @@ class MainActivity : Activity() {
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
     private val protocolListener = BattleSession.ProtocolListener { lines ->
         runOnUiThread {
-            if (lines.any { it.startsWith("|init|battle") }) ensureBattleMoveInfoLoaded()
+            if (lines.any { it.startsWith("|init|battle") || it.startsWith("|request|") }) {
+                ensureBattleMoveInfoLoaded()
+            }
             if (lightweightBattlePlayback) {
                 applyLightweightBattleProtocol(lines)
             } else {
@@ -412,6 +414,7 @@ class MainActivity : Activity() {
         spriteCache = ShowdownSpriteCache(this)
         moveDex = ShowdownMoveDex(spriteCache)
         bindMoveDexResolvers()
+        moveDex.loadMoveInfo(::bindMoveDexResolvers)
         battleAudio = BattleAudio(this, spriteCache, session, lightweightBattlePlayback)
         battleAudio.setPlaybackSpeed(replaySpeed)
         battleAudio.updateOptions(session)

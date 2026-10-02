@@ -419,6 +419,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val appContext = context.applicationContext
     private val downloadExecutor = Executors.newFixedThreadPool(2)
+    private val moveDataExecutor = Executors.newSingleThreadExecutor()
     private val fallbackSpriteExecutor = ThreadPoolExecutor(0, 1, 10L, TimeUnit.SECONDS, LinkedBlockingQueue())
     private val decodeExecutor = Executors.newSingleThreadExecutor()
     private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
@@ -574,7 +575,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     fun requestMoveDex(receiver: (File?) -> Unit) {
-        requestBytes("data/moves.json", receiver)
+        requestBytes("data/moves.json", moveDataExecutor, receiver)
     }
 
     fun requestPokedex(receiver: (File?) -> Unit) {
@@ -623,6 +624,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         downloadExecutor.shutdownNow()
+        moveDataExecutor.shutdownNow()
         fallbackSpriteExecutor.shutdownNow()
         decodeExecutor.shutdownNow()
         memoryCache.evictAll()
@@ -1354,6 +1356,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestBytes(path: String, receiver: (File?) -> Unit) {
+        requestBytesWithExecutor(path, downloadExecutor, receiver)
+    }
+
+    private fun requestBytes(path: String, executor: Executor, receiver: (File?) -> Unit) {
+        requestBytesWithExecutor(path, executor, receiver)
+    }
+
+    private fun requestBytesWithExecutor(path: String, executor: Executor, receiver: (File?) -> Unit) {
         if (closed.get()) {
             mainHandler.post { receiver(null) }
             return
@@ -1369,7 +1379,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         } ?: return
         if (!shouldStart) return
         runCatching {
-            downloadExecutor.execute {
+            executor.execute {
                 val file = loadBytes(path)
                 val receivers = pendingFileReceivers.remove(path).orEmpty()
                 mainHandler.post {

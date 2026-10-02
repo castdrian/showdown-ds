@@ -69,7 +69,8 @@ func TestREADMEAssetsRejectMissingBattleSprites(t *testing.T) {
 			draw.Draw(modified, modified.Bounds(), source, source.Bounds().Min, draw.Src)
 			spriteArea := image.Rectangle{Min: test.origin, Max: test.origin.Add(image.Pt(480, 550))}
 			if test.copyBackground {
-				draw.Draw(modified, spriteArea, source, test.backgroundOrigin, draw.Src)
+				backgroundColor := source.At(test.backgroundOrigin.X, test.backgroundOrigin.Y)
+				draw.Draw(modified, spriteArea, image.NewUniform(backgroundColor), image.Point{}, draw.Src)
 			} else {
 				draw.Draw(modified, spriteArea, image.NewUniform(color.NRGBA{R: 4, G: 15, B: 24, A: 255}), image.Point{}, draw.Src)
 			}

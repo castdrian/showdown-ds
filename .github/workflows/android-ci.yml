@@ -42,6 +42,9 @@ jobs:
       - name: Test Showdown battle-data generator
         run: go test tools/showdown-battle-data/*.go
 
+      - name: Test Thor screenshot composer
+        run: go test tools/compose-thor-screenshot/*.go
+
       - name: Set up Java
         uses: actions/setup-java@v6
         with:
