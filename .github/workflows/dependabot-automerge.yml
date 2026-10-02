@@ -27,7 +27,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request')
     runs-on: ubuntu-24.04
     steps:
-      - name: Find safe dependency update
+      - name: Find Dependabot update with passing CI
         id: dependency
         uses: actions/github-script@v9
         with:
@@ -89,10 +89,6 @@ jobs:
               run.conclusion === 'success'
             ))
             if (!greenCiRun) return
-
-            const updateTypes = [...(currentPullRequest.body ?? '').matchAll(/update-type:\s*version-update:semver-(patch|minor|major)/g)]
-              .map((match) => match[1])
-            if (!updateTypes.length) return
 
             core.setOutput('number', String(currentPullRequest.number))
 
