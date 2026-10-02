@@ -297,6 +297,7 @@ class ShowdownMoveEffectsView(
                             scene.__showdownNativeAnnouncerTimers.push(timer);
                         }
                         var nativeBattleLogGeneration = 0;
+                        var nativeBattleLogGenerationByStep = [];
                         var nativeBattleLogMarkupActive = false;
                         var nativeIdlePauseTimer = null;
                         function clearNativeIdlePauseTimer() {
@@ -337,6 +338,22 @@ class ShowdownMoveEffectsView(
                         }
                         function installBattleLogHooks() {
                             if (typeof BattleLog === 'undefined' || BattleLog.prototype.__showdownNativeBattleLogHooked) return;
+                            if (!Battle.prototype.__showdownNativeBattleLogGenerationHooked) {
+                                var originalRun = Battle.prototype.run;
+                                Battle.prototype.run = function (line, preempt) {
+                                    if (!preempt) {
+                                        var generation = nativeBattleLogGenerationByStep[this.currentStep];
+                                        if (generation === null) {
+                                            captureNativeBattleLog = false;
+                                        } else if (generation !== undefined) {
+                                            nativeBattleLogGeneration = generation;
+                                            captureNativeBattleLog = true;
+                                        }
+                                    }
+                                    return originalRun.apply(this, arguments);
+                                };
+                                Battle.prototype.__showdownNativeBattleLogGenerationHooked = true;
+                            }
                             var originalAdd = BattleLog.prototype.add;
                             var nativeJoinLeave = null;
                             var nativeJoinLeaveKey = null;
@@ -707,6 +724,7 @@ class ShowdownMoveEffectsView(
                                 chromeObserver = null;
                             }
                             destroyBattle();
+                            nativeBattleLogGenerationByStep = [];
                             document.getElementById('battle').innerHTML = '';
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', paused: true, ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
@@ -722,9 +740,13 @@ class ShowdownMoveEffectsView(
                             observeChrome();
                             layout();
                         }
-                        function add(lines) {
+                        function add(lines, generation) {
                             lines.forEach(function (line) {
-                                if (line.indexOf('|request|') !== 0) battle.add(line);
+                                if (line.indexOf('|request|') !== 0) {
+                                    var stepIndex = battle.stepQueue.length;
+                                    nativeBattleLogGenerationByStep[stepIndex] = generation === undefined ? null : Number(generation) || 0;
+                                    battle.add(line);
+                                }
                             });
                         }
                         window.addEventListener('resize', layout);
@@ -743,8 +765,7 @@ class ShowdownMoveEffectsView(
                                 clearNativeIdlePauseTimer();
                                 if (!battle || lines.some(function (line) { return line.indexOf('|init|battle') === 0; })) createBattle();
                                 captureNativeBattleLog = true;
-                                nativeBattleLogGeneration = Number(generation) || 0;
-                                add(lines);
+                                add(lines, generation);
                                 if (battle.paused) battle.play();
                                 if (synchronizeBattleLog) nativeBattleLogSynchronized(generation);
                             },

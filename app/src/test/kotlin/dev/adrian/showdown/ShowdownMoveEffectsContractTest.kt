@@ -182,6 +182,24 @@ class ShowdownMoveEffectsContractTest {
     }
 
     @Test
+    fun nativeBattleLogUsesTheGenerationOfItsQueuedShowdownStep() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val runHookStart = source.indexOf("Battle.prototype.run = function")
+        assertTrue(runHookStart >= 0)
+        val runHookEnd = source.indexOf("};", runHookStart)
+        val runHook = source.substring(runHookStart, runHookEnd)
+        assertTrue(runHook.contains("nativeBattleLogGenerationByStep[this.currentStep]"))
+        assertTrue(runHook.contains("if (generation === null)"))
+        assertTrue(source.contains("var nativeBattleLogGenerationByStep = [];"))
+        assertTrue(source.contains("nativeBattleLogGenerationByStep = [];"))
+        assertTrue(source.contains("nativeBattleLogGenerationByStep[stepIndex] = generation === undefined ? null : Number(generation) || 0;"))
+        assertTrue(source.contains("var stepIndex = battle.stepQueue.length;"))
+        assertTrue(source.contains("function add(lines, generation)"))
+        assertTrue(source.contains("add(lines, generation);"))
+        assertFalse(source.contains("nativeBattleLogGeneration = Number(generation) || 0;"))
+    }
+
+    @Test
     fun pausedReplayAppliesItsInitialChunkBeforePausingPlayback() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val enqueueIndex = source.indexOf("enqueueBattlePlayback(null, null, replayLines, resetOnBattleInit = false)")
