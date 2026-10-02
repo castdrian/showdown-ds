@@ -140,7 +140,7 @@ class ThorDisplayProfileTest {
         val script = File("../scripts/run-ayn-thor-avd.sh").canonicalFile
         listOf(
             "AYN_THOR_CPU_CORES" to "3",
-            "AYN_THOR_CPU_CORES" to "1",
+            "AYN_THOR_CPU_CORES" to "2",
             "AYN_THOR_RAM_MB" to "4096",
             "AYN_THOR_RAM_MB" to "2048",
             "AYN_THOR_RAM_MB" to "2049",
@@ -199,7 +199,7 @@ class ThorDisplayProfileTest {
 
         assertTrue(baseConfig.contains("avd.ini.displayname = AYN Thor API 34"))
         assertTrue(baseConfig.contains("hw.gpu.mode = auto"))
-        assertTrue(baseConfig.contains("hw.cpu.ncore = 2"))
+        assertTrue(baseConfig.contains("hw.cpu.ncore = 1"))
         assertTrue(baseConfig.contains("hw.ramSize = 1536"))
         assertTrue(baseConfig.contains("vm.heapSize = 128"))
         assertTrue(baseConfig.contains("image.sysdir.1 = system-images/android-34/default/arm64-v8a/"))
@@ -207,7 +207,7 @@ class ThorDisplayProfileTest {
         assertTrue(baseConfig.contains("tag.id = default"))
         assertTrue(baseConfig.contains("hw.display1.yOffset = 0"))
         assertTrue(displayProfile.contains("hw.gpu.mode=auto"))
-        assertTrue(displayProfile.contains("hw.cpu.ncore=2"))
+        assertTrue(displayProfile.contains("hw.cpu.ncore=1"))
         assertTrue(displayProfile.contains("hw.ramSize=1536"))
         assertTrue(displayProfile.contains("hw.display1.yOffset=0"))
         assertTrue(setupScript.contains("system-images;android-34;default;\$system_image_abi"))
@@ -223,12 +223,12 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("vsync_rate=\"\${AYN_THOR_VSYNC_RATE:-30}\""))
         assertTrue(runScript.contains("AYN_THOR_VSYNC_RATE must remain at 30 Hz for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("set_avd_config \"hw.lcd.vsync\" \"\$vsync_rate\""))
-        assertTrue(runScript.contains("cpu_cores=\"\${AYN_THOR_CPU_CORES:-2}\""))
+        assertTrue(runScript.contains("cpu_cores=\"\${AYN_THOR_CPU_CORES:-1}\""))
         assertTrue(runScript.contains("default_gpu_mode=\"auto\""))
         assertTrue(runScript.contains("default_gpu_mode=\"host\""))
         assertTrue(runScript.contains("ram_size_mb=\"\${AYN_THOR_RAM_MB:-1536}\""))
         assertTrue(runScript.contains("vm_heap_size_mb=\"\${AYN_THOR_HEAP_MB:-128}\""))
-        assertTrue(runScript.contains("AYN_THOR_CPU_CORES must remain at 2 for the resource-limited AYN Thor profile."))
+        assertTrue(runScript.contains("AYN_THOR_CPU_CORES must remain at 1 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("AYN_THOR_RAM_MB must remain at 1536 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("AYN_THOR_HEAP_MB must remain at 128 for the resource-limited AYN Thor profile."))
         assertTrue(runScript.contains("validate_emulator_arguments()"))
@@ -243,6 +243,7 @@ class ThorDisplayProfileTest {
         assertTrue(runScript.contains("host_memory_limit_mb=2560"))
         assertTrue(runScript.contains("macos_resource_policy_args=(\"\$taskpolicy_binary\" -c background -b -m \"\$host_memory_limit_mb\" -P throttle)"))
         assertTrue(runScript.contains("\"\${macos_resource_policy_args[@]}\" \"\$emulator\""))
+        assertTrue(runScript.contains("-cores \"\$cpu_cores\""))
         assertTrue(runScript.contains("macOS taskpolicy is required to enforce the AYN Thor host resource limit."))
         assertTrue(runScript.contains("adb_command()"))
         assertTrue(runScript.contains("alarm 12; exec @ARGV"))
@@ -281,7 +282,7 @@ class ThorDisplayProfileTest {
         val readme = File("../README.md").readText()
         assertTrue(readme.contains("30 Hz guest display refresh"))
         assertTrue(readme.contains("1,536 MB of guest RAM"))
-        assertTrue(readme.contains("2 virtual CPUs"))
+        assertTrue(readme.contains("1 virtual CPU"))
         assertTrue(readme.contains("2,560 MB process memory limit"))
         assertTrue(readme.contains("it is not a fixed host CPU quota"))
         assertFalse(readme.contains("30 Hz host frame cap"))
