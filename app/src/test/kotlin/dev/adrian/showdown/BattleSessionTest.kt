@@ -1061,6 +1061,7 @@ class BattleSessionTest {
         session.setLocalUsername("ADRIAN")
         session.applyProtocolPacket(
             listOf(
+                "|gametype|doubles",
                 "|player|p1|ADRIAN",
                 "|switch|p1a: Incineroar|Incineroar, L50|100/100",
                 "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",

@@ -2431,9 +2431,12 @@ class BattleSession {
         val target = fields.getOrNull(3)?.trim().orEmpty()
         val position = target.toIntOrNull()
         val sidePrefix = oldSlot.dropLast(1).takeIf { it.isNotBlank() } ?: return
+        val activePositionCount = battleActivePositionCount()
+        val oldPosition = oldSlot.lastOrNull()?.minus('a') ?: return
+        if (oldPosition !in 0 until activePositionCount) return
         val newSlot = when {
             position != null -> {
-                if (position !in 0..2) return
+                if (position !in 0 until activePositionCount) return
                 "$sidePrefix${('a'.code + position).toChar()}"
             }
             isProtocolActor(target) -> targetSlot(target)
@@ -2441,11 +2444,15 @@ class BattleSession {
         }
         if (oldSlot == newSlot) return
         if (sideForSlot(oldSlot) != sideForSlot(newSlot)) return
+        val newPosition = newSlot.lastOrNull()?.minus('a') ?: return
+        if (newPosition !in 0 until activePositionCount) return
         val playerSide = isPlayerSide(oldSlot)
         val combatants = if (playerSide) playerActiveCombatants else opponentActiveCombatants
         val moving = combatants[oldSlot] ?: return
         val displaced = combatants[newSlot]
-        if (position == null && displaced == null) return
+        val destinationUnavailable = displaced == null || displaced.condition.contains("FNT", true)
+        if (position == null && destinationUnavailable) return
+        if (position != null && newPosition != 1 && destinationUnavailable) return
         combatants.remove(oldSlot)
         combatants.remove(newSlot)
         combatants[newSlot] = moving.copy(slot = newSlot)
@@ -4258,6 +4265,12 @@ class BattleSession {
     private fun targetSlot(actor: String) = actor.substringBefore(':').trim()
 
     private fun sideForSlot(slot: String) = slot.dropLast(1)
+
+    private fun battleActivePositionCount() = when (gameType.lowercase()) {
+        "triples" -> 3
+        "doubles", "multi", "freeforall" -> 2
+        else -> 1
+    }
 
     private fun removeEmptyBoostSlot(actor: String) {
         val slots = boostSlots(actor)
