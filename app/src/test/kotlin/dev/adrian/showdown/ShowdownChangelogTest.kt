@@ -19,6 +19,7 @@ class ShowdownChangelogTest {
         assertTrue(entries.first().changes.any { it.contains("memory pressure") })
         assertTrue(entries.first().changes.any { it.contains("custom dialogs") })
         assertTrue(entries.first().changes.any { it.contains("Team previews") && it.contains("shiny") })
+        assertTrue(entries.first().changes.any { it == "The team builder now leaves format-specific legality checks to Showdown." })
         assertTrue(entries.first().changes.any { it.contains("EV budget") && it.contains("perfect-IV") })
         assertTrue(entries.first().changes.any { it.contains("No Item") && it.contains("fake item") })
     }

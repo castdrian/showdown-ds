@@ -10,6 +10,7 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "The team builder now leaves format-specific legality checks to Showdown.",
                 "Saving, duplicating, or deleting a team from the library now returns you to the refreshed team list.",
                 "Animated player back sprites now check indexed and generation-specific HD artwork before numbered pixel fallbacks.",
                 "Large animated sprites now use bounded decoding first to keep Thor memory use predictable.",
