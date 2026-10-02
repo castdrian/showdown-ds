@@ -26,7 +26,7 @@ class ShowdownTeamCodecTest {
     }
 
     @Test
-    fun preservesInvalidPackedNumbersForValidation() {
+    fun allowsShowdownNormalizedPackedNumbersForServerValidation() {
         val packed = listOf(
             "Pikachu",
             "",
@@ -47,10 +47,26 @@ class ShowdownTeamCodecTest {
         assertEquals(101, team.level)
         assertEquals(300, team.happiness)
         assertEquals(11, team.dynamaxLevel)
-        val errors = ShowdownTeamCodec.validate(listOf(team))
+        assertTrue(ShowdownTeamCodec.validate(listOf(team)).isEmpty())
+    }
+
+    @Test
+    fun rejectsPackedValuesBeyondShowdownEngineLimits() {
+        val packed = listOf("Pikachu", "", "", "", "", "", "", "", "", "", "100000", "").joinToString("|")
+
+        val errors = ShowdownTeamCodec.validate(ShowdownTeamCodec.unpack(packed))
+
         assertTrue(errors.any { it.contains("invalid level") })
-        assertTrue(errors.any { it.contains("invalid happiness") })
-        assertTrue(errors.any { it.contains("invalid Dynamax level") })
+    }
+
+    @Test
+    fun marksUnparseablePackedNumbersAsMalformed() {
+        val packed = listOf("Pikachu", "", "", "", "", "", "invalid,,,,,", "", "", "", "", "not-a-number,,pokeball,,invalid")
+            .joinToString("|")
+        val team = ShowdownTeamCodec.unpack(packed).single()
+
+        assertTrue(team.malformed)
+        assertTrue(ShowdownTeamCodec.validate(listOf(team)).any { it.contains("malformed fields") })
     }
 
     @Test
@@ -161,9 +177,8 @@ class ShowdownTeamCodecTest {
 
         assertEquals(-1, team.evs[0])
         assertEquals(40, team.ivs[0])
-        val errors = ShowdownTeamCodec.validate(listOf(team))
-        assertTrue(errors.any { it.contains("invalid EVs") })
-        assertTrue(errors.any { it.contains("invalid IVs") })
+        assertTrue(team.malformed)
+        assertTrue(ShowdownTeamCodec.validate(listOf(team)).any { it.contains("malformed fields") })
     }
 
     @Test
@@ -264,23 +279,60 @@ Ability: Static
     }
 
     @Test
-    fun validatesTeamSizeMovesAndCompetitiveLimits() {
-        val errors = ShowdownTeamCodec.validate(
-            listOf(
-                ShowdownTeamSet(
-                    species = "Pikachu",
-                    moves = listOf("Thunderbolt", "Surf", "Volt Tackle", "Nasty Plot", "Protect"),
-                    evs = listOf(252, 252, 0, 0, 0, 252)
-                )
+    fun allowsFormatSpecificTeamSizeMoveCountAndEvBudgetForServerValidation() {
+        val sets = (1..7).map { index ->
+            ShowdownTeamSet(
+                species = "Pikachu$index",
+                moves = listOf("Thunderbolt", "Surf", "Volt Tackle", "Nasty Plot", "Protect"),
+                evs = listOf(252, 252, 0, 0, 0, 252),
+                level = 101,
+                gender = "N",
+                happiness = 300,
+                dynamaxLevel = 11
             )
-        )
+        }
 
-        assertTrue(errors.any { it.contains("at most four moves") })
-        assertTrue(errors.any { it.contains("510 total EVs") })
+        assertTrue(ShowdownTeamCodec.validate(sets).isEmpty())
     }
 
     @Test
-    fun rejectsDuplicateMovesWithinOneSet() {
+    fun allowsShowdownDefaultLevelAndFormatDependentStatValues() {
+        val set = ShowdownTeamSet(
+            species = "Pikachu",
+            level = 0,
+            evs = listOf(300, 252, 252, 0, 0, 0),
+            ivs = listOf(32, 31, 31, 31, 31, 31)
+        )
+
+        assertTrue(ShowdownTeamCodec.validate(listOf(set)).isEmpty())
+    }
+
+    @Test
+    fun acceptsShowdownEngineMaximumTeamMoveAndLevelValues() {
+        val sets = (1..24).map { index ->
+            ShowdownTeamSet(
+                species = "Pokémon$index",
+                moves = (1..24).map { move -> "Move$move" },
+                level = 99999
+            )
+        }
+
+        assertTrue(ShowdownTeamCodec.validate(sets).isEmpty())
+    }
+
+    @Test
+    fun rejectsValuesBeyondShowdownEngineMaximums() {
+        val oversizedTeam = (1..25).map { index -> ShowdownTeamSet(species = "Pokémon$index") }
+        val oversizedMoves = ShowdownTeamSet(species = "Pikachu", moves = (1..25).map { "Move$it" })
+        val oversizedLevel = ShowdownTeamSet(species = "Pikachu", level = 100000)
+
+        assertTrue(ShowdownTeamCodec.validate(oversizedTeam).any { it.contains("at most 24") })
+        assertTrue(ShowdownTeamCodec.validate(listOf(oversizedMoves)).any { it.contains("at most 24") })
+        assertTrue(ShowdownTeamCodec.validate(listOf(oversizedLevel)).any { it.contains("invalid level") })
+    }
+
+    @Test
+    fun allowsDuplicateMovesWhenFormatRulesPermitThem() {
         val errors = ShowdownTeamCodec.validate(
             listOf(
                 ShowdownTeamSet(
@@ -290,11 +342,11 @@ Ability: Static
             )
         )
 
-        assertTrue(errors.any { it.contains("duplicate move") })
+        assertTrue(errors.isEmpty())
     }
 
     @Test
-    fun rejectsUnsupportedGenderValuesBeforePacking() {
+    fun allowsGenderlessSetsForFormatValidation() {
         val errors = ShowdownTeamCodec.validate(
             listOf(
                 ShowdownTeamSet(
@@ -304,7 +356,7 @@ Ability: Static
             )
         )
 
-        assertTrue(errors.any { it.contains("invalid gender") })
+        assertTrue(errors.isEmpty())
     }
 
     @Test
@@ -373,8 +425,8 @@ IVs: 31 Unknown"""
         assertEquals(-1, set.evs[0])
         assertEquals(-1, set.ivs[0])
         val errors = ShowdownTeamCodec.validate(listOf(set))
-        assertTrue(errors.any { it.contains("invalid EVs") })
-        assertTrue(errors.any { it.contains("invalid IVs") })
+        assertTrue(set.malformed)
+        assertTrue(errors.any { it.contains("malformed fields") })
     }
 
     @Test
@@ -390,9 +442,8 @@ Dynamax Level: 11"""
         assertEquals(-1, set.happiness)
         assertEquals(11, set.dynamaxLevel)
         val errors = ShowdownTeamCodec.validate(listOf(set))
-        assertTrue(errors.any { it.contains("invalid level") })
-        assertTrue(errors.any { it.contains("invalid happiness") })
-        assertTrue(errors.any { it.contains("invalid Dynamax level") })
+        assertTrue(set.malformed)
+        assertTrue(errors.any { it.contains("malformed fields") })
     }
 
     @Test
@@ -500,12 +551,8 @@ IVs: 30 SpA / 30 SpD"""
         assertEquals(-1, set.dynamaxLevel)
         assertEquals(-1, set.evs[0])
         assertEquals(40, set.ivs[1])
-        val errors = ShowdownTeamCodec.validate(listOf(set))
-        assertTrue(errors.any { it.contains("invalid level") })
-        assertTrue(errors.any { it.contains("invalid happiness") })
-        assertTrue(errors.any { it.contains("invalid Dynamax level") })
-        assertTrue(errors.any { it.contains("invalid EVs") })
-        assertTrue(errors.any { it.contains("invalid IVs") })
+        assertTrue(set.malformed)
+        assertTrue(ShowdownTeamCodec.validate(listOf(set)).any { it.contains("malformed fields") })
     }
 
     @Test

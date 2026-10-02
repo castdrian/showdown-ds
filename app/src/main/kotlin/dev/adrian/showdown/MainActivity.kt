@@ -5578,7 +5578,12 @@ class MainActivity : Activity() {
         hiddenPowerType = editor.hiddenPowerType.text.toString(),
         gigantamax = editor.gigantamax.isChecked,
         dynamaxLevel = ShowdownTeamEditorValues.optionalInt(editor.dynamaxLevel.text.toString(), 10),
-        teraType = editor.teraType.text.toString()
+        teraType = editor.teraType.text.toString(),
+        malformed = ShowdownTeamEditorValues.containsMalformedNumbers(
+            listOf(editor.level.text.toString(), editor.happiness.text.toString(), editor.dynamaxLevel.text.toString()) +
+                editor.evs.fields.map { it.text.toString() } +
+                editor.ivs.fields.map { it.text.toString() }
+        )
     )
 
     private fun populateTeamStatEditor(fields: List<EditText>, values: List<Int>, default: Int) {

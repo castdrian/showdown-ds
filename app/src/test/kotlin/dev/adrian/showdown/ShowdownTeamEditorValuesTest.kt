@@ -1,6 +1,8 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShowdownTeamEditorValuesTest {
@@ -17,5 +19,11 @@ class ShowdownTeamEditorValuesTest {
             listOf(ShowdownTeamEditorValues.INVALID_NUMBER, 31, 31, 31, 31, 31),
             ShowdownTeamEditorValues.statValues(listOf("abc"), 31)
         )
+    }
+
+    @Test
+    fun distinguishesUnparseableNumbersFromShowdownNormalizedValues() {
+        assertFalse(ShowdownTeamEditorValues.containsMalformedNumbers(listOf("", "101", "300", "11", "99999")))
+        assertTrue(ShowdownTeamEditorValues.containsMalformedNumbers(listOf("300", "abc")))
     }
 }

@@ -10,4 +10,9 @@ object ShowdownTeamEditorValues {
     fun statValues(values: List<String>, default: Int): List<Int> = (0 until 6).map { index ->
         optionalInt(values.getOrNull(index).orEmpty(), default)
     }
+
+    fun containsMalformedNumbers(values: List<String>): Boolean = values.any(::isMalformedNumber)
+
+    fun isMalformedNumber(value: String): Boolean =
+        value.trim().let { it.isNotBlank() && it.toIntOrNull() == null }
 }

@@ -48,7 +48,7 @@ class ShowdownTeamBackupCodecTest {
         val source = ShowdownTeamSet(
             species = "Pikachu",
             moves = listOf("Thunderbolt", "Surf", "Protect", "Encore", "Volt Tackle"),
-            level = 9999
+            level = 99999
         )
         val packed = ShowdownTeamCodec.pack(listOf(source))
 
@@ -56,7 +56,7 @@ class ShowdownTeamBackupCodecTest {
         val restored = ShowdownTeamCodec.unpack(parsed.single().packed).single()
 
         assertEquals(source.moves.map { it.lowercase().filter(Char::isLetterOrDigit) }, restored.moves)
-        assertEquals(9999, restored.level)
+        assertEquals(99999, restored.level)
     }
 
     @Test
@@ -95,7 +95,7 @@ Ability: Good as Gold
             "",
             "",
             "",
-            "10000",
+            "100000",
             ""
         ).joinToString("|")
 
