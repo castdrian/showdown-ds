@@ -1399,13 +1399,14 @@ class OfficialBattleTranscriptTest {
                 "|-start|p1b: Rotom-Wash|typechange|ELECTRIC",
                 "|-terastallize|p1b: Rotom-Wash|ICE",
                 "|detailschange|p1b: Rotom-Wash|Rotom-Frost, L50",
-                "|faint|p1b: Rotom-Frost"
+                "|faint|p1b: Rotom-Wash"
             )
         )
 
         assertEquals("Incineroar", session.playerPokemon)
         assertEquals(listOf("FIRE", "DARK"), session.playerDetails().types)
-        assertEquals("Rotom-Frost", session.teamMemberDetails(4).name)
+        assertEquals("Rotom-Wash", session.teamMemberDetails(4).name)
+        assertEquals("Rotom-Frost", session.teamMemberDetails(4).species)
         assertEquals("FNT", session.teamMemberDetails(4).condition)
     }
 

@@ -294,4 +294,37 @@ class ShowdownReplayIdentityTest {
         assertTrue(session.battleLog().contains("Blaze transformed!"))
         assertTrue(session.battleLog().contains("Blaze used Flamethrower!"))
     }
+
+    @Test
+    fun keepsProtocolPokemonNameStableWhenSpeciesChangesForme() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|switch|p1a: Charizard|Charizard, L50, M|153/153",
+                "|switch|p2a: Blastoise|Blastoise, L50|150/150"
+            )
+        )
+        session.applyProtocolPacket(listOf("|detailschange|p1a: Charizard|Charizard-Mega-X, L50, M|153/153"))
+
+        val activeAfterFormChange = session.playerActiveCombatants().single()
+        val spriteRequestAfterFormChange = BattleSpriteRequests.active(
+            session.playerActiveCombatants(),
+            BattleSpriteSide.PLAYER,
+            BattleSession.SpriteStyle.MODERN_3D
+        ).single().request
+        assertEquals("Charizard", activeAfterFormChange.name)
+        assertEquals("Charizard-Mega-X", activeAfterFormChange.species)
+        assertEquals("Charizard-Mega-X", spriteRequestAfterFormChange.species)
+
+        session.applyProtocolPacket(listOf("|move|p1a: Charizard|Flamethrower|p2a: Blastoise"))
+        session.applyProtocolPacket(listOf("|switch|p1a: Charizard|Venusaur, L50|150/150"))
+
+        assertTrue(session.battleLog().contains("Charizard used Flamethrower!"))
+        assertTrue(session.battleLog().contains("Charizard, come back!"))
+    }
 }

@@ -69,8 +69,9 @@ class ShowdownProtocolContractTest {
             )
         )
 
-        assertEquals("Charizard-Mega-X", session.playerPokemon)
-        assertEquals("Charizard-Mega-X", session.playerDetails().name)
+        assertEquals("Charizard", session.playerPokemon)
+        assertEquals("Charizard", session.playerDetails().name)
+        assertEquals("Charizard-Mega-X", session.playerDetails().species)
         assertEquals("READY", session.playerCondition)
         assertEquals(listOf("GHOST"), session.opponentDetails().types)
     }
@@ -109,10 +110,12 @@ class ShowdownProtocolContractTest {
 
         assertEquals("83/153 brn", session.playerHp)
         assertEquals("BRN", session.playerCondition)
-        assertEquals("Charizard-Mega-X", session.playerDetails().name)
+        assertEquals("Charizard", session.playerDetails().name)
+        assertEquals("Charizard-Mega-X", session.playerDetails().species)
         assertEquals("41/163 par", session.opponentHp)
         assertEquals("PAR", session.opponentCondition)
-        assertEquals("Dragapult-Tera", session.opponentDetails().name)
+        assertEquals("Dragapult", session.opponentDetails().name)
+        assertEquals("Dragapult-Tera", session.opponentDetails().species)
     }
 
     @Test

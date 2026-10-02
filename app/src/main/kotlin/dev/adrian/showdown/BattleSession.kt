@@ -3119,8 +3119,8 @@ class BattleSession {
             val current = playerActiveCombatants[slot]
             val parsed = parseDetails(details, current?.level ?: playerDetails.level, current?.gender ?: playerDetails.gender)
             val activeName = playerActiveCombatants[slot]
-                ?.let { pokemonIdentityAfterFormChange(fields, actor, it.name, it.species, species) }
-                ?: pokemonIdentityAfterFormChange(fields, actor, playerDetails.name, playerDetails.species, species)
+                ?.let { pokemonIdentityAfterFormChange(fields, actor, it.name, species) }
+                ?: pokemonIdentityAfterFormChange(fields, actor, playerDetails.name, species)
             playerActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
                 val hp = formHealth ?: it.hp
@@ -3136,7 +3136,7 @@ class BattleSession {
                 )
                 updatePlayerPartyMemberForSlot(slot, it.name) { party ->
                     party.copy(
-                        name = pokemonIdentityAfterFormChange(fields, actor, party.name, party.species, species),
+                        name = pokemonIdentityAfterFormChange(fields, actor, party.name, species),
                         species = species,
                         types = types,
                         level = parsed.first,
@@ -3173,8 +3173,8 @@ class BattleSession {
             val current = opponentActiveCombatants[slot]
             val parsed = parseDetails(details, current?.level ?: opponentDetails.level, current?.gender ?: opponentDetails.gender)
             val activeName = opponentActiveCombatants[slot]
-                ?.let { pokemonIdentityAfterFormChange(fields, actor, it.name, it.species, species) }
-                ?: pokemonIdentityAfterFormChange(fields, actor, opponentDetails.name, opponentDetails.species, species)
+                ?.let { pokemonIdentityAfterFormChange(fields, actor, it.name, species) }
+                ?: pokemonIdentityAfterFormChange(fields, actor, opponentDetails.name, species)
             opponentActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
                 val hp = formHealth ?: it.hp
@@ -3190,7 +3190,7 @@ class BattleSession {
                 )
                 updateOpponentPartyForSlot(slot) { party ->
                     party.copy(
-                        name = pokemonIdentityAfterFormChange(fields, actor, party.name, party.species, species),
+                        name = pokemonIdentityAfterFormChange(fields, actor, party.name, species),
                         species = species,
                         types = types,
                         level = parsed.first,
@@ -3234,22 +3234,10 @@ class BattleSession {
         fields: List<String>,
         actor: String,
         currentName: String,
-        currentSpecies: String,
         newSpecies: String
-    ) = if (fields.getOrNull(1) == "-transform") {
-        pokemonNameFromActor(actor, currentName)
-    } else {
-        identityName(actor, currentName, currentSpecies, newSpecies)
-    }
-
-    private fun identityName(actor: String, currentName: String, currentSpecies: String, newSpecies: String): String {
-        val identifier = actor.substringAfter(':').trim()
-        return when {
-            identifier.isBlank() -> newSpecies
-            !identifier.equals(currentSpecies, true) -> identifier
-            !currentName.equals(currentSpecies, true) -> currentName
-            else -> newSpecies
-        }
+    ): String {
+        val fallbackName = if (fields.getOrNull(1) == "-transform") currentName else currentName.ifBlank { newSpecies }
+        return pokemonNameFromActor(actor, fallbackName)
     }
 
     private fun applyTerastallize(fields: List<String>) {
