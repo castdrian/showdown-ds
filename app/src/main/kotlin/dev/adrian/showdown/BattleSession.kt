@@ -2428,14 +2428,26 @@ class BattleSession {
     private fun applySwap(fields: List<String>) {
         val actor = fields.getOrNull(2)?.trim().orEmpty()
         val oldSlot = actor.substringBefore(':').trim()
-        val position = fields.getOrNull(3)?.toIntOrNull() ?: return
+        val target = fields.getOrNull(3)?.trim().orEmpty()
+        val position = target.toIntOrNull()
         val sidePrefix = oldSlot.dropLast(1).takeIf { it.isNotBlank() } ?: return
-        val newSlot = "$sidePrefix${('a'.code + position).toChar()}"
+        val newSlot = when {
+            position != null -> {
+                if (position !in 0..2) return
+                "$sidePrefix${('a'.code + position).toChar()}"
+            }
+            isProtocolActor(target) -> targetSlot(target)
+            else -> return
+        }
         if (oldSlot == newSlot) return
+        if (sideForSlot(oldSlot) != sideForSlot(newSlot)) return
         val playerSide = isPlayerSide(oldSlot)
         val combatants = if (playerSide) playerActiveCombatants else opponentActiveCombatants
-        val moving = combatants.remove(oldSlot) ?: return
-        val displaced = combatants.remove(newSlot)
+        val moving = combatants[oldSlot] ?: return
+        val displaced = combatants[newSlot]
+        if (position == null && displaced == null) return
+        combatants.remove(oldSlot)
+        combatants.remove(newSlot)
         combatants[newSlot] = moving.copy(slot = newSlot)
         displaced?.let { combatants[oldSlot] = it.copy(slot = oldSlot) }
         swapSlotState(oldSlot, newSlot)
@@ -2450,7 +2462,13 @@ class BattleSession {
         } else {
             refreshOpponentPrimary()
         }
-        appendLog("${moving.name} moved to position ${position + 1}.")
+        val movingActor = battleActor("$oldSlot: ${moving.name}")
+        val message = if (position != null) {
+            "$movingActor moved to the center!"
+        } else {
+            "$movingActor and ${battleActor(target)} switched places!"
+        }
+        appendLog(message)
     }
 
     private fun refreshPlayerPrimary() {

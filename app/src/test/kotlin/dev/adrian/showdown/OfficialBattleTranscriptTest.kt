@@ -129,6 +129,44 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialNumericSwapAsCenterMovement() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|triples",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Incineroar|Incineroar, L50|100/100",
+                "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",
+                "|switch|p1c: Dragapult|Dragapult, L50|100/100",
+                "|swap|p1c: Dragapult|1"
+            )
+        )
+
+        assertEquals("Dragapult", session.playerActiveCombatants().single { it.slot == "p1b" }.name)
+        assertEquals("Dragapult moved to the center!", session.battleLog().last())
+    }
+
+    @Test
+    fun formatsOfficialPokemonSwapAndUpdatesOpponentPositions() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|doubles",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Rotom|Rotom-Wash, L50|100/100",
+                "|switch|p2b: Garchomp|Garchomp, L50|100/100",
+                "|swap|p2a: Rotom|p2b: Garchomp"
+            )
+        )
+
+        assertEquals("Garchomp", session.opponentActiveCombatants().single { it.slot == "p2a" }.name)
+        assertEquals("Rotom", session.opponentActiveCombatants().single { it.slot == "p2b" }.name)
+        assertEquals("The opposing Rotom and the opposing Garchomp switched places!", session.battleLog().last())
+    }
+
+    @Test
     fun tracksOfficialBattlePhasesAndClearsTheMessageFeedMarker() {
         val session = BattleSession()
 
