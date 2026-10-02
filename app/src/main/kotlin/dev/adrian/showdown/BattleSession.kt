@@ -2297,18 +2297,20 @@ class BattleSession {
                         .firstOrNull { (candidateIndex, value) ->
                             candidateIndex !in occupiedPartyIndices &&
                                 value.equals(identifier, true) &&
-                                teamDetails.getOrNull(candidateIndex)?.species.equals(pokemon, true)
+                                teamDetails.getOrNull(candidateIndex)?.species?.let {
+                                    matchesSpeciesOrHiddenForm(it, pokemon)
+                                } == true
                         }
                         ?.index
                         ?: teamDetails.withIndex()
                             .firstOrNull { (candidateIndex, details) ->
                                 candidateIndex !in occupiedPartyIndices &&
-                                    details.species.equals(pokemon, true) && details.name.equals(identifier, true)
+                                    matchesSpeciesOrHiddenForm(details.species, pokemon) && details.name.equals(identifier, true)
                             }
                             ?.index
                         ?: teamDetails.withIndex()
                             .firstOrNull { (candidateIndex, details) ->
-                                candidateIndex !in occupiedPartyIndices && details.species.equals(pokemon, true)
+                                candidateIndex !in occupiedPartyIndices && matchesSpeciesOrHiddenForm(details.species, pokemon)
                             }
                             ?.index
                         ?: playerPartyIdentifiers.withIndex()
@@ -5677,14 +5679,16 @@ class BattleSession {
             .filterKeys { it != slot }
             .values
             .toSet()
-        fun availableIndex(key: String) = opponentPartyIndicesByIdentifier[key.lowercase()]
-            ?.firstOrNull { it in opponentTeamDetails.indices && it !in occupiedByAnotherSlot }
-        availableIndex(identifier)?.let { return it }
-        availableIndex(species)?.let { return it }
-        return opponentTeamDetails.indices.firstOrNull { index ->
+        val compatibleSpeciesIndices = opponentTeamDetails.indices.filter { index ->
             index !in occupiedByAnotherSlot &&
-                opponentTeamDetails[index].species.equals(species, true)
-        } ?: -1
+                matchesSpeciesOrHiddenForm(opponentTeamDetails[index].species, species)
+        }
+        fun compatibleIdentifierIndices(key: String) = opponentPartyIndicesByIdentifier[key.trim().lowercase()]
+            .orEmpty()
+            .filter { it in compatibleSpeciesIndices }
+        compatibleIdentifierIndices(identifier).firstOrNull()?.let { return it }
+        compatibleIdentifierIndices(species).firstOrNull()?.let { return it }
+        return compatibleSpeciesIndices.firstOrNull() ?: -1
     }
 
     private fun recordOpponentPartyIdentifier(identifier: String, index: Int) {
@@ -5716,9 +5720,19 @@ class BattleSession {
         .singleOrNull()
 
     private fun uniquePartyIndex(party: List<PokemonDetails>, identifier: String, species: String) = party.withIndex()
-        .filter { (_, details) -> details.matchesIdentifier(identifier) || details.species.equals(species, true) }
+        .filter { (_, details) -> details.matchesIdentifier(identifier) || matchesSpeciesOrHiddenForm(details.species, species) }
         .map { it.index }
         .singleOrNull()
+
+    private fun matchesSpeciesOrHiddenForm(knownSpecies: String, revealedSpecies: String): Boolean {
+        val known = knownSpecies.trim()
+        val revealed = revealedSpecies.trim()
+        if (known.isBlank() || revealed.isBlank()) return false
+        if (known.equals(revealed, true)) return true
+        if (!known.endsWith("-*", true)) return false
+        val speciesBase = known.dropLast(2)
+        return revealed.equals(speciesBase, true) || revealed.startsWith("$speciesBase-", true)
+    }
 
     private fun unknownPokemonDetails(
         species: String,
@@ -5827,7 +5841,7 @@ class BattleSession {
     }
 
     private fun PokemonDetails.matchesIdentifier(identifier: String) =
-        name.equals(identifier, true) || species.equals(identifier, true)
+        name.equals(identifier, true) || matchesSpeciesOrHiddenForm(species, identifier)
 
     private fun PokemonDetails.withResolvedTypes() = copy(types = resolvedTypes(species, types))
 
