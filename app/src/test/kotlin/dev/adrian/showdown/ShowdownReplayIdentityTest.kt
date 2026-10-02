@@ -133,4 +133,26 @@ class ShowdownReplayIdentityTest {
         assertEquals("Rotom-Wash", session.playerPartyDetails().single().species)
         assertEquals("Rotom", session.playerActiveCombatants().single().name)
     }
+
+    @Test
+    fun disambiguatesSharedReplayNicknamesBySpecies() {
+        val session = BattleSession().apply {
+            setLocalUsername("DoerreKong")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|DoerreKong|156|1510",
+                "|player|p2|froonk53|101|1189",
+                "|poke|p1|Pikachu|",
+                "|poke|p1|Raichu|",
+                "|switch|p1a: Sparky|Pikachu, L50|100/100",
+                "|switch|p1a: Sparky|Raichu, L50|100/100"
+            )
+        )
+
+        assertEquals(listOf("Pikachu", "Raichu"), session.playerPartyDetails().map { it.species })
+        assertEquals(listOf("Sparky", "Sparky"), session.team())
+        assertEquals("Raichu", session.playerActiveCombatants().single().species)
+    }
 }

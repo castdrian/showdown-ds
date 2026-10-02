@@ -2295,14 +2295,34 @@ class BattleSession {
                 } else {
                     playerPartyIdentifiers.withIndex()
                         .firstOrNull { (candidateIndex, value) ->
-                            candidateIndex !in occupiedPartyIndices && value.equals(identifier, true)
+                            candidateIndex !in occupiedPartyIndices &&
+                                value.equals(identifier, true) &&
+                                teamDetails.getOrNull(candidateIndex)?.species.equals(pokemon, true)
                         }
                         ?.index
                         ?: teamDetails.withIndex()
                             .firstOrNull { (candidateIndex, details) ->
                                 candidateIndex !in occupiedPartyIndices &&
-                                    (details.name.equals(identifier, true) || details.name.equals(pokemon, true) || details.species.equals(pokemon, true))
+                                    details.species.equals(pokemon, true) && details.name.equals(identifier, true)
                             }
+                            ?.index
+                        ?: teamDetails.withIndex()
+                            .firstOrNull { (candidateIndex, details) ->
+                                candidateIndex !in occupiedPartyIndices && details.species.equals(pokemon, true)
+                            }
+                            ?.index
+                        ?: playerPartyIdentifiers.withIndex()
+                            .filter { (candidateIndex, value) ->
+                                candidateIndex !in occupiedPartyIndices && value.equals(identifier, true)
+                            }
+                            .singleOrNull()
+                            ?.index
+                        ?: teamDetails.withIndex()
+                            .filter { (candidateIndex, details) ->
+                                candidateIndex !in occupiedPartyIndices &&
+                                    (details.name.equals(identifier, true) || details.name.equals(pokemon, true))
+                            }
+                            .singleOrNull()
                             ?.index
                 }
                 if (index != null && index >= 0) playerActivePartyIndices[slot] = index else playerActivePartyIndices.remove(slot)
