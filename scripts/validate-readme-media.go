@@ -50,11 +50,11 @@ func main() {
 		}
 	}
 
-	fmt.Printf("validated %d dual-screen screenshot(s) with visible battle sprites on both sides\n", len(paths))
+	fmt.Printf("validated %d corresponding README screen(s) with both battle Pokémon visible on the upper display\n", len(paths))
 }
 
 func validateReadme(readme string) error {
-	for _, asset := range []string{"media/showdown-battle-hd-both-sides.png", "media/showdown-switch-hd-both-sides.png"} {
+	for _, asset := range []string{"media/showdown-battle-upper-screen-hd.png", "media/showdown-battle-lower-screen-hd.png"} {
 		if !strings.Contains(readme, asset) {
 			return fmt.Errorf("README.md does not embed %s", asset)
 		}
@@ -62,7 +62,69 @@ func validateReadme(readme string) error {
 	if len(readmeScreenshotPaths(readme)) == 0 {
 		return fmt.Errorf("README.md does not embed any PNG screenshots")
 	}
+	if err := validateReadmeScreenPair(
+		repositoryFile("media/showdown-battle-upper-screen-hd.png"),
+		repositoryFile("media/showdown-battle-lower-screen-hd.png"),
+		repositoryFile("media/showdown-battle-hd-both-sides.png"),
+	); err != nil {
+		return err
+	}
 	return validateReadmeImageCacheKeys(readme)
+}
+
+func validateReadmeScreenPair(upperPath string, lowerPath string, sourcePath string) error {
+	upper, err := decodeScreenshot(upperPath)
+	if err != nil {
+		return err
+	}
+	lower, err := decodeScreenshot(lowerPath)
+	if err != nil {
+		return err
+	}
+	source, err := decodeScreenshot(sourcePath)
+	if err != nil {
+		return err
+	}
+	if source.Bounds().Dx() != 1920 || source.Bounds().Dy() != 2160 {
+		return fmt.Errorf("%s must be the 1920x2160 source capture for both screens", sourcePath)
+	}
+	if !matchesImageRegion(source, upper, image.Rect(0, 0, 1920, 1080)) {
+		return fmt.Errorf("%s is not the upper screen from %s", upperPath, sourcePath)
+	}
+	if !matchesImageRegion(source, lower, image.Rect(0, 1080, 1920, 2160)) {
+		return fmt.Errorf("%s is not the corresponding lower screen from %s", lowerPath, sourcePath)
+	}
+	return nil
+}
+
+func decodeScreenshot(path string) (image.Image, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer file.Close()
+	decoded, format, err := image.Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	if format != "png" {
+		return nil, fmt.Errorf("%s must be PNG, got %s", path, format)
+	}
+	return decoded, nil
+}
+
+func matchesImageRegion(source image.Image, candidate image.Image, region image.Rectangle) bool {
+	if !region.In(source.Bounds()) || candidate.Bounds().Size() != region.Size() {
+		return false
+	}
+	for y := 0; y < region.Dy(); y++ {
+		for x := 0; x < region.Dx(); x++ {
+			if rgba(source.At(region.Min.X+x, region.Min.Y+y)) != rgba(candidate.At(candidate.Bounds().Min.X+x, candidate.Bounds().Min.Y+y)) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func validateReadmeImageCacheKeys(readme string) error {
@@ -124,12 +186,12 @@ func validateScreenshot(path string) error {
 		return fmt.Errorf("%s must be PNG, got %s", path, format)
 	}
 
-	if decoded.Bounds().Dx() != 1920 || decoded.Bounds().Dy() != 2160 {
-		return fmt.Errorf("%s must be 1920x2160, got %dx%d", path, decoded.Bounds().Dx(), decoded.Bounds().Dy())
+	if decoded.Bounds().Dx() != 1920 || decoded.Bounds().Dy() != 1080 {
+		return fmt.Errorf("%s must be 1920x1080, got %dx%d", path, decoded.Bounds().Dx(), decoded.Bounds().Dy())
 	}
 
 	templates := spriteTemplates(path)
-	if len(templates) == 0 {
+	if len(templates) == 0 && !strings.HasSuffix(path, "showdown-battle-lower-screen-hd.png") {
 		return fmt.Errorf("%s has no battle sprite templates", path)
 	}
 	for _, template := range templates {
@@ -138,33 +200,15 @@ func validateScreenshot(path string) error {
 		}
 	}
 
-	if strings.HasSuffix(strings.ToLower(path), "showdown-switch-hd-both-sides.png") {
-		teamPreviewRegions := []visualRegion{
-			{name: "player team preview", area: image.Rect(390, 1310, 650, 1600), windowSize: 120},
-			{name: "opponent team preview", area: image.Rect(950, 1310, 1260, 1600), windowSize: 120},
-		}
-		for _, region := range teamPreviewRegions {
-			score := focusedVisualScore(decoded, region.area, region.windowSize)
-			if score < 0.1 {
-				return fmt.Errorf("%s has no visible team-preview Pokémon on the %s (score %.3f)", path, region.name, score)
-			}
-		}
-	}
-
 	return nil
 }
 
 func spriteTemplates(path string) []spriteTemplate {
 	switch {
-	case strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"):
+	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"):
 		return []spriteTemplate{
 			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(420, 350)},
 			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1050, 150)},
-		}
-	case strings.HasSuffix(path, "showdown-switch-hd-both-sides.png"):
-		return []spriteTemplate{
-			{name: "player side", path: repositoryFile("media/validation/showdown-switch-player.png"), origin: image.Pt(420, 350)},
-			{name: "opponent side", path: repositoryFile("media/validation/showdown-switch-opponent.png"), origin: image.Pt(1050, 150)},
 		}
 	default:
 		return nil

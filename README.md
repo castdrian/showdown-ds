@@ -4,8 +4,8 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
 <table>
   <tr>
-    <td width="50%"><img src="media/showdown-battle-hd-both-sides.png?v=5251c08b586fa832" alt="Live Showdown battle with both Pokémon and move controls visible"></td>
-    <td width="50%"><img src="media/showdown-switch-hd-both-sides.png?v=4fae943922afa0d4" alt="Showdown switch screen with both Pokémon visible"></td>
+    <td width="50%"><img src="media/showdown-battle-upper-screen-hd.png?v=92a5179a0e4b2ed3" alt="Live battle with Rayquaza and Feraligatr both visible"></td>
+    <td width="50%"><img src="media/showdown-battle-lower-screen-hd.png?v=cbe782bd1007c62f" alt="Matching battle move screen showing Rayquaza's moves"></td>
   </tr>
 </table>
 

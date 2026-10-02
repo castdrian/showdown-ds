@@ -11,11 +11,51 @@ import (
 	"testing"
 )
 
-func TestREADMEAssetsContainBothBattleSprites(t *testing.T) {
-	for _, path := range []string{"../media/showdown-battle-hd-both-sides.png", "../media/showdown-switch-hd-both-sides.png"} {
+func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
+	for _, path := range []string{"../media/showdown-battle-upper-screen-hd.png", "../media/showdown-battle-lower-screen-hd.png"} {
 		if err := validateScreenshot(path); err != nil {
 			t.Fatalf("validateScreenshot(%q): %v", path, err)
 		}
+	}
+	if err := validateReadmeScreenPair(
+		"../media/showdown-battle-upper-screen-hd.png",
+		"../media/showdown-battle-lower-screen-hd.png",
+		"../media/showdown-battle-hd-both-sides.png",
+	); err != nil {
+		t.Fatalf("validateReadmeScreenPair rejected corresponding screenshots: %v", err)
+	}
+}
+
+func TestREADMEAssetsRejectMismatchedBattleScreens(t *testing.T) {
+	upperPath := "../media/showdown-battle-upper-screen-hd.png"
+	lowerPath := "../media/showdown-battle-lower-screen-hd.png"
+	sourcePath := "../media/showdown-battle-hd-both-sides.png"
+	lowerFile, err := os.Open(lowerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lower, _, err := image.Decode(lowerFile)
+	lowerFile.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	modified := image.NewNRGBA(lower.Bounds())
+	draw.Draw(modified, modified.Bounds(), lower, lower.Bounds().Min, draw.Src)
+	modified.Set(650, 40, color.NRGBA{R: 255, G: 0, B: 0, A: 255})
+	modifiedPath := filepath.Join(t.TempDir(), "showdown-battle-lower-screen-hd.png")
+	modifiedFile, err := os.Create(modifiedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(modifiedFile, modified); err != nil {
+		modifiedFile.Close()
+		t.Fatal(err)
+	}
+	if err := modifiedFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReadmeScreenPair(upperPath, modifiedPath, sourcePath); err == nil || !strings.Contains(err.Error(), "corresponding lower screen") {
+		t.Fatalf("validateReadmeScreenPair accepted a lower screen from a different battle: %v", err)
 	}
 }
 
@@ -46,14 +86,10 @@ func TestREADMEAssetsRejectMissingBattleSprites(t *testing.T) {
 		side             string
 		source           string
 	}{
-		{name: "missing player sprite", origin: image.Pt(420, 350), side: "player side", source: "../media/showdown-switch-hd-both-sides.png"},
-		{name: "missing opponent sprite", origin: image.Pt(1050, 150), side: "opponent side", source: "../media/showdown-switch-hd-both-sides.png"},
-		{name: "player sprite replaced by background", origin: image.Pt(420, 350), copyBackground: true, backgroundOrigin: image.Pt(1380, 300), side: "player side", source: "../media/showdown-switch-hd-both-sides.png"},
-		{name: "opponent sprite replaced by background", origin: image.Pt(1050, 150), copyBackground: true, backgroundOrigin: image.Pt(1440, 150), side: "opponent side", source: "../media/showdown-switch-hd-both-sides.png"},
-		{name: "battle missing player sprite", origin: image.Pt(420, 350), side: "player side", source: "../media/showdown-battle-hd-both-sides.png"},
-		{name: "battle missing opponent sprite", origin: image.Pt(1050, 150), side: "opponent side", source: "../media/showdown-battle-hd-both-sides.png"},
-		{name: "battle player sprite replaced by background", origin: image.Pt(420, 350), copyBackground: true, backgroundOrigin: image.Pt(1380, 300), side: "player side", source: "../media/showdown-battle-hd-both-sides.png"},
-		{name: "battle opponent sprite replaced by background", origin: image.Pt(1050, 150), copyBackground: true, backgroundOrigin: image.Pt(1440, 150), side: "opponent side", source: "../media/showdown-battle-hd-both-sides.png"},
+		{name: "missing player sprite", origin: image.Pt(420, 350), side: "player side", source: "../media/showdown-battle-upper-screen-hd.png"},
+		{name: "missing opponent sprite", origin: image.Pt(1050, 150), side: "opponent side", source: "../media/showdown-battle-upper-screen-hd.png"},
+		{name: "player sprite replaced by background", origin: image.Pt(420, 350), copyBackground: true, backgroundOrigin: image.Pt(1380, 300), side: "player side", source: "../media/showdown-battle-upper-screen-hd.png"},
+		{name: "opponent sprite replaced by background", origin: image.Pt(1050, 150), copyBackground: true, backgroundOrigin: image.Pt(1440, 150), side: "opponent side", source: "../media/showdown-battle-upper-screen-hd.png"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			file, err := os.Open(test.source)
