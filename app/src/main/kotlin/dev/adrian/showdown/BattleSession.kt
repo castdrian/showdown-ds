@@ -354,7 +354,8 @@ class BattleSession {
         val stats: String,
         val pokeball: String = "pokeball",
         val species: String = name,
-        val shiny: Boolean = false
+        val shiny: Boolean = false,
+        val possibleAbilities: List<String> = emptyList()
     )
 
     data class ActiveCombatant(
@@ -491,11 +492,14 @@ class BattleSession {
     private var nativeBattleLogGeneration = -1L
     private var nativeBattleLogPending = false
     private var protocolTimestampSeconds: Long? = null
+    private var battleGeneration = 9
     private val battleFeedEntriesCache = mutableMapOf<Int, List<String>>()
     private var hasBattleProtocolTranscript = false
     private var moveTypeResolver: ((String) -> String?)? = null
     private var moveInfoResolver: ((String) -> MoveInfo?)? = null
     private var pokemonTypeResolver: ((String) -> List<String>?)? = null
+    private var abilityPossibilitiesResolver: ((String, Int, String) -> List<String>)? = null
+    private var baseStatsResolver: ((String, Int, String) -> ShowdownStatPresentation.BaseStats?)? = null
     private var moveNameResolver: ((String) -> String)? = null
     private var itemNameResolver: ((String) -> String)? = null
     private var abilityNameResolver: ((String) -> String)? = null
@@ -886,6 +890,15 @@ class BattleSession {
         notifyListeners()
     }
 
+    fun setPokemonBattleDetailResolvers(
+        abilityPossibilitiesResolver: (String, Int, String) -> List<String>,
+        baseStatsResolver: (String, Int, String) -> ShowdownStatPresentation.BaseStats?
+    ) {
+        this.abilityPossibilitiesResolver = abilityPossibilitiesResolver
+        this.baseStatsResolver = baseStatsResolver
+        notifyListeners()
+    }
+
     fun moves() = displayedMoves().toList()
 
     fun team() = team.toList()
@@ -1048,6 +1061,32 @@ class BattleSession {
                 stats = "",
                 species = combatant.species.ifBlank { combatant.name }
             )
+        val species = combatant.species.ifBlank { base.species }
+        val ability = if (battleGeneration < 3 || format.contains("Let's Go", ignoreCase = true)) {
+            "No ability"
+        } else {
+            base.ability
+        }
+        val possibleAbilities = if (ability.isBlank() || ability == "Unknown ability") {
+            abilityPossibilitiesResolver?.invoke(species, battleGeneration, format).orEmpty()
+        } else {
+            emptyList()
+        }
+        val stats = base.stats.ifBlank {
+            if (playerSide) {
+                ""
+            } else {
+                baseStatsResolver?.invoke(species, battleGeneration, format)?.let { baseStats ->
+                    ShowdownStatPresentation.speedRange(
+                        baseStats,
+                        combatant.level.toIntOrNull() ?: 100,
+                        battleGeneration,
+                        format.contains("random", ignoreCase = true),
+                        format
+                    )
+                }.orEmpty()
+            }
+        }
         return base.copy(
             name = combatant.name,
             types = combatant.types,
@@ -1055,7 +1094,10 @@ class BattleSession {
             gender = combatant.gender,
             hp = combatant.hp,
             condition = combatant.condition,
-            species = combatant.species.ifBlank { base.species }
+            ability = ability,
+            species = species,
+            stats = stats,
+            possibleAbilities = possibleAbilities
         )
     }
 
@@ -1794,7 +1836,10 @@ class BattleSession {
                         }
                     }
                     "showteam" -> applyShowTeam(fields)
-                    "gen" -> fields.getOrNull(2)?.toIntOrNull()?.let { appendLog("Generation $it battle.") }
+                    "gen" -> fields.getOrNull(2)?.toIntOrNull()?.let {
+                        battleGeneration = it
+                        appendLog("Generation $it battle.")
+                    }
                     "tier" -> if (fields.size > 2) {
                         format = ShowdownFormatCompatibility.canonicalizeLegacyText(fields[2])
                         appendLog("Format: $format")
@@ -2081,6 +2126,7 @@ class BattleSession {
         turn = 1
         gameType = "singles"
         format = ""
+        battleGeneration = 9
         teamPreviewOrder.clear()
         teamPreviewRequiredSize = 0
         protocolTeamPreviewSize = 0
@@ -5292,6 +5338,16 @@ class BattleSession {
         "Confirm your team order"
     }
 
+    private fun battleStatsText(stats: JSONObject?, generation: Int): String {
+        if (stats == null) return ""
+        val values = buildMap {
+            listOf("atk", "def", "spa", "spd", "spc", "spe").forEach { stat ->
+                stats.opt(stat)?.toString()?.toIntOrNull()?.takeIf { it >= 0 }?.let { put(stat, it) }
+            }
+        }
+        return ShowdownStatPresentation.exactStats(values, generation)
+    }
+
     private fun syncTeamFromRequest(request: JSONObject, activePositions: List<Int>) {
         val pokemon = request.optJSONObject("side")?.optJSONArray("pokemon") ?: return
         val requestPlayerSlot = pokemon.optJSONObject(0)
@@ -5368,7 +5424,7 @@ class BattleSession {
                 ability,
                 item,
                 knownMoves,
-                known?.stats.orEmpty(),
+                battleStatsText(entry.optJSONObject("stats"), battleGeneration).ifBlank { known?.stats.orEmpty() },
                 entry.optString("pokeball", known?.pokeball ?: "pokeball"),
                 species,
                 entry.optBoolean("shiny", known?.shiny ?: false)

@@ -655,19 +655,12 @@ class BattleSceneView(
         } ?: (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
         val effects = combatants.flatMap { it.volatileEffects + it.turnEffects + it.moveEffects }.distinct()
         val name = BattleSession.displayPokemonName(details.name, details.species)
-        val summary = buildList {
-            add(BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, details.condition))
-            if (details.types.isNotEmpty()) add("types ${details.types.joinToString()}")
-            add("ability ${details.ability}")
-            add("item ${BattleItemPresentation.visibleName(details.item) ?: "Unknown item"}")
-            if (details.moves.isNotEmpty()) add("moves ${details.moves.joinToString()}")
-            if (effects.isNotEmpty()) add("active effects ${effects.joinToString()}")
-        }.joinToString(". ")
+        val description = BattleAccessibilityText.inspectDetails(details, name, effects)
         val bounds = inspectSheetBounds(width, height, playerSide)
         return listOf(
             CanvasAccessibilityNode(
                 ACCESSIBLE_INSPECT_DETAILS_ID,
-                "Pokémon details for $name. $summary. Activate to close details.",
+                description,
                 Rect().apply { bounds.roundOut(this) }.toCanvasAccessibilityBounds(),
                 role = CanvasAccessibilityNode.Role.BUTTON,
                 onClick = {
@@ -2319,13 +2312,26 @@ class BattleSceneView(
         canvas.drawText("${details.hp}  ${details.condition}", right, row, paint)
         paint.textAlign = Paint.Align.LEFT
         row += 56f * scale
-        paint.color = MUTED
-        canvas.drawText("Ability", left, row, paint)
-        paint.textAlign = Paint.Align.RIGHT
-        paint.color = INK
-        canvas.drawText(ellipsizeToWidth(details.ability, right - left - 150f * scale, paint), right, row, paint)
-        paint.textAlign = Paint.Align.LEFT
-        row += 56f * scale
+        if (details.possibleAbilities.isEmpty()) {
+            paint.color = MUTED
+            canvas.drawText("Ability", left, row, paint)
+            paint.textAlign = Paint.Align.RIGHT
+            paint.color = INK
+            canvas.drawText(ellipsizeToWidth(details.ability, right - left - 150f * scale, paint), right, row, paint)
+            paint.textAlign = Paint.Align.LEFT
+            row += 56f * scale
+        } else {
+            paint.textSize = readableTextSize(30f, scale, 16f)
+            paint.color = INK
+            val abilityText = "Possible abilities: ${details.possibleAbilities.joinToString(" · ")}"
+            val abilityLines = wrapTextToWidth(abilityText, right - left, paint)
+            abilityLines.forEach { line ->
+                canvas.drawText(ellipsizeToWidth(line, right - left, paint), left, row, paint)
+                row += 36f * scale
+            }
+            row += maxOf(20f * scale, 56f * scale - abilityLines.size * 36f * scale)
+        }
+        paint.textSize = readableTextSize(42f, scale, 18f)
         paint.color = MUTED
         canvas.drawText("Item", left, row, paint)
         paint.textAlign = Paint.Align.RIGHT
@@ -2355,9 +2361,13 @@ class BattleSceneView(
         }
         paint.textAlign = Paint.Align.LEFT
         row += 62f * scale
-        paint.textSize = readableTextSize(36f, scale, 16f)
+        paint.textSize = readableTextSize(30f, scale, 16f)
         paint.color = MUTED
-        canvas.drawText(ellipsizeToWidth(details.stats, right - left, paint), left, row, paint)
+        details.stats.lineSequence().filter(String::isNotBlank).forEach { statLine ->
+            canvas.drawText(ellipsizeToWidth(statLine, right - left, paint), left, row, paint)
+            row += 38f * scale
+        }
+        paint.textSize = readableTextSize(36f, scale, 16f)
         if (activeEffects.isNotEmpty()) {
             row += 42f * scale
             paint.color = MUTED
@@ -2812,6 +2822,22 @@ class BattleSceneView(
     }
 
     private fun ellipsize(value: String, maximum: Int) = if (value.length <= maximum) value else "${value.take(maximum - 1)}…"
+
+    private fun wrapTextToWidth(value: String, maximumWidth: Float, textPaint: Paint): List<String> {
+        val lines = mutableListOf<String>()
+        var current = ""
+        value.trim().split(Regex("\\s+")).filter(String::isNotBlank).forEach { word ->
+            val candidate = if (current.isBlank()) word else "$current $word"
+            if (current.isBlank() || textPaint.measureText(candidate) <= maximumWidth) {
+                current = candidate
+            } else {
+                lines += current
+                current = word
+            }
+        }
+        if (current.isNotBlank()) lines += current
+        return lines
+    }
 
     private fun ellipsizeToWidth(value: String, maximumWidth: Float, textPaint: Paint): String {
         if (textPaint.measureText(value) <= maximumWidth) return value

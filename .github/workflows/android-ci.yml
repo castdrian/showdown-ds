@@ -39,6 +39,9 @@ jobs:
       - name: Test README screenshot validation
         run: go test scripts/*.go
 
+      - name: Test Showdown battle-data generator
+        run: go test tools/showdown-battle-data/*.go
+
       - name: Set up Java
         uses: actions/setup-java@v6
         with:

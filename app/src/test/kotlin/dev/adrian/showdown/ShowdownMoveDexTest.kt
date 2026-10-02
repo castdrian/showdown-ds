@@ -19,6 +19,83 @@ class ShowdownMoveDexTest {
     }
 
     @Test
+    fun parsesOfficialBaseStatsForSpecies() {
+        val baseStats = ShowdownMoveDex.parsePokemonBaseStats(
+            """{"pikachu":{"baseStats":{"hp":35,"atk":55,"def":40,"spa":50,"spd":50,"spe":90}},"slowbro":{"baseStats":{"spe":30}}}"""
+        )
+
+        assertEquals(ShowdownStatPresentation.BaseStats(35, 55, 40, 50, 50, 90), baseStats["pikachu"])
+        assertEquals(ShowdownStatPresentation.BaseStats(0, 0, 0, 0, 0, 30), baseStats["slowbro"])
+    }
+
+    @Test
+    fun parsesBundledGenerationSpeciesOverrides() {
+        val overrides = ShowdownMoveDex.parseGenerationSpeciesOverrides(
+            """{"gen1":{"pikachu":{"baseStats":{"hp":35,"atk":55,"def":30,"spa":50,"spd":50,"spe":90},"abilities":{"0":"Static"},"types":["Electric"]}}}"""
+        )
+
+        assertEquals(
+            BattleSpeciesOverride(
+                ShowdownStatPresentation.BaseStats(35, 55, 30, 50, 50, 90),
+                mapOf("0" to "static")
+            ),
+            overrides["gen1"]?.get("pikachu")
+        )
+    }
+
+    @Test
+    fun resolvesSpeciesOverridesFromCurrentGenerationBackToBattleGeneration() {
+        val latestStats = ShowdownStatPresentation.BaseStats(35, 55, 40, 50, 50, 110)
+        val overrides = mapOf(
+            "gen9" to mapOf("pikachu" to BattleSpeciesOverride(latestStats, mapOf("0" to "static"))),
+            "gen8" to mapOf("pikachu" to BattleSpeciesOverride(latestStats.copy(speed = 100), mapOf("0" to "lightningrod"))),
+            "gen7" to mapOf("pikachu" to BattleSpeciesOverride(latestStats.copy(speed = 80), mapOf("0" to "static")))
+        )
+
+        val resolved = ShowdownMoveDex.resolveBattleSpeciesData(
+            "pikachu",
+            latestStats,
+            mapOf("0" to "static", "H" to "lightningrod"),
+            7,
+            "[Gen 7] OU",
+            overrides
+        )
+
+        assertEquals(80, resolved.baseStats?.speed)
+        assertEquals(mapOf("0" to "static"), resolved.abilities)
+    }
+
+    @Test
+    fun appliesFormatSpeciesOverridesAfterGenerationOverrides() {
+        val latestStats = ShowdownStatPresentation.BaseStats(35, 55, 40, 50, 50, 110)
+        val overrides = mapOf(
+            "gen7" to mapOf("pikachu" to BattleSpeciesOverride(latestStats.copy(speed = 80), mapOf("0" to "static"))),
+            "gen7letsgo" to mapOf("pikachu" to BattleSpeciesOverride(latestStats.copy(speed = 65), mapOf("0" to "noability")))
+        )
+
+        val resolved = ShowdownMoveDex.resolveBattleSpeciesData(
+            "pikachu",
+            latestStats,
+            mapOf("0" to "static"),
+            7,
+            "[Gen 7 Let's Go] Random Battle",
+            overrides
+        )
+
+        assertEquals(65, resolved.baseStats?.speed)
+        assertEquals(mapOf("0" to "noability"), resolved.abilities)
+    }
+
+    @Test
+    fun filtersPossibleAbilitiesByBattleGeneration() {
+        val abilities = mapOf("0" to "overgrow", "H" to "contrary")
+
+        assertTrue(ShowdownMoveDex.availableBattleAbilityIds(abilities, 2).isEmpty())
+        assertEquals(listOf("overgrow"), ShowdownMoveDex.availableBattleAbilityIds(abilities, 4))
+        assertEquals(listOf("overgrow", "contrary"), ShowdownMoveDex.availableBattleAbilityIds(abilities, 5))
+    }
+
+    @Test
     fun parsesSpeciesAbilitiesInOfficialSlotOrder() {
         val abilities = ShowdownMoveDex.parsePokemonAbilities(
             """{"pikachu":{"abilities":{"H":"Lightning Rod","0":"Static"}},"eevee":{"abilities":{"0":"Run Away","1":"Adaptability","H":"Anticipation"}}}"""

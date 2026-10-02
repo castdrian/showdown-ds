@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"image/color"
 	_ "image/png"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -58,6 +61,36 @@ func validateReadme(readme string) error {
 	}
 	if len(readmeScreenshotPaths(readme)) == 0 {
 		return fmt.Errorf("README.md does not embed any PNG screenshots")
+	}
+	return validateReadmeImageCacheKeys(readme)
+}
+
+func validateReadmeImageCacheKeys(readme string) error {
+	imagePattern := regexp.MustCompile(`(?i)<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>`)
+	for _, match := range imagePattern.FindAllStringSubmatch(readme, -1) {
+		parts := strings.SplitN(match[1], "?", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("README screenshot %s is missing its content cache key", match[1])
+		}
+		query, err := url.ParseQuery(parts[1])
+		if err != nil {
+			return fmt.Errorf("parse cache key for %s: %w", parts[0], err)
+		}
+		cacheKey := query.Get("v")
+		if cacheKey == "" {
+			return fmt.Errorf("README screenshot %s is missing its content cache key", parts[0])
+		}
+		if len(cacheKey) < 12 {
+			return fmt.Errorf("README screenshot %s needs a SHA-256 cache key of at least 12 characters", parts[0])
+		}
+		contents, err := os.ReadFile(repositoryFile(parts[0]))
+		if err != nil {
+			return fmt.Errorf("read README screenshot %s: %w", parts[0], err)
+		}
+		checksum := sha256.Sum256(contents)
+		if !strings.HasPrefix(hex.EncodeToString(checksum[:]), cacheKey) {
+			return fmt.Errorf("README screenshot %s has a stale content cache key", parts[0])
+		}
 	}
 	return nil
 }

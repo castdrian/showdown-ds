@@ -637,6 +637,7 @@ class MainActivity : Activity() {
         activityResumed = true
         configureWindow()
         showSecondaryDisplay()
+        if (::session.isInitialized && session.isLiveBattleActive()) ensureBattleMoveInfoLoaded()
         if (showdownMoveEffectsNeedsReload) {
             showdownMoveEffectsNeedsReload = false
             if (!lightweightBattlePlayback && ::session.isInitialized && session.isLiveBattleActive()) {
@@ -880,17 +881,18 @@ class MainActivity : Activity() {
         session.setMoveTypeResolver(moveDex::typeFor)
         session.setMoveInfoResolver(moveDex::infoFor)
         session.setPokemonTypeResolver(moveDex::typesFor)
+        session.setPokemonBattleDetailResolvers(moveDex::battleAbilitiesFor, moveDex::baseStatsFor)
         session.setTeamDetailNameResolvers(moveDex::moveNameFor, moveDex::itemNameFor, moveDex::abilityNameFor)
         session.setAbilitySlotResolver(moveDex::abilityFor)
     }
 
     private fun ensureMoveDexLoaded() {
-        moveDex.loadMoveInfo(::bindMoveDexResolvers)
         moveDex.load(::bindMoveDexResolvers)
     }
 
     private fun ensureBattleMoveInfoLoaded() {
         moveDex.loadMoveInfo(::bindMoveDexResolvers)
+        moveDex.loadBattleDetails(::bindMoveDexResolvers)
     }
 
     private fun applyBattleProtocolToEffects(lines: List<String>) {

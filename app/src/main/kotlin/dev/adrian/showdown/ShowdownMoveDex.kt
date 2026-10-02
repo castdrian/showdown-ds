@@ -7,6 +7,16 @@ import java.io.File
 import java.util.concurrent.Executors
 import java.util.Locale
 
+internal data class BattleSpeciesOverride(
+    val baseStats: ShowdownStatPresentation.BaseStats? = null,
+    val abilities: Map<String, String>? = null
+)
+
+internal data class ResolvedBattleSpeciesData(
+    val baseStats: ShowdownStatPresentation.BaseStats?,
+    val abilities: Map<String, String>
+)
+
 class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoCloseable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
@@ -16,16 +26,22 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val typeChart = mutableMapOf<String, Map<String, Int>>()
     private val pokemonAbilities = mutableMapOf<String, List<String>>()
     private val pokemonAbilitySlots = mutableMapOf<String, Map<String, String>>()
+    private val pokemonBaseStats = mutableMapOf<String, ShowdownStatPresentation.BaseStats>()
+    private val generationSpeciesOverrides = mutableMapOf<String, Map<String, BattleSpeciesOverride>>()
     private val pokemonMoves = mutableMapOf<String, List<String>>()
     private val moveNames = mutableListOf<String>()
     private val pokemonNames = mutableListOf<String>()
     private val itemNames = mutableListOf<String>()
     private val abilityNames = mutableListOf<String>()
     private val listeners = mutableListOf<() -> Unit>()
+    private val battleDetailsListeners = mutableListOf<() -> Unit>()
     private val moveInfoListeners = mutableListOf<() -> Unit>()
     private val teamCoverageListeners = mutableListOf<() -> Unit>()
     private var loading = false
     private var loaded = false
+    private var battleDetailsLoading = false
+    private var battleDetailsLoaded = false
+    private var battleDetailsRetryScheduled = false
     private var teamCoverageLoading = false
     private var teamCoverageLoaded = false
     private var moveInfoLoading = false
@@ -46,6 +62,29 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     fun abilitiesFor(species: String) = pokemonAbilities[speciesId(species)]
         .orEmpty()
         .map { displayName(it, abilityNames) }
+
+    fun battleAbilitiesFor(species: String, generation: Int, format: String = ""): List<String> {
+        if (generation < 3 || format.contains("Let's Go", ignoreCase = true)) return emptyList()
+        val speciesKey = speciesId(species)
+        val resolved = resolveBattleSpeciesData(
+            speciesKey,
+            pokemonBaseStats[speciesKey],
+            pokemonAbilitySlots[speciesKey].orEmpty(),
+            generation,
+            format,
+            generationSpeciesOverrides
+        )
+        return availableBattleAbilityIds(resolved.abilities, generation).map { displayName(it, abilityNames) }
+    }
+
+    fun baseStatsFor(species: String, generation: Int, format: String) = resolveBattleSpeciesData(
+        speciesId(species),
+        pokemonBaseStats[speciesId(species)],
+        pokemonAbilitySlots[speciesId(species)].orEmpty(),
+        generation,
+        format,
+        generationSpeciesOverrides
+    ).baseStats
 
     fun movesFor(species: String) = pokemonMoves[speciesId(species)]
         .orEmpty()
@@ -129,38 +168,59 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                             if (executor.isShutdown) return@requestLearnsets
                             resourceCache.requestTypeChart { typeChartFile ->
                                 if (executor.isShutdown) return@requestTypeChart
-                                executor.execute {
-                                    val pokemonContents = pokedexFile?.readText().orEmpty()
-                                    val itemContents = itemsFile?.readText().orEmpty()
-                                    val abilityContents = abilitiesFile?.readText().orEmpty()
-                                    val learnsetsContents = learnsetsFile?.readText().orEmpty()
-                                    val typeChartContents = typeChartFile?.readText().orEmpty()
-                                    val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
-                                    val loadedPokemonAbilities = parsePokemonAbilities(pokemonContents)
-                                    val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
-                                    val loadedPokemonMoves = parseLearnsets(learnsetsContents)
-                                    val loadedPokemonNames = parsePokemonNames(pokemonContents)
-                                    val loadedItemNames = parseScriptNames(itemContents)
-                                    val loadedAbilityNames = parseScriptNames(abilityContents)
-                                    val loadedTypeChart = parseTypeChart(typeChartContents)
-                                    mainHandler.post {
-                                        if (executor.isShutdown) return@post
-                                        loading = false
-                                        loaded = true
-                                        pokemonTypes.putAll(loadedPokemonTypes)
-                                        pokemonAbilities.putAll(loadedPokemonAbilities)
-                                        pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
-                                        pokemonMoves.putAll(loadedPokemonMoves)
-                                        typeChart.putAll(loadedTypeChart)
-                                        pokemonNames.clear()
-                                        pokemonNames += loadedPokemonNames
-                                        itemNames.clear()
-                                        itemNames += loadedItemNames
-                                        abilityNames.clear()
-                                        abilityNames += loadedAbilityNames
-                                        val callbacks = listeners.toList()
-                                        listeners.clear()
-                                        callbacks.forEach { it() }
+                                resourceCache.requestBattleGenerationOverrides { generationOverridesContents ->
+                                    if (executor.isShutdown) return@requestBattleGenerationOverrides
+                                    executor.execute {
+                                        val pokemonContents = pokedexFile?.readText().orEmpty()
+                                        val itemContents = itemsFile?.readText().orEmpty()
+                                        val abilityContents = abilitiesFile?.readText().orEmpty()
+                                        val learnsetsContents = learnsetsFile?.readText().orEmpty()
+                                        val typeChartContents = typeChartFile?.readText().orEmpty()
+                                        val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
+                                        val loadedPokemonAbilities = parsePokemonAbilities(pokemonContents)
+                                        val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
+                                        val loadedPokemonBaseStats = parsePokemonBaseStats(pokemonContents)
+                                        val loadedGenerationOverrides = parseGenerationSpeciesOverrides(generationOverridesContents.orEmpty())
+                                        val loadedPokemonMoves = parseLearnsets(learnsetsContents)
+                                        val loadedPokemonNames = parsePokemonNames(pokemonContents)
+                                        val loadedItemNames = parseScriptNames(itemContents)
+                                        val loadedAbilityNames = parseScriptNames(abilityContents)
+                                        val loadedTypeChart = parseTypeChart(typeChartContents)
+                                        mainHandler.post {
+                                            if (executor.isShutdown) return@post
+                                            loading = false
+                                            loaded = true
+                                            battleDetailsLoading = false
+                                            pokemonTypes.putAll(loadedPokemonTypes)
+                                            pokemonAbilities.putAll(loadedPokemonAbilities)
+                                            pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
+                                            pokemonBaseStats.putAll(loadedPokemonBaseStats)
+                                            generationSpeciesOverrides.putAll(loadedGenerationOverrides)
+                                            battleDetailsLoaded = hasBattleDetailData(
+                                                loadedPokemonAbilitySlots,
+                                                loadedPokemonBaseStats,
+                                                loadedGenerationOverrides
+                                            )
+                                            pokemonMoves.putAll(loadedPokemonMoves)
+                                            typeChart.putAll(loadedTypeChart)
+                                            pokemonNames.clear()
+                                            pokemonNames += loadedPokemonNames
+                                            itemNames.clear()
+                                            itemNames += loadedItemNames
+                                            abilityNames.clear()
+                                            abilityNames += loadedAbilityNames
+                                            val callbacks = listeners.toList()
+                                            listeners.clear()
+                                            callbacks.forEach { it() }
+                                            val battleCallbacks = battleDetailsListeners.toList()
+                                            if (battleDetailsLoaded) {
+                                                battleDetailsListeners.clear()
+                                                battleDetailsRetryScheduled = false
+                                                mainHandler.removeCallbacks(battleDetailsRetry)
+                                            }
+                                            battleCallbacks.forEach { it() }
+                                            if (!battleDetailsLoaded) scheduleBattleDetailsRetry()
+                                        }
                                     }
                                 }
                             }
@@ -169,6 +229,74 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                 }
             }
         }
+    }
+
+    fun loadBattleDetails(listener: () -> Unit) {
+        if (battleDetailsLoaded) {
+            mainHandler.post(listener)
+            return
+        }
+        if (loading) {
+            listeners += listener
+            return
+        }
+        if (listener !in battleDetailsListeners) battleDetailsListeners += listener
+        requestBattleDetails()
+    }
+
+    private fun requestBattleDetails() {
+        if (executor.isShutdown || loading || battleDetailsLoading || battleDetailsLoaded) return
+        battleDetailsLoading = true
+        resourceCache.requestPokedex { pokedexFile ->
+            if (executor.isShutdown) return@requestPokedex
+            resourceCache.requestAbilities { abilitiesFile ->
+                if (executor.isShutdown) return@requestAbilities
+                resourceCache.requestBattleGenerationOverrides { generationOverridesContents ->
+                    if (executor.isShutdown) return@requestBattleGenerationOverrides
+                    executor.execute {
+                        val pokemonContents = pokedexFile?.readText().orEmpty()
+                        val abilityContents = abilitiesFile?.readText().orEmpty()
+                        val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
+                        val loadedPokemonBaseStats = parsePokemonBaseStats(pokemonContents)
+                        val loadedGenerationOverrides = parseGenerationSpeciesOverrides(generationOverridesContents.orEmpty())
+                        val loadedAbilityNames = parseScriptNames(abilityContents)
+                        mainHandler.post {
+                            if (executor.isShutdown) return@post
+                            battleDetailsLoading = false
+                            pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
+                            pokemonBaseStats.putAll(loadedPokemonBaseStats)
+                            generationSpeciesOverrides.putAll(loadedGenerationOverrides)
+                            battleDetailsLoaded = hasBattleDetailData(
+                                loadedPokemonAbilitySlots,
+                                loadedPokemonBaseStats,
+                                loadedGenerationOverrides
+                            )
+                            abilityNames.clear()
+                            abilityNames += loadedAbilityNames
+                            val callbacks = battleDetailsListeners.toList()
+                            if (battleDetailsLoaded) {
+                                battleDetailsListeners.clear()
+                                battleDetailsRetryScheduled = false
+                                mainHandler.removeCallbacks(battleDetailsRetry)
+                            }
+                            callbacks.forEach { it() }
+                            if (!battleDetailsLoaded) scheduleBattleDetailsRetry()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private val battleDetailsRetry = Runnable {
+        battleDetailsRetryScheduled = false
+        requestBattleDetails()
+    }
+
+    private fun scheduleBattleDetailsRetry() {
+        if (battleDetailsRetryScheduled || executor.isShutdown || battleDetailsLoaded) return
+        battleDetailsRetryScheduled = true
+        mainHandler.postDelayed(battleDetailsRetry, 30_000L)
     }
 
     fun loadTeamCoverageData(listener: () -> Unit) {
@@ -214,8 +342,10 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     }
 
     override fun close() {
+        mainHandler.removeCallbacks(battleDetailsRetry)
         executor.shutdownNow()
         listeners.clear()
+        battleDetailsListeners.clear()
         moveInfoListeners.clear()
         teamCoverageListeners.clear()
     }
@@ -242,6 +372,98 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     }
 
     companion object {
+        private fun hasBattleDetailData(
+            abilitySlots: Map<String, Map<String, String>>,
+            baseStats: Map<String, ShowdownStatPresentation.BaseStats>,
+            generationOverrides: Map<String, Map<String, BattleSpeciesOverride>>
+        ) = abilitySlots.isNotEmpty() && baseStats.isNotEmpty() && generationOverrides.isNotEmpty()
+
+        internal fun availableBattleAbilityIds(slots: Map<String, String>, generation: Int) = slots.entries
+            .asSequence()
+            .filter { generation > 2 && (generation >= 5 || it.key != "H") }
+            .sortedWith(compareBy<Map.Entry<String, String>> { it.key != "0" }.thenBy { it.key })
+            .map { it.value }
+            .distinct()
+            .toList()
+
+        internal fun parseGenerationSpeciesOverrides(contents: String): Map<String, Map<String, BattleSpeciesOverride>> {
+            if (contents.isBlank()) return emptyMap()
+            return runCatching {
+                val mods = JSONObject(contents)
+                buildMap {
+                    mods.keys().forEach { mod ->
+                        val speciesEntries = mods.optJSONObject(mod) ?: return@forEach
+                        val overrides = buildMap {
+                            speciesEntries.keys().forEach { species ->
+                                val entry = speciesEntries.optJSONObject(species) ?: return@forEach
+                                val stats = entry.optJSONObject("baseStats")?.let(::parseBaseStats)
+                                val abilityEntries = entry.optJSONObject("abilities")
+                                val abilities = abilityEntries?.let { values ->
+                                    buildMap {
+                                        values.keys().forEach { slot ->
+                                            values.optString(slot).trim().takeIf { it.isNotBlank() }
+                                                ?.let { put(slot, moveId(it)) }
+                                        }
+                                    }
+                                }
+                                if (stats != null || !abilities.isNullOrEmpty()) {
+                                    put(species, BattleSpeciesOverride(stats, abilities))
+                                }
+                            }
+                        }
+                        if (overrides.isNotEmpty()) put(mod, overrides)
+                    }
+                }
+            }.getOrDefault(emptyMap())
+        }
+
+        internal fun resolveBattleSpeciesData(
+            species: String,
+            baseStats: ShowdownStatPresentation.BaseStats?,
+            abilities: Map<String, String>,
+            generation: Int,
+            format: String,
+            overrides: Map<String, Map<String, BattleSpeciesOverride>>
+        ): ResolvedBattleSpeciesData {
+            val normalizedGeneration = generation.coerceIn(1, 9)
+            var resolvedStats = baseStats
+            var resolvedAbilities = abilities
+            for (modGeneration in 9 downTo normalizedGeneration) {
+                val override = overrides["gen$modGeneration"]?.get(species) ?: continue
+                override.baseStats?.let { resolvedStats = it }
+                override.abilities?.let { resolvedAbilities = it }
+            }
+            val normalizedFormat = speciesId(format)
+            val formatMod = when {
+                "letsgo" in normalizedFormat -> "gen7letsgo"
+                "champions" in normalizedFormat -> "champions"
+                else -> "gen$normalizedGeneration"
+            }
+            if (formatMod != "gen$normalizedGeneration") {
+                val override = overrides[formatMod]?.get(species)
+                override?.baseStats?.let { resolvedStats = it }
+                override?.abilities?.let { resolvedAbilities = it }
+            }
+            if (normalizedGeneration < 3 || formatMod == "gen7letsgo") {
+                resolvedAbilities = mapOf("0" to "noability")
+            }
+            return ResolvedBattleSpeciesData(resolvedStats, resolvedAbilities)
+        }
+
+        private fun parseBaseStats(stats: JSONObject): ShowdownStatPresentation.BaseStats? {
+            val speed = stats.optInt("spe", 0).takeIf { it > 0 } ?: return null
+            val specialAttack = stats.optInt("spa", stats.optInt("spc", 0))
+            val specialDefense = stats.optInt("spd", stats.optInt("spc", specialAttack))
+            return ShowdownStatPresentation.BaseStats(
+                stats.optInt("hp", 0),
+                stats.optInt("atk", 0),
+                stats.optInt("def", 0),
+                specialAttack,
+                specialDefense,
+                speed
+            )
+        }
+
         fun parseMoveTypes(contents: String): Map<String, String> {
             return runCatching {
                 val moves = JSONObject(contents)
@@ -350,6 +572,29 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                             }
                         }
                         if (slots.isNotEmpty()) put(id, slots)
+                    }
+                }
+            }.getOrDefault(emptyMap())
+        }
+
+        fun parsePokemonBaseStats(contents: String): Map<String, ShowdownStatPresentation.BaseStats> {
+            return runCatching {
+                val pokemon = JSONObject(contents)
+                buildMap {
+                    pokemon.keys().forEach { id ->
+                        val stats = pokemon.optJSONObject(id)?.optJSONObject("baseStats") ?: return@forEach
+                        val baseSpeed = stats.optInt("spe", 0).takeIf { it > 0 } ?: return@forEach
+                        put(
+                            id,
+                            ShowdownStatPresentation.BaseStats(
+                                stats.optInt("hp", 0),
+                                stats.optInt("atk", 0),
+                                stats.optInt("def", 0),
+                                stats.optInt("spa", 0),
+                                stats.optInt("spd", 0),
+                                baseSpeed
+                            )
+                        )
                     }
                 }
             }.getOrDefault(emptyMap())

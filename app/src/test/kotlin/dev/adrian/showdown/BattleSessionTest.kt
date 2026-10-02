@@ -2200,6 +2200,121 @@ class BattleSessionTest {
     }
 
     @Test
+    fun playerInspectDetailsShowTheExactUnboostedStatsFromShowdownRequests() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|9",
+                "|tier|[Gen 9] Random Battle",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Pikachu\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\",\"active\":true,\"stats\":{\"atk\":81,\"def\":65,\"spa\":77,\"spd\":78,\"spe\":120},\"baseAbility\":\"Static\"}]},\"active\":[{}]}"
+            )
+        )
+
+        val details = session.detailsForActiveCombatant(true, "p1a")
+
+        assertEquals("Atk 81 · Def 65 · SpA 77 · SpD 78 · Spe 120", details?.stats)
+        assertEquals("Static", details?.ability)
+    }
+
+    @Test
+    fun generationOneInspectDetailsShowSpecialAndNoAbility() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|1",
+                "|tier|[Gen 1] OU",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Pikachu\",\"details\":\"Pikachu, L50\",\"condition\":\"100/100\",\"active\":true,\"stats\":{\"atk\":81,\"def\":65,\"spa\":77,\"spd\":78,\"spe\":120},\"baseAbility\":\"Static\"}]},\"active\":[{}]}"
+            )
+        )
+
+        val details = session.detailsForActiveCombatant(true, "p1a")
+
+        assertEquals("No ability", details?.ability)
+        assertEquals("Atk 81 · Def 65 · Spc 77 · Spe 120", details?.stats)
+    }
+
+    @Test
+    fun opponentInspectDetailsShowPossibleAbilitiesAndRandomBattleSpeedRange() {
+        val session = BattleSession()
+        session.setPokemonBattleDetailResolvers(
+            abilityPossibilitiesResolver = { species, _, _ ->
+                if (species == "Eevee") listOf("Run Away", "Adaptability", "Anticipation") else emptyList()
+            },
+            baseStatsResolver = { species, _, _ ->
+                if (species == "Eevee") ShowdownStatPresentation.BaseStats(55, 55, 50, 45, 65, 55) else null
+            }
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|9",
+                "|tier|[Gen 9] Random Battle",
+                "|switch|p2a: Eevee|Eevee, L50|100/100"
+            )
+        )
+
+        val details = session.detailsForActiveCombatant(false, "p2a")
+
+        assertEquals("Unknown ability", details?.ability)
+        assertEquals(listOf("Run Away", "Adaptability", "Anticipation"), details?.possibleAbilities)
+        assertEquals("Spe 60 or 86 (before external modifiers)", details?.stats)
+    }
+
+    @Test
+    fun opponentInspectResolversReceiveTheBattleGenerationAndFormat() {
+        val session = BattleSession()
+        var resolvedGeneration = 0
+        var resolvedFormat = ""
+        session.setPokemonBattleDetailResolvers(
+            abilityPossibilitiesResolver = { _, generation, format ->
+                resolvedGeneration = generation
+                resolvedFormat = format
+                listOf("Static")
+            },
+            baseStatsResolver = { _, generation, format ->
+                resolvedGeneration = generation
+                resolvedFormat = format
+                ShowdownStatPresentation.BaseStats(35, 55, 40, 50, 50, 65)
+            }
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|7",
+                "|tier|[Gen 7 Let's Go] Random Battle",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100"
+            )
+        )
+
+        val details = session.detailsForActiveCombatant(false, "p2a")
+
+        assertEquals(7, resolvedGeneration)
+        assertEquals("[Gen 7 Let's Go] Random Battle", resolvedFormat)
+        assertEquals("No ability", details?.ability)
+        assertTrue(details?.possibleAbilities.orEmpty().isEmpty())
+    }
+
+    @Test
+    fun opponentInspectDetailsStopShowingPossibleAbilitiesAfterTheAbilityIsRevealed() {
+        val session = BattleSession()
+        session.setPokemonBattleDetailResolvers(
+            abilityPossibilitiesResolver = { _, _, _ -> listOf("Run Away", "Adaptability", "Anticipation") },
+            baseStatsResolver = { _, _, _ -> null }
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Eevee|Eevee, L50|100/100",
+                "|-ability|p2a: Eevee|Anticipation"
+            )
+        )
+
+        val details = session.detailsForActiveCombatant(false, "p2a")
+
+        assertEquals("Anticipation", details?.ability)
+        assertTrue(details?.possibleAbilities.orEmpty().isEmpty())
+    }
+
+    @Test
     fun doublesKeepOpponentSideDetailsOutOfThePrimaryCombatantCard() {
         val session = BattleSession()
         session.applyProtocolPacket(

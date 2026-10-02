@@ -19,6 +19,24 @@ func TestREADMEAssetsContainBothBattleSprites(t *testing.T) {
 	}
 }
 
+func TestREADMEAssetsRequireFreshImageCacheKeys(t *testing.T) {
+	readme, err := os.ReadFile("../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReadmeImageCacheKeys(string(readme)); err != nil {
+		t.Fatalf("validateReadmeImageCacheKeys rejected current screenshot hashes: %v", err)
+	}
+	stale := strings.Replace(string(readme), "?v=", "?v=000000000000", 1)
+	if err := validateReadmeImageCacheKeys(stale); err == nil || !strings.Contains(err.Error(), "stale content cache key") {
+		t.Fatalf("validateReadmeImageCacheKeys accepted a stale screenshot hash: %v", err)
+	}
+	missing := strings.Replace(string(readme), "?v=", "?", 1)
+	if err := validateReadmeImageCacheKeys(missing); err == nil || !strings.Contains(err.Error(), "missing its content cache key") {
+		t.Fatalf("validateReadmeImageCacheKeys accepted a screenshot without a hash: %v", err)
+	}
+}
+
 func TestREADMEAssetsRejectMissingBattleSprites(t *testing.T) {
 	for _, test := range []struct {
 		name             string

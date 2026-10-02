@@ -17,6 +17,27 @@ internal object BattleAccessibilityText {
         }.joinToString(", ")
     }
 
+    fun inspectDetails(
+        details: BattleSession.PokemonDetails,
+        visibleName: String,
+        effects: List<String>
+    ): String {
+        val summary = buildList {
+            add(pokemon(visibleName, details.level, details.gender, details.hp, details.condition))
+            if (details.types.isNotEmpty()) add("types ${details.types.joinToString()}")
+            if (details.possibleAbilities.isNotEmpty()) {
+                add("possible abilities ${details.possibleAbilities.joinToString()}")
+            } else {
+                add("ability ${details.ability}")
+            }
+            add("item ${BattleItemPresentation.visibleName(details.item) ?: "Unknown item"}")
+            if (details.stats.isNotBlank()) add("stats ${details.stats.replace("\n", ", ")}")
+            if (details.moves.isNotEmpty()) add("moves ${details.moves.joinToString()}")
+            if (effects.isNotEmpty()) add("active effects ${effects.joinToString()}")
+        }.joinToString(". ")
+        return "Pokémon details for $visibleName. $summary. Activate to close details."
+    }
+
     fun move(
         name: String,
         type: String,

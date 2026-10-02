@@ -413,6 +413,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val appContext = context.applicationContext
     private val downloadExecutor = Executors.newFixedThreadPool(2)
     private val decodeExecutor = Executors.newSingleThreadExecutor()
     private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
@@ -568,6 +569,29 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     fun requestPokedex(receiver: (File?) -> Unit) {
         requestBytes("data/pokedex.json", receiver)
+    }
+
+    fun requestBattleGenerationOverrides(receiver: (String?) -> Unit) {
+        if (closed.get()) {
+            mainHandler.post { receiver(null) }
+            return
+        }
+        runCatching {
+            downloadExecutor.execute {
+                val contents = runCatching {
+                    appContext.assets.open("showdown-generation-overrides.json")
+                        .bufferedReader(Charsets.UTF_8)
+                        .use { it.readText() }
+                }.getOrNull()
+                mainHandler.post {
+                    if (!closed.get()) receiver(contents)
+                }
+            }
+        }.onFailure {
+            mainHandler.post {
+                if (!closed.get()) receiver(null)
+            }
+        }
     }
 
     fun requestItems(receiver: (File?) -> Unit) {

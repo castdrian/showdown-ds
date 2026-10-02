@@ -21,6 +21,30 @@ class BattleAccessibilityTextTest {
     }
 
     @Test
+    fun inspectDetailsExposePossibleAbilitiesAndSpeedAccessibly() {
+        val details = BattleSession.PokemonDetails(
+            name = "Pikachu",
+            types = listOf("ELECTRIC"),
+            level = "50",
+            gender = "",
+            hp = "100/100",
+            condition = "READY",
+            ability = "Unknown ability",
+            item = "No item",
+            moves = listOf("Thunderbolt"),
+            stats = "Spe 85–117 (before external modifiers)",
+            possibleAbilities = listOf("Static", "Lightning Rod")
+        )
+
+        assertEquals(
+            "Pokémon details for Pikachu. Pikachu, level 50, HP 100/100. types ELECTRIC. " +
+                "possible abilities Static, Lightning Rod. item Unknown item. " +
+                "stats Spe 85–117 (before external modifiers). moves Thunderbolt. Activate to close details.",
+            BattleAccessibilityText.inspectDetails(details, "Pikachu", emptyList())
+        )
+    }
+
+    @Test
     fun moveLabelIncludesActualPowerAccuracyTypePpCategoryAndDisabledState() {
         assertEquals(
             "Ice Beam, Ice type, power 90, accuracy 100 percent, 0 of 8 PP, Special, disabled",
