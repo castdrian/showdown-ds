@@ -4793,10 +4793,24 @@ class MainActivity : Activity() {
                 )
             }
         }
+        var refreshTeamCoverage: () -> Unit = {}
+        val coverageBoundFields = mutableSetOf<EditText>()
+        fun bindTeamCoverage(editor: TeamSetEditor) {
+            listOf(editor.species, editor.ability).forEach { field ->
+                if (!coverageBoundFields.add(field)) return@forEach
+                field.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = refreshTeamCoverage()
+                    override fun afterTextChanged(editable: Editable?) = Unit
+                })
+            }
+        }
         fun ensureTeamSetEditors(count: Int) {
             while (setEditors.size < count) {
                 val index = setEditors.size
-                setEditors += createTeamSetEditor(setFields, index, ShowdownTeamSet(), false)
+                val editor = createTeamSetEditor(setFields, index, ShowdownTeamSet(), false)
+                setEditors += editor
+                bindTeamCoverage(editor)
             }
         }
         ensureMoveDexLoaded()
@@ -4830,6 +4844,133 @@ class MainActivity : Activity() {
             }
         }
         refreshTeamSetOrderControls()
+        val coverageTitle = TextView(this).apply {
+            text = "Defensive coverage  ▾"
+            setTextSize(17f)
+            setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            setTextColor(0xffe4f5ff.toInt())
+            setPadding((14f * resources.displayMetrics.density).toInt(), (12f * resources.displayMetrics.density).toInt(), (14f * resources.displayMetrics.density).toInt(), (8f * resources.displayMetrics.density).toInt())
+        }
+        val coverageSummary = TextView(this).apply {
+            setTextSize(14f)
+            setTextColor(0xffa8cbd9.toInt())
+            setPadding((14f * resources.displayMetrics.density).toInt(), 0, (14f * resources.displayMetrics.density).toInt(), (12f * resources.displayMetrics.density).toInt())
+        }
+        val coverageRows = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding((10f * resources.displayMetrics.density).toInt(), 0, (10f * resources.displayMetrics.density).toInt(), (10f * resources.displayMetrics.density).toInt())
+        }
+        var coverageExpanded = false
+        var coverageLoaded = false
+        val coveragePanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(12, 37, 52))
+                setStroke((1f * resources.displayMetrics.density).toInt(), Color.rgb(45, 110, 123))
+                cornerRadius = 18f * resources.displayMetrics.density
+            }
+            addView(coverageTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(coverageSummary, LinearLayout.LayoutParams(-1, -2))
+            addView(coverageRows, LinearLayout.LayoutParams(-1, -2))
+        }
+        coverageTitle.setOnClickListener {
+            coverageExpanded = !coverageExpanded
+            coverageRows.visibility = if (coverageExpanded) View.VISIBLE else View.GONE
+            coverageTitle.text = if (coverageExpanded) "Defensive coverage  ▴" else "Defensive coverage  ▾"
+        }
+        fun refreshCoverageRows(results: List<ShowdownTeamCoverage.TypeResult>) {
+            coverageRows.removeAllViews()
+            val density = resources.displayMetrics.density
+            results.forEach { result ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    background = GradientDrawable().apply {
+                        setColor(Color.rgb(9, 29, 44))
+                        cornerRadius = 12f * density
+                    }
+                    setPadding((8f * density).toInt(), (7f * density).toInt(), (8f * density).toInt(), (7f * density).toInt())
+                }
+                val typeColor = ShowdownTypePalette.canonical(result.attackingType)
+                row.addView(TextView(this).apply {
+                    text = result.attackingType.lowercase().replaceFirstChar(Char::uppercase)
+                    gravity = android.view.Gravity.CENTER
+                    setTextSize(13f)
+                    setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+                    setTextColor(if (Color.luminance(typeColor) > 0.55f) Color.rgb(9, 29, 44) else Color.WHITE)
+                    background = GradientDrawable().apply {
+                        setColor(typeColor)
+                        setStroke((1f * density).toInt(), 0xff7694a3.toInt())
+                        cornerRadius = 999f
+                    }
+                    setPadding((8f * density).toInt(), (5f * density).toInt(), (8f * density).toInt(), (5f * density).toInt())
+                }, LinearLayout.LayoutParams((98f * density).toInt(), -2).apply {
+                    rightMargin = (10f * density).toInt()
+                })
+                val stats = buildList {
+                    result.weaknesses.takeIf { it > 0 }?.let { add("Weak $it") }
+                    result.resistances.takeIf { it > 0 }?.let { add("Resists $it") }
+                    result.immunities.takeIf { it > 0 }?.let { add("Immune $it") }
+                }.joinToString("  ·  ").ifBlank { "Neutral against the team" }
+                row.addView(TextView(this).apply {
+                    text = stats
+                    setTextSize(14f)
+                    setTextColor(0xffd6e8f0.toInt())
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                coverageRows.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                    topMargin = (4f * density).toInt()
+                })
+            }
+        }
+        refreshTeamCoverage = {
+            val generation = ShowdownTeamCoverage.generation(format.text.toString())
+            coverageRows.removeAllViews()
+            val members = setEditors.mapNotNull { editor ->
+                val species = editor.species.text.toString().trim()
+                val types = moveDex.typesFor(species).orEmpty()
+                types.takeIf { species.isNotBlank() && it.isNotEmpty() }?.let {
+                    ShowdownTeamCoverage.Member(it, editor.ability.text.toString())
+                }
+            }
+            val typeChart = moveDex.typeChart()
+            coverageSummary.text = when {
+                !coverageLoaded -> "Loading official Showdown type data…"
+                !moveDex.hasCompleteTeamCoverageData() || !moveDex.hasCompleteTypeChart() -> "Official Showdown type data is unavailable. Reopen the team editor to retry."
+                members.isEmpty() -> "Enter Pokémon species to see the team's defensive matchups."
+                else -> {
+                    val analysis = ShowdownTeamCoverage.analyze(members, typeChart, generation)
+                    refreshCoverageRows(analysis.typeResults)
+                    val weaknesses = analysis.typeResults.filter { it.weaknesses > 0 }
+                        .sortedWith(compareByDescending<ShowdownTeamCoverage.TypeResult> { it.weaknesses }.thenBy { it.attackingType })
+                        .take(4)
+                    val exposed = if (weaknesses.isEmpty()) {
+                        "No direct type weaknesses found."
+                    } else {
+                        "Weak to ${weaknesses.joinToString { "${it.attackingType.lowercase().replaceFirstChar(Char::uppercase)} ${it.weaknesses}" }}."
+                    }
+                    val immunities = analysis.typeResults.filter { it.immunities > 0 }
+                        .sortedWith(compareByDescending<ShowdownTeamCoverage.TypeResult> { it.immunities }.thenBy { it.attackingType })
+                        .take(2)
+                    val protected = immunities.takeIf { it.isNotEmpty() }?.joinToString { "${it.attackingType.lowercase().replaceFirstChar(Char::uppercase)} ${it.immunities}" }
+                        ?.let { "  ·  Immune to $it" }
+                        .orEmpty()
+                    val environmentalNote = analysis.environmentalNote?.let { "  ·  $it" }.orEmpty()
+                    "$exposed$protected$environmentalNote"
+                }
+            }
+        }
+        setEditors.forEach(::bindTeamCoverage)
+        format.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = refreshTeamCoverage()
+            override fun afterTextChanged(editable: Editable?) = Unit
+        })
+        moveDex.loadTeamCoverageData {
+            coverageLoaded = true
+            refreshTeamCoverage()
+        }
+        refreshTeamCoverage()
         fun readTeamSets(): Pair<List<ShowdownTeamSet>, String?> {
             val editedSets = setEditors.map(::readTeamSetEditor)
             val editedPacked = ShowdownTeamCodec.pack(editedSets)
@@ -5025,6 +5166,10 @@ class MainActivity : Activity() {
             addView(labeledTeamField("Team name", name))
             addView(labeledTeamField("Format ID", format))
             addView(formatPicker)
+            addView(coveragePanel, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = (8f * resources.displayMetrics.density).toInt()
+                bottomMargin = (12f * resources.displayMetrics.density).toInt()
+            })
             addView(labeledTeamField("Folder", folder))
             addView(labeledTeamField("Packed or Showdown export", packed))
             addView(importButton)

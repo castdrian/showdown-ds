@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 class ShowdownMoveDexTest {
     @Test
@@ -118,5 +119,17 @@ class ShowdownMoveDexTest {
         assertFalse(ShowdownMoveDex.typeNames().contains("Normal"))
         assertFalse(ShowdownMoveDex.typeNames().contains("Stellar"))
         assertTrue(ShowdownMoveDex.teraTypeNames().contains("Stellar"))
+    }
+
+    @Test
+    fun buildsShowdownIdentifiersIndependentlyOfTheSystemLocale() {
+        val previousLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+            assertEquals("icebeam", ShowdownMoveDex.moveId("Ice Beam"))
+            assertEquals("electric", ShowdownMoveDex.moveId("Electric"))
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
     }
 }

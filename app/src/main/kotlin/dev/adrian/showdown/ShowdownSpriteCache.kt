@@ -582,6 +582,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestBytes("data/learnsets.js", receiver)
     }
 
+    fun requestTypeChart(receiver: (File?) -> Unit) {
+        requestBytes("data/typechart.js", receiver)
+    }
+
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         downloadExecutor.shutdownNow()

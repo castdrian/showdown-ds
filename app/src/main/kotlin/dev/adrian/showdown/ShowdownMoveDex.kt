@@ -3,6 +3,7 @@ package dev.adrian.showdown
 import android.os.Handler
 import android.os.Looper
 import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.Executors
 import java.util.Locale
 
@@ -12,6 +13,7 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val moveTypes = mutableMapOf<String, String>()
     private val moveInfo = mutableMapOf<String, BattleSession.MoveInfo>()
     private val pokemonTypes = mutableMapOf<String, List<String>>()
+    private val typeChart = mutableMapOf<String, Map<String, Int>>()
     private val pokemonAbilities = mutableMapOf<String, List<String>>()
     private val pokemonAbilitySlots = mutableMapOf<String, Map<String, String>>()
     private val pokemonMoves = mutableMapOf<String, List<String>>()
@@ -21,8 +23,11 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     private val abilityNames = mutableListOf<String>()
     private val listeners = mutableListOf<() -> Unit>()
     private val moveInfoListeners = mutableListOf<() -> Unit>()
+    private val teamCoverageListeners = mutableListOf<() -> Unit>()
     private var loading = false
     private var loaded = false
+    private var teamCoverageLoading = false
+    private var teamCoverageLoaded = false
     private var moveInfoLoading = false
     private var moveInfoLoaded = false
 
@@ -31,6 +36,12 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
     fun infoFor(move: String) = moveInfo[moveId(move)]
 
     fun typesFor(species: String) = pokemonTypes[speciesId(species)]
+
+    fun typeChart() = typeChart.toMap()
+
+    fun hasCompleteTypeChart() = isCompleteTypeChart(typeChart)
+
+    fun hasCompleteTeamCoverageData() = teamCoverageLoaded
 
     fun abilitiesFor(species: String) = pokemonAbilities[speciesId(species)]
         .orEmpty()
@@ -97,7 +108,11 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
     fun load(listener: () -> Unit) {
         if (loaded) {
-            listener()
+            if (hasCompleteTypeChart()) {
+                listener()
+            } else {
+                reloadTypeChart(listener)
+            }
             return
         }
         listeners += listener
@@ -112,35 +127,41 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                         if (executor.isShutdown) return@requestAbilities
                         resourceCache.requestLearnsets { learnsetsFile ->
                             if (executor.isShutdown) return@requestLearnsets
-                            executor.execute {
-                                val pokemonContents = pokedexFile?.readText().orEmpty()
-                                val itemContents = itemsFile?.readText().orEmpty()
-                                val abilityContents = abilitiesFile?.readText().orEmpty()
-                                val learnsetsContents = learnsetsFile?.readText().orEmpty()
-                                val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
-                                val loadedPokemonAbilities = parsePokemonAbilities(pokemonContents)
-                                val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
-                                val loadedPokemonMoves = parseLearnsets(learnsetsContents)
-                                val loadedPokemonNames = parsePokemonNames(pokemonContents)
-                                val loadedItemNames = parseScriptNames(itemContents)
-                                val loadedAbilityNames = parseScriptNames(abilityContents)
-                                mainHandler.post {
-                                    if (executor.isShutdown) return@post
-                                    loading = false
-                                    loaded = true
-                                    pokemonTypes.putAll(loadedPokemonTypes)
-                                    pokemonAbilities.putAll(loadedPokemonAbilities)
-                                    pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
-                                    pokemonMoves.putAll(loadedPokemonMoves)
-                                    pokemonNames.clear()
-                                    pokemonNames += loadedPokemonNames
-                                    itemNames.clear()
-                                    itemNames += loadedItemNames
-                                    abilityNames.clear()
-                                    abilityNames += loadedAbilityNames
-                                    val callbacks = listeners.toList()
-                                    listeners.clear()
-                                    callbacks.forEach { it() }
+                            resourceCache.requestTypeChart { typeChartFile ->
+                                if (executor.isShutdown) return@requestTypeChart
+                                executor.execute {
+                                    val pokemonContents = pokedexFile?.readText().orEmpty()
+                                    val itemContents = itemsFile?.readText().orEmpty()
+                                    val abilityContents = abilitiesFile?.readText().orEmpty()
+                                    val learnsetsContents = learnsetsFile?.readText().orEmpty()
+                                    val typeChartContents = typeChartFile?.readText().orEmpty()
+                                    val loadedPokemonTypes = parsePokemonTypes(pokemonContents)
+                                    val loadedPokemonAbilities = parsePokemonAbilities(pokemonContents)
+                                    val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
+                                    val loadedPokemonMoves = parseLearnsets(learnsetsContents)
+                                    val loadedPokemonNames = parsePokemonNames(pokemonContents)
+                                    val loadedItemNames = parseScriptNames(itemContents)
+                                    val loadedAbilityNames = parseScriptNames(abilityContents)
+                                    val loadedTypeChart = parseTypeChart(typeChartContents)
+                                    mainHandler.post {
+                                        if (executor.isShutdown) return@post
+                                        loading = false
+                                        loaded = true
+                                        pokemonTypes.putAll(loadedPokemonTypes)
+                                        pokemonAbilities.putAll(loadedPokemonAbilities)
+                                        pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
+                                        pokemonMoves.putAll(loadedPokemonMoves)
+                                        typeChart.putAll(loadedTypeChart)
+                                        pokemonNames.clear()
+                                        pokemonNames += loadedPokemonNames
+                                        itemNames.clear()
+                                        itemNames += loadedItemNames
+                                        abilityNames.clear()
+                                        abilityNames += loadedAbilityNames
+                                        val callbacks = listeners.toList()
+                                        listeners.clear()
+                                        callbacks.forEach { it() }
+                                    }
                                 }
                             }
                         }
@@ -150,10 +171,74 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
         }
     }
 
+    fun loadTeamCoverageData(listener: () -> Unit) {
+        if (teamCoverageLoaded) {
+            mainHandler.post(listener)
+            return
+        }
+        teamCoverageListeners += listener
+        if (teamCoverageLoading) return
+        teamCoverageLoading = true
+        var responseCount = 0
+        var pokedexFile: File? = null
+        var typeChartFile: File? = null
+        fun completeRequest() {
+            responseCount += 1
+            if (responseCount != 2 || executor.isShutdown) return
+            executor.execute {
+                val loadedPokemonTypes = parsePokemonTypes(pokedexFile?.readText().orEmpty())
+                val loadedTypeChart = parseTypeChart(typeChartFile?.readText().orEmpty())
+                mainHandler.post {
+                    if (executor.isShutdown) return@post
+                    teamCoverageLoading = false
+                    teamCoverageLoaded = loadedPokemonTypes.isNotEmpty() && isCompleteTypeChart(loadedTypeChart)
+                    pokemonTypes.putAll(loadedPokemonTypes)
+                    typeChart.clear()
+                    typeChart.putAll(loadedTypeChart)
+                    val callbacks = teamCoverageListeners.toList()
+                    teamCoverageListeners.clear()
+                    callbacks.forEach { it() }
+                }
+            }
+        }
+        resourceCache.requestPokedex { file ->
+            if (executor.isShutdown) return@requestPokedex
+            pokedexFile = file
+            completeRequest()
+        }
+        resourceCache.requestTypeChart { file ->
+            if (executor.isShutdown) return@requestTypeChart
+            typeChartFile = file
+            completeRequest()
+        }
+    }
+
     override fun close() {
         executor.shutdownNow()
         listeners.clear()
         moveInfoListeners.clear()
+        teamCoverageListeners.clear()
+    }
+
+    private fun reloadTypeChart(listener: () -> Unit) {
+        listeners += listener
+        if (loading) return
+        loading = true
+        resourceCache.requestTypeChart { typeChartFile ->
+            if (executor.isShutdown) return@requestTypeChart
+            executor.execute {
+                val loadedTypeChart = parseTypeChart(typeChartFile?.readText().orEmpty())
+                mainHandler.post {
+                    if (executor.isShutdown) return@post
+                    loading = false
+                    typeChart.clear()
+                    typeChart.putAll(loadedTypeChart)
+                    val callbacks = listeners.toList()
+                    listeners.clear()
+                    callbacks.forEach { it() }
+                }
+            }
+        }
     }
 
     companion object {
@@ -208,6 +293,30 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
                     }
                 }
             }.getOrDefault(emptyMap())
+        }
+
+        fun parseTypeChart(contents: String): Map<String, Map<String, Int>> {
+            val supportedTypes = TYPE_CHART_NAMES.map(::moveId).toSet()
+            val damageTakenPattern = Regex("([a-z]+):\\s*\\{\\s*damageTaken:\\s*\\{([^}]*)\\}")
+            val typeEffectPattern = Regex("([A-Za-z]+):\\s*([0-3])")
+            return damageTakenPattern.findAll(contents).mapNotNull { typeMatch ->
+                val defendingType = typeMatch.groupValues[1].lowercase(Locale.ROOT)
+                if (defendingType !in supportedTypes) return@mapNotNull null
+                val effects = typeEffectPattern.findAll(typeMatch.groupValues[2]).mapNotNull { effectMatch ->
+                    val attackingType = effectMatch.groupValues[1].uppercase(Locale.ROOT)
+                    if (moveId(attackingType) !in supportedTypes) return@mapNotNull null
+                    attackingType to effectMatch.groupValues[2].toInt()
+                }.toMap()
+                defendingType to effects
+            }.toMap()
+        }
+
+        fun isCompleteTypeChart(typeChart: Map<String, Map<String, Int>>): Boolean {
+            val defendingTypes = TYPE_CHART_NAMES.map(::moveId).toSet()
+            val attackingTypes = TYPE_CHART_NAMES.map { it.uppercase(Locale.ROOT) }.toSet()
+            return defendingTypes.all { defendingType ->
+                typeChart[defendingType]?.keys?.containsAll(attackingTypes) == true
+            }
         }
 
         fun parsePokemonAbilities(contents: String): Map<String, List<String>> {
@@ -268,6 +377,8 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
 
         fun teraTypeNames() = TERA_TYPE_NAMES
 
+        fun typeChartNames() = TYPE_CHART_NAMES
+
         fun parseScriptNames(contents: String): List<String> = Regex("name:\"((?:\\\\.|[^\"])*)\"")
             .findAll(contents)
             .map { it.groupValues[1].replace("\\\\\"", "\"") }
@@ -306,6 +417,11 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
         private val TERA_TYPE_NAMES = listOf(
             "Bug", "Dark", "Dragon", "Electric", "Fairy", "Fighting", "Fire", "Flying", "Ghost", "Grass",
             "Ground", "Ice", "Normal", "Poison", "Psychic", "Rock", "Steel", "Water", "Stellar"
+        )
+
+        private val TYPE_CHART_NAMES = listOf(
+            "Bug", "Dark", "Dragon", "Electric", "Fairy", "Fighting", "Fire", "Flying", "Ghost", "Grass",
+            "Ground", "Ice", "Normal", "Poison", "Psychic", "Rock", "Steel", "Stellar", "Water"
         )
 
         private val HIDDEN_POWER_TYPE_NAMES = TERA_TYPE_NAMES.filterNot { it == "Fairy" || it == "Normal" || it == "Stellar" }
