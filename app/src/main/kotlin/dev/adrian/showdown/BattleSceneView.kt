@@ -30,6 +30,8 @@ class BattleSceneView(
     private val spriteCache: ShowdownSpriteCache
 ) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val battleFeedTypeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+    private val battleFeedBoldTypeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
     private val source = Rect()
     private val destination = RectF()
     private val logo: Bitmap? = BitmapFactory.decodeResource(resources, R.drawable.showdown_logo)
@@ -61,10 +63,11 @@ class BattleSceneView(
     private val battleFeedPresentation = BattleFeedPresentation()
     private var cachedBattleFeedText: String? = null
     private var cachedBattleFeedVisibleText: String? = null
+    private var cachedBattleFeedMarkup: String? = null
     private var cachedBattleFeedWidth = -1f
     private var cachedBattleFeedTextSize = -1f
     private var cachedBattleFeedFullLines = emptyList<String>()
-    private var cachedBattleFeedLines = emptyList<String>()
+    private var cachedBattleFeedLines = emptyList<List<BattleFeedText.StyledRun>>()
     private var battleFeedTouchDownY = 0f
     private var battleFeedTouchLastY = 0f
     private var battleFeedTouchActive = false
@@ -2759,26 +2762,38 @@ class BattleSceneView(
         val bottom = min(height * 0.945f, height * 0.98f - 32f * scale)
         paint.shader = null
         paint.style = Paint.Style.FILL
-        paint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+        paint.typeface = battleFeedTypeface
         val textSize = readableTextSize(36f, scale, 11f)
         paint.textSize = textSize
         val maxWidth = right - left - 48f * scale
         val lineHeight = maxOf(42f * scale, paint.descent() - paint.ascent() + 8f * scale)
         val padding = 22f * scale
+        val markup = session.battleFeedMarkupFor(frame.visibleText)
         if (cachedBattleFeedText != frame.text ||
             cachedBattleFeedVisibleText != frame.visibleText ||
+            cachedBattleFeedMarkup != markup ||
             cachedBattleFeedWidth != maxWidth ||
             cachedBattleFeedTextSize != textSize
         ) {
             cachedBattleFeedText = frame.text
             cachedBattleFeedVisibleText = frame.visibleText
+            cachedBattleFeedMarkup = markup
             cachedBattleFeedWidth = maxWidth
             cachedBattleFeedTextSize = textSize
-            cachedBattleFeedFullLines = BattleFeedText.wrap(frame.text, maxWidth, 2, paint::measureText)
+            cachedBattleFeedFullLines = BattleFeedText.wrap(frame.text, maxWidth, 2) { text ->
+                val regularWidth = measureBattleFeedText(text, false)
+                val boldWidth = measureBattleFeedText(text, true)
+                maxOf(regularWidth, boldWidth)
+            }
                 .ifEmpty { listOf("") }
-            cachedBattleFeedLines = BattleFeedText.wrap(frame.visibleText, maxWidth, cachedBattleFeedFullLines.size, paint::measureText)
-                .ifEmpty { listOf("") }
+            cachedBattleFeedLines = BattleFeedText.wrapShowdownMarkup(
+                markup,
+                maxWidth,
+                cachedBattleFeedFullLines.size,
+                ::measureBattleFeedText
+            ).ifEmpty { listOf(emptyList()) }
         }
+        paint.typeface = battleFeedTypeface
         val fullLines = cachedBattleFeedFullLines
         val lines = cachedBattleFeedLines
         val boundsHeight = fullLines.size * lineHeight + padding * 2f
@@ -2808,17 +2823,46 @@ class BattleSceneView(
         canvas.clipRect(bounds)
         lines.forEachIndexed { index, line ->
             val baseline = contentTop + index * lineHeight + (lineHeight - paint.ascent() - paint.descent()) / 2f
+            drawBattleFeedLine(canvas, line, left + 24f * scale, baseline, scale, outlineAlpha, textAlpha)
+        }
+        canvas.restore()
+        if (battleFeedPresentation.needsAnimation(nowMillis)) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
+    }
+
+    private fun measureBattleFeedText(value: String, emphasized: Boolean): Float {
+        paint.typeface = if (emphasized) battleFeedBoldTypeface else battleFeedTypeface
+        return paint.measureText(value)
+    }
+
+    private fun drawBattleFeedLine(
+        canvas: Canvas,
+        runs: List<BattleFeedText.StyledRun>,
+        startX: Float,
+        baseline: Float,
+        scale: Float,
+        outlineAlpha: Float,
+        textAlpha: Float
+    ) {
+        var x = startX
+        runs.forEach { run ->
+            paint.typeface = if (run.emphasized) battleFeedBoldTypeface else battleFeedTypeface
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 2.25f * scale
             paint.strokeJoin = Paint.Join.ROUND
             paint.color = Color.argb((220f * outlineAlpha).toInt(), 3, 12, 18)
-            canvas.drawText(line, left + 24f * scale, baseline, paint)
+            canvas.drawText(run.text, x, baseline, paint)
+            x += paint.measureText(run.text)
+        }
+        x = startX
+        runs.forEach { run ->
+            paint.typeface = if (run.emphasized) battleFeedBoldTypeface else battleFeedTypeface
             paint.style = Paint.Style.FILL
             paint.color = Color.argb((255f * textAlpha).toInt(), 255, 255, 255)
-            canvas.drawText(line, left + 24f * scale, baseline, paint)
+            canvas.drawText(run.text, x, baseline, paint)
+            x += paint.measureText(run.text)
         }
-        canvas.restore()
-        if (battleFeedPresentation.needsAnimation(nowMillis)) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
+        paint.typeface = battleFeedTypeface
+        paint.style = Paint.Style.FILL
     }
 
     private fun ellipsize(value: String, maximum: Int) = if (value.length <= maximum) value else "${value.take(maximum - 1)}…"

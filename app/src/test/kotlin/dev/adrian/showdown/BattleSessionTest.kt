@@ -79,6 +79,38 @@ class BattleSessionTest {
     }
 
     @Test
+    fun protocolFallbackEmphasizesPokemonAndMoveNamesInTheBattleFeed() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|move|p1a: Rayquaza|Dragon Ascent|p2a: Feraligatr"
+            )
+        )
+
+        val entry = session.battleFeedEntries().last()
+
+        assertEquals("Rayquaza used Dragon Ascent!", entry)
+        assertEquals("**Rayquaza** used **Dragon Ascent**!", session.battleFeedMarkupFor(entry))
+    }
+
+    @Test
+    fun protocolFallbackDoesNotUseNicknamesToFindTheMoveBoundary() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|move|p1a: Trick used Trickster|Dragon Ascent|p2a: Feraligatr"
+            )
+        )
+
+        val entry = session.battleFeedEntries().last()
+
+        assertEquals("Trick used Trickster used Dragon Ascent!", entry)
+        assertEquals("**Trick used Trickster** used **Dragon Ascent**!", session.battleFeedMarkupFor(entry))
+    }
+
+    @Test
     fun upperBattleFeedOmitsTimerAndRatingMetadataWhileActivityKeepsIt() {
         val session = BattleSession()
         session.appendShowdownBattleLog(
@@ -3189,6 +3221,7 @@ class BattleSessionTest {
 
         assertFalse(session.showdownBattleLog().contains("Queue open"))
         assertEquals(listOf("Queue closed"), session.showdownBattleLog())
+        assertEquals("**Queue closed**", session.battleFeedMarkupFor("Queue closed"))
         assertEquals(1, session.activityMessages().count { it == "Queue closed" })
     }
 

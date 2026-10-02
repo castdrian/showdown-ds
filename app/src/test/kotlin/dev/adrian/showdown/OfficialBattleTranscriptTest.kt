@@ -415,6 +415,10 @@ class OfficialBattleTranscriptTest {
             listOf("Samurott used Ceaseless Edge!", "A critical hit!"),
             session.showdownBattleLog()
         )
+        assertEquals(
+            "**Samurott** used **Ceaseless Edge**!",
+            session.battleFeedMarkupFor("Samurott used Ceaseless Edge!")
+        )
     }
 
     @Test

@@ -134,6 +134,36 @@ class BattleFeedTextTest {
     }
 
     @Test
+    fun showdownMoveMarkupBecomesAVisibleEmphasizedRun() {
+        val lines = BattleFeedText.wrapShowdownMarkup("Rayquaza used **Dragon Ascent**!", 40f, 2) { text, _ ->
+            text.length.toFloat()
+        }
+
+        assertEquals(
+            listOf(
+                listOf(
+                    BattleFeedText.StyledRun("Rayquaza used ", false),
+                    BattleFeedText.StyledRun("Dragon Ascent", true),
+                    BattleFeedText.StyledRun("!", false)
+                )
+            ),
+            lines
+        )
+        assertEquals("Rayquaza used Dragon Ascent!", lines.single().joinToString("") { it.text })
+    }
+
+    @Test
+    fun showdownMoveEmphasisSurvivesWrappingAndEllipsis() {
+        val lines = BattleFeedText.wrapShowdownMarkup("Rayquaza used **Dragon Ascent**!", 13f, 2) { text, _ ->
+            text.length.toFloat()
+        }
+
+        assertEquals("Rayquaza used", lines[0].joinToString("") { it.text })
+        assertEquals("Dragon Ascen…", lines[1].joinToString("") { it.text })
+        assertTrue(lines[1].all { it.emphasized })
+    }
+
+    @Test
     fun activityWindowWrapsEntriesAndFollowsTheFocusedMessage() {
         val lines = BattleFeedText.activityWindow(
             listOf(

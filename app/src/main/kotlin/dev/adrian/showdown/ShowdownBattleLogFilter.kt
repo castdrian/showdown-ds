@@ -16,6 +16,8 @@ object ShowdownBattleLogFilter {
         RegexOption.IGNORE_CASE
     )
     private val markupTag = Regex("<[^>]*>")
+    private val boldOpeningTag = Regex("(?i)<(?:strong|b)(?:\\s[^>]*)?>")
+    private val boldClosingTag = Regex("(?i)</(?:strong|b)>")
     private val interactiveControl = Regex("(?is)<button[^>]*>.*?</button>")
     private val repeatedWhitespace = Regex("\\s+")
     private val decodedEntity = Regex(
@@ -45,6 +47,12 @@ object ShowdownBattleLogFilter {
                     !diagnosticLine.containsMatchIn(line)
             }
     }
+
+    fun visibleMarkupEntries(value: String): List<String> = visibleEntries(
+        value
+            .replace(boldOpeningTag, "**")
+            .replace(boldClosingTag, "**")
+    )
 
     private fun decodeEntity(entity: String): String = when (entity.lowercase()) {
         "&nbsp;" -> " "

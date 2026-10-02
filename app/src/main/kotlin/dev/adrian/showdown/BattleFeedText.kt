@@ -1,10 +1,112 @@
 package dev.adrian.showdown
 
 object BattleFeedText {
+    data class StyledRun(
+        val text: String,
+        val emphasized: Boolean
+    )
+
     data class ActivityLine(
         val messageIndex: Int,
         val text: String
     )
+
+    fun wrapShowdownMarkup(
+        value: String,
+        maxWidth: Float,
+        maxLines: Int,
+        measure: (String, Boolean) -> Float
+    ): List<List<StyledRun>> {
+        if (maxWidth <= 0f || maxLines <= 0) return emptyList()
+        val runs = normalizeWhitespace(parseShowdownMarkup(value))
+        val plainText = runs.joinToString("") { it.text }
+        if (plainText.isBlank()) return emptyList()
+        val lines = wrap(plainText, maxWidth, maxLines) { text ->
+            maxOf(measure(text, false), measure(text, true))
+        }
+        var searchFrom = 0
+        return lines.map { line ->
+            val exactStart = plainText.indexOf(line, searchFrom)
+            val hasEllipsis = exactStart < 0 && line.endsWith("…")
+            val sourceText = if (hasEllipsis) line.dropLast(1) else line
+            val start = if (exactStart >= 0) exactStart else plainText.indexOf(sourceText, searchFrom)
+            if (start < 0) {
+                listOf(StyledRun(line, false))
+            } else {
+                val sourceEnd = start + sourceText.length
+                searchFrom = sourceEnd
+                val styledLine = sliceRuns(runs, start, sourceEnd).toMutableList()
+                if (hasEllipsis) appendRun(styledLine, "…", styledLine.lastOrNull()?.emphasized == true)
+                styledLine
+            }
+        }
+    }
+
+    private fun parseShowdownMarkup(value: String): List<StyledRun> {
+        val runs = mutableListOf<StyledRun>()
+        val emphasis = Regex("\\*\\*(.+?)\\*\\*")
+        var start = 0
+        emphasis.findAll(value).forEach { match ->
+            appendRun(runs, value.substring(start, match.range.first), false)
+            appendRun(runs, match.groupValues[1], true)
+            start = match.range.last + 1
+        }
+        appendRun(runs, value.substring(start), false)
+        return runs
+    }
+
+    private fun normalizeWhitespace(runs: List<StyledRun>): List<StyledRun> {
+        val normalized = mutableListOf<StyledRun>()
+        var pendingSpace = false
+        var pendingSpaceEmphasized = false
+        runs.forEach { run ->
+            var index = 0
+            while (index < run.text.length) {
+                val codePoint = run.text.codePointAt(index)
+                val nextIndex = index + Character.charCount(codePoint)
+                val value = run.text.substring(index, nextIndex)
+                if (Character.isWhitespace(codePoint)) {
+                    pendingSpace = normalized.isNotEmpty()
+                    pendingSpaceEmphasized = run.emphasized
+                } else {
+                    if (pendingSpace) appendRun(normalized, " ", pendingSpaceEmphasized)
+                    appendRun(normalized, value, run.emphasized)
+                    pendingSpace = false
+                }
+                index = nextIndex
+            }
+        }
+        return normalized
+    }
+
+    private fun sliceRuns(runs: List<StyledRun>, start: Int, end: Int): List<StyledRun> {
+        val sliced = mutableListOf<StyledRun>()
+        var offset = 0
+        runs.forEach { run ->
+            val runEnd = offset + run.text.length
+            val sliceStart = maxOf(start, offset)
+            val sliceEnd = minOf(end, runEnd)
+            if (sliceStart < sliceEnd) {
+                appendRun(
+                    sliced,
+                    run.text.substring(sliceStart - offset, sliceEnd - offset),
+                    run.emphasized
+                )
+            }
+            offset = runEnd
+        }
+        return sliced
+    }
+
+    private fun appendRun(runs: MutableList<StyledRun>, text: String, emphasized: Boolean) {
+        if (text.isEmpty()) return
+        val previous = runs.lastOrNull()
+        if (previous?.emphasized == emphasized) {
+            runs[runs.lastIndex] = previous.copy(text = previous.text + text)
+        } else {
+            runs += StyledRun(text, emphasized)
+        }
+    }
 
     fun window(entries: List<List<String>>, maxLines: Int, scrollLines: Int): List<String> {
         if (entries.isEmpty() || maxLines <= 0) return emptyList()

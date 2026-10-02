@@ -485,6 +485,11 @@ class BattleSession {
         val details: PokemonDetails
     )
 
+    private data class ShowdownBattleLogEntry(
+        val plainText: String,
+        val feedMarkup: String
+    )
+
     private val listeners = mutableListOf<Listener>()
     private val feedbackListeners = mutableListOf<FeedbackListener>()
     private val decisionListeners = mutableListOf<DecisionListener>()
@@ -495,8 +500,9 @@ class BattleSession {
     private var protocolEventCollector: MutableList<String>? = null
     private var protocolLogSuppressed = false
     private val protocolHistory = mutableListOf<String>()
-    private val showdownBattleLogEntries = mutableListOf<String>()
-    private val showdownBattleMarkupEntries = mutableMapOf<String, List<String>>()
+    private val showdownBattleLogEntries = mutableListOf<ShowdownBattleLogEntry>()
+    private val showdownBattleMarkupEntries = mutableMapOf<String, List<ShowdownBattleLogEntry>>()
+    private val protocolBattleFeedMarkupEntries = mutableListOf<ShowdownBattleLogEntry>()
     private var battleRoomPresenceLog: BattleRoomPresenceLog? = null
     private var battleRoomRenameFallback: String? = null
     private var battleLogGeneration = 0L
@@ -938,7 +944,9 @@ class BattleSession {
         battleFeedEntriesCache[normalizedLimit]?.let { return it }
         val protocolEntries = battleLog.filter(::isBattleFeedEntry)
         val nativeEntries = if (nativeBattleLogGeneration == battleLogGeneration) {
-            showdownBattleLogEntries.filter(::isBattleFeedEntry)
+            showdownBattleLogEntries
+                .filter { isBattleFeedEntry(it.plainText) }
+                .map { it.plainText }
         } else {
             emptyList()
         }
@@ -962,11 +970,23 @@ class BattleSession {
 
     fun latestBattleFeedEntry() = battleFeedEntries(1).lastOrNull()
 
-    fun showdownBattleLog() = showdownBattleLogEntries.toList()
+    fun showdownBattleLog() = showdownBattleLogEntries.map { it.plainText }
+
+    fun battleFeedMarkupFor(value: String): String {
+        val nativeIndex = if (nativeBattleLogGeneration == battleLogGeneration) {
+            showdownBattleLogEntries.indexOfLast { BattleFeedMessageIdentity.matches(it.plainText, value) }
+        } else {
+            -1
+        }
+        return showdownBattleLogEntries.getOrNull(nativeIndex)?.feedMarkup
+            ?: protocolBattleFeedMarkupEntries.lastOrNull { it.plainText == value }?.feedMarkup
+            ?: value
+    }
 
     fun resetShowdownBattleLog() {
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
+        protocolBattleFeedMarkupEntries.clear()
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = false
         battleFeedEntriesCache.clear()
@@ -977,12 +997,11 @@ class BattleSession {
         if (generation != battleLogGeneration) return
         val entries = normalizedShowdownEntries(value)
         if (entries.isEmpty()) return
-        showdownBattleLogEntries += entries
-        while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
+        appendNormalizedShowdownEntries(entries)
         if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
         battleFeedEntriesCache.clear()
-        entries.forEach(::appendNativeActivity)
-        latestBattleEvent = entries.last()
+        entries.forEach { appendNativeActivity(it.plainText) }
+        latestBattleEvent = entries.last().plainText
         latestBattleEventAtNanos = System.nanoTime()
         battleFeedVisible = true
         notifyListeners()
@@ -995,27 +1014,27 @@ class BattleSession {
             appendShowdownBattleLog(value, generation)
             return
         }
-        val previous = showdownBattleMarkupEntries.remove(normalizedKey).orEmpty()
+        val previous = showdownBattleMarkupEntries[normalizedKey]
         val entries = normalizedShowdownEntries(value)
         if (previous == entries) return
+        showdownBattleMarkupEntries.remove(normalizedKey)
         battleFeedEntriesCache.clear()
-        previous.forEach { entry ->
+        previous?.forEach { entry ->
             showdownBattleLogEntries.indexOfLast { it == entry }
                 .takeIf { it >= 0 }
                 ?.let(showdownBattleLogEntries::removeAt)
-            activityMessages.indexOfLast { it == entry }
+            activityMessages.indexOfLast { it == entry.plainText }
                 .takeIf { it >= 0 }
                 ?.let(::removeActivityAt)
         }
         if (entries.isNotEmpty()) {
             showdownBattleMarkupEntries[normalizedKey] = entries
-            showdownBattleLogEntries += entries
-            while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
-            entries.forEach(::appendNativeActivity)
-            latestBattleEvent = entries.last()
+            appendNormalizedShowdownEntries(entries)
+            entries.forEach { appendNativeActivity(it.plainText) }
+            latestBattleEvent = entries.last().plainText
             latestBattleEventAtNanos = System.nanoTime()
         } else {
-            latestBattleEvent = showdownBattleLogEntries.lastOrNull().orEmpty()
+            latestBattleEvent = showdownBattleLogEntries.lastOrNull()?.plainText.orEmpty()
             latestBattleEventAtNanos = System.nanoTime()
         }
         if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
@@ -1400,6 +1419,7 @@ class BattleSession {
         battleLog.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
+        protocolBattleFeedMarkupEntries.clear()
         battleRoomPresenceLog = null
         battleRoomRenameFallback = null
         battleFeedEntriesCache.clear()
@@ -2126,6 +2146,7 @@ class BattleSession {
         battleLog.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
+        protocolBattleFeedMarkupEntries.clear()
         battleRoomPresenceLog = null
         battleRoomRenameFallback = null
         battleFeedEntriesCache.clear()
@@ -2841,7 +2862,7 @@ class BattleSession {
         val event = capitalizeBattleActorAtSentenceStart("${battleActor(actorId)} used ${fields[3]}!")
         latestMoveEvent = event
         latestMoveEventAtNanos = System.nanoTime()
-        appendLog(event)
+        appendLog(event, battleMoveMarkup(actorId, fields[3]))
         publishFeedback(BattleFeedback(FeedbackType.MOVE, actor = actor, target = fields.getOrNull(4)?.substringAfter(':')?.trim().orEmpty(), move = fields[3]))
     }
 
@@ -4401,11 +4422,15 @@ class BattleSession {
 
     private fun battleActor(value: String?): String {
         val actor = value.orEmpty()
-        val name = displayPokemonName(actor.substringAfter(':').trim().ifBlank { "Pokémon" })
+        val name = battleActorName(actor)
         if (!isProtocolActor(actor)) return name
         if (spectatorMode) return "${battleTrainer(actor)}'s $name"
         return if (isPlayerSide(actor)) name else "the opposing $name"
     }
+
+    private fun battleActorName(actor: String) = displayPokemonName(
+        actor.substringAfter(':').trim().ifBlank { "Pokémon" }
+    )
 
     private fun battleTrainer(actor: String): String {
         val side = targetSlot(actor).take(2)
@@ -5063,13 +5088,30 @@ class BattleSession {
         return "$leading${opposingPrefix.replaceFirstChar(Char::uppercase)}${content.substring(opposingPrefix.length)}"
     }
 
-    private fun appendLog(entry: String) {
+    private fun battleMoveMarkup(actor: String, move: String): String {
+        val name = battleActorName(actor)
+        val formattedActor = when {
+            !isProtocolActor(actor) -> "**$name**"
+            spectatorMode -> "${battleTrainer(actor)}'s **$name**"
+            isPlayerSide(actor) -> "**$name**"
+            else -> "The opposing **$name**"
+        }
+        return "$formattedActor used **$move**!"
+    }
+
+    private fun appendLog(entry: String, feedMarkup: String = entry) {
         if (protocolLogSuppressed) return
         val message = capitalizeBattleActorAtSentenceStart(entry)
         if (battleLog.lastOrNull() == message) return
         battleFeedVisible = true
         battleLog += message
-        if (battleLog.size > 32) battleLog.removeAt(0)
+        if (feedMarkup != message) protocolBattleFeedMarkupEntries += ShowdownBattleLogEntry(message, feedMarkup)
+        if (battleLog.size > 32) {
+            val removed = battleLog.removeAt(0)
+            if (battleLog.none { it == removed }) {
+                protocolBattleFeedMarkupEntries.removeAll { it.plainText == removed }
+            }
+        }
         battleLogGeneration += 1L
         battleFeedEntriesCache.clear()
         nativeBattleLogPending = true
@@ -5174,9 +5216,22 @@ class BattleSession {
         return message.takeIf { it.isNotBlank() }
     }
 
-    private fun normalizedShowdownEntries(value: String): List<String> = ShowdownBattleLogFilter
-        .visibleEntries(value.replace("**", ""))
-        .mapNotNull(::sanitizeShowdownMarkup)
+    private fun appendNormalizedShowdownEntries(entries: List<ShowdownBattleLogEntry>) {
+        showdownBattleLogEntries += entries
+        while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
+    }
+
+    private fun normalizedShowdownEntries(value: String): List<ShowdownBattleLogEntry> {
+        val plainEntries = ShowdownBattleLogFilter
+            .visibleEntries(value.replace("**", ""))
+            .mapNotNull(::sanitizeShowdownMarkup)
+        val feedMarkupEntries = ShowdownBattleLogFilter
+            .visibleMarkupEntries(value)
+            .mapNotNull(::sanitizeShowdownMarkup)
+        return plainEntries.mapIndexed { index, plainText ->
+            ShowdownBattleLogEntry(plainText, feedMarkupEntries.getOrElse(index) { plainText })
+        }
+    }
 
     private fun moveMoveFocus(horizontal: Int, vertical: Int) {
         if (moves.isEmpty()) return
