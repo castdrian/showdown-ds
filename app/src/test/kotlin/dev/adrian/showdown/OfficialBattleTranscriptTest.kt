@@ -178,6 +178,29 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun illusionRevealUpdatesThePlayerPartyIdentityBeforeTheDisguiseSpeciesReturns() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|poke|p1|Pikachu, L50|",
+                "|poke|p1|Pikachu, L50|",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|replace|p1a: Zoroark|Zoroark, L50|100/100",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100"
+            )
+        )
+
+        assertEquals(listOf("Zoroark", "Pikachu"), session.team())
+        assertEquals(listOf("Zoroark", "Pikachu"), session.playerPartyDetails().map { it.species })
+        assertEquals("Pikachu", session.playerActiveCombatants().single().species)
+    }
+
+    @Test
     fun keepsTheViewerSideAsThePlayerWhenTheViewerIsP2() {
         val session = BattleSession().apply { setLocalUsername("OPPONENT") }
         session.applyProtocolPacket(
