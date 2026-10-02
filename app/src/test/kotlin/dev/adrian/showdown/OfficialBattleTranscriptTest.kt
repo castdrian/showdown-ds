@@ -738,20 +738,22 @@ class OfficialBattleTranscriptTest {
                 "|player|p2|OPPONENT||",
                 "|switch|p1a: Mewtwo|Mewtwo, L50|83/100 brn",
                 "|switch|p2a: Magikarp|Magikarp, L1|11/11",
+                "|-ability|p1a: Mewtwo|Pressure",
                 "|-sethp|p1a: Mewtwo|70/100 brn",
                 "|-endability|p1a: Mewtwo",
-                "|-transform|p1a: Mewtwo|Ditto",
-                "|-hitcount|p1a: Ditto|3",
-                "|-waiting|p1a: Ditto|p2a: Magikarp",
-                "|-zpower|p1a: Ditto",
-                "|-cureteam|p1a: Ditto"
+                "|-ability|p2a: Magikarp|Swift Swim",
+                "|-transform|p1a: Mewtwo|p2a: Magikarp",
+                "|-hitcount|p1a: Mewtwo|3",
+                "|-waiting|p1a: Mewtwo|p2a: Magikarp",
+                "|-zpower|p1a: Mewtwo",
+                "|-cureteam|p1a: Mewtwo"
             )
         )
 
-        assertEquals("Ditto", session.playerPokemon)
+        assertEquals("Mewtwo", session.playerPokemon)
         assertEquals("70/100", session.playerHp)
         assertEquals("READY", session.playerCondition)
-        assertEquals("Suppressed", session.playerDetails().ability)
+        assertEquals("Swift Swim", session.playerDetails().ability)
         assertTrue(session.battleLog().any { it.contains("hit 3 times") })
         assertTrue(session.battleLog().any { it.contains("Z-Power") })
     }
@@ -1139,6 +1141,45 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun restoresTerastallizationFromSwitchInDetailsAfterSwitchingOut() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+            setPokemonTypeResolver(
+                mapOf(
+                    "Pikachu" to listOf("ELECTRIC"),
+                    "Eevee" to listOf("NORMAL"),
+                    "Gengar" to listOf("GHOST")
+                )::get
+            )
+        }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|poke|p1|Pikachu|",
+                "|poke|p1|Eevee|",
+                "|poke|p2|Gengar|",
+                "|poke|p2|Haunter|",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p2a: Gengar|Gengar, L50|100/100",
+                "|-terastallize|p1a: Pikachu|WATER",
+                "|-terastallize|p2a: Gengar|FIRE",
+                "|switch|p1a: Eevee|Eevee, L50|100/100",
+                "|switch|p2a: Haunter|Haunter, L50|100/100",
+                "|switch|p1a: Pikachu|Pikachu, L50, tera:WATER|100/100",
+                "|switch|p2a: Gengar|Gengar, L50, tera:FIRE|100/100"
+            )
+        )
+
+        assertEquals("Pikachu", session.playerActiveCombatants().single().name)
+        assertEquals(listOf("WATER"), session.playerActiveCombatants().single().types)
+        assertEquals("Gengar", session.opponentActiveCombatants().single().name)
+        assertEquals(listOf("FIRE"), session.opponentActiveCombatants().single().types)
+    }
+
+    @Test
     fun keepsSilentProtocolStateChangesOutOfTheBattleLog() {
         val session = BattleSession()
         session.setPokemonTypeResolver(mapOf("Mewtwo" to listOf("PSYCHIC"))::get)
@@ -1186,7 +1227,9 @@ class OfficialBattleTranscriptTest {
             )
         )
 
-        assertEquals("Dragapult", session.playerPokemon)
+        assertEquals("Mewtwo", session.playerPokemon)
+        assertEquals("Mewtwo", session.playerDetails().name)
+        assertEquals("Dragapult", session.playerDetails().species)
         assertEquals(listOf("DRAGON", "GHOST"), session.playerDetails().types)
     }
 
@@ -1213,6 +1256,100 @@ class OfficialBattleTranscriptTest {
         assertEquals("Dragapult", session.playerDetails().species)
         assertEquals(listOf("DRAGON", "GHOST"), session.playerDetails().types)
         assertEquals("Infiltrator", session.playerDetails().ability)
+    }
+
+    @Test
+    fun temporaryTransformDoesNotReplaceThePokemonSpeciesAfterSwitchingOut() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|poke|p1|Ditto|",
+                "|poke|p1|Pikachu|",
+                "|poke|p2|Dragapult|",
+                "|switch|p1a: Copycat|Ditto, L50|100/100",
+                "|switch|p2a: Phantom|Dragapult, L50|100/100",
+                "|-ability|p2a: Phantom|Infiltrator",
+                "|-transform|p1a: Copycat|p2a: Phantom",
+                "|move|p1a: Copycat|Shadow Ball|p2a: Phantom",
+                "|switch|p1a: Bolt|Pikachu, L50|100/100"
+            )
+        )
+
+        val spriteRequest = BattleSpriteRequests.active(
+            session.playerActiveCombatants(),
+            BattleSpriteSide.PLAYER,
+            BattleSession.SpriteStyle.MODERN_3D
+        ).single().request
+
+        assertEquals(listOf("Ditto", "Pikachu"), session.playerPartyDetails().map { it.species })
+        assertEquals(listOf("Copycat", "Bolt"), session.team())
+        assertEquals("Pikachu", spriteRequest.species)
+        assertTrue(session.battleLog().contains("Copycat used Shadow Ball!"))
+    }
+
+    @Test
+    fun temporaryTransformKeepsThePokemonIdentityAndLevel() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|poke|p1|Ditto|",
+                "|poke|p2|Dragapult|",
+                "|switch|p1a: Ditto|Ditto, L50|100/100",
+                "|switch|p2a: Phantom|Dragapult, L80, M|100/100",
+                "|-transform|p1a: Ditto|p2a: Phantom"
+            )
+        )
+
+        val active = session.playerActiveCombatants().single()
+
+        assertEquals("Ditto", active.name)
+        assertEquals("Dragapult", active.species)
+        assertEquals("50", active.level)
+        assertEquals("", active.gender)
+        assertEquals("Ditto", session.playerDetails().name)
+        assertEquals("50", session.playerDetails().level)
+    }
+
+    @Test
+    fun temporaryOpponentTransformDoesNotReplaceThePokemonSpeciesAfterSwitchingOut() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|clearpoke",
+                "|poke|p1|Dragapult|",
+                "|poke|p2|Ditto|",
+                "|poke|p2|Eevee|",
+                "|switch|p1a: Phantom|Dragapult, L50|100/100",
+                "|switch|p2a: Ditto|Ditto, L50|100/100",
+                "|-transform|p2a: Ditto|p1a: Phantom",
+                "|switch|p2a: Eevee|Eevee, L50|100/100"
+            )
+        )
+
+        val spriteRequest = BattleSpriteRequests.active(
+            session.opponentActiveCombatants(),
+            BattleSpriteSide.OPPONENT,
+            BattleSession.SpriteStyle.MODERN_3D
+        ).single().request
+
+        assertEquals(listOf("Ditto", "Eevee"), session.opponentPartyDetails().map { it.species })
+        assertEquals("Eevee", spriteRequest.species)
+        assertTrue(session.battleLog().contains("The opposing Ditto transformed!"))
     }
 
     @Test

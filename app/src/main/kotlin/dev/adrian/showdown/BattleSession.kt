@@ -480,6 +480,11 @@ class BattleSession {
         val nextFraction: Float?
     )
 
+    private data class TransformPartySnapshot(
+        val partyIndex: Int,
+        val details: PokemonDetails
+    )
+
     private val listeners = mutableListOf<Listener>()
     private val feedbackListeners = mutableListOf<FeedbackListener>()
     private val decisionListeners = mutableListOf<DecisionListener>()
@@ -567,6 +572,7 @@ class BattleSession {
     private val playerActivePartyIndices = mutableMapOf<String, Int>()
     private val opponentPartyIndicesByIdentifier = mutableMapOf<String, MutableList<Int>>()
     private val opponentActivePartyIndices = mutableMapOf<String, Int>()
+    private val transformedPartySnapshotsBySlot = mutableMapOf<String, TransformPartySnapshot>()
     private val publicPartySidesInitialized = mutableSetOf<String>()
     private val activeTeamNames = mutableSetOf<String>()
     private val activeSlotNames = mutableMapOf<String, String>()
@@ -1809,6 +1815,7 @@ class BattleSession {
                         opponentTeamDetails.clear()
                         opponentPartyIndicesByIdentifier.clear()
                         opponentActivePartyIndices.clear()
+                        transformedPartySnapshotsBySlot.clear()
                         if (spectatorMode || replayMode) {
                             resetPublicPartyPreviewCollections()
                             playerActiveCombatants.clear()
@@ -2177,6 +2184,7 @@ class BattleSession {
         baseTypesBySlot.clear()
         typeChangeBySlot.clear()
         typeAdditionsBySlot.clear()
+        transformedPartySnapshotsBySlot.clear()
         terastallizedSlots.clear()
         teraTypesBySlot.clear()
         playerSlot = restoredPlayerSlot ?: "p1"
@@ -2264,6 +2272,7 @@ class BattleSession {
         val slot = fields[2].substringBefore(":").trim()
         val side = sideForSlot(slot)
         val previousCombatant = (if (playerSide) playerActiveCombatants else opponentActiveCombatants)[slot]
+        restoreTransformedPartySnapshot(slot)
         val shiny = detailsAreShiny(fields[3])
         if (fields.drop(5).any { it.contains("Baton Pass", true) }) pendingBatonPassBySide[side] = slot
         val passedBoosts = pendingBatonPassBySide.remove(side)?.let { sourceSlot ->
@@ -2339,6 +2348,9 @@ class BattleSession {
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
                 teraTypesBySlot.remove(slot)
+                val activeTypes = terastallizedTypeFromDetails(fields[3])
+                    ?.let { terastallizedTypesForSlot(slot, it, baseTypes) }
+                    ?: baseTypes
                 playerBoostsBySlot.remove(slot)
                 if (!passedBoosts.isNullOrEmpty()) playerBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val activeName = identifier.ifBlank { activeDetails.name.ifBlank { pokemon } }
@@ -2346,7 +2358,7 @@ class BattleSession {
                 val updatedDetails = activeDetails.copy(
                     name = activeName,
                     species = activeSpecies,
-                    types = baseTypes,
+                    types = activeTypes,
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
                     hp = hp,
@@ -2403,13 +2415,16 @@ class BattleSession {
                 typeAdditionsBySlot.remove(slot)
                 terastallizedSlots.remove(slot)
                 teraTypesBySlot.remove(slot)
+                val activeTypes = terastallizedTypeFromDetails(fields[3])
+                    ?.let { terastallizedTypesForSlot(slot, it, baseTypes) }
+                    ?: baseTypes
                 opponentBoostsBySlot.remove(slot)
                 if (!passedBoosts.isNullOrEmpty()) opponentBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val activeName = identifier.ifBlank { existing?.name ?: pokemon }
                 val updatedDetails = activeDetails.copy(
                     name = activeName,
                     species = pokemon,
-                    types = baseTypes,
+                    types = activeTypes,
                     level = parsedDetails.first,
                     gender = parsedDetails.second,
                     hp = hp,
@@ -3057,10 +3072,14 @@ class BattleSession {
     private fun applyTransform(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         val target = fields.getOrNull(3) ?: return
+        rememberPartyDetailsBeforeTransform(actor)
+        val sourceDetails = actorDetails(actor)
         val targetDetails = actorDetails(target)
         val species = targetDetails?.species ?: target.substringAfter(':').trim().ifBlank { return }
-        val level = targetDetails?.level ?: "50"
-        val gender = when (targetDetails?.gender) {
+        val actorSlot = targetSlot(actor)
+        val sourceCombatant = if (isPlayerSide(actor)) playerActiveCombatants[actorSlot] else opponentActiveCombatants[actorSlot]
+        val level = sourceDetails?.level ?: sourceCombatant?.level ?: "50"
+        val gender = when (sourceDetails?.gender ?: sourceCombatant?.gender.orEmpty()) {
             "♂" -> ", M"
             "♀" -> ", F"
             else -> ""
@@ -3100,8 +3119,8 @@ class BattleSession {
             val current = playerActiveCombatants[slot]
             val parsed = parseDetails(details, current?.level ?: playerDetails.level, current?.gender ?: playerDetails.gender)
             val activeName = playerActiveCombatants[slot]
-                ?.let { identityName(actor, it.name, it.species, species) }
-                ?: identityName(actor, playerDetails.name, playerDetails.species, species)
+                ?.let { pokemonIdentityAfterFormChange(fields, actor, it.name, it.species, species) }
+                ?: pokemonIdentityAfterFormChange(fields, actor, playerDetails.name, playerDetails.species, species)
             playerActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
                 val hp = formHealth ?: it.hp
@@ -3117,7 +3136,7 @@ class BattleSession {
                 )
                 updatePlayerPartyMemberForSlot(slot, it.name) { party ->
                     party.copy(
-                        name = identityName(actor, party.name, party.species, species),
+                        name = pokemonIdentityAfterFormChange(fields, actor, party.name, party.species, species),
                         species = species,
                         types = types,
                         level = parsed.first,
@@ -3154,8 +3173,8 @@ class BattleSession {
             val current = opponentActiveCombatants[slot]
             val parsed = parseDetails(details, current?.level ?: opponentDetails.level, current?.gender ?: opponentDetails.gender)
             val activeName = opponentActiveCombatants[slot]
-                ?.let { identityName(actor, it.name, it.species, species) }
-                ?: identityName(actor, opponentDetails.name, opponentDetails.species, species)
+                ?.let { pokemonIdentityAfterFormChange(fields, actor, it.name, it.species, species) }
+                ?: pokemonIdentityAfterFormChange(fields, actor, opponentDetails.name, opponentDetails.species, species)
             opponentActiveCombatants[slot]?.let {
                 val types = if (slot in terastallizedSlots) it.types else baseTypes
                 val hp = formHealth ?: it.hp
@@ -3171,7 +3190,7 @@ class BattleSession {
                 )
                 updateOpponentPartyForSlot(slot) { party ->
                     party.copy(
-                        name = identityName(actor, party.name, party.species, species),
+                        name = pokemonIdentityAfterFormChange(fields, actor, party.name, party.species, species),
                         species = species,
                         types = types,
                         level = parsed.first,
@@ -3208,6 +3227,21 @@ class BattleSession {
         }
     }
 
+    private fun pokemonNameFromActor(actor: String, fallback: String) =
+        actor.substringAfter(':').trim().ifBlank { fallback }
+
+    private fun pokemonIdentityAfterFormChange(
+        fields: List<String>,
+        actor: String,
+        currentName: String,
+        currentSpecies: String,
+        newSpecies: String
+    ) = if (fields.getOrNull(1) == "-transform") {
+        pokemonNameFromActor(actor, currentName)
+    } else {
+        identityName(actor, currentName, currentSpecies, newSpecies)
+    }
+
     private fun identityName(actor: String, currentName: String, currentSpecies: String, newSpecies: String): String {
         val identifier = actor.substringAfter(':').trim()
         return when {
@@ -3222,11 +3256,9 @@ class BattleSession {
         val actor = fields.getOrNull(2) ?: return
         val teraType = fields.getOrNull(3)?.uppercase()?.takeIf { it.isNotBlank() } ?: return
         val slot = actor.substringBefore(":").trim()
-        terastallizedSlots += slot
-        if (teraType == "STELLAR") teraTypesBySlot.remove(slot) else teraTypesBySlot[slot] = teraType
         typeChangeBySlot.remove(slot)
         typeAdditionsBySlot.remove(slot)
-        val displayedTypes = if (teraType == "STELLAR") currentTypesForSlot(slot) else listOf(teraType)
+        val displayedTypes = terastallizedTypesForSlot(slot, teraType, currentTypesForSlot(slot))
         if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let {
                 playerActiveCombatants[slot] = it.copy(types = displayedTypes)
@@ -3244,6 +3276,26 @@ class BattleSession {
             fields,
             "(${battleActor(actor)} has Terastallized into the ${battleTypeLabel(teraType)}-type!)"
         )
+    }
+
+    private fun terastallizedTypeFromDetails(details: String): String? = details.split(',').firstNotNullOfOrNull { value ->
+        value.trim()
+            .takeIf { it.startsWith("tera:", true) }
+            ?.substringAfter(':')
+            ?.trim()
+            ?.uppercase()
+            ?.takeIf(String::isNotBlank)
+    }
+
+    private fun terastallizedTypesForSlot(slot: String, teraType: String, baseTypes: List<String>): List<String> {
+        terastallizedSlots += slot
+        if (teraType == "STELLAR") {
+            teraTypesBySlot.remove(slot)
+            return baseTypes
+        }
+        val normalizedType = teraType.uppercase()
+        teraTypesBySlot[slot] = normalizedType
+        return listOf(normalizedType)
     }
 
     private fun applyStart(fields: List<String>) {
@@ -4726,6 +4778,7 @@ class BattleSession {
         swap(typeChangeBySlot)
         swap(typeAdditionsBySlot)
         swap(teraTypesBySlot)
+        swap(transformedPartySnapshotsBySlot)
         if (isPlayerSide(oldSlot)) swap(playerBoostsBySlot) else swap(opponentBoostsBySlot)
         if (isPlayerSide(oldSlot)) swap(playerActivePartyIndices) else swap(opponentActivePartyIndices)
         val oldTera = terastallizedSlots.remove(oldSlot)
@@ -5706,7 +5759,38 @@ class BattleSession {
         opponentTeamDetails.clear()
         opponentPartyIndicesByIdentifier.clear()
         opponentActivePartyIndices.clear()
+        transformedPartySnapshotsBySlot.clear()
         publicPartySidesInitialized.clear()
+    }
+
+    private fun rememberPartyDetailsBeforeTransform(actor: String) {
+        val slot = actor.substringBefore(":").trim()
+        if (slot in transformedPartySnapshotsBySlot) return
+        val playerSide = isPlayerSide(actor)
+        val party = if (playerSide) teamDetails else opponentTeamDetails
+        val partyIndex = (if (playerSide) playerActivePartyIndices[slot] else opponentActivePartyIndices[slot])
+            ?: return
+        val details = party.getOrNull(partyIndex) ?: return
+        transformedPartySnapshotsBySlot[slot] = TransformPartySnapshot(partyIndex, details)
+    }
+
+    private fun restoreTransformedPartySnapshot(slot: String) {
+        val snapshot = transformedPartySnapshotsBySlot.remove(slot) ?: return
+        val party = if (isPlayerSide(slot)) teamDetails else opponentTeamDetails
+        val transformedDetails = party.getOrNull(snapshot.partyIndex) ?: return
+        val originalDetails = snapshot.details
+        party[snapshot.partyIndex] = transformedDetails.copy(
+            name = originalDetails.name,
+            species = originalDetails.species,
+            types = originalDetails.types,
+            level = originalDetails.level,
+            gender = originalDetails.gender,
+            ability = originalDetails.ability,
+            moves = originalDetails.moves,
+            stats = originalDetails.stats,
+            shiny = originalDetails.shiny,
+            possibleAbilities = originalDetails.possibleAbilities
+        )
     }
 
     private fun uniqueIdentifierIndex(identifiers: List<String>, identifier: String) = identifiers.withIndex()
