@@ -101,6 +101,18 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
+    fun constrainedFrontSpriteFallbackStartsBeforeHdCandidatesFinish() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val constrainedFrontResolver = source.substringAfter("private fun requestConstrainedSpriteResolution")
+            .substringBefore("private fun requestConstrainedBackSpriteResolution")
+
+        assertTrue(constrainedFrontResolver.contains("SpriteResolutionGate<SpriteAsset>("))
+        assertTrue(constrainedFrontResolver.contains("primaryCanReplaceFallback = { it.isAnimated }"))
+        assertTrue(constrainedFrontResolver.contains("mainHandler.postDelayed("))
+        assertTrue(constrainedFrontResolver.contains("requestModernAnimatedSpriteResolution(request, plan) { asset -> resolutionGate.fallback(asset) }"))
+    }
+
+    @Test
     fun rejectsOneFrameGifArtwork() {
         assertFalse(hasMultipleGifFrames(testGif(1)))
         assertFalse(hasMultipleGifFrames(testGif(2, identicalFrames = true)))
@@ -267,6 +279,38 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("pokemon/shiny/${'$'}resourceNumber.png"))
         assertTrue(source.contains("pokemon/${'$'}resourceNumber.png"))
         assertTrue(staticResolver.indexOf("requestPokeApiStaticSprite") < staticResolver.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates"))
+    }
+
+    @Test
+    fun pokeApiSpritesResolveDexNumbersFromTheShowdownPokedexFirst() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val resolver = source.substringAfter("private fun requestPokeApiSpriteCandidates(")
+            .substringBefore("private fun requestPokedexNumbers(")
+
+        assertTrue(resolver.contains("requestPokedexNumbers"))
+        assertTrue(resolver.contains("dexNumbers[ShowdownAssetPaths.animationId(name)]"))
+        assertTrue(resolver.contains("requestSpriteCandidates(candidates(resourceNumbers[index]), animatedOnly)"))
+        assertTrue(resolver.contains("if (index >= resourceNumbers.size)"))
+        assertTrue(resolver.contains("requestIndexedSprite(0)"))
+        val apiLookupIndex = resolver.indexOf("requestLookup(0, resolutionGate::primary)")
+        val dexLookupIndex = resolver.indexOf("requestPokedexNumbers")
+        assertTrue(apiLookupIndex >= 0)
+        assertTrue(dexLookupIndex > apiLookupIndex)
+        assertTrue(source.contains("requestPokedex(::parsePokedexNumbers)"))
+        assertTrue(source.contains("File(diskCache, \"${'$'}{digest(\"data/pokedex.json\")}.json\").takeIf(File::isFile)"))
+        assertTrue(source.contains("PokeApiSpriteDexNumbers.parse(cachedFile.readText())"))
+    }
+
+    @Test
+    fun modernSpriteResolutionStartsTheNameBasedFallbackAlongsideDexLookup() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val resolver = source.substringAfter("private fun requestModernAnimatedSpriteResolution(")
+            .substringBefore("private fun requestStaticSpriteFallback(")
+
+        assertTrue(resolver.contains("requestStaticShowdownFallback(request, resolutionGate::fallback)"))
+        assertTrue(resolver.contains("requestPokeApiStaticSprite(request.species, request.shiny, baseSpeciesFirst = true, receiver = resolutionGate::fallback)"))
+        assertTrue(source.contains("private val fallbackSpriteExecutor = ThreadPoolExecutor(0, 1, 10L, TimeUnit.SECONDS, LinkedBlockingQueue())"))
+        assertTrue(source.contains("executor = fallbackSpriteExecutor"))
     }
 
     @Test
@@ -441,7 +485,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(modernLocalIndex >= 0)
         assertTrue(animatedIndex > modernLocalIndex)
         assertTrue(staticIndex > animatedIndex)
-        assertTrue(source.contains("ShowdownAssetPaths.staticDexSpriteCandidates(request.species, request.shiny)"))
+        assertTrue(source.contains("ShowdownAssetPaths.staticBattleSpriteCandidates(request.species, request.shiny)"))
         assertTrue(source.contains("it.startsWith(\"sprites/dex/\") || it.startsWith(\"sprites/dex-shiny/\")"))
         assertTrue(source.contains(".filterNot(::isHighResolutionSpritePath)"))
         assertTrue(source.contains("allowsStaticShowdownFallback(request)"))
@@ -478,7 +522,7 @@ class ShowdownSpriteCacheContractTest {
         val localResolver = source.substringAfter("private fun requestStaticSpriteFallback")
             .substringBefore("private fun requestRegularRemoteSpriteResolution")
         val animatedResolution = source.indexOf("requestModernAnimatedSpriteResolution(request, plan) { asset -> gate.fallback(asset) }")
-        val staticFallback = source.indexOf("ShowdownAssetPaths.staticDexSpriteCandidates(request.species, request.shiny)")
+        val staticFallback = source.indexOf("ShowdownAssetPaths.staticBattleSpriteCandidates(request.species, request.shiny)")
 
         assertTrue(backResolver.contains("requestAnimatedBackSpriteResolution(request, plan, receiver, includeRegularScrapedBack = true)"))
         assertTrue(animatedResolution >= 0)

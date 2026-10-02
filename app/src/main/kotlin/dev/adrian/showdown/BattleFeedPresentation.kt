@@ -9,9 +9,9 @@ data class BattleFeedFrame(
 )
 
 class BattleFeedPresentation(
-    private val minimumMessageDurationMillis: Long = 3_000L,
-    private val holdDurationMillis: Long = 2_600L,
-    private val fadeDurationMillis: Long = 400L
+    private val minimumMessageDurationMillis: Long = DEFAULT_MESSAGE_DWELL_MILLIS,
+    private val holdDurationMillis: Long = DEFAULT_MESSAGE_DWELL_MILLIS,
+    private val fadeDurationMillis: Long = DEFAULT_MESSAGE_FADE_MILLIS
 ) {
     private val pendingMessages = ArrayDeque<String>()
     private var observedEntries: List<String>? = null
@@ -24,6 +24,12 @@ class BattleFeedPresentation(
     private var accumulatedPausedMillis = 0L
     private var persistentText: String? = null
     private var pendingPersistentText: String? = null
+
+    companion object {
+        const val DEFAULT_MESSAGE_DWELL_MILLIS = 2_000L
+        const val DEFAULT_MESSAGE_FADE_MILLIS = 400L
+        const val DEFAULT_MESSAGE_CYCLE_MILLIS = DEFAULT_MESSAGE_DWELL_MILLIS + DEFAULT_MESSAGE_FADE_MILLIS
+    }
 
     fun setPlaybackSpeed(value: Float) {
         playbackSpeed = BattlePlaybackSpeed.coerce(value)

@@ -1130,6 +1130,15 @@ class BattleSession {
         }
     }
 
+    fun opponentTeamCardStatus(index: Int): String {
+        val details = opponentTeamDetails.getOrNull(index) ?: return "Unknown"
+        return when {
+            details.condition.contains("FNT", true) -> "Fainted"
+            opponentActivePartyIndices.values.any { it == index } -> "In battle"
+            else -> "Available"
+        }
+    }
+
     fun availableGimmicks() = availableGimmicks.toList()
 
     fun terastallizeType() = availableTeraType

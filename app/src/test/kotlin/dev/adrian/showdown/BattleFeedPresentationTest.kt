@@ -38,8 +38,23 @@ class BattleFeedPresentationTest {
         presentation.setPlaybackSpeed(0.75f)
         presentation.update(listOf("Meowstic used Nasty Plot!"), true, 1_000L)
 
-        assertEquals("Meowstic used Nasty Plot!", presentation.frame(5_000L)?.visibleText)
-        assertNull(presentation.frame(5_600L))
+        assertEquals("Meowstic used Nasty Plot!", presentation.frame(3_600L)?.visibleText)
+        assertNull(presentation.frame(4_300L))
+    }
+
+    @Test
+    fun advancesEachBattleMessageWithinThePacketPlaybackBudget() {
+        val presentation = BattleFeedPresentation()
+        presentation.setPlaybackSpeed(0.75f)
+        presentation.update(listOf("Move"), true, 1_000L)
+        presentation.update(listOf("Move", "Damage"), true, 1_001L)
+
+        val nextMessageAt = 1_001L + BattlePlaybackTiming.scaledPause(
+            BattlePlaybackTiming.pauseAfter(listOf("|-damage|p2a: Eevee|80/100")),
+            0.75f
+        )
+
+        assertEquals("Damage", presentation.frame(nextMessageAt)?.text)
     }
 
     @Test

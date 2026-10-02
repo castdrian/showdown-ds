@@ -373,8 +373,6 @@ class MainActivity : Activity() {
         lightweightBattlePlayback = activityManager?.let {
             shouldUseLightweightBattlePlayback(
                 it.isLowRamDevice,
-                it.memoryClass,
-                memoryInfo.totalMem,
                 memoryInfo.availMem
             )
         } ?: true

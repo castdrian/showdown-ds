@@ -294,8 +294,8 @@ class BattleSceneView(
                         } else {
                             directTargets.toList()
                         }
-                        lightweightImpactAtNanos = nowNanos + BattleSceneTiming.scaledDurationNanos(
-                            BattleSceneTiming.lightweightImpactDelayNanos,
+                        lightweightImpactAtNanos = nowNanos + BattleSceneTiming.lightweightImpactDelayForAnimation(
+                            lightweightMoveAnimationEnabled,
                             playbackSpeed
                         )
                         lightweightImpactSoundPending = true

@@ -27,6 +27,8 @@ object SwitchTeamLayout {
     const val COLUMNS = 2
     const val LEFT = 44f
     const val TOP = 220f
+    const val ROSTER_TOGGLE_TOP = 168f
+    const val ROSTER_TOGGLE_HEIGHT = 42f
     const val DECISION_PROMPT_TOP = 112f
     const val DECISION_PROMPT_BOTTOM = 160f
     const val DECISION_TOP = 180f
@@ -51,6 +53,13 @@ object SwitchTeamLayout {
 
     fun decisionBounds(width: Float, height: Float, scale: Float, index: Int, teamSize: Int): SwitchTeamCardBounds =
         boundsForTop(width, height, scale, index, teamSize, DECISION_TOP)
+
+    fun rosterToggleBounds(width: Float, height: Float, scale: Float) = SwitchTeamCardBounds(
+        LEFT * scale,
+        ROSTER_TOGGLE_TOP * scale,
+        width - LEFT * scale,
+        (ROSTER_TOGGLE_TOP + ROSTER_TOGGLE_HEIGHT) * scale
+    )
 
     private fun boundsForTop(
         width: Float,

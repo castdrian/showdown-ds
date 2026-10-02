@@ -24,7 +24,11 @@ import java.net.URL
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -415,6 +419,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val appContext = context.applicationContext
     private val downloadExecutor = Executors.newFixedThreadPool(2)
+    private val fallbackSpriteExecutor = ThreadPoolExecutor(0, 1, 10L, TimeUnit.SECONDS, LinkedBlockingQueue())
     private val decodeExecutor = Executors.newSingleThreadExecutor()
     private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
         ?.let { manager -> ActivityManager.MemoryInfo().also(manager::getMemoryInfo).totalMem < 2L * 1024L * 1024L * 1024L }
@@ -449,6 +454,11 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val resolvedPokemonCache = LruCache<BattleSpriteRequest, WeakReference<SpriteAsset>>(16)
     private val pendingSpriteReceivers = ConcurrentHashMap<String, MutableList<(SpriteAsset?) -> Unit>>()
     private val pendingFileReceivers = ConcurrentHashMap<String, MutableList<(File?) -> Unit>>()
+    private val pokedexNumbersLock = Any()
+    private val pendingPokedexNumberReceivers = mutableListOf<(Map<String, Int>) -> Unit>()
+    private var pokedexNumbers = emptyMap<String, Int>()
+    private var pokedexNumbersLoaded = false
+    private var pokedexNumbersLoading = false
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
     private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
     private val closed = AtomicBoolean(false)
@@ -613,11 +623,16 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         downloadExecutor.shutdownNow()
+        fallbackSpriteExecutor.shutdownNow()
         decodeExecutor.shutdownNow()
         memoryCache.evictAll()
         resolvedPokemonCache.evictAll()
         pendingSpriteReceivers.clear()
         pendingFileReceivers.clear()
+        synchronized(pokedexNumbersLock) {
+            pendingPokedexNumberReceivers.clear()
+            pokedexNumbersLoading = false
+        }
     }
 
     fun clearMemory() {
@@ -626,6 +641,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestSprite(path: String, receiver: (SpriteAsset?) -> Unit) {
+        requestSprite(path, receiver, downloadExecutor)
+    }
+
+    private fun requestSprite(path: String, receiver: (SpriteAsset?) -> Unit, executor: Executor) {
         if (closed.get()) {
             mainHandler.post { receiver(null) }
             return
@@ -647,7 +666,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         } ?: return
         if (!shouldStart) return
         runCatching {
-            downloadExecutor.execute {
+            executor.execute {
                 val file = loadBytes(path)
                 if (file == null) {
                     finishSpriteRequest(path, null)
@@ -681,16 +700,17 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(paths, animatedOnly = false, receiver)
+        requestSpriteCandidates(paths, animatedOnly = false, receiver = receiver)
     }
 
     private fun requestAnimatedSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(paths, animatedOnly = true, receiver)
+        requestSpriteCandidates(paths, animatedOnly = true, receiver = receiver)
     }
 
     private fun requestSpriteCandidates(
         paths: List<String>,
         animatedOnly: Boolean,
+        executor: Executor = downloadExecutor,
         receiver: (SpriteAsset?) -> Unit
     ) {
         val usablePaths = paths.filterNot(::isGenericSpritePlaceholder)
@@ -701,9 +721,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 return
             }
             val path = usablePaths[index]
-            requestSprite(path) { asset ->
+            requestSprite(path, { asset ->
                 if (asset != null && (!requiresAnimatedSprite(path, animatedOnly) || asset.isAnimated)) receiver(asset) else request(index + 1)
-            }
+            }, executor)
         }
         request(0)
     }
@@ -749,33 +769,36 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             requestConstrainedBackSpriteResolution(request, plan, receiver)
             return
         }
+        val resolutionGate = SpriteResolutionGate<SpriteAsset>(
+            receiver = receiver,
+            primaryCanReplaceFallback = { it.isAnimated },
+            releaseRejectedAsset = { it.stopAnimation() }
+        )
+        var animatedFallbackStarted = false
+        val primaryReceiver: (SpriteAsset?) -> Unit = resolutionGate::primary
         requestAnimatedSpriteCandidates(plan.preferredRemoteCandidates) { hdAsset ->
             if (hdAsset != null) {
-                receiver(hdAsset)
+                primaryReceiver(hdAsset)
             } else {
                 requestNumberedHdSpriteResolution(request) { numberedHdAsset ->
                     if (numberedHdAsset != null) {
-                        receiver(numberedHdAsset)
+                        primaryReceiver(numberedHdAsset)
                     } else {
                         requestScrapedFrontSpriteResolution(request, highResolutionOnly = true) { indexedHdAsset ->
                             if (indexedHdAsset != null) {
-                                receiver(indexedHdAsset)
+                                primaryReceiver(indexedHdAsset)
                             } else {
                                 requestAnimatedSpriteCandidates(plan.regularRemoteCandidates) { regularAsset ->
                                     if (regularAsset != null) {
-                                        receiver(regularAsset)
+                                        primaryReceiver(regularAsset)
                                     } else {
                                         requestAnimatedSpriteCandidates(plan.communityRemoteCandidates.take(MAX_COMMUNITY_SPRITE_CANDIDATES)) { communityAsset ->
                                             if (communityAsset != null) {
-                                                receiver(communityAsset)
+                                                primaryReceiver(communityAsset)
+                                            } else if (animatedFallbackStarted) {
+                                                primaryReceiver(null)
                                             } else {
-                                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
-                                                    if (modernAsset != null) {
-                                                        receiver(modernAsset)
-                                                    } else {
-                                                        requestStaticSpriteFallback(request, receiver)
-                                                    }
-                                                }
+                                                requestModernAnimatedSpriteResolution(request, plan, primaryReceiver)
                                             }
                                         }
                                     }
@@ -786,6 +809,12 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 }
             }
         }
+        mainHandler.postDelayed({
+            if (resolutionGate.beginFallback()) {
+                animatedFallbackStarted = true
+                requestModernAnimatedSpriteResolution(request, plan) { asset -> resolutionGate.fallback(asset) }
+            }
+        }, CONSTRAINED_FRONT_ANIMATED_FALLBACK_DELAY_MILLIS)
     }
 
     private fun requestConstrainedBackSpriteResolution(
@@ -1053,23 +1082,32 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
+        val resolutionGate = SpriteResolutionGate<SpriteAsset>(
+            receiver = receiver,
+            primaryCanReplaceFallback = { it.isAnimated },
+            fallbackCanReplacePrimary = { it.isAnimated },
+            releaseRejectedAsset = { it.stopAnimation() }
+        )
+        val primaryReceiver: (SpriteAsset?) -> Unit = resolutionGate::primary
         val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
         requestAnimatedSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
             if (modernLocalAsset != null) {
-                receiver(modernLocalAsset)
+                primaryReceiver(modernLocalAsset)
             } else {
                 requestSmallSpriteResolution(request) { animatedAsset ->
                     if (animatedAsset != null) {
-                        receiver(animatedAsset)
-                    } else if (allowsStaticShowdownFallback(request)) {
-                        requestPokeApiStaticSprite(request.species, request.shiny) { staticAsset ->
-                            if (staticAsset != null) receiver(staticAsset) else requestStaticShowdownFallback(request, receiver)
-                        }
+                        primaryReceiver(animatedAsset)
                     } else {
-                        receiver(null)
+                        primaryReceiver(null)
                     }
                 }
             }
+        }
+        if (allowsStaticShowdownFallback(request)) {
+            requestStaticShowdownFallback(request, resolutionGate::fallback)
+            requestPokeApiStaticSprite(request.species, request.shiny, baseSpeciesFirst = true, receiver = resolutionGate::fallback)
+        } else {
+            resolutionGate.fallback(null)
         }
     }
 
@@ -1177,12 +1215,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         request: BattleSpriteRequest,
         receiver: (SpriteAsset?) -> Unit
     ) {
-        val standardCandidates = ShowdownAssetPaths.staticDexSpriteCandidates(request.species, request.shiny)
+        val standardCandidates = ShowdownAssetPaths.staticBattleSpriteCandidates(request.species, request.shiny)
             .filter { it.startsWith("sprites/dex/") || it.startsWith("sprites/dex-shiny/") }
             .filterNot(::isHighResolutionSpritePath)
-        requestSpriteCandidates(standardCandidates) { asset ->
-            receiver(asset)
-        }
+        requestSpriteCandidates(standardCandidates, animatedOnly = false, executor = fallbackSpriteExecutor, receiver = receiver)
     }
 
     private fun isModernLocalCandidate(path: String) =
@@ -1200,27 +1236,37 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private fun requestPokeApiStaticSprite(
         species: String,
         shiny: Boolean,
+        baseSpeciesFirst: Boolean = false,
         receiver: (SpriteAsset?) -> Unit
     ) {
+        val lookupNames = ShowdownAssetPaths.pokeApiLookupNames(species).let { names ->
+            if (baseSpeciesFirst) names.asReversed() else names
+        }
         requestPokeApiSpriteCandidates(species, animatedOnly = false, { resourceNumber ->
             if (shiny) {
                 listOf("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/$resourceNumber.png")
             } else {
                 listOf("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$resourceNumber.png")
             }
-        }, receiver)
+        }, receiver, lookupNames)
     }
 
     private fun requestPokeApiSpriteCandidates(
         species: String,
         animatedOnly: Boolean,
         candidates: (Int) -> List<String>,
-        receiver: (SpriteAsset?) -> Unit
+        receiver: (SpriteAsset?) -> Unit,
+        names: List<String> = ShowdownAssetPaths.pokeApiLookupNames(species)
     ) {
-        fun requestLookup(index: Int) {
-            val names = ShowdownAssetPaths.pokeApiLookupNames(species)
+        val resolutionGate = SpriteResolutionGate<SpriteAsset>(
+            receiver = receiver,
+            primaryCanReplaceFallback = { it.isAnimated },
+            fallbackCanReplacePrimary = { it.isAnimated },
+            releaseRejectedAsset = { it.stopAnimation() }
+        )
+        fun requestLookup(index: Int, routeReceiver: (SpriteAsset?) -> Unit) {
             if (index >= names.size) {
-                receiver(null)
+                routeReceiver(null)
                 return
             }
             val lookupUrl = "https://pokeapi.co/api/v2/pokemon/${names[index]}"
@@ -1230,15 +1276,81 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 }
                 val resourceNumber = payload?.optInt("id", 0)?.takeIf { it > 0 }
                 if (resourceNumber == null) {
-                    requestLookup(index + 1)
+                    requestLookup(index + 1, routeReceiver)
                     return@requestBytes
                 }
                 requestSpriteCandidates(candidates(resourceNumber), animatedOnly) { asset ->
-                    if (asset != null) receiver(asset) else requestLookup(index + 1)
+                    if (asset != null) routeReceiver(asset) else requestLookup(index + 1, routeReceiver)
                 }
             }
         }
-        requestLookup(0)
+        requestLookup(0, resolutionGate::primary)
+        requestPokedexNumbers { dexNumbers ->
+            val resourceNumbers = names.mapNotNull { name ->
+                dexNumbers[ShowdownAssetPaths.animationId(name)]
+            }.distinct()
+            fun requestIndexedSprite(index: Int) {
+                if (index >= resourceNumbers.size) {
+                    resolutionGate.fallback(null)
+                    return
+                }
+                requestSpriteCandidates(candidates(resourceNumbers[index]), animatedOnly) { asset ->
+                    if (asset != null) resolutionGate.fallback(asset) else requestIndexedSprite(index + 1)
+                }
+            }
+            requestIndexedSprite(0)
+        }
+    }
+
+    private fun requestPokedexNumbers(receiver: (Map<String, Int>) -> Unit) {
+        var shouldLoad = false
+        val cachedNumbers = synchronized(pokedexNumbersLock) {
+            if (pokedexNumbersLoaded) {
+                pokedexNumbers
+            } else {
+                pendingPokedexNumberReceivers += receiver
+                if (!pokedexNumbersLoading) {
+                    pokedexNumbersLoading = true
+                    shouldLoad = true
+                }
+                null
+            }
+        }
+        if (cachedNumbers != null) {
+            receiver(cachedNumbers)
+            return
+        }
+        if (!shouldLoad) return
+        val cachedPokedex = File(diskCache, "${digest("data/pokedex.json")}.json").takeIf(File::isFile)
+        if (cachedPokedex != null) {
+            parsePokedexNumbers(cachedPokedex)
+        } else {
+            requestPokedex(::parsePokedexNumbers)
+        }
+    }
+
+    private fun parsePokedexNumbers(file: File?) {
+        runCatching {
+            Thread({
+                val numbers = file?.let { cachedFile ->
+                    runCatching { PokeApiSpriteDexNumbers.parse(cachedFile.readText()) }.getOrDefault(emptyMap())
+                }.orEmpty()
+                mainHandler.post { completePokedexNumberRequest(numbers) }
+            }, "showdown-pokedex-number-parse").apply {
+                priority = Thread.NORM_PRIORITY - 1
+                isDaemon = true
+            }.start()
+        }.onFailure { mainHandler.post { completePokedexNumberRequest(emptyMap()) } }
+    }
+
+    private fun completePokedexNumberRequest(numbers: Map<String, Int>) {
+        val receivers = synchronized(pokedexNumbersLock) {
+            pokedexNumbers = numbers
+            pokedexNumbersLoaded = true
+            pokedexNumbersLoading = false
+            pendingPokedexNumberReceivers.toList().also { pendingPokedexNumberReceivers.clear() }
+        }
+        if (!closed.get()) receivers.forEach { it(numbers) }
     }
 
     private fun requestBytes(path: String, receiver: (File?) -> Unit) {
@@ -1451,6 +1563,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         const val SPRITE_MEMORY_CACHE_BYTES = 12 * 1024 * 1024
         const val CONSTRAINED_SPRITE_MEMORY_CACHE_BYTES = 6 * 1024 * 1024
         const val MAX_COMMUNITY_SPRITE_CANDIDATES = 8
+        const val CONSTRAINED_FRONT_ANIMATED_FALLBACK_DELAY_MILLIS = 900L
         const val BACK_SPRITE_ANIMATED_FALLBACK_DELAY_MILLIS = 900L
         const val TEAM_PREVIEW_ANIMATED_FALLBACK_DELAY_MILLIS = 450L
         const val MAX_FILE_BYTES = 24 * 1024 * 1024

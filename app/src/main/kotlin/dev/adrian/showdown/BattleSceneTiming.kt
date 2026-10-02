@@ -10,9 +10,12 @@ object BattleSceneTiming {
     const val summonSettleDurationNanos = 300_000_000L
     const val summonDurationNanos = summonBallDurationNanos + summonDropDurationNanos + summonSettleDurationNanos
     const val lightweightMoveDurationNanos = 1_200_000_000L
-    const val lightweightImpactDelayNanos = 650_000_000L
+    const val lightweightImpactDelayNanos = lightweightMoveDurationNanos
     const val lightweightImpactDurationNanos = 700_000_000L
     const val lightweightStatDurationNanos = 1_100_000_000L
+
+    fun lightweightImpactDelayForAnimation(shouldAnimate: Boolean, speed: Float): Long =
+        if (shouldAnimate) scaledDurationNanos(lightweightImpactDelayNanos, speed) else 0L
 
     fun faintProgress(pokemon: String, condition: String, latestFaintedPokemon: String, faintAtNanos: Long, nowNanos: Long): Float {
         if (!condition.contains("FNT", true)) return 0f

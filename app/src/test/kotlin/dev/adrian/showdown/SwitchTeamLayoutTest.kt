@@ -30,6 +30,17 @@ class SwitchTeamLayoutTest {
     }
 
     @Test
+    fun opponentTeamToggleFitsBetweenTheTabsAndRosterCards() {
+        val toggle = SwitchTeamLayout.rosterToggleBounds(1240f, 1080f, 1f)
+        val firstCard = SwitchTeamLayout.bounds(1240f, 1080f, 1f, 0, 6)
+
+        assertTrue(toggle.left >= 0f)
+        assertTrue(toggle.right <= 1240f)
+        assertTrue(toggle.top > 164f)
+        assertTrue(toggle.bottom < firstCard.top)
+    }
+
+    @Test
     fun switchTeamBottomRowReservesStatusBeforeSizingTypeBadges() {
         val card = SwitchTeamLayout.bounds(1240f, 1080f, 1f, 0, 6)
         val row = SwitchTeamLayout.rowBounds(card, 1f, 2)

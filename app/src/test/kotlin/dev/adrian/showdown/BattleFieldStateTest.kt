@@ -103,4 +103,28 @@ class BattleFieldStateTest {
         assertEquals(BattleSession.BattlePhase.TEAM_PREVIEW, session.battlePhase)
         assertEquals(listOf("Garchomp", "Rotom-Wash"), session.opponentPartyDetails().map { it.species })
     }
+
+    @Test
+    fun opponentTeamCardsKeepAvailabilityAndFaintedStateAfterBattleStarts() {
+        val session = BattleSession()
+        session.setSpectatorMode(true)
+
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|poke|p2|Garchomp, L50|",
+                "|poke|p2|Rotom-Wash, L50|",
+                "|switch|p2a: Garchomp|Garchomp, L50|100/100",
+                "|-damage|p2a: Garchomp|0 fnt",
+                "|faint|p2a: Garchomp"
+            )
+        )
+
+        assertEquals("Fainted", session.opponentTeamCardStatus(0))
+        assertEquals("Available", session.opponentTeamCardStatus(1))
+
+        session.applyProtocolPacket(listOf("|switch|p2a: Rotom-Wash|Rotom-Wash, L50|100/100"))
+
+        assertEquals("In battle", session.opponentTeamCardStatus(1))
+    }
 }

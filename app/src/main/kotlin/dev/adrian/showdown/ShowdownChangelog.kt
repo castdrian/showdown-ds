@@ -10,6 +10,8 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "The team panel now switches between your party and the opponent’s revealed Pokémon, including active and fainted states.",
+                "Battle-log fades now stay in step with the action timeline, and lightweight damage cues land with the attack impact.",
                 "The team builder now leaves format-specific legality checks to Showdown.",
                 "Saving, duplicating, or deleting a team from the library now returns you to the refreshed team list.",
                 "Animated player back sprites now check indexed and generation-specific HD artwork before numbered pixel fallbacks.",

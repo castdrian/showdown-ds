@@ -32,14 +32,27 @@ class BattleSceneTimingTest {
     }
 
     @Test
-    fun lightweightImpactTimingSlowsWithHumanPlaybackSpeed() {
+    fun lightweightImpactBeginsWhenTheMoveReachesItsTarget() {
+        assertEquals(
+            BattleSceneTiming.lightweightMoveDurationNanos,
+            BattleSceneTiming.lightweightImpactDelayNanos
+        )
         assertEquals(
             BattleSceneTiming.lightweightImpactDelayNanos,
             BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightImpactDelayNanos, 1f)
         )
         assertEquals(
-            866_666_667L,
+            BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightMoveDurationNanos, 0.75f),
             BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightImpactDelayNanos, 0.75f)
+        )
+    }
+
+    @Test
+    fun lightweightDamageWithoutAnAnimationCanCueImmediately() {
+        assertEquals(0L, BattleSceneTiming.lightweightImpactDelayForAnimation(false, 0.75f))
+        assertEquals(
+            BattleSceneTiming.scaledDurationNanos(BattleSceneTiming.lightweightMoveDurationNanos, 0.75f),
+            BattleSceneTiming.lightweightImpactDelayForAnimation(true, 0.75f)
         )
     }
 }

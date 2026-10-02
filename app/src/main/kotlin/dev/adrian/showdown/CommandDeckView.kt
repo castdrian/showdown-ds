@@ -32,6 +32,12 @@ class CommandDeckView(
         val baseline: Float,
         val bounds: RectF
     )
+    private data class TeamCardPresentation(
+        val name: String,
+        val details: BattleSession.PokemonDetails,
+        val status: String,
+        val selected: Boolean
+    )
 
     interface InteractionListener {
         fun onNavigation()
@@ -57,6 +63,8 @@ class CommandDeckView(
     private val requestedTeamSprites = mutableMapOf<Int, BattleSpriteRequest>()
     private val typeIcons = mutableMapOf<String, Bitmap?>()
     private var activityChatBounds: RectF? = null
+    private var teamRosterToggleBounds: RectF? = null
+    private var showingOpponentTeam = false
     private var cancelChoiceBounds: RectF? = null
     private var shiftBounds: RectF? = null
     private var testFightBounds: RectF? = null
@@ -136,6 +144,7 @@ class CommandDeckView(
         val height = height.toFloat()
         val teamDecision = isTeamDecision()
         val decisionKind = session.decisionKind
+        if (showingOpponentTeam && !shouldShowOpponentTeamToggle()) showingOpponentTeam = false
         val retainTeamSprites = teamDecision ||
             (session.panel == BattleSession.Panel.TEAM && (session.isLiveBattleActive() || session.isBattleFinished() || session.isReplayMode()))
         if (!retainTeamSprites &&
@@ -219,6 +228,16 @@ class CommandDeckView(
                 }
             }
         }
+        if (session.panel == BattleSession.Panel.TEAM &&
+            shouldShowOpponentTeamToggle() &&
+            teamRosterToggleBounds?.contains(x, y) == true
+        ) {
+            showingOpponentTeam = !showingOpponentTeam
+            interactionListener.onNavigation()
+            invalidate()
+            performClick()
+            return true
+        }
         if (session.panel == BattleSession.Panel.MOVES) {
             if (hasReplayControls()) {
                 if (replayPauseBounds?.contains(x, y) == true) {
@@ -271,7 +290,7 @@ class CommandDeckView(
                 }
             }
         }
-        if (isTeamDecision() || session.panel == BattleSession.Panel.TEAM) {
+        if (isTeamDecision() || session.panel == BattleSession.Panel.TEAM && !showingOpponentTeam) {
             teamBounds.forEachIndexed { index, bounds ->
                 if (bounds?.contains(x, y) == true) {
                     session.selectTeamWithTouch(index)
@@ -307,6 +326,7 @@ class CommandDeckView(
     private fun accessibilityDescription(): String {
         val panel = when {
             isTeamDecision() -> if (session.decisionKind == BattleSession.DecisionKind.TEAM_PREVIEW) "Team preview" else "Switch Pokémon"
+            showingOpponentTeam && shouldShowOpponentTeamToggle() -> "Opponent team"
             shouldShowPublicTeamPreview() -> "Public team preview"
             else -> tabName(session.panel)
         }
@@ -340,20 +360,47 @@ class CommandDeckView(
                     )
                     layoutTeamTouchBounds(width.toFloat(), height.toFloat(), scale, false)
                 }
-                session.team().forEachIndexed { index, pokemon ->
-                    val details = session.teamMemberDetails(index)
-                    val name = BattleSession.displayPokemonName(pokemon, details.species)
-                    val status = session.teamCardStatus(index)
+                if (shouldShowOpponentTeamToggle()) {
                     addAccessibilityNode(
                         nodes,
-                        ACCESSIBLE_TEAM_BASE + index,
-                        BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, status),
-                        teamBounds.getOrNull(index),
-                        selected = session.focusedTeam == index,
-                        role = if (publicPreview) CanvasAccessibilityNode.Role.TEXT else CanvasAccessibilityNode.Role.BUTTON
+                        ACCESSIBLE_TEAM_SIDE_TOGGLE_ID,
+                        if (showingOpponentTeam) "Show your team" else "Show opponent's known team, ${session.opponentPartyDetails().size} Pokémon",
+                        teamRosterToggleBounds,
+                        selected = showingOpponentTeam
                     ) {
-                        session.selectTeamWithTouch(index)
-                        interactionListener.onConfirmation()
+                        showingOpponentTeam = !showingOpponentTeam
+                        interactionListener.onNavigation()
+                        invalidate()
+                    }
+                }
+                if (showingOpponentTeam && shouldShowOpponentTeamToggle()) {
+                    session.opponentPartyDetails().take(teamBounds.size).forEachIndexed { index, details ->
+                        val name = BattleSession.displayPokemonName(details.name, details.species)
+                        val status = session.opponentTeamCardStatus(index)
+                        addAccessibilityNode(
+                            nodes,
+                            ACCESSIBLE_TEAM_BASE + index,
+                            BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, status),
+                            teamBounds.getOrNull(index),
+                            role = CanvasAccessibilityNode.Role.TEXT
+                        )
+                    }
+                } else {
+                    session.team().forEachIndexed { index, pokemon ->
+                        val details = session.teamMemberDetails(index)
+                        val name = BattleSession.displayPokemonName(pokemon, details.species)
+                        val status = session.teamCardStatus(index)
+                        addAccessibilityNode(
+                            nodes,
+                            ACCESSIBLE_TEAM_BASE + index,
+                            BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, status),
+                            teamBounds.getOrNull(index),
+                            selected = session.focusedTeam == index,
+                            role = if (publicPreview) CanvasAccessibilityNode.Role.TEXT else CanvasAccessibilityNode.Role.BUTTON
+                        ) {
+                            session.selectTeamWithTouch(index)
+                            interactionListener.onConfirmation()
+                        }
                     }
                 }
             }
@@ -525,10 +572,18 @@ class CommandDeckView(
             session.playerPartyDetails().isNotEmpty() &&
             (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || session.playerActiveCombatants().isEmpty())
 
+    private fun shouldShowOpponentTeamToggle(decisionLayout: Boolean = false) =
+        !decisionLayout &&
+            !isTeamDecision() &&
+            !shouldShowPublicTeamPreview() &&
+            session.opponentPartyDetails().isNotEmpty() &&
+            (session.isLiveBattleActive() || session.isBattleFinished() || session.isReplayMode() || session.isSpectatorMode())
+
     private fun clearInteractiveBounds() {
         tabBounds.fill(null)
         moveBounds.fill(null)
         teamBounds.fill(null)
+        teamRosterToggleBounds = null
         menuBounds.fill(null)
         gimmickBounds.fill(null)
         targetBounds.fill(null)
@@ -574,13 +629,22 @@ class CommandDeckView(
 
     private fun layoutTeamTouchBounds(width: Float, height: Float, scale: Float, decisionLayout: Boolean) {
         teamBounds.fill(null)
+        teamRosterToggleBounds = if (shouldShowOpponentTeamToggle(decisionLayout)) {
+            SwitchTeamLayout.rosterToggleBounds(width, height, scale).let { RectF(it.left, it.top, it.right, it.bottom) }
+        } else {
+            null
+        }
         if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished() && !shouldShowPublicTeamPreview()) return
-        val visibleTeam = session.team().take(teamBounds.size)
-        visibleTeam.forEachIndexed { index, _ ->
+        val visibleCount = if (showingOpponentTeam && shouldShowOpponentTeamToggle(decisionLayout)) {
+            session.opponentPartyDetails().size
+        } else {
+            session.team().size
+        }.coerceAtMost(teamBounds.size)
+        repeat(visibleCount) { index ->
             val layoutBounds = if (decisionLayout) {
-                SwitchTeamLayout.decisionBounds(width, height, scale, index, visibleTeam.size)
+                SwitchTeamLayout.decisionBounds(width, height, scale, index, visibleCount)
             } else {
-                SwitchTeamLayout.bounds(width, height, scale, index, visibleTeam.size)
+                SwitchTeamLayout.bounds(width, height, scale, index, visibleCount)
             }
             teamBounds[index] = RectF(layoutBounds.left, layoutBounds.top, layoutBounds.right, layoutBounds.bottom)
         }
@@ -2039,6 +2103,7 @@ class CommandDeckView(
         decisionLayout: Boolean = false
     ) {
         val publicTeamPreview = shouldShowPublicTeamPreview()
+        val opponentTeamVisible = !decisionLayout && showingOpponentTeam && shouldShowOpponentTeamToggle()
         if (!decisionLayout && !session.isLiveBattleActive() && !session.isBattleFinished()) {
             if (!publicTeamPreview) {
                 teamBounds.fill(null)
@@ -2054,10 +2119,31 @@ class CommandDeckView(
                 return
             }
         }
-        val visibleTeam = session.team().take(teamBounds.size)
+        drawTeamRosterToggle(canvas, width, height, scale, decisionLayout)
+        val visibleTeam = if (opponentTeamVisible) {
+            session.opponentPartyDetails().take(teamBounds.size).mapIndexed { index, details ->
+                TeamCardPresentation(
+                    details.name,
+                    details,
+                    session.opponentTeamCardStatus(index),
+                    false
+                )
+            }
+        } else {
+            session.team().take(teamBounds.size).mapIndexed { index, pokemon ->
+                TeamCardPresentation(
+                    pokemon,
+                    session.teamMemberDetails(index),
+                    session.teamCardStatus(index),
+                    index == session.focusedTeam
+                )
+            }
+        }
         teamBounds.fill(null)
         val previewOrder = session.teamPreviewOrder()
-        visibleTeam.forEachIndexed { index, pokemon ->
+        visibleTeam.forEachIndexed { index, member ->
+            val pokemon = member.name
+            val details = member.details
             val layoutBounds = if (decisionLayout) {
                 SwitchTeamLayout.decisionBounds(width, height, scale, index, visibleTeam.size)
             } else {
@@ -2065,9 +2151,8 @@ class CommandDeckView(
             }
             val bounds = RectF(layoutBounds.left, layoutBounds.top, layoutBounds.right, layoutBounds.bottom)
             teamBounds[index] = bounds
-            val focused = index == session.focusedTeam
+            val focused = member.selected
             val previewPosition = previewOrder.indexOf(index)
-            val details = session.teamMemberDetails(index)
             requestTeamSprite(index, details.species.ifBlank { pokemon }, details.shiny)
             paint.style = Paint.Style.FILL
             paint.shader = LinearGradient(
@@ -2186,7 +2271,7 @@ class CommandDeckView(
                 canvas.restore()
                 paint.textAlign = Paint.Align.LEFT
             }
-            val state = session.teamCardStatus(index)
+            val state = member.status
             val stateBounds = RectF(rowBounds.statusLeft, bottomRow.top, rowBounds.right, bottomRow.bottom)
             paint.color = if (details.condition.contains("FNT", true)) Color.rgb(95, 31, 66) else Color.rgb(12, 69, 82)
             canvas.drawRoundRect(stateBounds, 14f * scale, 14f * scale, paint)
@@ -2208,6 +2293,51 @@ class CommandDeckView(
             paint.textAlign = Paint.Align.LEFT
             canvas.restore()
         }
+    }
+
+    private fun drawTeamRosterToggle(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        decisionLayout: Boolean
+    ) {
+        if (!shouldShowOpponentTeamToggle(decisionLayout)) {
+            teamRosterToggleBounds = null
+            return
+        }
+        val layoutBounds = SwitchTeamLayout.rosterToggleBounds(width, height, scale)
+        val bounds = RectF(layoutBounds.left, layoutBounds.top, layoutBounds.right, layoutBounds.bottom)
+        teamRosterToggleBounds = bounds
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(190, 8, 26, 43)
+        canvas.drawRoundRect(bounds, bounds.height() / 2f, bounds.height() / 2f, paint)
+        val halfWidth = bounds.width() / 2f
+        val selectedBounds = if (showingOpponentTeam) {
+            RectF(bounds.left + halfWidth + 2f * scale, bounds.top + 2f * scale, bounds.right - 2f * scale, bounds.bottom - 2f * scale)
+        } else {
+            RectF(bounds.left + 2f * scale, bounds.top + 2f * scale, bounds.left + halfWidth - 2f * scale, bounds.bottom - 2f * scale)
+        }
+        paint.color = Color.rgb(16, 111, 126)
+        canvas.drawRoundRect(selectedBounds, selectedBounds.height() / 2f, selectedBounds.height() / 2f, paint)
+        val labels = listOf(
+            "Your team · ${session.playerPartyDetails().size}",
+            "Opponent team · ${session.opponentPartyDetails().size}"
+        )
+        labels.forEachIndexed { index, label ->
+            val centerX = bounds.left + halfWidth * (index + 0.5f)
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = readableTextSize(22f, scale, 16f, 13f)
+            paint.color = if (showingOpponentTeam == (index == 1)) PAPER else MUTED
+            canvas.drawText(
+                fitTextToWidth(label, halfWidth - 24f * scale),
+                centerX,
+                centeredTextBaseline(bounds.centerY()),
+                paint
+            )
+        }
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun RectF.toSwitchTeamBounds() = SwitchTeamCardBounds(left, top, right, bottom)
@@ -2686,6 +2816,7 @@ class CommandDeckView(
         const val ACCESSIBLE_CANCEL_CHOICE_ID = 802
         const val ACCESSIBLE_REPLAY_PAUSE_ID = 803
         const val ACCESSIBLE_CHAT_ID = 804
+        const val ACCESSIBLE_TEAM_SIDE_TOGGLE_ID = 805
         const val ACCESSIBLE_ACTIVITY_BASE = 900
         val BOOST_NAMES = mapOf("atk" to "Atk", "def" to "Def", "spa" to "Sp. Atk", "spd" to "Sp. Def", "spe" to "Speed", "accuracy" to "Accuracy", "evasion" to "Evasion")
     }
