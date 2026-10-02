@@ -468,6 +468,12 @@ class BattleSession {
         SET_HP
     }
 
+    private enum class SwitchEventKind {
+        NORMAL,
+        FORCED_DRAG,
+        ILLUSION_REPLACEMENT
+    }
+
     private data class HealthTransition(
         val actor: String,
         val previousFraction: Float?,
@@ -1878,8 +1884,9 @@ class BattleSession {
                         applyTurn(fields)
                     }
                     "t:" -> fields.getOrNull(2)?.toLongOrNull()?.let { protocolTimestampSeconds = it }
-                    "switch", "drag" -> applySwitch(fields)
-                    "replace" -> applySwitch(fields, replacingIllusion = true)
+                    "switch" -> applySwitch(fields)
+                    "drag" -> applySwitch(fields, SwitchEventKind.FORCED_DRAG)
+                    "replace" -> applySwitch(fields, SwitchEventKind.ILLUSION_REPLACEMENT)
                     "swap" -> applySwap(fields)
                     "poke" -> applyPoke(fields)
                     "updatepoke" -> applyUpdatePoke(fields)
@@ -2249,19 +2256,21 @@ class BattleSession {
         appendLog("Turn $turn.")
     }
 
-    private fun applySwitch(fields: List<String>, replacingIllusion: Boolean = false) {
+    private fun applySwitch(fields: List<String>, eventKind: SwitchEventKind = SwitchEventKind.NORMAL) {
         if (fields.size < 5) return
+        val isIllusionReplacement = eventKind == SwitchEventKind.ILLUSION_REPLACEMENT
         val pokemon = fields[3].substringBefore(',')
         val playerSide = isPlayerSide(fields[2])
         val slot = fields[2].substringBefore(":").trim()
         val side = sideForSlot(slot)
+        val previousCombatant = (if (playerSide) playerActiveCombatants else opponentActiveCombatants)[slot]
         val shiny = detailsAreShiny(fields[3])
         if (fields.drop(5).any { it.contains("Baton Pass", true) }) pendingBatonPassBySide[side] = slot
         val passedBoosts = pendingBatonPassBySide.remove(side)?.let { sourceSlot ->
             val slots = if (playerSide) playerBoostsBySlot else opponentBoostsBySlot
             slots.remove(sourceSlot)?.toMap()
         }
-        val entryDelayMillis = if (replacingIllusion) 0L else queueEntry(playerSide)
+        val entryDelayMillis = if (isIllusionReplacement) 0L else queueEntry(playerSide)
         val parsedDetails = parseDetails(fields[3])
         val hp = fields[4]
         val currentCondition = condition(hp)
@@ -2274,7 +2283,7 @@ class BattleSession {
                     .filterKeys { it != slot }
                     .values
                     .toSet()
-                val index = if (replacingIllusion) {
+                val index = if (isIllusionReplacement) {
                     playerActivePartyIndices[slot]
                         ?: playerPartyIdentifiers.withIndex()
                             .firstOrNull { (candidateIndex, value) ->
@@ -2349,13 +2358,15 @@ class BattleSession {
             else -> {
                 val primary = slot.endsWith("a") || opponentActiveCombatants.isEmpty()
                 val identifier = fields[2].substringAfter(':').trim()
-                val index = if (replacingIllusion) {
+                val index = if (isIllusionReplacement) {
                     opponentActivePartyIndices[slot] ?: findOpponentPartyIndex(identifier, pokemon, slot)
                 } else {
                     findOpponentPartyIndex(identifier, pokemon, slot)
                 }
                 val existing = opponentTeamDetails.getOrNull(index)
-                val activeDetails = if (replacingIllusion && existing != null && !existing.species.equals(pokemon, true)) {
+                val activeDetails = if (
+                    isIllusionReplacement && existing != null && !existing.species.equals(pokemon, true)
+                ) {
                     unknownPokemonDetails(pokemon, parsedDetails, hp, currentCondition, shiny).copy(name = identifier.ifBlank { pokemon })
                 } else {
                     existing ?: unknownPokemonDetails(pokemon, parsedDetails, hp, currentCondition, shiny)
@@ -2413,16 +2424,43 @@ class BattleSession {
         }
         refreshVisibleBoosts()
         val nickname = fields[2].substringAfter(':').trim()
-        val message = if (replacingIllusion) {
-            "${battleActor(fields[2])} was revealed as ${displayPokemonName(pokemon)}."
-        } else {
-            sendOutMessage(nickname, playerSide, pokemon, fields[2])
+        if (
+            previousCombatant != null &&
+            !previousCombatant.condition.equals("FNT", true) &&
+            eventKind == SwitchEventKind.NORMAL &&
+            shouldAnnounceSwitchOut(fields)
+        ) {
+            appendLog(switchOutMessage(fields[2], previousCombatant))
+        }
+        val message = when (eventKind) {
+            SwitchEventKind.ILLUSION_REPLACEMENT -> "${battleActor(fields[2])} was revealed as ${displayPokemonName(pokemon)}."
+            SwitchEventKind.FORCED_DRAG -> "${fullBattlePokemonName(nickname, pokemon)} was dragged out!"
+            SwitchEventKind.NORMAL -> sendOutMessage(nickname, playerSide, pokemon, fields[2])
         }
         appendLog(message)
-        if (!replacingIllusion) {
+        if (!isIllusionReplacement) {
             publishFeedback(BattleFeedback(FeedbackType.ENTRY, actor = pokemon, delayMillis = entryDelayMillis, message = message))
             publishFeedback(BattleFeedback(FeedbackType.POKEMON_CRY, actor = pokemon, delayMillis = entryDelayMillis))
         }
+    }
+
+    private fun shouldAnnounceSwitchOut(fields: List<String>): Boolean {
+        val effect = fields.drop(5)
+            .firstOrNull { it.trim().startsWith("[from]", true) }
+            ?.substringAfter(']')
+            ?.trim()
+            ?.substringAfter(": ")
+            ?.let(::normalizeBattleTextKey)
+            .orEmpty()
+        if (effect in setOf("batonpass", "zbatonpass", "shedtail", "teleport")) return false
+        return effect.isNotBlank() || !format.contains("Relay Race", true)
+    }
+
+    private fun switchOutMessage(actor: String, combatant: ActiveCombatant): String {
+        val nickname = displayPokemonName(combatant.name)
+        val isViewerSide = targetSlot(actor).take(2).equals(playerSlot, true)
+        return if (!spectatorMode && isViewerSide) "$nickname, come back!"
+        else "${battleTrainer(actor)} withdrew $nickname!"
     }
 
     private fun applySwap(fields: List<String>) {

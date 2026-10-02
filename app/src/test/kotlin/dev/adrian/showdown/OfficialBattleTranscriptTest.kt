@@ -167,6 +167,73 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun logsOfficialWithdrawalsBeforeNormalSwitchIns() {
+        val session = switchTranscriptSession(
+            "|switch|p1a: Rotom|Rotom-Wash, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|switch|p1a: Mimikyu|Mimikyu, L50|100/100",
+            "|switch|p2a: Snorlax|Snorlax, L50|100/100"
+        )
+
+        assertEquals(
+            listOf(
+                "Rotom, come back!",
+                "Go! Mimikyu!",
+                "OPPONENT withdrew Eevee!",
+                "OPPONENT sent out Snorlax!"
+            ),
+            session.battleLog().takeLast(4)
+        )
+    }
+
+    @Test
+    fun formatsForcedDragWithoutAWithdrawalOrTrainerSendOutLine() {
+        val session = switchTranscriptSession(
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|drag|p2a: Garchomp|Garchomp, L50|100/100"
+        )
+
+        assertEquals("Garchomp was dragged out!", session.battleLog().last())
+        assertFalse(session.battleLog().contains("OPPONENT withdrew Eevee!"))
+        assertFalse(session.battleLog().contains("OPPONENT sent out Garchomp!"))
+    }
+
+    @Test
+    fun omitsWithdrawLinesForSwitchesThatDoNotAnnounceAWithdrawal() {
+        val switchSources = listOf("Baton Pass", "Z-Baton Pass", "Shed Tail", "Teleport")
+        switchSources.forEach { source ->
+            val session = switchTranscriptSession(
+                "|switch|p2a: Eevee|Eevee, L50|100/100",
+                "|switch|p2a: Snorlax|Snorlax, L50|100/100|[from]move: $source"
+            )
+
+            assertEquals("OPPONENT sent out Snorlax!", session.battleLog().last())
+            assertFalse(session.battleLog().contains("OPPONENT withdrew Eevee!"))
+        }
+
+        val relayRaceSession = switchTranscriptSession(
+            "|tier|[Gen 9] Relay Race",
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|switch|p2a: Snorlax|Snorlax, L50|100/100"
+        )
+
+        assertEquals("OPPONENT sent out Snorlax!", relayRaceSession.battleLog().last())
+        assertFalse(relayRaceSession.battleLog().contains("OPPONENT withdrew Eevee!"))
+    }
+
+    @Test
+    fun doesNotLogAWithdrawalWhenAReplacementFollowsAFaint() {
+        val session = switchTranscriptSession(
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|faint|p2a: Eevee",
+            "|switch|p2a: Snorlax|Snorlax, L50|100/100"
+        )
+
+        assertEquals("OPPONENT sent out Snorlax!", session.battleLog().last())
+        assertFalse(session.battleLog().contains("OPPONENT withdrew Eevee!"))
+    }
+
+    @Test
     fun ignoresSwapPositionsOutsideTheBattleActiveField() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         session.applyProtocolPacket(
@@ -1168,5 +1235,16 @@ class OfficialBattleTranscriptTest {
 
         assertFalse(session.activityMessages().contains("Queue open"))
         assertEquals(1, session.activityMessages().count { it == "Queue closed" })
+    }
+
+    private fun switchTranscriptSession(vararg events: String): BattleSession {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||"
+            ) + events.toList()
+        )
+        return session
     }
 }
