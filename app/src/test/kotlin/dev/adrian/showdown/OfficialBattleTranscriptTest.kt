@@ -156,6 +156,28 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun illusionRevealRemovesTheDisguiseSpeciesFromTheRevealedPokemonIndex() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|poke|p2|Pikachu, L50|",
+                "|poke|p2|Pikachu, L50|",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100",
+                "|replace|p2a: Zoroark|Zoroark, L50|100/100",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100"
+            )
+        )
+
+        assertEquals(listOf("Zoroark", "Pikachu"), session.opponentPartyDetails().map { it.species })
+        assertEquals("Pikachu", session.opponentActiveCombatants().single().species)
+    }
+
+    @Test
     fun keepsTheViewerSideAsThePlayerWhenTheViewerIsP2() {
         val session = BattleSession().apply { setLocalUsername("OPPONENT") }
         session.applyProtocolPacket(

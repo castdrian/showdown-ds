@@ -2397,8 +2397,12 @@ class BattleSession {
                     opponentTeamDetails += updatedDetails
                     opponentTeamDetails.lastIndex
                 }
-                recordOpponentPartyIdentifier(identifier, resolvedIndex)
-                recordOpponentPartyIdentifier(pokemon, resolvedIndex)
+                if (isIllusionReplacement) {
+                    rebuildOpponentPartyIdentifiers()
+                } else {
+                    recordOpponentPartyIdentifier(identifier, resolvedIndex)
+                    recordOpponentPartyIdentifier(pokemon, resolvedIndex)
+                }
                 opponentActivePartyIndices[slot] = resolvedIndex
                 opponentActiveCombatants[slot] = ActiveCombatant(
                     slot,
