@@ -2039,7 +2039,7 @@ class BattleSession {
                             else "It doesn't affect ${battleActor(target)}..."
                         )
                     }
-                    "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
+                    "-prepare" -> applyPrepare(fields)
                     "-mustrecharge" -> Unit
                     "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
@@ -3486,6 +3486,20 @@ class BattleSession {
                 }
             }
         }
+    }
+
+    private fun applyPrepare(fields: List<String>) {
+        val actor = fields.getOrNull(2) ?: return
+        val moveId = normalizeBattleTextKey(battleEffectName(fields.getOrNull(3)))
+        val template = SHOWDOWN_MOVE_PREPARE_MESSAGES[moveId] ?: return
+        val target = fields.getOrNull(4)
+            ?.takeIf(::isProtocolActor)
+            ?.let(::battleActor)
+            .orEmpty()
+        val announcement = template
+            .replace("{POKEMON}", battleActor(actor))
+            .replace("{TARGET}", target)
+        appendProtocolAnnouncement(fields, announcement)
     }
 
     private fun abilityStateStartAnnouncement(actor: String, effect: String): String? {
@@ -6358,6 +6372,27 @@ class BattleSession {
             "disguise",
             "safetygoggles",
             "protectivepads"
+        )
+        private val SHOWDOWN_MOVE_PREPARE_MESSAGES = mapOf(
+            "bounce" to "{POKEMON} sprang up!",
+            "chillyreception" to "{POKEMON} is preparing to tell a chillingly bad joke!",
+            "dig" to "{POKEMON} burrowed its way under the ground!",
+            "dive" to "{POKEMON} hid underwater!",
+            "electroshot" to "{POKEMON} absorbed electricity!",
+            "fly" to "{POKEMON} flew up high!",
+            "freezeshock" to "{POKEMON} became cloaked in a freezing light!",
+            "geomancy" to "{POKEMON} is absorbing power!",
+            "iceburn" to "{POKEMON} became cloaked in freezing air!",
+            "meteorbeam" to "{POKEMON} is overflowing with space power!",
+            "phantomforce" to "{POKEMON} vanished instantly!",
+            "razorwind" to "{POKEMON} whipped up a whirlwind!",
+            "shadowforce" to "{POKEMON} vanished instantly!",
+            "shelltrap" to "{POKEMON} set a shell trap!",
+            "skullbash" to "{POKEMON} tucked in its head!",
+            "skyattack" to "{POKEMON} became cloaked in a harsh light!",
+            "skydrop" to "{POKEMON} took {TARGET} into the sky!",
+            "solarbeam" to "{POKEMON} absorbed light!",
+            "solarblade" to "{POKEMON} absorbed light!"
         )
 
         fun displayPokemonName(name: String, species: String = name): String {

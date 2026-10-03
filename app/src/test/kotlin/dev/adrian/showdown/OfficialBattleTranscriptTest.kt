@@ -11,6 +11,7 @@ class OfficialBattleTranscriptTest {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         session.applyProtocolPacket(
             listOf(
+                "|init|battle",
                 "|player|p1|ADRIAN||",
                 "|player|p2|OPPONENT||",
                 "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
@@ -996,6 +997,28 @@ class OfficialBattleTranscriptTest {
                 "It started to snow!"
             ),
             session.battleLog().drop(previousLogSize)
+        )
+    }
+
+    @Test
+    fun formatsOfficialMovePreparationAnnouncements() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|-prepare|p2a: Armarouge|Meteor Beam|p1a: Toxtricity",
+                "|-prepare|p2a: Ninetales|Solar Beam|p1a: Vaporeon"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "The opposing Armarouge is overflowing with space power!",
+                "The opposing Ninetales absorbed light!"
+            ),
+            session.battleLog().takeLast(2)
         )
     }
 
