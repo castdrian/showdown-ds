@@ -3551,6 +3551,7 @@ class BattleSession {
                     ?: "(${battleEffectName(fields.getOrNull(3))} started on $pokemon!)"
             }
             "encore" -> "$pokemon must do an encore!"
+            "focusenergy" -> "$pokemon is getting pumped!"
             "attract" -> "$pokemon fell in love!"
             "confusion" -> if (fields.any { it.trim().equals("[fatigue]", true) }) {
                 "$pokemon became confused due to fatigue!"

@@ -1158,6 +1158,19 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsFocusEnergyStartLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|-start|p1a: Mewtwo|move: Focus Energy"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo is getting pumped!"))
+    }
+
+    @Test
     fun formatsStatAnnouncementsLikeTheShowdownBattleLog() {
         val session = BattleSession()
 
