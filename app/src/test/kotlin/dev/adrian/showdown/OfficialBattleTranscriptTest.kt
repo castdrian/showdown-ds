@@ -105,6 +105,35 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun preservesAllPokemonInTheShowdownMaximumOpenTeamSheet() {
+        val species = listOf(
+            "Pikachu", "Eevee", "Bulbasaur", "Ivysaur", "Venusaur", "Charmander",
+            "Charmeleon", "Charizard", "Squirtle", "Wartortle", "Blastoise", "Caterpie",
+            "Metapod", "Butterfree", "Weedle", "Kakuna", "Beedrill", "Pidgey",
+            "Pidgeotto", "Pidgeot", "Rattata", "Raticate", "Spearow", "Fearow"
+        )
+        val team = species.mapIndexed { index, name ->
+            ShowdownTeamSet(nickname = "Member ${index + 1}", species = name)
+        }
+        val packedTeam = ShowdownTeamCodec.pack(team)
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|showteam|p1|$packedTeam",
+                "|showteam|p2|$packedTeam"
+            )
+        )
+
+        assertEquals(team.map { it.nickname }, session.playerPartyDetails().map { it.name })
+        assertEquals(team.map { it.nickname }, session.opponentPartyDetails().map { it.name })
+        assertEquals(species, session.playerPartyDetails().map { it.species })
+        assertEquals(species, session.opponentPartyDetails().map { it.species })
+    }
+
+    @Test
     fun selectsTheViewerSideOfOfficialSplitReplayPackets() {
         val playerOne = BattleSession().apply { setLocalUsername("ADRIAN") }
         playerOne.applyProtocolPacket(

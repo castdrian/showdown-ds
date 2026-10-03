@@ -2824,7 +2824,7 @@ class BattleSession {
         val side = fields.getOrNull(2)?.trim().orEmpty()
         val packedTeam = fields.drop(3).joinToString("|")
         if (side.isBlank() || packedTeam.isBlank()) return
-        val sets = ShowdownTeamCodec.unpack(packedTeam).take(6)
+        val sets = ShowdownTeamCodec.unpack(packedTeam).take(ShowdownTeamCodec.MAX_TEAM_SIZE)
         if (sets.isEmpty()) return
         val playerSide = isPlayerSide(side)
         val existingParty = if (playerSide) teamDetails.toList() else opponentTeamDetails.toList()
@@ -5488,8 +5488,10 @@ class BattleSession {
                 status = "Team order ${teamPreviewOrder.size}/$teamPreviewRequiredSize: choose the next Pokémon."
                 return
             }
+            val separator = if (team.size > 10) ", " else ""
+            val selectedOrder = teamPreviewOrder.joinToString(separator) { (it + 1).toString() }
             completeTeamSelection(
-                "/choose team ${teamPreviewOrder.joinToString("") { (it + 1).toString() }}${requestId?.let { "|$it" } ?: ""}"
+                "/choose team $selectedOrder${requestId?.let { "|$it" } ?: ""}"
             )
             return
         }

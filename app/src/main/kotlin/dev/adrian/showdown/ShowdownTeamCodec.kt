@@ -26,7 +26,7 @@ data class ShowdownTeamSet(
 
 object ShowdownTeamCodec {
     private const val INVALID_NUMBER = -1
-    private const val SHOWDOWN_ENGINE_MAX_TEAM_SIZE = 24
+    const val MAX_TEAM_SIZE = 24
     private const val SHOWDOWN_ENGINE_MAX_MOVES_PER_SET = 24
     private const val SHOWDOWN_ENGINE_MAX_LEVEL = 99999
 
@@ -110,7 +110,7 @@ object ShowdownTeamCodec {
         val errors = mutableListOf<String>()
         val populated = sets.filter { it.hasContent() }
         if (populated.isEmpty()) return mutableListOf("Add at least one Pokémon to the team.")
-        if (populated.size > SHOWDOWN_ENGINE_MAX_TEAM_SIZE) errors += "A team can contain at most $SHOWDOWN_ENGINE_MAX_TEAM_SIZE Pokémon."
+        if (populated.size > MAX_TEAM_SIZE) errors += "A team can contain at most $MAX_TEAM_SIZE Pokémon."
         populated.forEachIndexed { index, set ->
             val label = "Pokémon ${index + 1}"
             if (set.species.isBlank() && set.nickname.isBlank()) errors += "$label needs a species."

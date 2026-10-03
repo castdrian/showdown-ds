@@ -1206,6 +1206,31 @@ class BattleSessionTest {
     }
 
     @Test
+    fun teamPreviewSeparatesSlotsWhenTheShowdownTeamExceedsTenPokemon() {
+        val session = BattleSession()
+        val decisions = mutableListOf<String>()
+        session.addDecisionListener(decisions::add)
+        val species = listOf(
+            "Pikachu", "Eevee", "Bulbasaur", "Ivysaur", "Venusaur", "Charmander",
+            "Charmeleon", "Charizard", "Squirtle", "Wartortle", "Blastoise"
+        )
+        val pokemon = species.mapIndexed { index, name ->
+            """{"ident":"p1: Member ${index + 1}","details":"$name, L50","condition":"100/100"}"""
+        }.joinToString(",")
+        session.applyProtocolLine(
+            "|request|{\"rqid\":42,\"teamPreview\":true,\"maxChosenTeamSize\":2,\"side\":{\"pokemon\":[$pokemon]}}"
+        )
+
+        session.moveFocus(0, 5)
+        session.confirmSelection()
+        session.moveFocus(0, -5)
+        session.confirmSelection()
+
+        assertEquals(listOf(10, 0), session.teamPreviewOrder())
+        assertEquals(listOf("/choose team 11, 1|42"), decisions)
+    }
+
+    @Test
     fun teamPreviewKeepsDirectMoveEntryPointsOnTheReplacementGrid() {
         val session = BattleSession()
         session.applyProtocolLine(
