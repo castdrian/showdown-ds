@@ -33,6 +33,46 @@ class ShowdownReplayPlaybackParityTest {
         }
     }
 
+    @Test
+    fun replayKeepsTheOriginalFormVisibleUntilItsMoveMessageHasPlayed() {
+        val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/gen9randombattle-2691985124.json"))
+            .bufferedReader()
+            .use { it.readText() }
+        val replay = ShowdownReplayImporter.payload(replayJson)
+        val chunks = BattlePlaybackTiming.chunks(replay.log.lines())
+        val moveChunkIndex = chunks.indexOfFirst { chunk ->
+            chunk.any { it == "|move|p1a: Cramorant|Surf|p2a: Perrserker" }
+        }
+        val formChangeChunkIndex = chunks.indexOfFirst { chunk ->
+            chunk.any { it.startsWith("|-formechange|p1a: Cramorant|Cramorant-Gulping|") }
+        }
+        assertTrue("replay fixture has no Cramorant Surf", moveChunkIndex >= 0)
+        assertTrue("Cramorant's form change was not isolated after its Surf message", formChangeChunkIndex > moveChunkIndex)
+
+        val session = BattleSession().apply {
+            setLocalUsername(replay.players.firstOrNull().orEmpty())
+            setReplayMode(true)
+        }
+        chunks.take(moveChunkIndex + 1).forEach(session::applyProtocolPacket)
+
+        assertTrue(session.battleFeedMessages().any { it.text.contains("Cramorant used Surf!") })
+        val moveSprite = BattleSpriteRequests.active(
+            session.playerActiveCombatants(),
+            BattleSpriteSide.PLAYER,
+            session.spriteStyle
+        ).single().request
+        assertEquals("Cramorant", moveSprite.species)
+
+        session.applyProtocolPacket(chunks[formChangeChunkIndex])
+
+        val changedSprite = BattleSpriteRequests.active(
+            session.playerActiveCombatants(),
+            BattleSpriteSide.PLAYER,
+            session.spriteStyle
+        ).single().request
+        assertEquals("Cramorant-Gulping", changedSprite.species)
+    }
+
     private fun assertReplayMoveActorsMatchSprites(replayCase: ReplayCase, speed: Float) {
         val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}"))
             .bufferedReader()

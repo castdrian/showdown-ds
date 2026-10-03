@@ -61,6 +61,12 @@ object BattlePlaybackTiming {
             line.startsWith("|switch|") ||
             line.startsWith("|drag|") ||
             line.startsWith("|replace|") ||
+            line.startsWith("|detailschange|") ||
+            line.startsWith("|-formechange|") ||
+            line.startsWith("|-transform|") ||
+            line.startsWith("|-burst|") ||
+            line.startsWith("|-mega|") ||
+            line.startsWith("|-primal|") ||
             line.startsWith("|turn|") ||
             line.startsWith("|request|") ||
             line.startsWith("|win|") ||

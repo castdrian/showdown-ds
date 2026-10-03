@@ -61,6 +61,43 @@ class BattlePlaybackTimingTest {
     }
 
     @Test
+    fun isolatesSpeciesChangingEventsFromTheActionTheyFollow() {
+        val move = "|move|p1a: Cramorant|Surf|p2a: Perrserker"
+        listOf(
+            "|detailschange|p1a: Charizard|Charizard-Mega-X, L50|153/153",
+            "|-formechange|p1a: Cramorant|Cramorant-Gulping|",
+            "|-transform|p1a: Ditto|p2a: Dragapult",
+            "|-burst|p1a: Necrozma|Necrozma-Ultra|Ultranecrozium Z",
+            "|-mega|p1a: Charizard|Charizardite X",
+            "|-primal|p1a: Kyogre|Blue Orb"
+        ).forEach { transition ->
+            assertEquals(
+                listOf(listOf(move), listOf(transition)),
+                BattlePlaybackTiming.chunks(listOf(move, transition))
+            )
+        }
+
+        assertEquals(
+            listOf(
+                listOf(move),
+                listOf(
+                    "|-formechange|p1a: Cramorant|Cramorant-Gulping|",
+                    "|-damage|p2a: Perrserker|155/269"
+                ),
+                listOf("|")
+            ),
+            BattlePlaybackTiming.chunks(
+                listOf(
+                    move,
+                    "|-formechange|p1a: Cramorant|Cramorant-Gulping|",
+                    "|-damage|p2a: Perrserker|155/269",
+                    "|"
+                )
+            )
+        )
+    }
+
+    @Test
     fun givesFaintsLongerReadingTimeThanOrdinaryMoves() {
         assertEquals(2_600L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee")))
         assertEquals(4_800L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee", "|faint|p2a: Eevee")))
