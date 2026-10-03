@@ -107,6 +107,91 @@ class ShowdownReplayPlaybackParityTest {
         assertEquals("Sparky", afterSwap["p1b"])
     }
 
+    @Test
+    fun repeatedTripleBattleSlotSwapsKeepMoveActorsAndSpritesAligned() {
+        val chunks = BattlePlaybackTiming.chunks(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|gametype|triples",
+                "|switch|p1a: Spark|Pikachu, L50|100/100",
+                "|switch|p1b: Tide|Gyarados, L50|100/100",
+                "|switch|p1c: Leaf|Meowscarada, L50|100/100",
+                "|switch|p2a: Atlas|Dragonite, L50|100/100",
+                "|switch|p2b: Volt|Zapdos, L50|100/100",
+                "|switch|p2c: Stone|Garchomp, L50|100/100",
+                "|move|p1a: Spark|Thunderbolt|p2a: Atlas",
+                "|move|p2c: Stone|Earthquake|p1c: Leaf",
+                "|swap|p1a: Spark|1",
+                "|move|p1b: Spark|Thunderbolt|p2c: Stone",
+                "|swap|p1c: Leaf|1",
+                "|move|p1c: Spark|Thunderbolt|p2b: Volt",
+                "|swap|p1a: Tide|1",
+                "|move|p1b: Tide|Waterfall|p2a: Atlas",
+                "|swap|p1c: Spark|1",
+                "|move|p1b: Spark|Thunderbolt|p2c: Stone",
+                "|swap|p2c: Stone|1",
+                "|move|p2b: Stone|Earthquake|p1a: Leaf",
+                "|swap|p2a: Atlas|1",
+                "|move|p2b: Atlas|Dragon Claw|p1b: Spark",
+                "|swap|p2c: Volt|1",
+                "|move|p2c: Atlas|Dragon Claw|p1c: Tide"
+            )
+        )
+        val expectedSpecies = mapOf(
+            "Spark" to "Pikachu",
+            "Tide" to "Gyarados",
+            "Leaf" to "Meowscarada",
+            "Atlas" to "Dragonite",
+            "Volt" to "Zapdos",
+            "Stone" to "Garchomp"
+        )
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        var moveCount = 0
+
+        chunks.forEach { packet ->
+            session.applyProtocolPacket(packet)
+            packet.filter { it.startsWith("|move|") }.forEach { line ->
+                val actorIdent = line.split('|').getOrElse(2) { "" }
+                val actorSlot = actorIdent.substringBefore(':').trim()
+                val actorName = actorIdent.substringAfter(": ", actorIdent).substringBefore(',').trim()
+                val playerSide = actorSlot.startsWith(session.battlePlayerSlot())
+                val combatants = if (playerSide) {
+                    session.playerActiveCombatants()
+                } else {
+                    session.opponentActiveCombatants()
+                }
+                val context = "after triple-slot swaps at $line"
+                val activeActor = combatants.singleOrNull { it.slot == actorSlot }
+
+                assertTrue("$context has no active actor in ${combatants.map { it.slot to it.name }}", activeActor != null)
+                assertEquals(context, actorName, checkNotNull(activeActor).name)
+                assertEquals(context, expectedSpecies[actorName], activeActor.species)
+
+                val spriteRequest = BattleSpriteRequests.active(
+                    combatants,
+                    if (playerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
+                    session.spriteStyle
+                ).singleOrNull { it.slot == actorSlot }?.request
+
+                assertEquals(context, expectedSpecies[actorName], checkNotNull(spriteRequest).species)
+                assertEquals(
+                    context,
+                    if (playerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
+                    checkNotNull(spriteRequest).side
+                )
+                val moveMessage = session.battleFeedMessages().lastOrNull { it.text.contains(" used ") }?.text
+                assertEquals(context, actorName, messageActor(checkNotNull(moveMessage)))
+                moveCount += 1
+            }
+        }
+
+        assertEquals(9, moveCount)
+    }
+
     private fun assertReplayMoveActorsMatchSprites(replayCase: ReplayCase, speed: Float) {
         val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}"))
             .bufferedReader()
