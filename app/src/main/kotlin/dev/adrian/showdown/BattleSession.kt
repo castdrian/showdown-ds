@@ -518,6 +518,7 @@ class BattleSession {
     private var battleLogGeneration = 0L
     private var nativeBattleLogGeneration = -1L
     private var nativeBattleLogPending = false
+    private var lastNativeProtocolMessageId = Long.MIN_VALUE
     private var protocolTimestampSeconds: Long? = null
     private var battleGeneration = 9
     private val battleFeedEntriesCache = mutableMapOf<Int, List<String>>()
@@ -1015,6 +1016,7 @@ class BattleSession {
         protocolBattleFeedMarkupEntries.clear()
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = false
+        lastNativeProtocolMessageId = Long.MIN_VALUE
         clearBattleFeedEntriesCache()
         notifyListeners()
     }
@@ -2187,6 +2189,7 @@ class BattleSession {
         battleLogGeneration += 1L
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = true
+        lastNativeProtocolMessageId = Long.MIN_VALUE
         protocolTimestampSeconds = null
         battleLog += "Battle started."
         battleLogMessageIds += newBattleFeedMessageId()
@@ -5300,18 +5303,26 @@ class BattleSession {
         val feedMarkupEntries = ShowdownBattleLogFilter
             .visibleMarkupEntries(value)
             .mapNotNull(::sanitizeShowdownMarkup)
-        var protocolSearchStart = 0
-        return plainEntries.mapIndexed { index, plainText ->
+        var protocolSearchAfterMessageId = lastNativeProtocolMessageId
+        val entries = plainEntries.mapIndexed { index, plainText ->
             val previousId = previous.getOrNull(index)
                 ?.takeIf { BattleFeedMessageIdentity.matches(it.plainText, plainText) }
                 ?.id
-            val protocolIndex = battleLog.indices
-                .drop(protocolSearchStart)
-                .firstOrNull { BattleFeedMessageIdentity.matches(battleLog[it], plainText) }
-            if (protocolIndex != null) protocolSearchStart = protocolIndex + 1
-            val id = previousId ?: protocolIndex?.let(battleLogMessageIds::get) ?: newBattleFeedMessageId()
+            val protocolIndex = if (previousId == null) {
+                battleLog.indices.firstOrNull { candidateIndex ->
+                    battleLogMessageIds[candidateIndex] > protocolSearchAfterMessageId &&
+                        BattleFeedMessageIdentity.matches(battleLog[candidateIndex], plainText)
+                }
+            } else {
+                null
+            }
+            val protocolId = protocolIndex?.let { battleLogMessageIds[it] }
+            if (protocolId != null) protocolSearchAfterMessageId = protocolId
+            val id = previousId ?: protocolId ?: newBattleFeedMessageId()
             ShowdownBattleLogEntry(id, plainText, feedMarkupEntries.getOrElse(index) { plainText })
         }
+        lastNativeProtocolMessageId = maxOf(lastNativeProtocolMessageId, protocolSearchAfterMessageId)
+        return entries
     }
 
     private fun moveMoveFocus(horizontal: Int, vertical: Int) {

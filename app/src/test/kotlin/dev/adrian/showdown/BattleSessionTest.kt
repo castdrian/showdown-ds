@@ -311,6 +311,36 @@ class BattleSessionTest {
     }
 
     @Test
+    fun repeatedNativeSwitchOutLinesKeepTheIdentityOfEachWithdrawnPokemon() {
+        val session = BattleSession().apply {
+            setLocalUsername("ADRIAN")
+            applyProtocolPacket(
+                listOf(
+                    "|init|battle",
+                    "|player|p1|ADRIAN||",
+                    "|player|p2|OPPONENT||",
+                    "|switch|p1a: Sparky|Pikachu, L50|100/100",
+                    "|switch|p1a: Sparky|Raichu, L50|100/100",
+                    "|switch|p1a: Sparky|Eevee, L50|100/100"
+                )
+            )
+        }
+
+        session.appendShowdownBattleLog("Sparky, come back!")
+        session.appendShowdownBattleLog("Sparky, come back!")
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        val nativeWithdrawals = session.battleFeedMessages().filter { it.text == "Sparky, come back!" }
+
+        assertEquals(2, nativeWithdrawals.size)
+        assertEquals(2, nativeWithdrawals.map { it.id }.distinct().size)
+        assertEquals(
+            listOf("Pikachu", "Raichu"),
+            nativeWithdrawals.map { session.switchOutVisualForBattleFeed(it.id)?.combatant?.species }
+        )
+    }
+
+    @Test
     fun battleRoomPresenceEventsUseShowdownGroupingAndReplaceTheirFallback() {
         val session = BattleSession()
 
