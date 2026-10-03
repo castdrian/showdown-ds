@@ -443,11 +443,11 @@ class BattleSceneView(
         drawBackdrop(canvas, width, height)
         drawFieldVisuals(canvas, width, height, scale, nowNanos, fieldVisuals)
         if (!singles && opponentCombatants.isNotEmpty()) {
-            val centeredSlot = centeredTriplesSlot(opponentCombatants)
+            val centeredSlot = BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), opponentCombatants)
             fieldCombatants(opponentCombatants, false).forEachIndexed { index, combatant ->
                 drawCombatant(
                     canvas,
-                    multiCombatantX(width, false, index, opponentCombatants.size, centeredSlot, combatant.slot),
+                    BattleCombatantLayout.x(width, false, index, opponentCombatants.size, centeredSlot, combatant.slot),
                     opponentY,
                     scale * 0.92f,
                     combatant.name,
@@ -472,11 +472,11 @@ class BattleSceneView(
             )
         }
         if (!singles && playerCombatants.isNotEmpty()) {
-            val centeredSlot = centeredTriplesSlot(playerCombatants)
+            val centeredSlot = BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), playerCombatants)
             fieldCombatants(playerCombatants, true).forEachIndexed { index, combatant ->
                 drawCombatant(
                     canvas,
-                    multiCombatantX(width, true, index, playerCombatants.size, centeredSlot, combatant.slot),
+                    BattleCombatantLayout.x(width, true, index, playerCombatants.size, centeredSlot, combatant.slot),
                     playerY,
                     scale * 1.02f,
                     combatant.name,
@@ -780,10 +780,10 @@ class BattleSceneView(
             player
         )
         val centerY = height * if (player) 0.67f else 0.42f
-        val centeredSlot = centeredTriplesSlot(combatants)
+        val centeredSlot = BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), combatants)
         combatants.forEachIndexed { index, combatant ->
             val details = session.detailsForActiveCombatant(player, combatant.slot) ?: return@forEachIndexed
-            val centerX = multiCombatantX(width, player, index, combatants.size, centeredSlot, combatant.slot)
+            val centerX = BattleCombatantLayout.x(width, player, index, combatants.size, centeredSlot, combatant.slot)
             val bounds = RectF(
                 centerX - 220f * scale,
                 centerY - 360f * scale,
@@ -962,9 +962,9 @@ class BattleSceneView(
     ): InspectTarget? {
         if (combatants.isEmpty()) return null
         val centerY = height * if (player) 0.67f else 0.42f
-        val centeredSlot = centeredTriplesSlot(combatants)
+        val centeredSlot = BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), combatants)
         val spriteTarget = combatants.mapIndexed { index, combatant ->
-            val centerX = multiCombatantX(width, player, index, combatants.size, centeredSlot, combatant.slot)
+            val centerX = BattleCombatantLayout.x(width, player, index, combatants.size, centeredSlot, combatant.slot)
             val bounds = RectF(
                 centerX - 220f * scale,
                 centerY - 360f * scale,
@@ -1765,12 +1765,12 @@ class BattleSceneView(
             BattleDamageCueResolver.targetKey(combatant.slot) == BattleDamageCueResolver.targetKey(target)
         }
         if (index < 0) return if (player) playerX to playerY else opponentX to opponentY
-        return multiCombatantX(
+        return BattleCombatantLayout.x(
             width,
             player,
             index,
             combatants.size,
-            centeredTriplesSlot(combatants),
+            BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), combatants),
             combatants[index].slot
         ) to if (player) height * 0.67f else height * 0.42f
     }
@@ -2301,27 +2301,6 @@ class BattleSceneView(
             paint.textAlign = Paint.Align.LEFT
             badgeLeft += badgeWidth + 8f * scale
         }
-    }
-
-    private fun centeredTriplesSlot(combatants: List<BattleSession.ActiveCombatant>): String? =
-        if (session.isTriplesCentered()) {
-            combatants.singleOrNull { !it.condition.contains("FNT", true) }?.slot
-        } else {
-            null
-        }
-
-    private fun multiCombatantX(
-        width: Float,
-        player: Boolean,
-        index: Int,
-        count: Int,
-        centeredSlot: String? = null,
-        slot: String? = null
-    ): Float {
-        if (centeredSlot != null && centeredSlot == slot) return width * 0.5f
-        val step = if (count > 2) 0.12f else 0.16f
-        val base = if (player) 0.20f else 0.64f
-        return width * (base + index * step)
     }
 
     private fun fieldCombatants(combatants: List<BattleSession.ActiveCombatant>, player: Boolean) =
@@ -2967,14 +2946,14 @@ class BattleSceneView(
             width * 0.315f
         }
         val playerCombatants = session.playerActiveCombatants()
-        val centeredPlayerSlot = centeredTriplesSlot(playerCombatants)
+        val centeredPlayerSlot = BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), playerCombatants)
         val playerSpriteRight = if (session.isSinglesBattle()) {
             ShowdownBattleLayout.x(width, ShowdownBattleLayout.PLAYER_X) +
                 145f * scale * ShowdownBattleLayout.PLAYER_SCALE
         } else {
             playerCombatants.mapIndexedNotNull { index, combatant ->
                 if (combatant.condition.contains("FNT", true)) return@mapIndexedNotNull null
-                multiCombatantX(
+                BattleCombatantLayout.x(
                     width,
                     true,
                     index,
