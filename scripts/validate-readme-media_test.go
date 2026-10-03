@@ -12,15 +12,34 @@ import (
 )
 
 func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
-	if err := validateScreenshot("../media/showdown-battle-hd-both-sides.png"); err != nil {
-		t.Fatalf("validateScreenshot(%q): %v", "../media/showdown-battle-hd-both-sides.png", err)
-	}
-	if err := validateReadmeScreenPair(
-		"../media/showdown-battle-upper-screen-hd.png",
-		"../media/showdown-battle-lower-screen-hd.png",
+	for _, sourcePath := range []string{
 		"../media/showdown-battle-hd-both-sides.png",
-	); err != nil {
-		t.Fatalf("validateReadmeScreenPair rejected corresponding screenshots: %v", err)
+		"../media/showdown-battle-party-both-sides.png",
+	} {
+		if err := validateScreenshot(sourcePath); err != nil {
+			t.Fatalf("validateScreenshot(%q): %v", sourcePath, err)
+		}
+	}
+	for _, pair := range []struct {
+		lowerPath  string
+		sourcePath string
+	}{
+		{
+			lowerPath:  "../media/showdown-battle-lower-screen-hd.png",
+			sourcePath: "../media/showdown-battle-hd-both-sides.png",
+		},
+		{
+			lowerPath:  "../media/showdown-battle-party-screen-hd.png",
+			sourcePath: "../media/showdown-battle-party-both-sides.png",
+		},
+	} {
+		if err := validateReadmeScreenPair(
+			"../media/showdown-battle-upper-screen-hd.png",
+			pair.lowerPath,
+			pair.sourcePath,
+		); err != nil {
+			t.Fatalf("validateReadmeScreenPair rejected corresponding screenshots: %v", err)
+		}
 	}
 }
 

@@ -54,19 +54,42 @@ func main() {
 }
 
 func validateReadme(readme string) error {
-	asset := "media/showdown-battle-hd-both-sides.png"
-	if !strings.Contains(readme, asset) {
-		return fmt.Errorf("README.md does not embed %s", asset)
+	assets := []string{
+		"media/showdown-battle-hd-both-sides.png",
+		"media/showdown-battle-party-both-sides.png",
 	}
-	if len(readmeScreenshotPaths(readme)) == 0 {
-		return fmt.Errorf("README.md does not embed any PNG screenshots")
+	for _, asset := range assets {
+		if !strings.Contains(readme, asset) {
+			return fmt.Errorf("README.md does not embed %s", asset)
+		}
 	}
-	if err := validateReadmeScreenPair(
-		repositoryFile("media/showdown-battle-upper-screen-hd.png"),
-		repositoryFile("media/showdown-battle-lower-screen-hd.png"),
-		repositoryFile("media/showdown-battle-hd-both-sides.png"),
-	); err != nil {
-		return err
+	if len(readmeScreenshotPaths(readme)) != len(assets) {
+		return fmt.Errorf("README.md must embed both matching battle screenshots")
+	}
+	pairs := []struct {
+		upper  string
+		lower  string
+		source string
+	}{
+		{
+			upper:  "media/showdown-battle-upper-screen-hd.png",
+			lower:  "media/showdown-battle-lower-screen-hd.png",
+			source: assets[0],
+		},
+		{
+			upper:  "media/showdown-battle-upper-screen-hd.png",
+			lower:  "media/showdown-battle-party-screen-hd.png",
+			source: assets[1],
+		},
+	}
+	for _, pair := range pairs {
+		if err := validateReadmeScreenPair(
+			repositoryFile(pair.upper),
+			repositoryFile(pair.lower),
+			repositoryFile(pair.source),
+		); err != nil {
+			return err
+		}
 	}
 	return validateReadmeImageCacheKeys(readme)
 }
@@ -186,7 +209,7 @@ func validateScreenshot(path string) error {
 	}
 
 	expectedHeight := 1080
-	if strings.HasSuffix(path, "showdown-battle-hd-both-sides.png") {
+	if strings.HasSuffix(path, "showdown-battle-hd-both-sides.png") || strings.HasSuffix(path, "showdown-battle-party-both-sides.png") {
 		expectedHeight = 2160
 	}
 	if decoded.Bounds().Dx() != 1920 || decoded.Bounds().Dy() != expectedHeight {
@@ -208,7 +231,7 @@ func validateScreenshot(path string) error {
 
 func spriteTemplates(path string) []spriteTemplate {
 	switch {
-	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"):
+	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"), strings.HasSuffix(path, "showdown-battle-party-both-sides.png"):
 		return []spriteTemplate{
 			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(420, 350)},
 			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1050, 150)},
@@ -302,8 +325,7 @@ func visualScore(source image.Image, area image.Rectangle) float64 {
 			right := rgba(source.At(min(x+2, area.Max.X-1), y))
 			down := rgba(source.At(x, min(y+2, area.Max.Y-1)))
 			edge := colorDistance(pixel, right) > 48 || colorDistance(pixel, down) > 48
-			colorful := max3(pixel.r, pixel.g, pixel.b)-min3(pixel.r, pixel.g, pixel.b) > 42 && max3(pixel.r, pixel.g, pixel.b) > 90
-			if edge && colorful {
+			if edge {
 				foreground++
 			}
 			inspected++
@@ -344,30 +366,8 @@ func min(value, other int) int {
 	return other
 }
 
-func max3(first, second, third uint8) uint8 {
-	return max(first, max(second, third))
-}
-
-func min3(first, second, third uint8) uint8 {
-	return minByte(first, minByte(second, third))
-}
-
-func max(first, second uint8) uint8 {
-	if first > second {
-		return first
-	}
-	return second
-}
-
 func maxFloat(first, second float64) float64 {
 	if first > second {
-		return first
-	}
-	return second
-}
-
-func minByte(first, second uint8) uint8 {
-	if first < second {
 		return first
 	}
 	return second
