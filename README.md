@@ -3,7 +3,7 @@
 Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
 <p align="center">
-  <img src="media/showdown-battle-hd-both-sides.png?v=3a849a3693b78f91" width="768" alt="Live battle with Alcremie and Zacian visible on the upper screen and Alcremie's matching move selector on the lower screen">
+  <img src="media/showdown-battle-hd-both-sides.png?v=d91ea4993ad4d162" width="768" alt="Active Gen 9 Random Battle with Manaphy and Bellossom visible on the upper screen and the matching move selector below">
 </p>
 
 ## Hardware target
