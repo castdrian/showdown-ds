@@ -6,6 +6,9 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.Arrays
 
+private const val MAX_LZW_CODES = 4096
+private const val MAX_LZW_BITS = 12
+
 internal class ShowdownStreamingGif private constructor(
     private val width: Int,
     private val height: Int,
@@ -14,8 +17,11 @@ internal class ShowdownStreamingGif private constructor(
     private val frames: List<Frame>,
     private val canvasPixels: IntArray,
     private val outputBitmap: Bitmap,
-    private val memoryBytes: Int
+    private val memoryBytes: Int,
+    private val lzwDecoder: GifLzwDecoder
 ) {
+    private val outputX = IntArray(width) { it * outputWidth / width }
+    private val outputY = IntArray(height) { it * outputHeight / height }
     private var currentFrameIndex = -1
     private var savedCanvas: IntArray? = null
     private var released = false
@@ -27,7 +33,7 @@ internal class ShowdownStreamingGif private constructor(
     val sourceHeight: Int get() = height
     val frameWidth: Int get() = outputWidth
     val frameHeight: Int get() = outputHeight
-    val hasVisiblePixels: Boolean get() = currentFrameHasVisiblePixels
+    val hasVisiblePixels: Boolean get() = !released && currentFrameHasVisiblePixels
 
     fun frameAt(elapsedMillis: Long): Bitmap? {
         if (!isAnimated) return null
@@ -80,7 +86,15 @@ internal class ShowdownStreamingGif private constructor(
     private fun applyDisposal(frame: Frame) {
         when (frame.disposal) {
             DISPOSAL_BACKGROUND -> clearFrame(frame)
-            DISPOSAL_PREVIOUS -> savedCanvas?.copyInto(canvasPixels) ?: clearFrame(frame)
+            DISPOSAL_PREVIOUS -> {
+                val previousCanvas = savedCanvas
+                if (previousCanvas == null) {
+                    clearFrame(frame)
+                } else {
+                    previousCanvas.copyInto(canvasPixels)
+                }
+                savedCanvas = null
+            }
         }
     }
 
@@ -95,85 +109,35 @@ internal class ShowdownStreamingGif private constructor(
     }
 
     private fun decodeFrame(frame: Frame) {
-        val rows = if (frame.interlaced) interlacedRows(frame.height) else IntArray(frame.height) { it }
+        val rows = if (frame.interlaced) interlacedRows(frame.height) else null
+        val palette = frame.palette
+        val transparentIndex = frame.transparentIndex
+        val framePixelCount = frame.width * frame.height
+        val frameRight = frame.left + frame.width
         var pixelIndex = 0
-        decodeLzw(frame) { colorIndex ->
-            if (pixelIndex >= frame.width * frame.height) return@decodeLzw
-            val row = rows[pixelIndex / frame.width]
-            val column = pixelIndex % frame.width
-            val x = frame.left + column
-            val y = frame.top + row
-            if (x in 0 until width && y in 0 until height && colorIndex != frame.transparentIndex) {
-                val outputX = (x * outputWidth / width).coerceIn(0, outputWidth - 1)
-                val outputY = (y * outputHeight / height).coerceIn(0, outputHeight - 1)
-                canvasPixels[outputY * outputWidth + outputX] = frame.palette.getOrElse(colorIndex) { 0 }
+        var x = frame.left
+        var rowIndex = 0
+        var y = frame.top + (rows?.get(0) ?: 0)
+        lzwDecoder.decode(frame.minimumCodeSize, frame.imageData) framePixels@{ colorIndex ->
+            if (pixelIndex >= framePixelCount) return@framePixels
+            if (colorIndex != transparentIndex) {
+                val outputIndex = outputY[y] * outputWidth + outputX[x]
+                val color = if (colorIndex < palette.size) palette[colorIndex] else 0
+                canvasPixels[outputIndex] = color
             }
             pixelIndex += 1
+            x += 1
+            if (x == frameRight) {
+                x = frame.left
+                rowIndex += 1
+                if (rowIndex < frame.height) y = frame.top + (rows?.get(rowIndex) ?: rowIndex)
+            }
         }
     }
 
     private fun publishFrame() {
         outputBitmap.setPixels(canvasPixels, 0, outputWidth, 0, 0, outputWidth, outputHeight)
         currentFrameHasVisiblePixels = canvasPixels.any { it ushr 24 != 0 }
-    }
-
-    private fun decodeLzw(frame: Frame, emit: (Int) -> Unit) {
-        val minimumCodeSize = frame.minimumCodeSize
-        if (minimumCodeSize !in 2..8) return
-        val clearCode = 1 shl minimumCodeSize
-        val endCode = clearCode + 1
-        val prefix = IntArray(MAX_LZW_CODES)
-        val suffix = ByteArray(MAX_LZW_CODES)
-        val stack = ByteArray(MAX_LZW_CODES)
-        val reader = GifBitReader(frame.imageData)
-        var codeSize = minimumCodeSize + 1
-        var availableCode = clearCode + 2
-        var previousCode = -1
-        var firstColor = 0
-        var stackSize = 0
-        while (true) {
-            val code = reader.read(codeSize) ?: return
-            when {
-                code == clearCode -> {
-                    codeSize = minimumCodeSize + 1
-                    availableCode = clearCode + 2
-                    previousCode = -1
-                }
-                code == endCode -> return
-                previousCode < 0 -> {
-                    if (code >= clearCode) return
-                    firstColor = code
-                    emit(code)
-                    previousCode = code
-                }
-                else -> {
-                    val inputCode = code
-                    var resolvedCode = code
-                    if (resolvedCode == availableCode) {
-                        if (stackSize == stack.size) return
-                        stack[stackSize++] = firstColor.toByte()
-                        resolvedCode = previousCode
-                    }
-                    if (resolvedCode >= availableCode || resolvedCode >= MAX_LZW_CODES) return
-                    while (resolvedCode >= clearCode) {
-                        if (resolvedCode >= MAX_LZW_CODES || stackSize == stack.size) return
-                        stack[stackSize++] = suffix[resolvedCode]
-                        resolvedCode = prefix[resolvedCode]
-                    }
-                    if (resolvedCode < 0 || resolvedCode >= clearCode || stackSize == stack.size) return
-                    firstColor = resolvedCode
-                    stack[stackSize++] = firstColor.toByte()
-                    while (stackSize > 0) emit(stack[--stackSize].toInt() and 0xff)
-                    if (availableCode < MAX_LZW_CODES) {
-                        prefix[availableCode] = previousCode
-                        suffix[availableCode] = firstColor.toByte()
-                        availableCode += 1
-                        if (availableCode == (1 shl codeSize) && codeSize < MAX_LZW_BITS) codeSize += 1
-                    }
-                    previousCode = inputCode
-                }
-            }
-        }
     }
 
     private data class Frame(
@@ -195,21 +159,6 @@ internal class ShowdownStreamingGif private constructor(
         val durationMillis: Long = DEFAULT_FRAME_DURATION_MILLIS,
         val transparentIndex: Int = -1
     )
-
-    private class GifBitReader(private val bytes: ByteArray) {
-        private var bitOffset = 0
-
-        fun read(bitCount: Int): Int? {
-            if (bitOffset + bitCount > bytes.size * 8) return null
-            var value = 0
-            repeat(bitCount) { index ->
-                val offset = bitOffset + index
-                value = value or (((bytes[offset / 8].toInt() ushr (offset % 8)) and 1) shl index)
-            }
-            bitOffset += bitCount
-            return value
-        }
-    }
 
     private class GifCursor(private val bytes: ByteArray) {
         var position = 0
@@ -250,8 +199,6 @@ internal class ShowdownStreamingGif private constructor(
     }
 
     companion object {
-        private const val MAX_LZW_CODES = 4096
-        private const val MAX_LZW_BITS = 12
         private const val DEFAULT_FRAME_DURATION_MILLIS = 100L
         private const val DISPOSAL_NONE = 1
         private const val DISPOSAL_BACKGROUND = 2
@@ -375,6 +322,8 @@ internal class ShowdownStreamingGif private constructor(
                 .toLong()
                 .plus(canvasPixels.size.toLong() * 4L)
                 .plus(outputBitmap.allocationByteCount.toLong())
+                .plus(MAX_LZW_CODES.toLong() * 6L)
+                .plus((width.toLong() + height.toLong()) * Int.SIZE_BYTES.toLong())
                 .coerceIn(1L, Int.MAX_VALUE.toLong())
                 .toInt()
             return runCatching {
@@ -386,7 +335,8 @@ internal class ShowdownStreamingGif private constructor(
                     sampledFrames,
                     canvasPixels,
                     outputBitmap,
-                    memoryBytes
+                    memoryBytes,
+                    GifLzwDecoder()
                 )
             }.getOrElse {
                 outputBitmap.recycle()
@@ -438,6 +388,102 @@ internal class ShowdownStreamingGif private constructor(
                 }
             }
             return rows
+        }
+    }
+}
+
+internal class GifBitReader(bytes: ByteArray) {
+    private var source = bytes
+    private var byteOffset = 0
+    private var bitBuffer = 0
+    private var bufferedBitCount = 0
+
+    constructor() : this(byteArrayOf())
+
+    fun reset(bytes: ByteArray) {
+        source = bytes
+        byteOffset = 0
+        bitBuffer = 0
+        bufferedBitCount = 0
+    }
+
+    fun read(bitCount: Int): Int {
+        if (bitCount <= 0) return 0
+        while (bufferedBitCount < bitCount) {
+            if (byteOffset >= source.size) return -1
+            bitBuffer = bitBuffer or ((source[byteOffset++].toInt() and 0xff) shl bufferedBitCount)
+            bufferedBitCount += Byte.SIZE_BITS
+        }
+        val value = bitBuffer and ((1 shl bitCount) - 1)
+        bitBuffer = bitBuffer ushr bitCount
+        bufferedBitCount -= bitCount
+        return value
+    }
+}
+
+internal class GifLzwDecoder {
+    private val prefix = IntArray(MAX_LZW_CODES)
+    private val suffix = ByteArray(MAX_LZW_CODES)
+    private val stack = ByteArray(MAX_LZW_CODES)
+    private val bitReader = GifBitReader()
+
+    fun decode(minimumCodeSize: Int, imageData: ByteArray, emit: (Int) -> Unit) {
+        if (minimumCodeSize !in 2..8) return
+        val clearCode = 1 shl minimumCodeSize
+        val endCode = clearCode + 1
+        val prefixCodes = prefix
+        val suffixCodes = suffix
+        val outputStack = stack
+        val reader = bitReader
+        reader.reset(imageData)
+        var codeSize = minimumCodeSize + 1
+        var availableCode = clearCode + 2
+        var previousCode = -1
+        var firstColor = 0
+        var stackSize = 0
+        while (true) {
+            val code = reader.read(codeSize)
+            if (code < 0) return
+            when {
+                code == clearCode -> {
+                    codeSize = minimumCodeSize + 1
+                    availableCode = clearCode + 2
+                    previousCode = -1
+                }
+                code == endCode -> return
+                previousCode < 0 -> {
+                    if (code >= clearCode) return
+                    firstColor = code
+                    emit(code)
+                    previousCode = code
+                }
+                else -> {
+                    val inputCode = code
+                    var resolvedCode = code
+                    if (resolvedCode == availableCode) {
+                        if (stackSize == outputStack.size) return
+                        outputStack[stackSize++] = firstColor.toByte()
+                        resolvedCode = previousCode
+                    }
+                    if (resolvedCode >= availableCode || resolvedCode >= MAX_LZW_CODES) return
+                    while (resolvedCode >= clearCode) {
+                        if (resolvedCode >= MAX_LZW_CODES || stackSize == outputStack.size) return
+                        outputStack[stackSize++] = suffixCodes[resolvedCode]
+                        resolvedCode = prefixCodes[resolvedCode]
+                    }
+                    if (resolvedCode < 0 || resolvedCode >= clearCode || stackSize == outputStack.size) return
+                    firstColor = resolvedCode
+                    outputStack[stackSize++] = firstColor.toByte()
+                    while (stackSize > 0) emit(outputStack[--stackSize].toInt() and 0xff)
+                    if (availableCode < MAX_LZW_CODES) {
+                        prefixCodes[availableCode] = previousCode
+                        suffixCodes[availableCode] = firstColor.toByte()
+                        availableCode += 1
+                        if (availableCode == (1 shl codeSize) && codeSize < MAX_LZW_BITS) codeSize += 1
+                    }
+                    previousCode = inputCode
+                }
+            }
         }
     }
 }
