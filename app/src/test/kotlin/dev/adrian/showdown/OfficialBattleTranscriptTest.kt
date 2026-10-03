@@ -1105,7 +1105,9 @@ class OfficialBattleTranscriptTest {
                 "|-item|p2a: Pikachu|Eviolite",
                 "|-enditem|p2a: Pikachu|Eviolite",
                 "|-item|p1a: Persian|Sitrus Berry|[from] move: Thief|[of] p2a: Pikachu",
-                "|-item|p2a: Pikachu|Choice Scarf|[from] move: Bestow|[of] p1a: Persian"
+                "|-item|p2a: Pikachu|Choice Scarf|[from] move: Bestow|[of] p1a: Persian",
+                "|-item|p2a: Pikachu|Choice Band|[from] ability: Frisk|[of] p1a: Persian",
+                "|-item|p1a: Persian|Sitrus Berry|[from] ability: Harvest|[of] p1a: Persian"
             )
         )
 
@@ -1117,6 +1119,42 @@ class OfficialBattleTranscriptTest {
         assertTrue(session.battleLog().contains("(The opposing Pikachu used its Eviolite!)"))
         assertTrue(session.battleLog().contains("Persian stole the opposing Pikachu's Sitrus Berry!"))
         assertTrue(session.battleLog().contains("Persian gave the opposing Pikachu its Choice Scarf!"))
+        assertTrue(session.battleLog().contains("[Persian's Frisk]"))
+        assertTrue(session.battleLog().contains("Persian frisked the opposing Pikachu and found its Choice Band!"))
+        assertTrue(session.battleLog().contains("[Persian's Harvest]"))
+        assertTrue(session.battleLog().contains("Persian harvested one Sitrus Berry!"))
+    }
+
+    @Test
+    fun formatsCommonVolatileEffectAnnouncementsLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p2a: Magikarp|Magikarp, L50|100/100",
+                "|-start|p2a: Magikarp|move: Taunt",
+                "|-end|p2a: Magikarp|move: Taunt",
+                "|-start|p2a: Magikarp|move: Heal Block",
+                "|-end|p2a: Magikarp|move: Heal Block",
+                "|-start|p2a: Magikarp|move: Attract",
+                "|-end|p2a: Magikarp|move: Attract",
+                "|-start|p2a: Magikarp|confusion|[fatigue]",
+                "|-end|p2a: Magikarp|confusion",
+                "|-start|p2a: Magikarp|move: Yawn",
+                "|-start|p2a: Magikarp|trapped"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("The opposing Magikarp fell for the taunt!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp shook off the taunt!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp was prevented from healing!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp's Heal Block wore off!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp fell in love!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp got over its infatuation!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp became confused due to fatigue!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp snapped out of its confusion!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp grew drowsy!"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp can no longer escape!"))
     }
 
     @Test

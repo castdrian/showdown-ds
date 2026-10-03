@@ -3551,8 +3551,18 @@ class BattleSession {
                     ?: "(${battleEffectName(fields.getOrNull(3))} started on $pokemon!)"
             }
             "encore" -> "$pokemon must do an encore!"
+            "attract" -> "$pokemon fell in love!"
+            "confusion" -> if (fields.any { it.trim().equals("[fatigue]", true) }) {
+                "$pokemon became confused due to fatigue!"
+            } else {
+                "$pokemon became confused!"
+            }
+            "healblock" -> "$pokemon was prevented from healing!"
             "leechseed" -> "$pokemon was seeded!"
             "substitute" -> "$pokemon put in a substitute!"
+            "taunt" -> "$pokemon fell for the taunt!"
+            "trapped" -> "$pokemon can no longer escape!"
+            "yawn" -> "$pokemon grew drowsy!"
             else -> "(${battleEffectName(fields.getOrNull(3))} started on $pokemon!)"
         }
     }
@@ -3562,9 +3572,12 @@ class BattleSession {
         return when (effect) {
             "disable" -> "$pokemon's move is no longer disabled!"
             "encore" -> "$pokemon's encore ended!"
+            "attract" -> "$pokemon got over its infatuation!"
+            "confusion" -> "$pokemon snapped out of its confusion!"
             "healblock" -> "$pokemon's Heal Block wore off!"
             "leechseed" -> "$pokemon was freed from Leech Seed!"
             "substitute" -> "$pokemon's substitute faded!"
+            "taunt" -> "$pokemon shook off the taunt!"
             else -> "$pokemon was freed from $effectName!"
         }
     }
@@ -4405,6 +4418,9 @@ class BattleSession {
             val sourceActor = protocolSourceActor(fields)?.let(::battleActor)
             val pokemon = battleActor(actor)
             val announcement = when {
+                source == "abilityfrisk" && sourceActor != null ->
+                    "$sourceActor frisked $pokemon and found its $item!"
+                source == "abilityharvest" -> "$pokemon harvested one $item!"
                 source in setOf("movethief", "movecovet", "abilitymagician", "abilitypickpocket") && sourceActor != null ->
                     "$pokemon stole $sourceActor's $item!"
                 source == "movebestow" && sourceActor != null -> "$sourceActor gave $pokemon its $item!"
