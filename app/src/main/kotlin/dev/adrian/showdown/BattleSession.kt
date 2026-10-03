@@ -2585,7 +2585,7 @@ class BattleSession {
     }
 
     private fun switchOutMessage(actor: String, combatant: ActiveCombatant): String {
-        val nickname = displayPokemonName(combatant.name)
+        val nickname = combatant.name.trim().ifBlank { combatant.species }
         val isViewerSide = targetSlot(actor).take(2).equals(playerSlot, true)
         return if (!spectatorMode && isViewerSide) "$nickname, come back!"
         else "${battleTrainer(actor)} withdrew $nickname!"
@@ -3306,7 +3306,7 @@ class BattleSession {
             "detailschange", "-formechange", "-transform" -> {
                 appendProtocolAnnouncement(fields, "${battleActor(actor)} transformed!")
             }
-            else -> appendLog("${displayPokemonName(species)} changed form.")
+            else -> appendLog("$species changed form.")
         }
     }
 
@@ -4219,7 +4219,7 @@ class BattleSession {
             }
             appendProtocolAnnouncement(fields, activation)
             val species = speciesField?.takeUnless { it.equals(itemField, true) }
-                ?.let(::displayPokemonName)
+                ?.trim()
                 ?: activeSpeciesName(actor)
             appendProtocolAnnouncement(fields, "$actorName has Mega Evolved into Mega $species!")
         } else {
@@ -4491,9 +4491,7 @@ class BattleSession {
         return if (isPlayerSide(actor)) name else "the opposing $name"
     }
 
-    private fun battleActorName(actor: String) = displayPokemonName(
-        actor.substringAfter(':').trim().ifBlank { "Pokémon" }
-    )
+    private fun battleActorName(actor: String) = actor.substringAfter(':').trim().ifBlank { "Pokémon" }
 
     private fun battleTrainer(actor: String): String {
         val side = targetSlot(actor).take(2)
@@ -4503,15 +4501,15 @@ class BattleSession {
     }
 
     private fun fullBattlePokemonName(nickname: String, species: String): String {
-        val displaySpecies = displayPokemonName(species)
-        val displayNickname = displayPokemonName(nickname, species)
-        return if (displayNickname.equals(displaySpecies, true)) displaySpecies else "$displayNickname ($displaySpecies)"
+        val fullSpecies = species.trim().ifBlank { nickname.trim() }
+        val fullNickname = nickname.trim().ifBlank { fullSpecies }
+        return if (fullNickname == fullSpecies) fullSpecies else "$fullNickname ($fullSpecies)"
     }
 
     private fun activeSpeciesName(actor: String): String {
         val slot = targetSlot(actor)
         val species = if (isPlayerSide(actor)) playerActiveCombatants[slot]?.species else opponentActiveCombatants[slot]?.species
-        return displayPokemonName(species?.takeIf { it.isNotBlank() } ?: actor.substringAfter(':').trim())
+        return species?.takeIf { it.isNotBlank() } ?: actor.substringAfter(':').trim()
     }
 
     private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")

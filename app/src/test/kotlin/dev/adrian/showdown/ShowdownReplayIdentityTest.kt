@@ -6,6 +6,69 @@ import org.junit.Test
 
 class ShowdownReplayIdentityTest {
     @Test
+    fun preservesFullShowdownNamesInBattleTranscriptWithoutChangingCompactLabels() {
+        val session = BattleSession().apply { setLocalUsername("RED") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|switch|p1a: Alcremie-Caramel-Swirl|Alcremie-Caramel-Swirl, L50|100/100",
+                "|switch|p2a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|move|p1a: Alcremie-Caramel-Swirl|Fake Out|p2a: Tapu Koko",
+                "|switch|p1a: Dragonite|Dragonite, L50|100/100"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Go! Alcremie-Caramel-Swirl!"))
+        assertTrue(session.battleLog().contains("Alcremie-Caramel-Swirl used Fake Out!"))
+        assertTrue(session.battleLog().contains("Alcremie-Caramel-Swirl, come back!"))
+        assertEquals("Alcremie", BattleSession.displayPokemonName("Alcremie-Caramel-Swirl"))
+    }
+
+    @Test
+    fun preservesFullSpeciesFormsBesideNicknamesInSwitchAnnouncements() {
+        val session = BattleSession().apply { setLocalUsername("RED") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|switch|p1a: Creamy|Alcremie-Caramel-Swirl, L50|100/100"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Go! Creamy (Alcremie-Caramel-Swirl)!"))
+        assertEquals("Creamy", BattleSession.displayPokemonName(session.playerPokemon, session.playerDetails().species))
+    }
+
+    @Test
+    fun nativeFormTranscriptKeepsItsProtocolIdentityForTheVisibleSprite() {
+        val session = BattleSession().apply { setLocalUsername("RED") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|switch|p1a: Alcremie-Caramel-Swirl|Alcremie-Caramel-Swirl, L50|100/100",
+                "|move|p1a: Alcremie-Caramel-Swirl|Fake Out|p2a: Tapu Koko"
+            )
+        )
+        val protocolMove = session.battleFeedMessages().single { it.text.contains(" used Fake Out!") }
+        val spriteRequest = BattleSpriteRequests.active(
+            session.playerActiveCombatants(),
+            BattleSpriteSide.PLAYER,
+            session.spriteStyle
+        ).single().request
+
+        session.appendShowdownBattleLog(
+            "Go! Alcremie-Caramel-Swirl!<br />Alcremie-Caramel-Swirl used Fake Out!"
+        )
+
+        val nativeMove = session.battleFeedMessages().single { it.text.contains(" used Fake Out!") }
+
+        assertEquals("Alcremie-Caramel-Swirl", spriteRequest.species)
+        assertEquals(protocolMove.id, nativeMove.id)
+    }
+
+    @Test
     fun formatsOpponentNamesWithShowdownPerspective() {
         val session = BattleSession().apply { setLocalUsername("DoerreKong") }
         session.applyProtocolPacket(

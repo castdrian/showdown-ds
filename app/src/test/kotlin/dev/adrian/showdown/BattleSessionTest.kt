@@ -2540,7 +2540,7 @@ class BattleSessionTest {
     }
 
     @Test
-    fun longFormNamesStayShortInUserFacingBattleMessages() {
+    fun longFormNamesStayShortInVisualLabelsAndRemainFullInBattleTranscript() {
         val session = BattleSession()
 
         session.applyProtocolLine("|switch|p1a: Alcremie-Caramel-Swirl|Alcremie-Caramel-Swirl, L50|100/100")
@@ -2550,8 +2550,9 @@ class BattleSessionTest {
 
         session.applyProtocolLine("|move|p1a: Alcremie-Caramel-Swirl|Fake Out|p2a: Tapu Koko")
 
-        assertEquals("Alcremie used Fake Out!", session.latestBattleEvent)
-        assertEquals("Alcremie used Fake Out!", session.battleLog().last())
+        assertEquals("Alcremie-Caramel-Swirl used Fake Out!", session.latestBattleEvent)
+        assertEquals("Alcremie-Caramel-Swirl used Fake Out!", session.battleLog().last())
+        assertEquals("Alcremie", BattleSession.displayPokemonName(session.playerPokemon, session.playerDetails().species))
     }
 
     @Test
