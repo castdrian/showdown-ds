@@ -119,6 +119,27 @@ class ShowdownReplayIdentityTest {
     }
 
     @Test
+    fun formatsReplayNamesWithShowdownSpectatorPerspective() {
+        val session = BattleSession().apply {
+            setLocalUsername("Red")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|Red||",
+                "|player|p2|Blue||",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p2a: Eevee|Eevee, L50|100/100",
+                "|move|p2a: Eevee|Tackle|p1a: Pikachu"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Red sent out Pikachu!"))
+        assertTrue(session.battleLog().contains("Blue sent out Eevee!"))
+        assertEquals("Blue's Eevee used Tackle!", session.battleLog().last())
+    }
+
+    @Test
     fun usesEachTrainersNameForMultiBattleSwitches() {
         val session = BattleSession().apply { setLocalUsername("Red") }
         session.applyProtocolPacket(
@@ -172,8 +193,8 @@ class ShowdownReplayIdentityTest {
             "froonk53 sent out Rotom (Rotom-Wash)!",
             session.battleLog().first { it.contains("sent out Rotom") }
         )
-        assertTrue(session.battleLog().contains("The opposing Rotom used Hex!"))
-        assertEquals("The opposing Rotom used Hex!", session.latestMoveEvent)
+        assertTrue(session.battleLog().contains("froonk53's Rotom used Hex!"))
+        assertEquals("froonk53's Rotom used Hex!", session.latestMoveEvent)
     }
 
     @Test
@@ -230,7 +251,7 @@ class ShowdownReplayIdentityTest {
         assertEquals(listOf("Pikachu", "Raichu"), session.opponentPartyDetails().map { it.species })
         assertEquals(listOf("Sparky", "Sparky"), session.opponentPartyDetails().map { it.name })
         assertEquals("Raichu", opponentSpriteRequest.species)
-        assertTrue(session.battleLog().contains("The opposing Sparky used Tackle!"))
+        assertTrue(session.battleLog().contains("froonk53's Sparky used Tackle!"))
     }
 
     @Test
@@ -275,19 +296,19 @@ class ShowdownReplayIdentityTest {
         assertEquals("Arceus-Water", playerOnePerspective.opponentPartyDetails().single().species)
         assertEquals("Arceus-Fire", playerSpriteRequest.species)
         assertEquals("Arceus-Water", opponentSpriteRequest.species)
-        assertTrue(playerOnePerspective.battleLog().contains("Go! Sparky (Arceus-Fire)!"))
+        assertTrue(playerOnePerspective.battleLog().contains("DoerreKong sent out Sparky (Arceus-Fire)!"))
         assertTrue(playerOnePerspective.battleLog().contains("froonk53 sent out Fuego (Arceus-Water)!"))
-        assertTrue(playerOnePerspective.battleLog().contains("Sparky used Judgment!"))
-        assertTrue(playerOnePerspective.battleLog().contains("The opposing Fuego used Judgment!"))
+        assertTrue(playerOnePerspective.battleLog().contains("DoerreKong's Sparky used Judgment!"))
+        assertTrue(playerOnePerspective.battleLog().contains("froonk53's Fuego used Judgment!"))
         assertEquals(listOf("Fuego"), playerTwoPerspective.team())
         assertEquals("Arceus-Water", playerTwoPerspective.playerPartyDetails().single().species)
         assertEquals("Sparky", playerTwoPerspective.opponentPartyDetails().single().name)
         assertEquals("Arceus-Fire", playerTwoPerspective.opponentPartyDetails().single().species)
         assertEquals("Arceus-Water", playerTwoSpriteRequest.species)
         assertTrue(playerTwoPerspective.battleLog().contains("DoerreKong sent out Sparky (Arceus-Fire)!"))
-        assertTrue(playerTwoPerspective.battleLog().contains("Go! Fuego (Arceus-Water)!"))
-        assertTrue(playerTwoPerspective.battleLog().contains("The opposing Sparky used Judgment!"))
-        assertTrue(playerTwoPerspective.battleLog().contains("Fuego used Judgment!"))
+        assertTrue(playerTwoPerspective.battleLog().contains("froonk53 sent out Fuego (Arceus-Water)!"))
+        assertTrue(playerTwoPerspective.battleLog().contains("DoerreKong's Sparky used Judgment!"))
+        assertTrue(playerTwoPerspective.battleLog().contains("froonk53's Fuego used Judgment!"))
     }
 
     @Test
@@ -322,7 +343,7 @@ class ShowdownReplayIdentityTest {
         assertEquals("Sparky", movedPokemon.name)
         assertEquals("Pikachu", movedPokemon.species)
         assertEquals("Pikachu", movedSpriteRequest.species)
-        assertTrue(session.battleLog().contains("Sparky used Thunderbolt!"))
+        assertTrue(session.battleLog().contains("RED's Sparky used Thunderbolt!"))
     }
 
     @Test
@@ -347,7 +368,7 @@ class ShowdownReplayIdentityTest {
         val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
         session.applyProtocolPacket(switchPacket)
         val generatedMessages = session.battleFeedMessages().filter { it.id !in previousMessageIds }
-        assertEquals(listOf("Pikachu, come back!", "Go! Raichu!"), generatedMessages.map { it.text })
+        assertEquals(listOf("RED withdrew Pikachu!", "RED sent out Raichu!"), generatedMessages.map { it.text })
         assertEquals(
             6_400L,
             BattlePlaybackTiming.scaledPause(
@@ -366,7 +387,7 @@ class ShowdownReplayIdentityTest {
             switchOutVisual
         )
 
-        assertEquals("Pikachu, come back!", switchOutFrame?.visibleText)
+        assertEquals("RED withdrew Pikachu!", switchOutFrame?.visibleText)
         assertEquals("Raichu", currentCombatant.single().name)
         assertEquals("Pikachu", displayedDuringSwitchOut.single().name)
         assertEquals("Pikachu", displayedDuringSwitchOut.single().species)
@@ -379,7 +400,7 @@ class ShowdownReplayIdentityTest {
             switchInVisual
         )
 
-        assertEquals("Go! Raichu!", switchInFrame?.visibleText)
+        assertEquals("RED sent out Raichu!", switchInFrame?.visibleText)
         assertEquals("Raichu", displayedDuringSwitchIn.single().name)
     }
 
@@ -412,8 +433,8 @@ class ShowdownReplayIdentityTest {
         assertEquals("Blaze", active.name)
         assertEquals("Charizard-Mega-X", active.species)
         assertEquals("Charizard-Mega-X", spriteRequest.species)
-        assertTrue(session.battleLog().contains("Blaze transformed!"))
-        assertTrue(session.battleLog().contains("Blaze used Flamethrower!"))
+        assertTrue(session.battleLog().contains("RED's Blaze transformed!"))
+        assertTrue(session.battleLog().contains("RED's Blaze used Flamethrower!"))
     }
 
     @Test
@@ -445,7 +466,7 @@ class ShowdownReplayIdentityTest {
         session.applyProtocolPacket(listOf("|move|p1a: Charizard|Flamethrower|p2a: Blastoise"))
         session.applyProtocolPacket(listOf("|switch|p1a: Charizard|Venusaur, L50|150/150"))
 
-        assertTrue(session.battleLog().contains("Charizard used Flamethrower!"))
-        assertTrue(session.battleLog().contains("Charizard, come back!"))
+        assertTrue(session.battleLog().contains("RED's Charizard used Flamethrower!"))
+        assertTrue(session.battleLog().contains("RED withdrew Charizard!"))
     }
 }

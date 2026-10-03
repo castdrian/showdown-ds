@@ -1509,7 +1509,7 @@ class BattleSession {
         val fullName = fullBattlePokemonName(pokemon, species)
         val trainer = actor?.let(::battleTrainer) ?: if (playerSide) playerName else opponentName
         val isViewerPokemon = actor?.let { targetSlot(it).take(2).equals(playerSlot, true) } ?: playerSide
-        return if (isViewerPokemon && !spectatorMode) "Go! $fullName!" else "$trainer sent out $fullName!"
+        return if (isViewerPokemon && !usesSpectatorPerspective()) "Go! $fullName!" else "$trainer sent out $fullName!"
     }
 
     fun setMatchFormat(format: MatchFormat) {
@@ -2593,7 +2593,7 @@ class BattleSession {
     private fun switchOutMessage(actor: String, combatant: ActiveCombatant): String {
         val nickname = combatant.name.trim().ifBlank { combatant.species }
         val isViewerSide = targetSlot(actor).take(2).equals(playerSlot, true)
-        return if (!spectatorMode && isViewerSide) "$nickname, come back!"
+        return if (!usesSpectatorPerspective() && isViewerSide) "$nickname, come back!"
         else "${battleTrainer(actor)} withdrew $nickname!"
     }
 
@@ -4493,7 +4493,7 @@ class BattleSession {
         val actor = value.orEmpty()
         val name = battleActorName(actor)
         if (!isProtocolActor(actor)) return name
-        if (spectatorMode) return "${battleTrainer(actor)}'s $name"
+        if (usesSpectatorPerspective()) return "${battleTrainer(actor)}'s $name"
         return if (isPlayerSide(actor)) name else "the opposing $name"
     }
 
@@ -5161,7 +5161,7 @@ class BattleSession {
         val name = battleActorName(actor)
         val formattedActor = when {
             !isProtocolActor(actor) -> "**$name**"
-            spectatorMode -> "${battleTrainer(actor)}'s **$name**"
+            usesSpectatorPerspective() -> "${battleTrainer(actor)}'s **$name**"
             isPlayerSide(actor) -> "**$name**"
             else -> "The opposing **$name**"
         }
@@ -6131,6 +6131,8 @@ class BattleSession {
     }
 
     private fun isFreeForAllBattle() = gameType.equals("freeforall", true)
+
+    private fun usesSpectatorPerspective() = spectatorMode || replayMode
 
     private fun battleSideGroup(side: String): Int? = side
         .removePrefix("p")
