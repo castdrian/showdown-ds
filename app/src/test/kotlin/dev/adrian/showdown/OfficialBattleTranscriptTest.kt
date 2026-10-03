@@ -7,6 +7,25 @@ import org.junit.Test
 
 class OfficialBattleTranscriptTest {
     @Test
+    fun formatsTurnAndPercentageDamageAnnouncementsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
+                "|switch|p2a: Magikarp|Magikarp, L1|11/11",
+                "|turn|1",
+                "|-damage|p2a: Magikarp|6/11"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("== Turn 1 =="))
+        assertEquals("(The opposing Magikarp lost 45% of its health!)", session.battleLog().last())
+        assertFalse(session.battleFeedEntries().contains("== Turn 1 =="))
+    }
+
+    @Test
     fun preservesDistinctEventsThatProduceIdenticalShowdownMessages() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         session.applyProtocolPacket(
@@ -632,7 +651,7 @@ class OfficialBattleTranscriptTest {
 
         assertEquals(
             listOf(
-                "Turn 1.",
+                "== Turn 1 ==",
                 "It's extremely effective!",
                 "It's mostly ineffective...",
                 "The Pokémon was hit 1 time!",

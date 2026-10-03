@@ -244,7 +244,7 @@ class BattleSessionTest {
             )
         )
 
-        assertTrue(session.battleLog().contains("The opposing Eevee lost 50% of its health!"))
+        assertTrue(session.battleLog().contains("(The opposing Eevee lost 50% of its health!)"))
         assertTrue(session.battleLog().contains("The opposing Eevee had its HP restored."))
     }
 
@@ -3008,7 +3008,7 @@ class BattleSessionTest {
         session.applyProtocolLine("|move|p1a: Pikachu|Tackle|p2a: Eevee")
         session.applyProtocolLine("|turn|2")
 
-        assertEquals(1, session.activityMessages().count { it == "Turn 2." })
+        assertEquals(1, session.activityMessages().count { it == "== Turn 2 ==" })
         assertTrue(session.battleLog().contains("Pikachu used Tackle!"))
     }
 

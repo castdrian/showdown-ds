@@ -1074,7 +1074,7 @@ class BattleSession {
     }
 
     fun battleFeedText(): String? = battleLog.asReversed()
-        .firstOrNull { it.isNotBlank() && !it.startsWith("Turn ") }
+        .firstOrNull { it.isNotBlank() && !isBattleFeedTurnMarker(it) }
 
     fun chatMessages() = chatMessages.toList()
 
@@ -2337,7 +2337,7 @@ class BattleSession {
         if (!announcedTurns.add(announcedTurn)) return
         turn = announcedTurn
         clearTurnEffects()
-        appendLog("Turn $turn.")
+        appendLog("== Turn $turn ==")
     }
 
     private fun applySwitch(fields: List<String>, eventKind: SwitchEventKind = SwitchEventKind.NORMAL) {
@@ -3032,7 +3032,7 @@ class BattleSession {
             source?.startsWith("item:", true) == true && effectId == "lifeorb" -> "$actor lost some of its HP!"
             source?.startsWith("item:", true) == true && effect.isNotBlank() -> "($actor was hurt by its $effect!)"
             fields.any { it.equals("[partiallytrapped]", true) } && effect.isNotBlank() -> "$actor is hurt by $effect!"
-            percent != null -> "$actor lost $percent% of its health!"
+            percent != null -> "($actor lost $percent% of its health!)"
             else -> "($actor was hurt!)"
         }
     }
@@ -6195,7 +6195,7 @@ class BattleSession {
         private const val LOBBY_STATUS = "Find a battle or challenge a player."
         private const val BATTLE_HISTORY_LIMIT = 1024
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
-        private val BATTLE_FEED_TURN_MARKER = Regex("^Turn\\s+\\d+\\.?$", RegexOption.IGNORE_CASE)
+        private val BATTLE_FEED_TURN_MARKER = Regex("^(?:Turn\\s+\\d+\\.?|==\\s*Turn\\s+\\d+\\s*==)$", RegexOption.IGNORE_CASE)
         private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
             "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|Format: .+|Rule: .+|.+ team size: \\d+|Rated battle\\.)$"
         )
