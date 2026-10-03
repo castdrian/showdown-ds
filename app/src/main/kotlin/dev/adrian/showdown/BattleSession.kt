@@ -3042,8 +3042,7 @@ class BattleSession {
         val effectId = effect.lowercase().filter(Char::isLetterOrDigit)
         return when {
             effectId == "zpower" || effectId == "zmove" -> "$actor restored its HP using its Z-Power!"
-            source?.startsWith("item:", true) == true && effectId in setOf("leftovers", "blacksludge", "shellbell") -> "$actor restored a little HP using its $effect!"
-            source?.startsWith("ability:", true) == true || effect.isBlank() -> "$actor had its HP restored."
+            effect.isBlank() -> "$actor had its HP restored."
             else -> "$actor restored HP using its $effect!"
         }
     }

@@ -261,7 +261,7 @@ class BattleSessionTest {
         )
 
         assertTrue(session.battleLog().contains("(The opposing Eevee was hurt by its burn!)"))
-        assertTrue(session.battleLog().contains("The opposing Eevee restored a little HP using its Leftovers!"))
+        assertTrue(session.battleLog().contains("The opposing Eevee restored HP using its Leftovers!"))
         assertFalse(session.battleLog().contains("The opposing Eevee lost 20% of its health!"))
     }
 
