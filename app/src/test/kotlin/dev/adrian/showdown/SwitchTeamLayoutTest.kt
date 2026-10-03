@@ -30,6 +30,28 @@ class SwitchTeamLayoutTest {
     }
 
     @Test
+    fun pagedDecisionGridLeavesRoomForItsPageNavigation() {
+        val first = SwitchTeamLayout.decisionBounds(1240f, 1080f, 1f, 0, 6, true)
+        val last = SwitchTeamLayout.decisionBounds(1240f, 1080f, 1f, 5, 6, true)
+        val navigation = SwitchTeamLayout.rosterToggleBounds(1240f, 1080f, 1f)
+
+        assertEquals(SwitchTeamLayout.PAGED_DECISION_TOP, first.top, 0.001f)
+        assertTrue(first.top > navigation.bottom)
+        assertTrue(last.bottom <= 1080f - SwitchTeamLayout.BOTTOM_MARGIN)
+    }
+
+    @Test
+    fun rosterSideTabsAndPageButtonsStayInSeparateTouchRegions() {
+        val navigation = SwitchTeamLayout.rosterNavigationBounds(1240f, 1080f, 1f, true)
+        val toggle = navigation.rosterToggle ?: error("roster side toggle is missing")
+
+        assertTrue(navigation.previousPage.right <= toggle.left)
+        assertTrue(toggle.right <= navigation.nextPage.left)
+        assertTrue(navigation.previousPage.left >= 0f)
+        assertTrue(navigation.nextPage.right <= 1240f)
+    }
+
+    @Test
     fun opponentTeamToggleFitsBetweenTheTabsAndRosterCards() {
         val toggle = SwitchTeamLayout.rosterToggleBounds(1240f, 1080f, 1f)
         val firstCard = SwitchTeamLayout.bounds(1240f, 1080f, 1f, 0, 6)

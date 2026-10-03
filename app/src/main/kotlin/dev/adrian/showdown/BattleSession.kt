@@ -1615,6 +1615,12 @@ class BattleSession {
         confirmSelection()
     }
 
+    fun focusTeam(index: Int) {
+        if (index !in team.indices || focusedTeam == index) return
+        focusedTeam = index
+        notifyListeners()
+    }
+
     fun moveFocus(horizontal: Int, vertical: Int) {
         when (panel) {
             Panel.MOVES -> moveMoveFocus(horizontal, vertical)

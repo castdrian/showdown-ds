@@ -131,6 +131,11 @@ class OfficialBattleTranscriptTest {
         assertEquals(team.map { it.nickname }, session.opponentPartyDetails().map { it.name })
         assertEquals(species, session.playerPartyDetails().map { it.species })
         assertEquals(species, session.opponentPartyDetails().map { it.species })
+
+        session.focusTeam(23)
+
+        assertEquals(23, session.focusedTeam)
+        assertTrue(session.teamPreviewOrder().isEmpty())
     }
 
     @Test

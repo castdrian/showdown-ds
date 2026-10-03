@@ -12,13 +12,25 @@ class CommandDeckViewContractTest {
 
         assertTrue(source.contains("private val teamSprites = mutableMapOf<Int, ShowdownSpriteCache.SpriteAsset>()"))
         assertTrue(source.contains("private val requestedTeamSprites = mutableMapOf<Int, BattleSpriteRequest>()"))
-        assertTrue(source.contains("requestTeamSprite(index, details.species.ifBlank { pokemon }, details.shiny)"))
-        assertTrue(source.contains("val sprite = teamSprites[index]"))
-        assertTrue(source.contains("teamStaticSprites[index]?.takeUnless { it === sprite }?.draw("))
+        assertTrue(source.contains("requestTeamSprite(teamIndex, details.species.ifBlank { pokemon }, details.shiny)"))
+        assertTrue(source.contains("val sprite = teamSprites[teamIndex]"))
+        assertTrue(source.contains("teamStaticSprites[teamIndex]?.takeUnless { it === sprite }?.draw("))
         assertTrue(source.contains("if (!rendered && !renderedStatic) drawTeamSpriteFallback("))
         assertTrue(source.contains("private fun drawTeamSpriteFallback("))
         assertTrue(source.contains("requestedTeamSprites[index] == request"))
         assertTrue(source.contains("session.isReplayMode()"))
+    }
+
+    @Test
+    fun teamRosterPagesKeepTouchAndSpriteIndexesAbsolute() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/CommandDeckView.kt").readText()
+
+        assertTrue(source.contains("private val teamBounds = arrayOfNulls<RectF>(6)"))
+        assertTrue(source.contains("TeamRosterPager.visibleIndices(teamSize, teamPageIndex)"))
+        assertTrue(source.contains("session.selectTeamWithTouch(teamIndex)"))
+        assertTrue(source.contains("ACCESSIBLE_TEAM_PAGE_PREVIOUS_ID"))
+        assertTrue(source.contains("ACCESSIBLE_TEAM_PAGE_NEXT_ID"))
+        assertTrue(source.contains("session::focusTeam"))
     }
 
     @Test

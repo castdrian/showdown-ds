@@ -23,6 +23,13 @@ data class SwitchTeamCardContentBounds(
     val bottomRow: SwitchTeamCardBounds
 )
 
+data class SwitchTeamNavigationBounds(
+    val previousPage: SwitchTeamCardBounds,
+    val pageLabel: SwitchTeamCardBounds?,
+    val rosterToggle: SwitchTeamCardBounds?,
+    val nextPage: SwitchTeamCardBounds
+)
+
 object SwitchTeamLayout {
     const val COLUMNS = 2
     const val LEFT = 44f
@@ -32,6 +39,7 @@ object SwitchTeamLayout {
     const val DECISION_PROMPT_TOP = 112f
     const val DECISION_PROMPT_BOTTOM = 160f
     const val DECISION_TOP = 180f
+    const val PAGED_DECISION_TOP = 220f
     const val GAP = 14f
     const val BOTTOM_MARGIN = 28f
     const val STATUS_WIDTH = 204f
@@ -51,8 +59,21 @@ object SwitchTeamLayout {
     fun bounds(width: Float, height: Float, scale: Float, index: Int, teamSize: Int): SwitchTeamCardBounds =
         boundsForTop(width, height, scale, index, teamSize, TOP)
 
-    fun decisionBounds(width: Float, height: Float, scale: Float, index: Int, teamSize: Int): SwitchTeamCardBounds =
-        boundsForTop(width, height, scale, index, teamSize, DECISION_TOP)
+    fun decisionBounds(
+        width: Float,
+        height: Float,
+        scale: Float,
+        index: Int,
+        visibleTeamSize: Int,
+        hasMultiplePages: Boolean = false
+    ): SwitchTeamCardBounds = boundsForTop(
+        width,
+        height,
+        scale,
+        index,
+        visibleTeamSize,
+        if (hasMultiplePages) PAGED_DECISION_TOP else DECISION_TOP
+    )
 
     fun rosterToggleBounds(width: Float, height: Float, scale: Float) = SwitchTeamCardBounds(
         LEFT * scale,
@@ -60,6 +81,22 @@ object SwitchTeamLayout {
         width - LEFT * scale,
         (ROSTER_TOGGLE_TOP + ROSTER_TOGGLE_HEIGHT) * scale
     )
+
+    fun rosterNavigationBounds(width: Float, height: Float, scale: Float, showRosterToggle: Boolean): SwitchTeamNavigationBounds {
+        val row = rosterToggleBounds(width, height, scale)
+        val pageControlWidth = (if (showRosterToggle) 104f else 150f) * scale
+        val previous = SwitchTeamCardBounds(row.left, row.top, row.left + pageControlWidth, row.bottom)
+        val next = SwitchTeamCardBounds(row.right - pageControlWidth, row.top, row.right, row.bottom)
+        val middleLeft = previous.right
+        val middleRight = next.left
+        val middle = SwitchTeamCardBounds(middleLeft, row.top, middleRight, row.bottom)
+        return SwitchTeamNavigationBounds(
+            previous,
+            if (showRosterToggle) null else middle,
+            middle.takeIf { showRosterToggle },
+            next
+        )
+    }
 
     private fun boundsForTop(
         width: Float,
