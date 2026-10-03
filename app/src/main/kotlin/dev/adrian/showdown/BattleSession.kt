@@ -3521,13 +3521,28 @@ class BattleSession {
         else -> null
     }
 
-    private fun protocolAbilityAnnouncement(fields: List<String>, sourceIndex: Int = 4): String? {
+    private fun protocolAbilityAnnouncement(
+        fields: List<String>,
+        sourceIndex: Int = 4,
+        updateActorAbility: Boolean = true
+    ): String? {
         val source = protocolSource(fields, sourceIndex)?.takeIf { it.startsWith("ability:", true) } ?: return null
         val ability = source.substringAfter(":").trim().takeIf(String::isNotBlank) ?: return null
         val holder = protocolSourceActor(fields) ?: fields.getOrNull(2)?.takeIf(::isProtocolActor) ?: return null
         val resolvedAbility = abilityNameResolver?.invoke(ability) ?: ability
-        updateActorDetails(holder) { details -> details.copy(ability = resolvedAbility) }
+        if (updateActorAbility) {
+            updateActorDetails(holder) { details -> details.copy(ability = resolvedAbility) }
+        }
         return "[${battleActor(holder)}'s $resolvedAbility]"
+    }
+
+    private fun abilityStartAnnouncement(actor: String, ability: String): String? {
+        val pokemon = battleActor(actor)
+        return when (normalizeBattleTextKey(ability)) {
+            "comatose" -> "$pokemon is drowsing!"
+            "pressure" -> "$pokemon is exerting its pressure!"
+            else -> null
+        }
     }
 
     private fun startEffectAnnouncement(actor: String, effect: String, fields: List<String>): String {
@@ -4267,15 +4282,28 @@ class BattleSession {
         updateActorDetails(actor) { it.copy(ability = ability) }
         if (isSilent(fields)) return
         val previousAbility = fields.drop(4)
-            .firstOrNull { !it.trim().startsWith("[") && it.isNotBlank() }
-            ?.let { abilityNameResolver?.invoke(it) ?: it }
-        appendLog(
-            when {
-                previousAbility != null -> "${battleActor(actor)}'s ability changed from $previousAbility to $ability."
-                protocolSource(fields) != null -> "${battleActor(actor)}'s ability became $ability."
-                else -> "${battleActor(actor)}'s $ability activated."
+            .firstOrNull {
+                it.isNotBlank() &&
+                    !it.trim().startsWith("[") &&
+                    !it.trim().equals("boost", true) &&
+                    !it.trim().equals("fail", true)
             }
-        )
+            ?.let { abilityNameResolver?.invoke(it) ?: it }
+        val actorName = battleActor(actor)
+        val source = protocolSource(fields)
+        val announcements = mutableListOf<String>()
+        if (previousAbility != null) {
+            announcements += "[$actorName's $previousAbility]"
+        } else {
+            protocolAbilityAnnouncement(fields, updateActorAbility = false)?.let(announcements::add)
+        }
+        announcements += "[$actorName's $ability]"
+        if (source != null) {
+            announcements += "$actorName acquired $ability!"
+        } else {
+            abilityStartAnnouncement(actor, ability)?.let(announcements::add)
+        }
+        announcements.forEach(::appendLog)
     }
 
     private fun applyEndAbility(fields: List<String>) {

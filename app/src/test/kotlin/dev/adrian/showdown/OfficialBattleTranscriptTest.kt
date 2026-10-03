@@ -1023,6 +1023,39 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialAbilityRevealsAndStartsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|-ability|p1b: Blaziken|Speed Boost|boost",
+                "|-ability|p2b: Porygon2|Download|boost",
+                "|-ability|p2a: Suicune|Pressure",
+                "|-ability|p1a: Greninja|Battle Bond|boost",
+                "|-ability|p1a: Komala|Comatose",
+                "|-ability|p2a: Vespiquen|Pressure"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "[Blaziken's Speed Boost]",
+                "[The opposing Porygon2's Download]",
+                "[The opposing Suicune's Pressure]",
+                "The opposing Suicune is exerting its pressure!",
+                "[Greninja's Battle Bond]",
+                "[Komala's Comatose]",
+                "Komala is drowsing!",
+                "[The opposing Vespiquen's Pressure]",
+                "The opposing Vespiquen is exerting its pressure!"
+            ),
+            session.battleLog().takeLast(9)
+        )
+    }
+
+    @Test
     fun keepsOfficialAbilityAndItemAnnouncementsInTheBattleFeed() {
         val session = BattleSession()
         session.applyProtocolPacket(
@@ -1039,9 +1072,11 @@ class OfficialBattleTranscriptTest {
 
         assertEquals("Unburden", session.playerDetails().ability)
         assertEquals("Choice Scarf", session.playerDetails().item)
-        assertTrue(session.battleLog().contains("Gholdengo's Good as Gold activated."))
+        assertTrue(session.battleLog().contains("[Gholdengo's Good as Gold]"))
         assertTrue(session.battleLog().contains("Gholdengo's Air Balloon activated."))
-        assertTrue(session.battleLog().contains("Gholdengo's ability became Klutz."))
+        assertTrue(session.battleLog().contains("[Gholdengo's Skill Swap]"))
+        assertTrue(session.battleLog().contains("[Gholdengo's Klutz]"))
+        assertTrue(session.battleLog().contains("Gholdengo acquired Klutz!"))
         assertTrue(session.battleLog().contains("Gholdengo obtained Leftovers."))
         assertFalse(session.battleLog().any { it.contains("Unburden") })
         assertFalse(session.battleLog().any { it.contains("Choice Scarf") })
