@@ -654,6 +654,7 @@ class BattleSession {
         private set
     var turn = 1
         private set
+    private val announcedTurns = mutableSetOf<Int>()
     var playerName = "ADRIAN"
         private set
     var opponentName = "GLADION"
@@ -961,20 +962,8 @@ class BattleSession {
         } else {
             emptyList()
         }
-        val source = when {
-            !hasBattleProtocolTranscript && nativeEntries.isNotEmpty() -> nativeEntries
-            nativeEntries.isEmpty() -> protocolEntries
-            else -> mergeBattleFeedEntries(protocolEntries, nativeEntries)
-        }
-        val entries = source
-            .fold(mutableListOf<String>()) { uniqueEntries, entry ->
-                if (uniqueEntries.lastOrNull()?.let { BattleFeedMessageIdentity.matches(it, entry) } != true) {
-                    uniqueEntries += entry
-                }
-                uniqueEntries
-            }
-            .takeLast(normalizedLimit)
-            .toList()
+        val source = if (nativeBattleLogGeneration == battleLogGeneration) nativeEntries else protocolEntries
+        val entries = source.takeLast(normalizedLimit).toList()
         battleFeedEntriesCache[normalizedLimit] = entries
         return entries
     }
@@ -992,20 +981,8 @@ class BattleSession {
         } else {
             emptyList()
         }
-        val source = when {
-            !hasBattleProtocolTranscript && nativeEntries.isNotEmpty() -> nativeEntries
-            nativeEntries.isEmpty() -> protocolEntries
-            else -> mergeBattleFeedMessages(protocolEntries, nativeEntries)
-        }
-        val entries = source
-            .fold(mutableListOf<BattleFeedMessage>()) { uniqueEntries, entry ->
-                if (uniqueEntries.lastOrNull()?.let { BattleFeedMessageIdentity.matches(it.text, entry.text) } != true) {
-                    uniqueEntries += entry
-                }
-                uniqueEntries
-            }
-            .takeLast(normalizedLimit)
-            .toList()
+        val source = if (nativeBattleLogGeneration == battleLogGeneration) nativeEntries else protocolEntries
+        val entries = source.takeLast(normalizedLimit).toList()
         battleFeedMessagesCache[normalizedLimit] = entries
         return entries
     }
@@ -2050,7 +2027,7 @@ class BattleSession {
                         )
                     }
                     "-prepare" -> appendLog("${battleActor(fields.getOrNull(2))} is preparing ${battleEffectName(fields.getOrNull(3))}.")
-                    "-mustrecharge" -> appendLog("${battleActor(fields.getOrNull(2))} must recharge!")
+                    "-mustrecharge" -> Unit
                     "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
                     "-hint" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let { appendLog("($it)") }
@@ -2230,6 +2207,7 @@ class BattleSession {
         playerName = localUsername ?: "PLAYER"
         opponentName = "OPPONENT"
         turn = 1
+        announcedTurns.clear()
         gameType = "singles"
         format = ""
         battleGeneration = 9
@@ -2338,30 +2316,34 @@ class BattleSession {
     }
 
     private fun applyTurn(fields: List<String>) {
-        turn = fields.getOrNull(2)?.toIntOrNull() ?: return
+        val announcedTurn = fields.getOrNull(2)?.toIntOrNull() ?: return
+        if (!announcedTurns.add(announcedTurn)) return
+        turn = announcedTurn
         clearTurnEffects()
         appendLog("Turn $turn.")
     }
 
     private fun applySwitch(fields: List<String>, eventKind: SwitchEventKind = SwitchEventKind.NORMAL) {
-        if (fields.size < 5) return
         val isIllusionReplacement = eventKind == SwitchEventKind.ILLUSION_REPLACEMENT
+        if (fields.size < if (isIllusionReplacement) 4 else 5) return
         val pokemon = fields[3].substringBefore(',')
         val playerSide = isPlayerSide(fields[2])
         val slot = fields[2].substringBefore(":").trim()
         val side = sideForSlot(slot)
         val previousCombatant = (if (playerSide) playerActiveCombatants else opponentActiveCombatants)[slot]
         val previousDetails = previousCombatant?.let { detailsForActiveCombatant(playerSide, slot) }
-        restoreTransformedPartySnapshot(slot)
+        if (!isIllusionReplacement) restoreTransformedPartySnapshot(slot)
         val shiny = detailsAreShiny(fields[3])
         if (fields.drop(5).any { it.contains("Baton Pass", true) }) pendingBatonPassBySide[side] = slot
-        val passedBoosts = pendingBatonPassBySide.remove(side)?.let { sourceSlot ->
+        val passedBoosts = if (isIllusionReplacement) null else pendingBatonPassBySide.remove(side)?.let { sourceSlot ->
             val slots = if (playerSide) playerBoostsBySlot else opponentBoostsBySlot
             slots.remove(sourceSlot)?.toMap()
         }
         val entryDelayMillis = if (isIllusionReplacement) 0L else queueEntry(playerSide)
         val parsedDetails = parseDetails(fields[3])
-        val hp = fields[4]
+        val hp = fields.getOrNull(4)?.takeIf(String::isNotBlank)
+            ?: previousCombatant?.takeIf { isIllusionReplacement }?.hp
+            ?: return
         val currentCondition = condition(hp)
         when {
             playerSide -> {
@@ -2424,14 +2406,14 @@ class BattleSession {
                 }
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
                 baseTypesBySlot[slot] = baseTypes
-                typeChangeBySlot.remove(slot)
-                typeAdditionsBySlot.remove(slot)
-                terastallizedSlots.remove(slot)
-                teraTypesBySlot.remove(slot)
-                val activeTypes = terastallizedTypeFromDetails(fields[3])
-                    ?.let { terastallizedTypesForSlot(slot, it, baseTypes) }
-                    ?: baseTypes
-                playerBoostsBySlot.remove(slot)
+                if (!isIllusionReplacement) {
+                    typeChangeBySlot.remove(slot)
+                    typeAdditionsBySlot.remove(slot)
+                    terastallizedSlots.remove(slot)
+                    teraTypesBySlot.remove(slot)
+                    playerBoostsBySlot.remove(slot)
+                }
+                val activeTypes = activeTypesForSwitch(slot, fields[3], baseTypes, isIllusionReplacement)
                 if (!passedBoosts.isNullOrEmpty()) playerBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val activeName = identifier.ifBlank { activeDetails.name.ifBlank { pokemon } }
                 val activeSpecies = pokemon.ifBlank { activeDetails.species }
@@ -2491,14 +2473,14 @@ class BattleSession {
                 }
                 val baseTypes = baseTypesFor(pokemon, activeDetails.types)
                 baseTypesBySlot[slot] = baseTypes
-                typeChangeBySlot.remove(slot)
-                typeAdditionsBySlot.remove(slot)
-                terastallizedSlots.remove(slot)
-                teraTypesBySlot.remove(slot)
-                val activeTypes = terastallizedTypeFromDetails(fields[3])
-                    ?.let { terastallizedTypesForSlot(slot, it, baseTypes) }
-                    ?: baseTypes
-                opponentBoostsBySlot.remove(slot)
+                if (!isIllusionReplacement) {
+                    typeChangeBySlot.remove(slot)
+                    typeAdditionsBySlot.remove(slot)
+                    terastallizedSlots.remove(slot)
+                    teraTypesBySlot.remove(slot)
+                    opponentBoostsBySlot.remove(slot)
+                }
+                val activeTypes = activeTypesForSwitch(slot, fields[3], baseTypes, isIllusionReplacement)
                 if (!passedBoosts.isNullOrEmpty()) opponentBoostsBySlot[slot] = passedBoosts.toMutableMap()
                 val activeName = identifier.ifBlank { existing?.name ?: pokemon }
                 val updatedDetails = activeDetails.copy(
@@ -2563,15 +2545,28 @@ class BattleSession {
             } ?: appendLog(switchOutMessage(fields[2], previousCombatant))
         }
         val message = when (eventKind) {
-            SwitchEventKind.ILLUSION_REPLACEMENT -> "${battleActor(fields[2])} was revealed as ${displayPokemonName(pokemon)}."
+            SwitchEventKind.ILLUSION_REPLACEMENT -> null
             SwitchEventKind.FORCED_DRAG -> "${fullBattlePokemonName(nickname, pokemon)} was dragged out!"
             SwitchEventKind.NORMAL -> sendOutMessage(nickname, playerSide, pokemon, fields[2])
         }
-        appendLog(message)
-        if (!isIllusionReplacement) {
+        message?.let(::appendLog)
+        if (message != null) {
             publishFeedback(BattleFeedback(FeedbackType.ENTRY, actor = pokemon, delayMillis = entryDelayMillis, message = message))
             publishFeedback(BattleFeedback(FeedbackType.POKEMON_CRY, actor = pokemon, delayMillis = entryDelayMillis))
         }
+    }
+
+    private fun activeTypesForSwitch(
+        slot: String,
+        details: String,
+        baseTypes: List<String>,
+        preserveSlotState: Boolean
+    ): List<String> {
+        val teraType = terastallizedTypeFromDetails(details)
+            ?: teraTypesBySlot[slot].takeIf { preserveSlotState && slot in terastallizedSlots }
+        if (teraType != null) return terastallizedTypesForSlot(slot, teraType, baseTypes)
+        if (!preserveSlotState || slot in terastallizedSlots) return baseTypes
+        return effectiveTypes(slot)
     }
 
     private fun shouldAnnounceSwitchOut(fields: List<String>): Boolean {
@@ -3419,6 +3414,7 @@ class BattleSession {
         val slot = actor.substringBefore(":").trim()
         val effect = battleEffectName(fields.getOrNull(3)).lowercase().filter(Char::isLetterOrDigit)
         when (effect) {
+            "illusion" -> appendProtocolAnnouncement(fields, "${battleActor(actor)}'s illusion wore off!")
             "typechange" -> {
                 typeChangeBySlot.remove(slot)
                 updateActiveTypes(actor, effectiveTypes(slot))
@@ -5172,7 +5168,6 @@ class BattleSession {
     ): Long? {
         if (protocolLogSuppressed) return null
         val message = capitalizeBattleActorAtSentenceStart(entry)
-        if (battleLog.lastOrNull() == message) return null
         battleFeedVisible = true
         val messageId = newBattleFeedMessageId()
         battleLog += message
@@ -5198,7 +5193,6 @@ class BattleSession {
     }
 
     private fun appendActivity(entry: String, origin: ActivityOrigin = ActivityOrigin.PROTOCOL) {
-        if (activityMessages.lastOrNull()?.let { BattleFeedMessageIdentity.matches(it, entry) } == true) return
         val followsTail = activityMessages.isEmpty() || focusedMessage >= activityMessages.lastIndex
         activityMessages += entry
         activityOrigins += origin
@@ -6100,49 +6094,6 @@ class BattleSession {
         return normalized.isNotBlank() &&
             !isBattleFeedTurnMarker(normalized) &&
             !BATTLE_FEED_NON_ACTION_ENTRY.matches(normalized)
-    }
-
-    private fun mergeBattleFeedEntries(protocolEntries: List<String>, nativeEntries: List<String>): List<String> {
-        val merged = mutableListOf<String>()
-        var nativeIndex = 0
-        protocolEntries.forEach { protocolEntry ->
-            val relativeNativeMatch = nativeEntries.subList(nativeIndex, nativeEntries.size)
-                .indexOfFirst { nativeEntry -> BattleFeedMessageIdentity.matches(protocolEntry, nativeEntry) }
-            val nativeMatch = if (relativeNativeMatch >= 0) nativeIndex + relativeNativeMatch else -1
-            if (nativeMatch >= 0) {
-                while (nativeIndex < nativeMatch) merged += nativeEntries[nativeIndex++]
-                merged += nativeEntries[nativeMatch]
-                nativeIndex = nativeMatch + 1
-            } else if (protocolEntry != "Battle started." || nativeEntries.isEmpty()) {
-                merged += protocolEntry
-            }
-        }
-        while (nativeIndex < nativeEntries.size) merged += nativeEntries[nativeIndex++]
-        return merged
-    }
-
-    private fun mergeBattleFeedMessages(
-        protocolEntries: List<BattleFeedMessage>,
-        nativeEntries: List<BattleFeedMessage>
-    ): List<BattleFeedMessage> {
-        val merged = mutableListOf<BattleFeedMessage>()
-        var nativeIndex = 0
-        protocolEntries.forEach { protocolEntry ->
-            val relativeNativeMatch = nativeEntries.subList(nativeIndex, nativeEntries.size)
-                .indexOfFirst { nativeEntry ->
-                    BattleFeedMessageIdentity.matches(protocolEntry.text, nativeEntry.text)
-                }
-            val nativeMatch = if (relativeNativeMatch >= 0) nativeIndex + relativeNativeMatch else -1
-            if (nativeMatch >= 0) {
-                while (nativeIndex < nativeMatch) merged += nativeEntries[nativeIndex++]
-                merged += nativeEntries[nativeMatch].copy(id = protocolEntry.id)
-                nativeIndex = nativeMatch + 1
-            } else if (protocolEntry.text != "Battle started." || nativeEntries.isEmpty()) {
-                merged += protocolEntry
-            }
-        }
-        while (nativeIndex < nativeEntries.size) merged += nativeEntries[nativeIndex++]
-        return merged
     }
 
     private fun newBattleFeedMessageId() = nextBattleFeedMessageId++

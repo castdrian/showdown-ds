@@ -51,6 +51,7 @@ class BattleSceneView(
     private var requestedBackdrop = ""
     private var requestedSwitchOutVisual: BattleSession.SwitchOutVisual? = null
     private var resourcesRequested = false
+    private val spriteRequestTracker = BattleSpriteRequestTracker()
     private val effectAssets = mutableMapOf<String, Bitmap>()
     private val requestedEffects = mutableSetOf<String>()
     private val partyBallBitmaps = mutableMapOf<PartyBallBitmapKey, Bitmap>()
@@ -122,6 +123,16 @@ class BattleSceneView(
         invalidate()
     }
 
+    fun remainingBattleFeedPlaybackBudgetMillis(nowMillis: Long = SystemClock.elapsedRealtime()): Long {
+        battleFeedPresentation.updateMessages(
+            session.battleFeedMessages(),
+            session.battleFeedVisible,
+            nowMillis,
+            session.battleResult()
+        )
+        return battleFeedPresentation.remainingPlaybackBudgetMillis(nowMillis)
+    }
+
     fun setPlaybackPaused(paused: Boolean) {
         if (animationsPaused == paused) return
         if (paused) {
@@ -152,6 +163,7 @@ class BattleSceneView(
             releaseRetainedResources()
         }
         resourcesRequested = false
+        spriteRequestTracker.reset()
         invalidate()
     }
 
@@ -176,6 +188,7 @@ class BattleSceneView(
         backdrop = null
         requestedBackdrop = ""
         resourcesRequested = false
+        spriteRequestTracker.reset()
         spriteCache.clearMemory()
     }
 
@@ -367,10 +380,8 @@ class BattleSceneView(
         if (teamPreview || publicTeamPreview) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             battleFeedBounds.setEmpty()
-            if (!resourcesRequested) {
-                requestResources()
-                resourcesRequested = true
-            }
+            requestTeamPreviewSprites()
+            ensureResourcesRequested(session.playerActiveCombatants(), session.opponentActiveCombatants())
             drawBackdrop(canvas, width, height)
             drawTeamPreview(canvas, width, height, scale)
             if (!animationsPaused && previewSprites.values.any { it?.isAnimated == true }) {
@@ -402,6 +413,8 @@ class BattleSceneView(
             false,
             switchOutVisual
         )
+        requestTeamPreviewSprites()
+        ensureResourcesRequested(playerCombatants, opponentCombatants)
         val playerCombatant = playerCombatants.firstOrNull()
         val opponentCombatant = opponentCombatants.firstOrNull()
         val fieldVisuals = BattleFieldVisualComposer.compose(session.battleInfo())
@@ -423,10 +436,6 @@ class BattleSceneView(
         )
         playerInspectBounds.set(width * 0.05f, height * 0.28f, width * 0.57f, height * 0.88f)
         opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
-        if (!resourcesRequested) {
-            requestResources(playerCombatants, opponentCombatants)
-            resourcesRequested = true
-        }
         drawBackdrop(canvas, width, height)
         drawFieldVisuals(canvas, width, height, scale, nowNanos, fieldVisuals)
         if (!singles && opponentCombatants.isNotEmpty()) {
@@ -923,10 +932,25 @@ class BattleSceneView(
         return true
     }
 
-    private fun requestResources(
-        playerActiveCombatants: List<BattleSession.ActiveCombatant> = session.playerActiveCombatants(),
-        opponentActiveCombatants: List<BattleSession.ActiveCombatant> = session.opponentActiveCombatants()
+    private fun ensureResourcesRequested(
+        playerCombatants: List<BattleSession.ActiveCombatant>,
+        opponentCombatants: List<BattleSession.ActiveCombatant>
     ) {
+        val requests = BattleSpriteRequests.forScene(
+            playerCombatants = playerCombatants,
+            opponentCombatants = opponentCombatants,
+            singlesBattle = session.isSinglesBattle(),
+            style = session.spriteStyle,
+            playerFallbackSpecies = session.playerPokemon,
+            opponentFallbackSpecies = session.opponentPokemon
+        )
+        if (spriteRequestTracker.updateIfChanged(requests)) resourcesRequested = false
+        if (resourcesRequested) return
+        requestResources(requests)
+        resourcesRequested = true
+    }
+
+    private fun requestResources(requests: BattleSceneSpriteRequests) {
         val backdropName = session.showdownBackdrop()
         if (backdropName != requestedBackdrop) {
             requestedBackdrop = backdropName
@@ -938,14 +962,9 @@ class BattleSceneView(
                 }
             }
         }
-        requestTeamPreviewSprites()
         if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW) return
-        if (session.isSinglesBattle() || playerActiveCombatants.isEmpty()) {
-            val playerCombatant = playerActiveCombatants.firstOrNull()
-            val playerSpecies = playerCombatant?.species
-                ?.ifBlank { session.playerPokemon }
-                ?: session.playerPokemon
-            val playerRequest = BattleSpriteRequests.single(playerSpecies, BattleSpriteSide.PLAYER, session.spriteStyle, playerCombatant?.shiny == true)
+        val playerRequest = requests.playerLead
+        if (playerRequest != null) {
             if (playerRequest != requestedPlayerSprite) {
                 requestedPlayerSprite = playerRequest
                 playerSprite?.stopAnimation()
@@ -963,12 +982,8 @@ class BattleSceneView(
             playerSprite?.stopAnimation()
             playerSprite = null
         }
-        if (session.isSinglesBattle() || opponentActiveCombatants.isEmpty()) {
-            val opponentCombatant = opponentActiveCombatants.firstOrNull()
-            val opponentSpecies = opponentCombatant?.species
-                ?.ifBlank { session.opponentPokemon }
-                ?: session.opponentPokemon
-            val opponentRequest = BattleSpriteRequests.single(opponentSpecies, BattleSpriteSide.OPPONENT, session.spriteStyle, opponentCombatant?.shiny == true)
+        val opponentRequest = requests.opponentLead
+        if (opponentRequest != null) {
             if (opponentRequest != requestedOpponentSprite) {
                 requestedOpponentSprite = opponentRequest
                 opponentSprite?.stopAnimation()
@@ -986,7 +1001,7 @@ class BattleSceneView(
             opponentSprite?.stopAnimation()
             opponentSprite = null
         }
-        if (session.isSinglesBattle()) {
+        if (requests.singlesBattle) {
             requestedPlayerActiveSprites.clear()
             requestedOpponentActiveSprites.clear()
             playerActiveSprites.values.forEach { it?.stopAnimation() }
@@ -995,12 +1010,12 @@ class BattleSceneView(
             opponentActiveSprites.clear()
         } else {
             requestActiveSprites(
-                BattleSpriteRequests.active(playerActiveCombatants, BattleSpriteSide.PLAYER, session.spriteStyle),
+                requests.playerActive,
                 playerActiveSprites,
                 requestedPlayerActiveSprites
             )
             requestActiveSprites(
-                BattleSpriteRequests.active(opponentActiveCombatants, BattleSpriteSide.OPPONENT, session.spriteStyle),
+                requests.opponentActive,
                 opponentActiveSprites,
                 requestedOpponentActiveSprites
             )

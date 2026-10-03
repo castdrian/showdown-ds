@@ -9,7 +9,7 @@ object BattlePlaybackTiming {
         val chunks = mutableListOf<List<String>>()
         var current = mutableListOf<String>()
         lines.forEach { line ->
-            if (current.isNotEmpty() && isActionBoundary(line)) {
+            if (current.isNotEmpty() && (isActionBoundary(line) || line == "|")) {
                 chunks += current
                 current = mutableListOf()
             }
@@ -19,7 +19,11 @@ object BattlePlaybackTiming {
         return chunks
     }
 
-    fun pauseAfter(lines: List<String>, generatedMessageCount: Int = 0): Long {
+    fun pauseAfter(
+        lines: List<String>,
+        generatedMessageCount: Int = 0,
+        feedPlaybackBudgetMillis: Long = 0L
+    ): Long {
         val actionPause = when {
             lines.any {
                 it.startsWith("|win|") ||
@@ -35,7 +39,7 @@ object BattlePlaybackTiming {
             else -> 0L
         }
         val messageCount = maxOf(readableMessageCount(lines), generatedMessageCount.coerceAtLeast(0).toLong())
-        return maxOf(actionPause, messageCount * MESSAGE_PAUSE_MILLIS)
+        return maxOf(actionPause, messageCount * MESSAGE_PAUSE_MILLIS, feedPlaybackBudgetMillis.coerceAtLeast(0L))
     }
 
     fun isDecisionChunk(lines: List<String>): Boolean = lines.any { it.startsWith("|request|") }

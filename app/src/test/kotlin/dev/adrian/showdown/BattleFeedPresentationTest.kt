@@ -176,6 +176,25 @@ class BattleFeedPresentationTest {
     }
 
     @Test
+    fun playbackBudgetDrainsTheCurrentAndQueuedMessagesBeforeAdvancingBattleState() {
+        val presentation = BattleFeedPresentation(
+            minimumMessageDurationMillis = 1_000L,
+            holdDurationMillis = 1_000L,
+            fadeDurationMillis = 250L
+        )
+        val first = BattleFeedMessage(1L, "First")
+        val second = BattleFeedMessage(2L, "Second")
+        val third = BattleFeedMessage(3L, "Third")
+
+        presentation.updateMessages(listOf(first), true, 1_000L)
+        presentation.updateMessages(listOf(first, second, third), true, 1_300L)
+
+        assertEquals(3_450L, presentation.remainingPlaybackBudgetMillis(1_300L))
+        presentation.updateMessages(listOf(first, second, third), false, 1_400L)
+        assertEquals(0L, presentation.remainingPlaybackBudgetMillis(1_400L))
+    }
+
+    @Test
     fun aNewBattleReplacesThePreviousMessageImmediately() {
         val presentation = fastPresentation()
         presentation.update(listOf("Old battle"), true, 1_000L)

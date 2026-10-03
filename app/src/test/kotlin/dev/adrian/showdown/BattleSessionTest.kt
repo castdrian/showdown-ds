@@ -302,12 +302,12 @@ class BattleSessionTest {
     }
 
     @Test
-    fun upperBattleFeedRemovesAdjacentDuplicateMessages() {
+    fun upperBattleFeedPreservesRepeatedNativeEvents() {
         val session = BattleSession()
 
         session.appendShowdownBattleLog("<div>Pikachu used Tackle!</div><div>Pikachu used Tackle!</div>")
 
-        assertEquals(listOf("Pikachu used Tackle!"), session.battleFeedEntries())
+        assertEquals(listOf("Pikachu used Tackle!", "Pikachu used Tackle!"), session.battleFeedEntries())
     }
 
     @Test
@@ -463,6 +463,26 @@ class BattleSessionTest {
     }
 
     @Test
+    fun synchronizedOfficialBattleFeedDoesNotShowProtocolFallbacksBeforeTheOfficialLogArrives() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee"
+            )
+        )
+        val generation = session.battleLogGeneration()
+
+        session.markNativeBattleLogSynchronized(generation)
+
+        assertTrue(session.battleFeedEntries().isEmpty())
+
+        session.appendShowdownBattleLog("Pikachu used Thunderbolt!", generation)
+
+        assertEquals(listOf("Pikachu used Thunderbolt!"), session.battleFeedEntries())
+    }
+
+    @Test
     fun ignoresNativeEntriesAndSynchronizationFromAnOlderBattleGeneration() {
         val session = BattleSession()
         session.applyProtocolLine("|init|battle")
@@ -500,7 +520,7 @@ class BattleSessionTest {
     }
 
     @Test
-    fun keepsProtocolEventsVisibleUntilTheMatchingNativeGenerationIsSynchronized() {
+    fun usesOnlyTheOfficialTranscriptAfterTheMatchingGenerationIsSynchronized() {
         val session = BattleSession()
         session.applyProtocolLine("|init|battle")
         session.appendShowdownBattleLog("Go! Pikachu!")
@@ -520,7 +540,7 @@ class BattleSessionTest {
         session.markNativeBattleLogSynchronized(session.battleLogGeneration())
 
         assertEquals(
-            listOf("Go! Pikachu!", "Pikachu used Thunderbolt!", "It's super effective!"),
+            listOf("Go! Pikachu!", "Pikachu used Thunderbolt!"),
             session.battleFeedEntries()
         )
     }
@@ -2535,16 +2555,51 @@ class BattleSessionTest {
                 "|player|p1|ADRIAN|",
                 "|player|p2|OPPONENT|",
                 "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Zoro\",\"details\":\"Zoroark, L50\",\"condition\":\"100/100\",\"active\":true}]}}",
-                "|switch|p1a: Zoro|Pikachu, L50|100/100",
-                "|replace|p1a: Zoro|Zoroark, L50|100/100"
+                "|switch|p1a: Zoro|Pikachu, L50|100/100"
             )
         )
+        val logBeforeReveal = session.battleLog()
+        session.applyProtocolPacket(listOf("|replace|p1a: Zoro|Zoroark, L50|100/100"))
 
         assertEquals("Zoro", session.playerActiveCombatants().single().name)
         assertEquals("Zoroark", session.playerActiveCombatants().single().species)
         assertEquals("Zoro", session.playerDetails().name)
         assertEquals("Zoroark", session.playerDetails().species)
-        assertTrue(session.battleLog().last().contains("was revealed as Zoroark"))
+        assertEquals(logBeforeReveal, session.battleLog())
+        session.applyProtocolPacket(listOf("|-end|p1a: Zoro|Illusion"))
+        assertEquals("Zoro's illusion wore off!", session.battleLog().last())
+    }
+
+    @Test
+    fun replacePacketsWithoutHealthRevealIllusionAndPreserveCurrentHealth() {
+        val session = BattleSession()
+        session.setPokemonTypeResolver { species ->
+            when (species) {
+                "Sceptile" -> listOf("GRASS")
+                "Zoroark" -> listOf("DARK")
+                else -> emptyList()
+            }
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Sceptile|Sceptile, L83, M|54/100",
+                "|-boost|p2a: Sceptile|atk|2",
+                "|-start|p2a: Sceptile|typeadd|FIRE"
+            )
+        )
+        val logBeforeReveal = session.battleLog()
+        val boostsBeforeReveal = session.battleInfo().opponentBoosts
+        session.applyProtocolPacket(listOf("|replace|p2a: Zoroark|Zoroark, L83, M"))
+
+        val revealed = session.opponentActiveCombatants().single()
+        assertEquals("Zoroark", revealed.name)
+        assertEquals("Zoroark", revealed.species)
+        assertEquals("54/100", revealed.hp)
+        assertEquals(listOf("DARK", "FIRE"), revealed.types)
+        assertEquals(boostsBeforeReveal, session.battleInfo().opponentBoosts)
+        assertEquals(logBeforeReveal, session.battleLog())
+        session.applyProtocolPacket(listOf("|-end|p2a: Zoroark|Illusion"))
+        assertEquals("The opposing Zoroark's illusion wore off!", session.battleLog().last())
     }
 
     @Test
@@ -2890,13 +2945,15 @@ class BattleSessionTest {
     }
 
     @Test
-    fun activitySuppressesRepeatedProtocolEvents() {
+    fun repeatedTurnMarkersDoNotAddRepeatedBattleFeedEntries() {
         val session = BattleSession()
 
         session.applyProtocolLine("|turn|2")
+        session.applyProtocolLine("|move|p1a: Pikachu|Tackle|p2a: Eevee")
         session.applyProtocolLine("|turn|2")
 
         assertEquals(1, session.activityMessages().count { it == "Turn 2." })
+        assertTrue(session.battleLog().contains("Pikachu used Tackle!"))
     }
 
     @Test

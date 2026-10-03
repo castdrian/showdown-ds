@@ -7,6 +7,28 @@ import org.junit.Test
 
 class BattlePlaybackTimingTest {
     @Test
+    fun defersMessageBarClearUntilAfterTheActionDwell() {
+        val lines = listOf(
+            "|move|p2a: Hypno|Toxic|p1a: Registeel",
+            "|-immune|p1a: Registeel",
+            "|",
+            "|switch|p2a: Suicune|Suicune, L82|298/298"
+        )
+
+        assertEquals(
+            listOf(
+                listOf(
+                    "|move|p2a: Hypno|Toxic|p1a: Registeel",
+                    "|-immune|p1a: Registeel"
+                ),
+                listOf("|"),
+                listOf("|switch|p2a: Suicune|Suicune, L82|298/298")
+            ),
+            BattlePlaybackTiming.chunks(lines)
+        )
+    }
+
+    @Test
     fun keepsMoveConsequencesTogetherBeforeTheNextAction() {
         val lines = listOf(
             "|turn|1",
@@ -53,6 +75,18 @@ class BattlePlaybackTimingTest {
 
         assertEquals(4_800L, pause)
         assertEquals(6_400L, BattlePlaybackTiming.scaledPause(pause, 0.75f))
+    }
+
+    @Test
+    fun keepsLaterBattlePacketsBehindMessagesAlreadyQueuedForDisplay() {
+        assertEquals(
+            8_400L,
+            BattlePlaybackTiming.pauseAfter(
+                listOf("|switch|p2a: Perrserker|Perrserker, L80|100/100"),
+                generatedMessageCount = 1,
+                feedPlaybackBudgetMillis = 8_400L
+            )
+        )
     }
 
     @Test

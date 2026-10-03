@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import java.util.ArrayDeque
+import kotlin.math.ceil
 
 data class BattleFeedFrame(
     val text: String,
@@ -251,6 +252,18 @@ class BattleFeedPresentation(
         val message = currentMessage ?: return pendingMessages.isNotEmpty() || pendingPersistentText != null
         val ageMillis = (presentationNowMillis(nowMillis) - currentStartedAtMillis).coerceAtLeast(0L)
         return pendingMessages.isNotEmpty() || (message.text.isNotBlank() && ageMillis < messageVisibleDurationMillis() + scaledFadeDurationMillis())
+    }
+
+    fun remainingPlaybackBudgetMillis(nowMillis: Long): Long {
+        if (playbackPaused || !feedVisible) return 0L
+        val presentationNowMillis = presentationNowMillis(nowMillis)
+        advance(presentationNowMillis)
+        val cycleMillis = messageVisibleDurationMillis() + scaledFadeDurationMillis()
+        val currentRemainingMillis = currentMessage?.let {
+            (cycleMillis - (presentationNowMillis - currentStartedAtMillis).coerceAtLeast(0L)).coerceAtLeast(0L)
+        } ?: 0L
+        val remainingMillis = currentRemainingMillis + pendingMessages.size * cycleMillis
+        return ceil(remainingMillis * playbackSpeed).toLong()
     }
 
     private fun advance(nowMillis: Long) {

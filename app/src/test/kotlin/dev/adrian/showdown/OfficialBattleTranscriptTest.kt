@@ -7,6 +7,30 @@ import org.junit.Test
 
 class OfficialBattleTranscriptTest {
     @Test
+    fun preservesDistinctEventsThatProduceIdenticalShowdownMessages() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|gametype|doubles",
+                "|switch|p1a: Buddy|Ninetales, L50|100/100",
+                "|switch|p1b: Buddy|Arcanine, L50|100/100",
+                "|-damage|p1a: Buddy|94/100|[from] Sandstorm",
+                "|-damage|p1b: Buddy|94/100|[from] Sandstorm"
+            )
+        )
+
+        val expected = "(Buddy is buffeted by the sandstorm!)"
+        val feedMessages = session.battleFeedMessages().filter { it.text == expected }
+
+        assertEquals(2, session.battleFeedEntries().count { it == expected })
+        assertEquals(2, feedMessages.size)
+        assertTrue(feedMessages[0].id != feedMessages[1].id)
+        assertEquals(2, session.activityMessages().count { it == expected })
+    }
+
+    @Test
     fun appliesTheCompleteOfficialSimulatorTranscript() {
         val session = BattleSession()
         session.setLocalUsername("ADRIAN")
@@ -383,7 +407,7 @@ class OfficialBattleTranscriptTest {
 
         session.applyProtocolLine("|")
         session.applyProtocolLine("|-weather|RainDance")
-        assertFalse(session.battleFeedVisible)
+        assertTrue(session.battleFeedVisible)
 
         session.applyProtocolLine("|-weather|Sun")
         assertTrue(session.battleFeedVisible)

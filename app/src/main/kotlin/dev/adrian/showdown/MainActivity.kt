@@ -1024,7 +1024,10 @@ class MainActivity : Activity() {
         session.applyProtocolPacket(packet.lines)
         handleAppliedBattlePacket(packet)
         val generatedMessageCount = session.battleFeedMessages().count { it.id !in previousMessageIds }
-        scheduleBattlePlayback(BattlePlaybackTiming.pauseAfter(packet.lines, generatedMessageCount))
+        val feedPlaybackBudgetMillis = battleScene?.remainingBattleFeedPlaybackBudgetMillis() ?: 0L
+        scheduleBattlePlayback(
+            BattlePlaybackTiming.pauseAfter(packet.lines, generatedMessageCount, feedPlaybackBudgetMillis)
+        )
     }
 
     private fun scheduleBattlePlayback(pauseMillis: Long) {
