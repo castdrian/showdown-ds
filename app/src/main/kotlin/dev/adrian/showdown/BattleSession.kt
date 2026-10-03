@@ -1858,8 +1858,8 @@ class BattleSession {
                 }
                 protocolLogSuppressed = fields[1].isNotEmpty() && isSilent(fields)
                 when (fields[1]) {
-                    "j", "join", "l", "leave" -> battleRoomRenameFallback = null
-                    "n", "name" -> Unit
+                    "j", "J", "join", "l", "L", "leave" -> battleRoomRenameFallback = null
+                    "n", "N", "name" -> Unit
                     "request" -> Unit
                     else -> {
                         battleRoomPresenceLog = null
@@ -2082,9 +2082,9 @@ class BattleSession {
                     "sentchoice" -> applySentChoice(fields)
                     "win" -> applyWin(fields)
                     "tie", "draw", "prematureend" -> applyTie(fields)
-                    "j", "join" -> applyBattleRoomPresence(fields, joining = true)
-                    "l", "leave" -> applyBattleRoomPresence(fields, joining = false)
-                    "n", "name" -> applyBattleRoomRename(fields)
+                    "j", "J", "join" -> applyBattleRoomPresence(fields, joining = true)
+                    "l", "L", "leave" -> applyBattleRoomPresence(fields, joining = false)
+                    "n", "N", "name" -> applyBattleRoomRename(fields)
                     "bigerror" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.takeIf { it.isNotBlank() }?.let { appendLog("Warning: $it") }
                     "error" -> applyBattleError(fields)
                     "c", "chat", "c:" -> applyChat(fields)

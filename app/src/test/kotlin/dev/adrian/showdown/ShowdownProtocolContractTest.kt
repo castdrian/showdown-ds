@@ -6,6 +6,22 @@ import org.junit.Test
 
 class ShowdownProtocolContractTest {
     @Test
+    fun acceptsUppercaseBattleRoomPresenceAndRenameAliases() {
+        val session = BattleSession().apply { setReplayMode(true) }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|J|+Guest",
+                "|L|+Leaver",
+                "|N|%NewName|oldname"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("+Guest joined; +Leaver left"))
+        assertTrue(session.battleLog().contains("%NewName renamed from oldname."))
+    }
+
+    @Test
     fun preservesTheLocalPlayersPerspectiveForPlayerTwoAndTracksRevealedState() {
         val session = BattleSession()
         session.setLocalUsername("ADRIAN")
