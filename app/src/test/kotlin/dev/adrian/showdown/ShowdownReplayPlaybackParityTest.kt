@@ -73,6 +73,40 @@ class ShowdownReplayPlaybackParityTest {
         assertEquals("Cramorant-Gulping", changedSprite.species)
     }
 
+    @Test
+    fun doubleBattleMoveFrameUsesTheSlotLayoutFromBeforeItsFollowingSwap() {
+        val chunks = BattlePlaybackTiming.chunks(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|gametype|doubles",
+                "|switch|p1a: Sparky|Pikachu, L50|100/100",
+                "|switch|p1b: Wrench|Rotom-Wash, L50|100/100",
+                "|switch|p2a: Rival|Eevee, L50|100/100",
+                "|move|p1a: Sparky|Ally Switch|p1b: Wrench",
+                "|swap|p1a: Sparky|1"
+            )
+        )
+        val moveChunkIndex = chunks.indexOfFirst { chunk -> chunk.any { it.startsWith("|move|") } }
+        val swapChunkIndex = chunks.indexOfFirst { chunk -> chunk.any { it.startsWith("|swap|") } }
+        assertTrue("move and following slot swap were not isolated", swapChunkIndex > moveChunkIndex)
+
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        chunks.take(moveChunkIndex + 1).forEach(session::applyProtocolPacket)
+        val beforeSwap = session.playerActiveCombatants().associate { it.slot to it.name }
+        assertEquals("Sparky", beforeSwap["p1a"])
+        assertEquals("Wrench", beforeSwap["p1b"])
+
+        session.applyProtocolPacket(chunks[swapChunkIndex])
+
+        val afterSwap = session.playerActiveCombatants().associate { it.slot to it.name }
+        assertEquals("Wrench", afterSwap["p1a"])
+        assertEquals("Sparky", afterSwap["p1b"])
+    }
+
     private fun assertReplayMoveActorsMatchSprites(replayCase: ReplayCase, speed: Float) {
         val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}"))
             .bufferedReader()
