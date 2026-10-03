@@ -235,6 +235,51 @@ class BattleFeedPresentationTest {
     }
 
     @Test
+    fun queuesNewMessagesWhenTheRollingFeedWindowShrinks() {
+        val presentation = BattleFeedPresentation(
+            minimumMessageDurationMillis = 0L,
+            holdDurationMillis = 0L,
+            fadeDurationMillis = 100L
+        )
+        val previous = (38L..43L).map { BattleFeedMessage(it, "Old $it") }
+        val current = listOf(
+            BattleFeedMessage(42L, "Old 42"),
+            BattleFeedMessage(43L, "Old 43"),
+            BattleFeedMessage(70L, "Raging Bolt used Dragon Pulse!"),
+            BattleFeedMessage(71L, "Cresselia lost 37% of its health!"),
+            BattleFeedMessage(72L, "Cresselia lost Eject Button.")
+        )
+
+        presentation.updateMessages(previous, true, 1_000L)
+        presentation.updateMessages(current, true, 1_100L)
+
+        assertEquals(43L, presentation.frame(1_100L)?.messageId)
+        assertEquals(70L, presentation.frame(1_200L)?.messageId)
+        assertEquals("Raging Bolt used Dragon Pulse!", presentation.frame(1_200L)?.text)
+        assertEquals(71L, presentation.frame(1_400L)?.messageId)
+        assertEquals(72L, presentation.frame(1_600L)?.messageId)
+    }
+
+    @Test
+    fun shorterFeedWithoutAnOverlapReplacesThePreviousSnapshot() {
+        val presentation = fastPresentation()
+        val previous = listOf(
+            BattleFeedMessage(1L, "Old 1"),
+            BattleFeedMessage(2L, "Old 2"),
+            BattleFeedMessage(3L, "Old 3")
+        )
+        val current = listOf(
+            BattleFeedMessage(4L, "New 1"),
+            BattleFeedMessage(5L, "New 2")
+        )
+
+        presentation.updateMessages(previous, true, 1_000L)
+        presentation.updateMessages(current, true, 1_100L)
+
+        assertEquals(5L, presentation.frame(1_100L)?.messageId)
+    }
+
+    @Test
     fun skipsAReplacedHistorySnapshotWithoutASharedBoundary() {
         val presentation = fastPresentation()
         presentation.update(listOf("Protocol status", "Format"), true, 1_000L)

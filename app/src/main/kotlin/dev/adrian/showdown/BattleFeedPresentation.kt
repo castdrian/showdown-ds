@@ -363,7 +363,6 @@ class BattleFeedPresentation(
     private fun isSnapshotReplacement(previous: List<BattleFeedMessage>, current: List<BattleFeedMessage>): Boolean {
         if (sameSequence(previous, current)) return false
         if (isContinuation(previous, current)) return false
-        if (current.size < previous.size) return true
         if (current.size == 1 && current.firstOrNull()?.id != previous.firstOrNull()?.id) return true
         if (previous.isEmpty() || current.isEmpty()) return false
         return (minOf(previous.size, current.size) downTo 1).none { size ->
