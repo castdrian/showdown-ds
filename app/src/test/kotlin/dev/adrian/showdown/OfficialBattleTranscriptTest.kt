@@ -635,7 +635,6 @@ class OfficialBattleTranscriptTest {
                 "Turn 1.",
                 "It's extremely effective!",
                 "It's mostly ineffective...",
-                "Automatic center!",
                 "The Pokémon was hit 1 time!",
                 "The Pokémon was hit 3 times!",
                 "Mewtwo transformed into the Water type!",

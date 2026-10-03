@@ -682,6 +682,7 @@ class BattleSession {
         private set
     var gameType = "singles"
         private set
+    private var triplesCentered = false
     var format = "[Gen 7] OU"
         private set
     var status = "Choose a move"
@@ -1219,6 +1220,8 @@ class BattleSession {
     fun availableMatchFormats() = availableMatchFormats.toList()
 
     fun isSinglesBattle() = gameType.equals("singles", true)
+
+    fun isTriplesCentered() = gameType.equals("triples", true) && triplesCentered
 
     fun showdownBackdrop() = SHOWDOWN_BACKDROPS[Math.floorMod(battleVisualSeed, SHOWDOWN_BACKDROPS.size)]
 
@@ -2073,7 +2076,7 @@ class BattleSession {
                     "-transform" -> applyTransform(fields)
                     "-mega" -> applyGimmickFormChange(fields, "Mega Evolved.")
                     "-primal" -> applyGimmickFormChange(fields, "reverted to its primal form.")
-                    "-center" -> appendProtocolAnnouncement(fields, "Automatic center!")
+                    "-center" -> triplesCentered = gameType.equals("triples", true)
                     "-terastallize" -> applyTerastallize(fields)
                     "custom" -> applyCustom(fields)
                     "-start" -> applyStart(fields)
@@ -2218,6 +2221,7 @@ class BattleSession {
         turn = 1
         announcedTurns.clear()
         gameType = "singles"
+        triplesCentered = false
         format = ""
         battleGeneration = 9
         teamPreviewOrder.clear()
@@ -2303,6 +2307,7 @@ class BattleSession {
         val value = fields.getOrNull(2)?.trim().orEmpty()
         if (value.isBlank()) return
         gameType = value
+        triplesCentered = false
         val label = when (value.lowercase()) {
             "singles" -> "Singles"
             "doubles" -> "Doubles"

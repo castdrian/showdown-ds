@@ -40,6 +40,22 @@ class BattleFieldStateTest {
     }
 
     @Test
+    fun treatsTripleBattleCenteringAsVisualStateInsteadOfLogText() {
+        val session = BattleSession()
+        session.applyProtocolLine("|gametype|triples")
+        val messagesBeforeCentering = session.battleLog()
+
+        session.applyProtocolLine("|-center")
+
+        assertTrue(session.isTriplesCentered())
+        assertEquals(messagesBeforeCentering, session.battleLog())
+
+        session.applyProtocolLine("|init|battle")
+
+        assertFalse(session.isTriplesCentered())
+    }
+
+    @Test
     fun keepsTheOfficialBattleClockUntilTheServerTurnsItOff() {
         val session = BattleSession()
 
