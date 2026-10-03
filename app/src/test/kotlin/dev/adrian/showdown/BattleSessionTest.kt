@@ -266,6 +266,20 @@ class BattleSessionTest {
     }
 
     @Test
+    fun grassyTerrainHealingUsesShowdownTerrainText() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Eevee|Eevee, L50|90/100",
+                "|-heal|p1a: Eevee|95/100|[from] move: Grassy Terrain"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Eevee's HP was restored."))
+        assertFalse(session.battleLog().contains("Eevee restored HP using its Grassy Terrain!"))
+    }
+
+    @Test
     fun protocolHintsKeepShowdownParenthesesSeparateFromMessages() {
         val session = BattleSession()
 
