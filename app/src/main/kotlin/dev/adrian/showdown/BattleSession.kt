@@ -3445,8 +3445,12 @@ class BattleSession {
             }
             else -> {
                 updateVolatileEffect(actor, effect, true)
-                if (!isHiddenAbilityStateEffect(effect)) {
-                    appendProtocolAnnouncement(fields, "(${battleEffectName(fields.getOrNull(3))} started on ${battleActor(actor)}!)")
+                val abilityStateAnnouncement = abilityStateStartAnnouncement(actor, effect)
+                if (abilityStateAnnouncement != null) {
+                    appendProtocolAnnouncement(fields, abilityStateAnnouncement)
+                } else if (!isHiddenAbilityStateEffect(effect)) {
+                    appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+                    appendProtocolAnnouncement(fields, startEffectAnnouncement(actor, effect, fields))
                 }
             }
         }
@@ -3475,9 +3479,70 @@ class BattleSession {
             else -> {
                 updateVolatileEffect(actor, effect, false)
                 if (!isHiddenAbilityStateEffect(effect)) {
-                    appendProtocolAnnouncement(fields, "${battleActor(actor)} was freed from ${battleEffectName(fields.getOrNull(3))}!")
+                    appendProtocolAnnouncement(
+                        fields,
+                        endEffectAnnouncement(actor, effect, battleEffectName(fields.getOrNull(3)))
+                    )
                 }
             }
+        }
+    }
+
+    private fun abilityStateStartAnnouncement(actor: String, effect: String): String? {
+        val stat = when {
+            effect.startsWith("protosynthesis") -> effect.removePrefix("protosynthesis")
+            effect.startsWith("quarkdrive") -> effect.removePrefix("quarkdrive")
+            else -> return null
+        }
+        val statName = showdownBoostStatLabel(stat) ?: return null
+        return "${battleActor(actor)}'s $statName was heightened!"
+    }
+
+    private fun showdownBoostStatLabel(stat: String) = when (stat) {
+        "atk" -> "Attack"
+        "def" -> "Defense"
+        "spa" -> "Sp. Atk"
+        "spd" -> "Sp. Def"
+        "spe" -> "Speed"
+        else -> null
+    }
+
+    private fun protocolAbilityAnnouncement(fields: List<String>, sourceIndex: Int = 4): String? {
+        val source = protocolSource(fields, sourceIndex)?.takeIf { it.startsWith("ability:", true) } ?: return null
+        val ability = source.substringAfter(":").trim().takeIf(String::isNotBlank) ?: return null
+        val holder = protocolSourceActor(fields) ?: fields.getOrNull(2)?.takeIf(::isProtocolActor) ?: return null
+        val resolvedAbility = abilityNameResolver?.invoke(ability) ?: ability
+        updateActorDetails(holder) { details -> details.copy(ability = resolvedAbility) }
+        return "[${battleActor(holder)}'s $resolvedAbility]"
+    }
+
+    private fun startEffectAnnouncement(actor: String, effect: String, fields: List<String>): String {
+        val pokemon = battleActor(actor)
+        return when (effect) {
+            "disable" -> {
+                val move = fields.getOrNull(4)
+                    ?.takeUnless { it.trim().startsWith("[") }
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { moveNameResolver?.invoke(it) ?: it }
+                move?.let { "$pokemon's $it was disabled!" }
+                    ?: "(${battleEffectName(fields.getOrNull(3))} started on $pokemon!)"
+            }
+            "encore" -> "$pokemon must do an encore!"
+            "leechseed" -> "$pokemon was seeded!"
+            "substitute" -> "$pokemon put in a substitute!"
+            else -> "(${battleEffectName(fields.getOrNull(3))} started on $pokemon!)"
+        }
+    }
+
+    private fun endEffectAnnouncement(actor: String, effect: String, effectName: String): String {
+        val pokemon = battleActor(actor)
+        return when (effect) {
+            "disable" -> "$pokemon's move is no longer disabled!"
+            "encore" -> "$pokemon's encore ended!"
+            "healblock" -> "$pokemon's Heal Block wore off!"
+            "leechseed" -> "$pokemon was freed from Leech Seed!"
+            "substitute" -> "$pokemon's substitute faded!"
+            else -> "$pokemon was freed from $effectName!"
         }
     }
 
@@ -4347,7 +4412,10 @@ class BattleSession {
             weather.isBlank() -> weatherEndAnnouncement(previousWeather)
             else -> weatherStartAnnouncement(weather)
         }
-        if (!isSilent(fields)) announcement?.let(::appendLog)
+        if (!isSilent(fields)) {
+            protocolAbilityAnnouncement(fields, sourceIndex = 3)?.let(::appendLog)
+            announcement?.let(::appendLog)
+        }
     }
 
     private fun applyFieldEffect(fields: List<String>, enabled: Boolean) {
@@ -4623,7 +4691,7 @@ class BattleSession {
         else -> stat
     }
 
-    private fun protocolSource(fields: List<String>): String? = fields.drop(4)
+    private fun protocolSource(fields: List<String>, sourceIndex: Int = 4): String? = fields.drop(sourceIndex)
         .firstOrNull { it.trim().startsWith("[from]", true) }
         ?.substringAfter(']')
         ?.trim()

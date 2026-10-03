@@ -960,6 +960,46 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsOfficialVolatileAndWeatherAnnouncementsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(listOf("|player|p1|ADRIAN||", "|player|p2|OPPONENT||"))
+        val previousLogSize = session.battleLog().size
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-start|p1a: Polteageist|move: Leech Seed",
+                "|-start|p2a: Salazzle|Encore",
+                "|-start|p2a: Salazzle|Substitute",
+                "|-start|p2a: Vespiquen|Disable|Hurricane|[from] ability: Cursed Body|[of] p1a: Polteageist",
+                "|-start|p2a: Walking Wake|protosynthesisspa",
+                "|-end|p1a: Brambleghast|move: Heal Block",
+                "|-end|p2a: Salazzle|Substitute",
+                "|-end|p2a: Vespiquen|Disable",
+                "|-end|p2a: Salazzle|Encore",
+                "|-weather|Snowscape|[from] ability: Snow Warning|[of] p2a: Abomasnow"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Polteageist was seeded!",
+                "The opposing Salazzle must do an encore!",
+                "The opposing Salazzle put in a substitute!",
+                "[Polteageist's Cursed Body]",
+                "The opposing Vespiquen's Hurricane was disabled!",
+                "The opposing Walking Wake's Sp. Atk was heightened!",
+                "Brambleghast's Heal Block wore off!",
+                "The opposing Salazzle's substitute faded!",
+                "The opposing Vespiquen's move is no longer disabled!",
+                "The opposing Salazzle's encore ended!",
+                "[The opposing Abomasnow's Snow Warning]",
+                "It started to snow!"
+            ),
+            session.battleLog().drop(previousLogSize)
+        )
+    }
+
+    @Test
     fun keepsOfficialAbilityAndItemAnnouncementsInTheBattleFeed() {
         val session = BattleSession()
         session.applyProtocolPacket(
