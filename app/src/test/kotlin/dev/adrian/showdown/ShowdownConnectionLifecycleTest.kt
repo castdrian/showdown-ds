@@ -197,6 +197,43 @@ class ShowdownConnectionLifecycleTest {
     }
 
     @Test
+    fun preservesRoomlessLobbyInitializationPackets() {
+        val server = LoopbackWebSocketServer()
+        val connected = CountDownLatch(1)
+        val lobbyInitialized = CountDownLatch(1)
+        val protocolPackets = CopyOnWriteArrayList<Pair<String?, List<String>>>()
+        val listener = object : ShowdownConnection.Listener {
+            override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
+                if (state == ShowdownConnection.State.CONNECTED) connected.countDown()
+            }
+
+            override fun onProtocol(roomId: String?, lines: List<String>) {
+                protocolPackets += roomId to lines
+                if (roomId == null && lines.any { it == "|init|chat" }) lobbyInitialized.countDown()
+            }
+        }
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            testHttpClient()
+        )
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+            server.sendText(socket, "|updateuser| Guest 1|0|1")
+            assertTrue(connected.await(2, TimeUnit.SECONDS))
+
+            server.sendText(socket, "|init|chat\n|title|Lobby")
+
+            assertTrue(lobbyInitialized.await(2, TimeUnit.SECONDS))
+            assertEquals(null to listOf("|init|chat", "|title|Lobby"), protocolPackets.last())
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
+    @Test
     fun queuesCommandsUntilSockJsTransportIsReady() {
         val server = LoopbackWebSocketServer()
         val listener = RecordingListener()
