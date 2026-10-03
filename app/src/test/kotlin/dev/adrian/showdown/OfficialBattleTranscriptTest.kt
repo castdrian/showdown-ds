@@ -576,12 +576,30 @@ class OfficialBattleTranscriptTest {
                 "Reflect made the opposing team stronger against physical moves!",
                 "A sticky web has been laid out on the ground around your team!",
                 "The sticky web has disappeared from the ground around your team!",
-                "(G-Max Cannonade started on the opposing team!)",
+                "  The opposing Pokémon got caught in the vortex of water!",
                 "(G-Max Cannonade ended on the opposing team!)"
             ),
             session.battleLog().takeLast(6)
         )
         assertFalse(session.battleLog().any { it.contains("Spikes") })
+    }
+
+    @Test
+    fun formatsGigantamaxSideConditionAnnouncementsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|-sidestart|p2: OPPONENT|move: G-Max Cannonade",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100",
+                "|-damage|p2a: Pikachu|85/100|[from] move: G-Max Cannonade"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("  The opposing Pokémon got caught in the vortex of water!"))
+        assertTrue(session.battleLog().contains("  The opposing Pikachu is hurt by G-Max Cannonade’s vortex!"))
     }
 
     @Test

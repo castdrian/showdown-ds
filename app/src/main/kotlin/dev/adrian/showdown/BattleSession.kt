@@ -22,8 +22,9 @@ private data class BattleFieldAnnouncement(
 )
 
 private data class BattleSideConditionAnnouncement(
-    val start: String,
-    val end: String
+    val start: String? = null,
+    val end: String? = null,
+    val damage: String? = null
 )
 
 private val BATTLE_WEATHER_ANNOUNCEMENTS = mapOf(
@@ -128,6 +129,10 @@ private val BATTLE_SIDE_CONDITION_ANNOUNCEMENTS = mapOf(
     "auroraveil" to BattleSideConditionAnnouncement(
         start = "Aurora Veil made {TEAM} stronger against physical and special moves!",
         end = "{TEAM}'s Aurora Veil wore off!"
+    ),
+    "gmaxcannonade" to BattleSideConditionAnnouncement(
+        start = "  {PARTY} got caught in the vortex of water!",
+        damage = "  {POKEMON} is hurt by G-Max Cannonade’s vortex!"
     ),
     "lightscreen" to BattleSideConditionAnnouncement(
         start = "Light Screen made {TEAM} stronger against special moves!",
@@ -3016,7 +3021,10 @@ class BattleSession {
         val effect = battleEffectName(source).trim()
         val effectId = effect.lowercase().filter(Char::isLetterOrDigit)
         val percent = healthLossPercent(transition)
+        val sideConditionDamage = BATTLE_SIDE_CONDITION_ANNOUNCEMENTS[effectId]?.damage
+            ?.replace("{POKEMON}", actor)
         return when {
+            sideConditionDamage != null -> sideConditionDamage
             effectId == "brn" -> "($actor was hurt by its burn!)"
             effectId == "psn" || effectId == "tox" -> "($actor was hurt by poison!)"
             effectId == "sandstorm" -> "($actor is buffeted by the sandstorm!)"
@@ -4566,9 +4574,10 @@ class BattleSession {
 
     private fun sideConditionAnnouncement(effect: String, side: String, enabled: Boolean): String {
         val team = if (isPlayerSide(side)) "your team" else "the opposing team"
+        val party = if (isPlayerSide(side)) "Your ally Pokémon" else "The opposing Pokémon"
         val announcement = BATTLE_SIDE_CONDITION_ANNOUNCEMENTS[normalizeBattleTextKey(effect)]
         val template = if (enabled) announcement?.start else announcement?.end
-        return template?.replace("{TEAM}", team)
+        return template?.replace("{TEAM}", team)?.replace("{PARTY}", party)
             ?: if (enabled) "($effect started on $team!)" else "($effect ended on $team!)"
     }
 
