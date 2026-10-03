@@ -2056,7 +2056,7 @@ class BattleSession {
                     "-ohko" -> appendProtocolAnnouncement(fields, "It's a one-hit KO!")
                     "-combine" -> appendProtocolAnnouncement(fields, "The two moves have become one! It's a combined move!")
                     "-candynamax" -> applyCanDynamax(fields)
-                    "-nothing" -> appendProtocolAnnouncement(fields, "Splash activated.")
+                    "-nothing" -> appendProtocolAnnouncement(fields, "But nothing happened!")
                     "-zpower" -> appendProtocolAnnouncement(
                         fields,
                         "${battleActor(fields.getOrNull(2))} surrounded itself with its Z-Power!"
@@ -4207,9 +4207,17 @@ class BattleSession {
 
     private fun applyActivate(fields: List<String>) {
         val actor = fields.getOrNull(2).orEmpty()
-        val hasActor = fields.size > 3 && actor.contains(":")
-        val rawEffect = fields.getOrNull(if (hasActor) 3 else 2).orEmpty()
+        val hasActor = fields.size > 3 && isProtocolActor(actor)
+        val rawEffect = if (hasActor) {
+            fields.getOrNull(3).orEmpty()
+        } else {
+            fields.drop(2).firstOrNull { it.isNotBlank() && !it.trim().startsWith("[") }.orEmpty()
+        }
         val effect = battleEffectName(rawEffect).ifBlank { "an effect" }
+        if (!hasActor && normalizeBattleTextKey(effect) == "splash") {
+            appendProtocolAnnouncement(fields, "But nothing happened!")
+            return
+        }
         if (hasActor && rawEffect.substringBefore(":").equals("ability", true)) {
             rawEffect.substringAfter(":", "").trim().takeIf { it.isNotBlank() }?.let { ability ->
                 updateActorDetails(actor) { details ->
@@ -4552,7 +4560,7 @@ class BattleSession {
         return species?.takeIf { it.isNotBlank() } ?: actor.substringAfter(':').trim()
     }
 
-    private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(": ").substringBefore(" [")
+    private fun battleEffectName(value: String?) = value.orEmpty().substringAfter(':').trim().substringBefore(" [")
 
     private fun battleTypeLabel(value: String) = value.trim().lowercase().replaceFirstChar { it.uppercase() }
 

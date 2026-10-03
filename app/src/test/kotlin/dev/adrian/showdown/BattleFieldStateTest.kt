@@ -78,14 +78,15 @@ class BattleFieldStateTest {
             listOf(
                 "|-weather|RainDance",
                 "|-weather|RainDance|[upkeep]",
-                "|-activate|move: Splash"
+                "|-activate|move: Splash",
+                "|-activate||move:Splash"
             )
         )
 
         assertEquals("RainDance", session.battleInfo().weather)
         assertEquals(1, session.battleLog().count { it == "It started to rain!" })
         assertEquals(1, session.battleLog().count { it == "(Rain continues to fall.)" })
-        assertTrue(session.battleLog().contains("Splash activated."))
+        assertEquals(2, session.battleLog().count { it == "But nothing happened!" })
     }
 
     @Test

@@ -615,7 +615,7 @@ class OfficialBattleTranscriptTest {
                 "It doesn't affect the opposing Magikarp...",
                 "But it had no effect!",
                 "The two moves have become one! It's a combined move!",
-                "Splash activated.",
+                "But nothing happened!",
                 "Mewtwo surrounded itself with its Z-Power!",
                 "Mewtwo couldn't fully protect itself and got hurt!",
                 "Mewtwo is waiting for the opposing Magikarp's move..."
