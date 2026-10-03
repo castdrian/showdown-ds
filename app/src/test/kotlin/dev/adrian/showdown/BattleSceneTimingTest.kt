@@ -38,6 +38,26 @@ class BattleSceneTimingTest {
     }
 
     @Test
+    fun protocolFaintsWithTheSameNicknameRetainTheirDistinctSlots() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            applyProtocolPacket(
+                listOf(
+                    "|player|p1|RED||",
+                    "|player|p2|BLUE||",
+                    "|gametype|doubles",
+                    "|switch|p1a: Echo|Pikachu, L50|100/100",
+                    "|switch|p1b: Echo|Rotom-Wash, L50|100/100",
+                    "|faint|p1a: Echo",
+                    "|faint|p1b: Echo"
+                )
+            )
+        }
+
+        assertEquals("p1b", session.latestFaintedSlot)
+    }
+
+    @Test
     fun summonRevealsTheCombatantAfterThePokeballAndSettlesBeforeTheNextEntrance() {
         val summonAtNanos = 2_000_000_000L
 
