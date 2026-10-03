@@ -450,7 +450,7 @@ class BattleSceneView(
                     BattleCombatantLayout.x(width, false, index, opponentCombatants.size, centeredSlot, combatant.slot),
                     opponentY,
                     scale * 0.92f,
-                    combatant.name,
+                    combatant.slot,
                     combatant.condition,
                     combatant.entryAtNanos,
                     nowNanos,
@@ -463,7 +463,7 @@ class BattleSceneView(
                 opponentX,
                 opponentY,
                 scale * if (singles) ShowdownBattleLayout.OPPONENT_SCALE else 1.05f,
-                opponentCombatant?.name ?: session.opponentPokemon,
+                opponentCombatant?.slot ?: primaryBattleSlot(player = false),
                 opponentCombatant?.condition ?: session.opponentCondition,
                 opponentCombatant?.entryAtNanos ?: session.opponentEntryAtNanos,
                 nowNanos,
@@ -479,7 +479,7 @@ class BattleSceneView(
                     BattleCombatantLayout.x(width, true, index, playerCombatants.size, centeredSlot, combatant.slot),
                     playerY,
                     scale * 1.02f,
-                    combatant.name,
+                    combatant.slot,
                     combatant.condition,
                     combatant.entryAtNanos,
                     nowNanos,
@@ -492,7 +492,7 @@ class BattleSceneView(
                 playerX,
                 playerY,
                 scale * if (singles) ShowdownBattleLayout.PLAYER_SCALE else 1.16f,
-                playerCombatant?.name ?: session.playerPokemon,
+                playerCombatant?.slot ?: primaryBattleSlot(player = true),
                 playerCombatant?.condition ?: session.playerCondition,
                 playerCombatant?.entryAtNanos ?: session.playerEntryAtNanos,
                 nowNanos,
@@ -589,8 +589,8 @@ class BattleSceneView(
         drawInspectSheet(canvas, width, height, scale)
         if (
             (
-            playerCombatants.any { isFainting(it.name, it.condition) } ||
-            opponentCombatants.any { isFainting(it.name, it.condition) } ||
+            playerCombatants.any { isFainting(it.slot, it.condition) } ||
+            opponentCombatants.any { isFainting(it.slot, it.condition) } ||
             BattleSceneTiming.summonProgress(session.playerEntryAtNanos, nowNanos) < 1f ||
             BattleSceneTiming.summonProgress(session.opponentEntryAtNanos, nowNanos) < 1f ||
             playerSprite?.isAnimated == true ||
@@ -2306,19 +2306,25 @@ class BattleSceneView(
     private fun fieldCombatants(combatants: List<BattleSession.ActiveCombatant>, player: Boolean) =
         if (player) combatants else combatants.asReversed()
 
+    private fun primaryBattleSlot(player: Boolean): String {
+        val playerSide = session.battlePlayerSlot()
+        val side = if (player) playerSide else if (playerSide == "p1") "p2" else "p1"
+        return "${side}a"
+    }
+
     private fun drawCombatant(
         canvas: Canvas,
         centerX: Float,
         centerY: Float,
         scale: Float,
-        pokemon: String,
+        slot: String,
         condition: String,
         summonAtNanos: Long,
         nowNanos: Long,
         sprite: ShowdownSpriteCache.SpriteAsset?,
         showdownPlacement: Boolean = false
     ) {
-        val faintProgress = faintProgress(pokemon, condition, nowNanos)
+        val faintProgress = faintProgress(slot, condition, nowNanos)
         if (faintProgress >= 1f) return
         sprite ?: return
         drawSummonBall(canvas, centerX, centerY, scale, summonAtNanos, nowNanos)
@@ -2358,10 +2364,10 @@ class BattleSceneView(
         paint.alpha = 255
     }
 
-    private fun faintProgress(pokemon: String, condition: String, nowNanos: Long) = BattleSceneTiming.faintProgress(
-        pokemon,
+    private fun faintProgress(slot: String, condition: String, nowNanos: Long) = BattleSceneTiming.faintProgress(
+        slot,
         condition,
-        session.latestFaintedPokemon,
+        session.latestFaintedSlot,
         session.latestFaintAtNanos,
         nowNanos
     )
@@ -2374,8 +2380,8 @@ class BattleSceneView(
         nowNanos
     )
 
-    private fun isFainting(pokemon: String, condition: String) =
-        condition.contains("FNT", true) && faintProgress(pokemon, condition, System.nanoTime()) < 1f
+    private fun isFainting(slot: String, condition: String) =
+        condition.contains("FNT", true) && faintProgress(slot, condition, System.nanoTime()) < 1f
 
     private fun drawHeader(canvas: Canvas, width: Float, scale: Float) {
         val padding = 30f * scale

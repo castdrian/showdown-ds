@@ -697,6 +697,8 @@ class BattleSession {
         private set
     var latestFaintedPokemon = ""
         private set
+    var latestFaintedSlot = ""
+        private set
     var latestFaintAtNanos = 0L
         private set
     var playerEntryAtNanos = 0L
@@ -2214,6 +2216,7 @@ class BattleSession {
         latestMoveEvent = ""
         latestMoveEventAtNanos = 0L
         latestFaintedPokemon = ""
+        latestFaintedSlot = ""
         latestFaintAtNanos = 0L
         pendingHit = null
         playerName = localUsername ?: "PLAYER"
@@ -3059,9 +3062,10 @@ class BattleSession {
     private fun applyFaint(fields: List<String>) {
         val actor = fields.getOrNull(2) ?: return
         val pokemon = actor.substringAfter(':').trim()
-        latestFaintedPokemon = pokemon
-        latestFaintAtNanos = System.nanoTime()
         val slot = actor.substringBefore(":").trim()
+        latestFaintedPokemon = pokemon
+        latestFaintedSlot = slot
+        latestFaintAtNanos = System.nanoTime()
         if (isPlayerSide(actor)) {
             playerActiveCombatants[slot]?.let {
                 playerActiveCombatants[slot] = it.copy(hp = "0 fnt", condition = "FNT")

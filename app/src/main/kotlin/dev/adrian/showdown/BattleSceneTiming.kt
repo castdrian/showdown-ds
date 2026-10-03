@@ -17,9 +17,9 @@ object BattleSceneTiming {
     fun lightweightImpactDelayForAnimation(shouldAnimate: Boolean, speed: Float): Long =
         if (shouldAnimate) scaledDurationNanos(lightweightImpactDelayNanos, speed) else 0L
 
-    fun faintProgress(pokemon: String, condition: String, latestFaintedPokemon: String, faintAtNanos: Long, nowNanos: Long): Float {
+    fun faintProgress(slot: String, condition: String, latestFaintedSlot: String, faintAtNanos: Long, nowNanos: Long): Float {
         if (!condition.contains("FNT", true)) return 0f
-        if (!pokemon.equals(latestFaintedPokemon, true)) return 1f
+        if (slot != latestFaintedSlot) return 1f
         return ((nowNanos - faintAtNanos).toFloat() / faintDurationNanos).coerceIn(0f, 1f)
     }
 

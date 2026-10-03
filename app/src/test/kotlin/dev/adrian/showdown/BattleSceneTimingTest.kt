@@ -17,8 +17,24 @@ class BattleSceneTimingTest {
     fun faintedSpriteCompletesAfterItsStatusCardHasFaded() {
         val faintAtNanos = 2_000_000_000L
 
-        assertEquals(0f, BattleSceneTiming.faintProgress("Tapu Koko", "FNT", "Tapu Koko", faintAtNanos, faintAtNanos), 0.001f)
-        assertEquals(1f, BattleSceneTiming.faintProgress("Tapu Koko", "FNT", "Tapu Koko", faintAtNanos, faintAtNanos + BattleSceneTiming.faintDurationNanos), 0.001f)
+        assertEquals(0f, BattleSceneTiming.faintProgress("p1a", "FNT", "p1a", faintAtNanos, faintAtNanos), 0.001f)
+        assertEquals(1f, BattleSceneTiming.faintProgress("p1a", "FNT", "p1a", faintAtNanos, faintAtNanos + BattleSceneTiming.faintDurationNanos), 0.001f)
+    }
+
+    @Test
+    fun aLaterFaintOnAnotherSlotDoesNotRestartAnEarlierSpriteFade() {
+        val laterFaintAtNanos = 2_520_000_000L
+
+        assertEquals(
+            1f,
+            BattleSceneTiming.faintProgress("p1a", "FNT", "p2a", laterFaintAtNanos, laterFaintAtNanos),
+            0.001f
+        )
+        assertEquals(
+            0f,
+            BattleSceneTiming.faintProgress("p2a", "FNT", "p2a", laterFaintAtNanos, laterFaintAtNanos),
+            0.001f
+        )
     }
 
     @Test
