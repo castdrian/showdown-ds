@@ -58,6 +58,8 @@ class BattleSceneView(
     private val partyBallPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private var inspectedPlayer: Boolean? = null
     private var inspectedSlot: String? = null
+    private var opponentPreviewPageIndex = 0
+    private var opponentPreviewRosterKey = ""
     private val playerInspectBounds = RectF()
     private val opponentInspectBounds = RectF()
     private val battleFeedBounds = RectF()
@@ -74,6 +76,8 @@ class BattleSceneView(
     private var battleFeedTouchLastY = 0f
     private var battleFeedTouchActive = false
     private var battleFeedTouchMoved = false
+    private var teamPreviewTouchDownX = 0f
+    private var teamPreviewTouchActive = false
     private var animationsPaused = false
     private var playbackSpeed = 1f
     private var lightweightMoveStartedAtNanos = 0L
@@ -613,8 +617,11 @@ class BattleSceneView(
             return "Showdown lobby. ${session.status}"
         }
         if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || shouldShowPublicTeamPreview()) {
-            val opponentCount = session.opponentPartyDetails().size
-            return "Pokémon team preview. Opponent team: $opponentCount Pokémon."
+            val party = session.opponentPartyDetails()
+            val visibleIndices = opponentPreviewIndices(party)
+            val pageCount = TeamRosterPager.pageCount(party.size)
+            val pageSummary = if (pageCount > 1) " Page ${opponentPreviewPageIndex + 1} of $pageCount." else ""
+            return "Pokémon team preview. Opponent team: ${party.size} Pokémon.$pageSummary ${visibleIndices.size} shown."
         }
         val player = BattleSession.displayPokemonName(session.playerDetails().name, session.playerDetails().species)
         val opponent = BattleSession.displayPokemonName(session.opponentDetails().name, session.opponentDetails().species)
@@ -686,9 +693,30 @@ class BattleSceneView(
     }
 
     private fun opponentTeamPreviewAccessibilityNodes(width: Float, height: Float): List<CanvasAccessibilityNode> {
-        val party = session.opponentPartyDetails().take(6)
-        return BattleTeamPreviewLayout.slots(width, height, party.size).mapIndexed { index, slot ->
-            val details = party[index]
+        val party = session.opponentPartyDetails()
+        val visibleIndices = opponentPreviewIndices(party)
+        val pageCount = TeamRosterPager.pageCount(party.size)
+        val nodes = mutableListOf<CanvasAccessibilityNode>()
+        if (pageCount > 1) {
+            val navigation = BattleTeamPreviewLayout.navigationSlots(width, height)
+            navigation.forEachIndexed { index, slot ->
+                val previous = index == 0
+                val enabled = if (previous) opponentPreviewPageIndex > 0 else opponentPreviewPageIndex + 1 < pageCount
+                nodes += CanvasAccessibilityNode(
+                    if (previous) ACCESSIBLE_TEAM_PREVIEW_PREVIOUS_ID else ACCESSIBLE_TEAM_PREVIEW_NEXT_ID,
+                    if (previous) "Previous opponent team page, ${opponentPreviewPageIndex + 1} of $pageCount" else "Next opponent team page, ${opponentPreviewPageIndex + 1} of $pageCount",
+                    Rect().apply {
+                        RectF(slot.left, slot.top, slot.right, slot.bottom).roundOut(this)
+                    }.toCanvasAccessibilityBounds(),
+                    enabled = enabled,
+                    onClick = if (enabled) ({ changeOpponentPreviewPage(if (previous) -1 else 1) }) else null
+                )
+            }
+        }
+        val slots = BattleTeamPreviewLayout.slots(width, height, visibleIndices.size)
+        visibleIndices.forEachIndexed { visibleIndex, teamIndex ->
+            val details = party[teamIndex]
+            val slot = slots[visibleIndex]
             val name = BattleSession.displayPokemonName(details.name, details.species)
             val pokemonSummary = BattleAccessibilityText.pokemon(
                 name,
@@ -698,8 +726,8 @@ class BattleSceneView(
                 details.condition
             )
             val typeSummary = details.types.takeIf { it.isNotEmpty() }?.joinToString()?.let { ", types $it" }.orEmpty()
-            CanvasAccessibilityNode(
-                ACCESSIBLE_TEAM_PREVIEW_BASE + index,
+            nodes += CanvasAccessibilityNode(
+                ACCESSIBLE_TEAM_PREVIEW_BASE + teamIndex,
                 "Opponent Pokémon, $pokemonSummary$typeSummary",
                 Rect().apply {
                     RectF(slot.left, slot.top, slot.right, slot.bottom).roundOut(this)
@@ -707,6 +735,7 @@ class BattleSceneView(
                 role = CanvasAccessibilityNode.Role.TEXT
             )
         }
+        return nodes
     }
 
     private fun inspectSheetAccessibilityNodes(width: Float, height: Float): List<CanvasAccessibilityNode> {
@@ -817,6 +846,11 @@ class BattleSceneView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (isTeamPreviewVisible()) {
+                    teamPreviewTouchActive = true
+                    teamPreviewTouchDownX = event.x
+                    return true
+                }
                 if (inspectTargetAt(event.x, event.y) != null || inspectedPlayer != null) return true
                 if (battleFeedBounds.contains(event.x, event.y)) {
                     battleFeedTouchDownY = event.y
@@ -828,6 +862,7 @@ class BattleSceneView(
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
+                if (teamPreviewTouchActive) return true
                 if (!battleFeedTouchActive) return false
                 val delta = event.y - battleFeedTouchLastY
                 if (abs(delta) > 0.5f) {
@@ -838,6 +873,17 @@ class BattleSceneView(
                 return true
             }
             MotionEvent.ACTION_UP -> {
+                if (teamPreviewTouchActive) {
+                    teamPreviewTouchActive = false
+                    val horizontalDelta = event.x - teamPreviewTouchDownX
+                    val direction = when {
+                        abs(horizontalDelta) > width * 0.08f -> if (horizontalDelta < 0f) 1 else -1
+                        else -> teamPreviewPageDirectionAt(event.x, event.y)
+                    }
+                    direction?.let(::changeOpponentPreviewPage)
+                    performClick()
+                    return true
+                }
                 val wasBattleFeedTouch = battleFeedTouchActive
                 battleFeedTouchActive = false
                 if (wasBattleFeedTouch && battleFeedTouchMoved) {
@@ -868,6 +914,10 @@ class BattleSceneView(
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
+                if (teamPreviewTouchActive) {
+                    teamPreviewTouchActive = false
+                    return true
+                }
                 battleFeedTouchActive = false
                 battleFeedTouchMoved = false
                 return inspectedPlayer != null
@@ -1033,10 +1083,10 @@ class BattleSceneView(
     }
 
     private fun requestTeamPreviewSprites() {
-        val party = session.opponentPartyDetails().take(6)
-        val publicTeamPreview = shouldShowPublicTeamPreview()
-        val visibleIndices = if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || publicTeamPreview) {
-            party.indices.toSet()
+        val party = session.opponentPartyDetails()
+        val teamPreviewVisible = session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || shouldShowPublicTeamPreview()
+        val visibleIndices = if (teamPreviewVisible) {
+            opponentPreviewIndices(party).toSet()
         } else {
             emptySet()
         }
@@ -1044,17 +1094,18 @@ class BattleSceneView(
             requestedPreviewSprites.remove(index)
             previewSprites.remove(index)?.stopAnimation()
         }
-        if (session.battlePhase != BattleSession.BattlePhase.TEAM_PREVIEW && !publicTeamPreview) return
-        party.forEachIndexed { index, details ->
+        if (!teamPreviewVisible) return
+        visibleIndices.forEach { index ->
+            val details = party[index]
             val species = details.species.ifBlank { details.name }.trim()
-            if (species.isBlank() || species.equals("Unknown", true)) return@forEachIndexed
+            if (species.isBlank() || species.equals("Unknown", true)) return@forEach
             val request = BattleSpriteRequests.single(
                 species,
                 BattleSpriteSide.OPPONENT,
                 session.spriteStyle,
                 details.shiny
             )
-            if (requestedPreviewSprites[index] == request) return@forEachIndexed
+            if (requestedPreviewSprites[index] == request) return@forEach
             requestedPreviewSprites[index] = request
             previewSprites[index]?.stopAnimation()
             previewSprites[index] = null
@@ -1096,6 +1147,40 @@ class BattleSceneView(
             session.opponentPartyDetails().isNotEmpty() &&
             session.playerActiveCombatants().isEmpty() &&
             session.opponentActiveCombatants().isEmpty()
+
+    private fun isTeamPreviewVisible() =
+        session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW || shouldShowPublicTeamPreview()
+
+    private fun opponentPreviewIndices(party: List<BattleSession.PokemonDetails>): List<Int> {
+        val rosterKey = party.joinToString("|") { "${it.name}:${it.species}" }
+        if (opponentPreviewRosterKey != rosterKey) {
+            opponentPreviewRosterKey = rosterKey
+            opponentPreviewPageIndex = 0
+        }
+        opponentPreviewPageIndex = TeamRosterPager.movePage(opponentPreviewPageIndex, party.size, 0)
+        return TeamRosterPager.visibleIndices(party.size, opponentPreviewPageIndex).toList()
+    }
+
+    private fun teamPreviewPageDirectionAt(x: Float, y: Float): Int? {
+        val controls = BattleTeamPreviewLayout.navigationSlots(width.toFloat(), height.toFloat())
+        val previous = RectF(controls[0].left, controls[0].top, controls[0].right, controls[0].bottom)
+        val next = RectF(controls[1].left, controls[1].top, controls[1].right, controls[1].bottom)
+        return when {
+            previous.contains(x, y) -> -1
+            next.contains(x, y) -> 1
+            else -> null
+        }
+    }
+
+    private fun changeOpponentPreviewPage(direction: Int) {
+        val party = session.opponentPartyDetails()
+        opponentPreviewIndices(party)
+        val nextPage = TeamRosterPager.movePage(opponentPreviewPageIndex, party.size, direction)
+        if (nextPage == opponentPreviewPageIndex) return
+        opponentPreviewPageIndex = nextPage
+        invalidate()
+        performClick()
+    }
 
     private fun lightweightMoveEffectActive(nowNanos: Long): Boolean {
         val moveActive = lightweightMoveStartedAtNanos > 0L && nowNanos - lightweightMoveStartedAtNanos < scaledLightweightMoveDurationNanos()
@@ -2075,13 +2160,17 @@ class BattleSceneView(
 
     private fun drawTeamPreview(canvas: Canvas, width: Float, height: Float, scale: Float) {
         drawHeader(canvas, width, scale)
-        val party = session.opponentPartyDetails().take(6)
+        val party = session.opponentPartyDetails()
+        val visibleIndices = opponentPreviewIndices(party)
+        val pageCount = TeamRosterPager.pageCount(party.size)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
         paint.textSize = readableTextSize(44f, scale, 20f)
         paint.color = INK
-        canvas.drawText("Opponent team", width / 2f, height * 0.195f, paint)
+        val title = if (pageCount > 1) "Opponent team · ${opponentPreviewPageIndex + 1} / $pageCount" else "Opponent team"
+        canvas.drawText(ellipsizeToWidth(title, width * 0.58f, paint), width / 2f, height * 0.195f, paint)
         paint.textAlign = Paint.Align.LEFT
+        if (pageCount > 1) drawTeamPreviewPageNavigation(canvas, width, height, scale, pageCount)
         if (party.isEmpty()) {
             val bounds = RectF(width * 0.23f, height * 0.40f, width * 0.77f, height * 0.62f)
             paint.color = Color.argb(148, 8, 23, 38)
@@ -2094,8 +2183,10 @@ class BattleSceneView(
             paint.textAlign = Paint.Align.LEFT
             return
         }
-        BattleTeamPreviewLayout.slots(width, height, party.size).forEachIndexed { index, card ->
-            val details = party[index]
+        val slots = BattleTeamPreviewLayout.slots(width, height, visibleIndices.size)
+        visibleIndices.forEachIndexed { visibleIndex, teamIndex ->
+            val card = slots[visibleIndex]
+            val details = party[teamIndex]
             paint.shader = LinearGradient(
                 card.left,
                 card.top,
@@ -2118,7 +2209,7 @@ class BattleSceneView(
                 card.left + 206f * scale,
                 card.bottom - 26f * scale
             )
-            previewSprites[index]?.draw(
+            previewSprites[teamIndex]?.draw(
                 canvas,
                 spriteBounds,
                 SystemClock.elapsedRealtime(),
@@ -2147,6 +2238,34 @@ class BattleSceneView(
             canvas.drawText("Lv.${details.level}${details.gender}", textLeft, card.top + 136f * scale, paint)
             drawTeamPreviewTypes(canvas, details.types, textLeft, card.top + 174f * scale, textRight, scale)
         }
+    }
+
+    private fun drawTeamPreviewPageNavigation(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        pageCount: Int
+    ) {
+        val controls = BattleTeamPreviewLayout.navigationSlots(width, height)
+        controls.forEachIndexed { index, slot ->
+            val previous = index == 0
+            val enabled = if (previous) opponentPreviewPageIndex > 0 else opponentPreviewPageIndex + 1 < pageCount
+            val bounds = RectF(slot.left, slot.top, slot.right, slot.bottom)
+            paint.color = Color.argb(if (enabled) 150 else 80, 8, 30, 48)
+            canvas.drawRoundRect(bounds, bounds.height() / 2f, bounds.height() / 2f, paint)
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+            paint.textSize = readableTextSize(40f, scale, 18f)
+            paint.color = if (enabled) INK else MUTED
+            canvas.drawText(
+                if (previous) "‹" else "›",
+                bounds.centerX(),
+                bounds.centerY() - (paint.ascent() + paint.descent()) / 2f,
+                paint
+            )
+        }
+        paint.textAlign = Paint.Align.LEFT
     }
 
     private fun drawTeamPreviewTypes(
@@ -2979,6 +3098,8 @@ class BattleSceneView(
         const val ACCESSIBLE_OPPONENT_ID = 2
         const val ACCESSIBLE_BATTLE_LOG_ID = 3
         const val ACCESSIBLE_TEAM_PREVIEW_BASE = 100
+        const val ACCESSIBLE_TEAM_PREVIEW_PREVIOUS_ID = 124
+        const val ACCESSIBLE_TEAM_PREVIEW_NEXT_ID = 125
         const val ACCESSIBLE_INSPECT_DETAILS_ID = 200
         const val ACCESSIBLE_PLAYER_PARTY_BASE = 300
         const val ACCESSIBLE_OPPONENT_PARTY_BASE = 400

@@ -1,3 +1,5 @@
+package dev.adrian.showdown
+
 data class BattleTeamPreviewSlot(
     val left: Float,
     val top: Float,
@@ -12,13 +14,28 @@ data class BattleTeamPreviewSlot(
 }
 
 object BattleTeamPreviewLayout {
-    private const val MAX_PARTY_SIZE = 6
+    private const val MAX_PARTY_SIZE = TeamRosterPager.PAGE_SIZE
     private const val COLUMN_COUNT = 3
     private const val HORIZONTAL_MARGIN_FRACTION = 0.075f
     private const val HORIZONTAL_GAP_FRACTION = 0.018f
     private const val TOP_FRACTION = 0.24f
     private const val BOTTOM_FRACTION = 0.89f
     private const val VERTICAL_GAP_FRACTION = 0.028f
+    private const val NAVIGATION_TOP_FRACTION = 0.15f
+    private const val NAVIGATION_BOTTOM_FRACTION = 0.225f
+    private const val NAVIGATION_MARGIN_FRACTION = 0.035f
+    private const val NAVIGATION_WIDTH_FRACTION = 0.075f
+
+    fun navigationSlots(width: Float, height: Float): List<BattleTeamPreviewSlot> {
+        val margin = width * NAVIGATION_MARGIN_FRACTION
+        val buttonWidth = width * NAVIGATION_WIDTH_FRACTION
+        val top = height * NAVIGATION_TOP_FRACTION
+        val bottom = height * NAVIGATION_BOTTOM_FRACTION
+        return listOf(
+            BattleTeamPreviewSlot(margin, top, margin + buttonWidth, bottom),
+            BattleTeamPreviewSlot(width - margin - buttonWidth, top, width - margin, bottom)
+        )
+    }
 
     fun slots(width: Float, height: Float, count: Int): List<BattleTeamPreviewSlot> {
         val visibleCount = count.coerceIn(0, MAX_PARTY_SIZE)
