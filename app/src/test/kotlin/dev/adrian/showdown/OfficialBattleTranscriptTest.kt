@@ -680,6 +680,7 @@ class OfficialBattleTranscriptTest {
                 "|-fail|p1a: Mewtwo|heal",
                 "|-fail|p1a: Mewtwo|brn",
                 "|-fail|p1a: Mewtwo|dynamax",
+                "|-fail|p2a: Magikarp|unboost|atk|[from] ability: Clear Body|[of] p2a: Magikarp",
                 "|-supereffective|p2a: Magikarp|2|[spread]",
                 "|-resisted|p2a: Magikarp|[spread]",
                 "|-crit|p2a: Magikarp|[spread]",
@@ -692,6 +693,8 @@ class OfficialBattleTranscriptTest {
         assertTrue(session.battleLog().contains("Mewtwo's HP is full!"))
         assertTrue(session.battleLog().contains("Mewtwo is already burned!"))
         assertTrue(session.battleLog().contains("Mewtwo shook its head. It seems like it can't use this move..."))
+        assertTrue(session.battleLog().contains("[The opposing Magikarp's Clear Body]"))
+        assertTrue(session.battleLog().contains("The opposing Magikarp's Attack was not lowered!"))
         assertTrue(session.battleLog().contains("It's extremely effective on the opposing Magikarp!"))
         assertTrue(session.battleLog().contains("It's not very effective on the opposing Magikarp."))
         assertTrue(session.battleLog().contains("A critical hit on the opposing Magikarp!"))
@@ -1061,6 +1064,7 @@ class OfficialBattleTranscriptTest {
         session.applyProtocolPacket(
             listOf(
                 "|switch|p1a: Gholdengo|Gholdengo, L50|100/100",
+                "|-item|p1a: Gholdengo|Leftovers",
                 "|-ability|p1a: Gholdengo|Good as Gold",
                 "|-item|p1a: Gholdengo|Air Balloon",
                 "|-ability|p1a: Gholdengo|Klutz|[from] ability: Skill Swap",
@@ -1073,13 +1077,46 @@ class OfficialBattleTranscriptTest {
         assertEquals("Unburden", session.playerDetails().ability)
         assertEquals("Choice Scarf", session.playerDetails().item)
         assertTrue(session.battleLog().contains("[Gholdengo's Good as Gold]"))
-        assertTrue(session.battleLog().contains("Gholdengo's Air Balloon activated."))
+        assertTrue(session.battleLog().contains("Gholdengo floats in the air with its Air Balloon!"))
+        assertFalse(session.battleLog().any { it.contains("Leftovers activated") })
         assertTrue(session.battleLog().contains("[Gholdengo's Skill Swap]"))
         assertTrue(session.battleLog().contains("[Gholdengo's Klutz]"))
         assertTrue(session.battleLog().contains("Gholdengo acquired Klutz!"))
         assertTrue(session.battleLog().contains("Gholdengo obtained Leftovers."))
         assertFalse(session.battleLog().any { it.contains("Unburden") })
         assertFalse(session.battleLog().any { it.contains("Choice Scarf") })
+    }
+
+    @Test
+    fun formatsItemStartAndEndAnnouncementsLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Persian|Persian, L50|100/100",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100",
+                "|-item|p1a: Persian|Air Balloon",
+                "|-enditem|p1a: Persian|Air Balloon",
+                "|-item|p1a: Persian|Focus Sash",
+                "|-enditem|p1a: Persian|Focus Sash",
+                "|-item|p2a: Pikachu|Sitrus Berry",
+                "|-enditem|p2a: Pikachu|Sitrus Berry|[eat]",
+                "|-item|p2a: Pikachu|Leftovers",
+                "|-enditem|p2a: Pikachu|Leftovers|[from] move: Knock Off|[of] p1a: Persian",
+                "|-item|p2a: Pikachu|Eviolite",
+                "|-enditem|p2a: Pikachu|Eviolite",
+                "|-item|p1a: Persian|Sitrus Berry|[from] move: Thief|[of] p2a: Pikachu",
+                "|-item|p2a: Pikachu|Choice Scarf|[from] move: Bestow|[of] p1a: Persian"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Persian floats in the air with its Air Balloon!"))
+        assertTrue(session.battleLog().contains("Persian's Air Balloon popped!"))
+        assertTrue(session.battleLog().contains("Persian hung on using its Focus Sash!"))
+        assertTrue(session.battleLog().contains("(The opposing Pikachu ate its Sitrus Berry!)"))
+        assertTrue(session.battleLog().contains("The opposing Pikachu lost its Leftovers!"))
+        assertTrue(session.battleLog().contains("(The opposing Pikachu used its Eviolite!)"))
+        assertTrue(session.battleLog().contains("Persian stole the opposing Pikachu's Sitrus Berry!"))
+        assertTrue(session.battleLog().contains("Persian gave the opposing Pikachu its Choice Scarf!"))
     }
 
     @Test

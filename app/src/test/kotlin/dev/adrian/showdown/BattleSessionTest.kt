@@ -2272,7 +2272,7 @@ class BattleSessionTest {
         session.applyProtocolLine("|-eat|p1a: Incineroar|Sitrus Berry")
 
         assertEquals("No item", session.playerDetails().item)
-        assertTrue(session.battleLog().any { it.contains("consumed Sitrus Berry") })
+        assertTrue(session.battleLog().any { it.contains("ate its Sitrus Berry") })
     }
 
     @Test
@@ -2283,7 +2283,7 @@ class BattleSessionTest {
         session.applyProtocolLine("|-enditem|p1a: Incineroar|Sitrus Berry|[eat]")
 
         assertEquals("No item", session.playerDetails().item)
-        assertTrue(session.battleLog().any { it.contains("consumed Sitrus Berry") })
+        assertTrue(session.battleLog().any { it.contains("ate its Sitrus Berry") })
     }
 
     @Test

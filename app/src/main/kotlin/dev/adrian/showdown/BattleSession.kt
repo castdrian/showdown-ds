@@ -4196,6 +4196,7 @@ class BattleSession {
             "dynamax" -> "${battleActor(actor)} shook its head. It seems like it can't use this move..."
             else -> "But it failed!"
         }
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
         appendProtocolAnnouncement(fields, announcement)
     }
 
@@ -4400,10 +4401,19 @@ class BattleSession {
         val item = itemNameResolver?.invoke(rawItem) ?: rawItem
         updateActorDetails(actor) { it.copy(item = item) }
         if (replacement == null && !isSilent(fields)) {
-            appendLog(
-                if (protocolSource(fields) != null) "${battleActor(actor)} obtained $item."
-                else "${battleActor(actor)}'s $item activated."
-            )
+            val source = normalizeBattleTextKey(protocolSource(fields).orEmpty())
+            val sourceActor = protocolSourceActor(fields)?.let(::battleActor)
+            val pokemon = battleActor(actor)
+            val announcement = when {
+                source in setOf("movethief", "movecovet", "abilitymagician", "abilitypickpocket") && sourceActor != null ->
+                    "$pokemon stole $sourceActor's $item!"
+                source == "movebestow" && sourceActor != null -> "$sourceActor gave $pokemon its $item!"
+                source.isNotBlank() -> "$pokemon obtained $item."
+                normalizeBattleTextKey(item) == "airballoon" -> "$pokemon floats in the air with its Air Balloon!"
+                else -> null
+            }
+            appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+            appendProtocolAnnouncement(fields, announcement)
         }
     }
 
@@ -4445,12 +4455,19 @@ class BattleSession {
             ?.takeIf(String::isNotBlank)
             ?: "its item"
         val consumed = fields.drop(4).any { it.equals("[eat]", true) }
+        val source = protocolSource(fields)
         updateActorDetails(actor) { it.copy(item = "No item") }
         if (!isSilent(fields)) {
-            appendLog(
-                if (consumed) "${battleActor(actor)} consumed $item."
-                else "${battleActor(actor)} lost $item."
-            )
+            val pokemon = battleActor(actor)
+            val announcement = when {
+                consumed -> "($pokemon ate its $item!)"
+                source != null -> "$pokemon lost its $item!"
+                normalizeBattleTextKey(item) == "airballoon" -> "$pokemon's Air Balloon popped!"
+                normalizeBattleTextKey(item) == "focussash" -> "$pokemon hung on using its Focus Sash!"
+                else -> "($pokemon used its $item!)"
+            }
+            appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+            appendProtocolAnnouncement(fields, announcement)
         }
     }
 
@@ -4461,7 +4478,7 @@ class BattleSession {
             ?.takeIf(String::isNotBlank)
             ?: "an item"
         updateActorDetails(actor) { it.copy(item = "No item") }
-        appendLog("${battleActor(actor)} consumed $item.")
+        appendLog("(${battleActor(actor)} ate its $item!)")
     }
 
     private fun applyWeather(fields: List<String>) {
