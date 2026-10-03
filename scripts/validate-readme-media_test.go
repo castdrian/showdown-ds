@@ -43,6 +43,15 @@ func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
 	}
 }
 
+func TestREADMEPrimaryScreenshotShowsLiveMoveChoice(t *testing.T) {
+	if err := validateLiveMoveChoiceScreen("../media/showdown-battle-lower-screen-hd.png"); err != nil {
+		t.Fatalf("validateLiveMoveChoiceScreen rejected the active battle screen: %v", err)
+	}
+	if err := validateLiveMoveChoiceScreen("../media/showdown-battle-party-screen-hd.png"); err == nil {
+		t.Fatal("validateLiveMoveChoiceScreen accepted the party screen as the primary move-choice screenshot")
+	}
+}
+
 func TestREADMEAssetsRejectMismatchedBattleScreens(t *testing.T) {
 	upperPath := "../media/showdown-battle-upper-screen-hd.png"
 	lowerPath := "../media/showdown-battle-lower-screen-hd.png"

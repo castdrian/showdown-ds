@@ -91,7 +91,40 @@ func validateReadme(readme string) error {
 			return err
 		}
 	}
+	if err := validateLiveMoveChoiceScreen(repositoryFile(pairs[0].lower)); err != nil {
+		return err
+	}
 	return validateReadmeImageCacheKeys(readme)
+}
+
+func validateLiveMoveChoiceScreen(path string) error {
+	screenshot, err := decodeScreenshot(path)
+	if err != nil {
+		return err
+	}
+	if screenshot.Bounds().Dx() != 1920 || screenshot.Bounds().Dy() != 1080 {
+		return fmt.Errorf("%s must be a 1920x1080 lower-display capture", path)
+	}
+	fightTabGreen := averageGreen(screenshot, image.Rect(388, 116, 402, 156))
+	pokemonTabGreen := averageGreen(screenshot, image.Rect(684, 116, 698, 156))
+	if fightTabGreen-pokemonTabGreen < 30 {
+		return fmt.Errorf("%s must show the live Fight move-choice screen, not replay controls or another battle tab", path)
+	}
+	return nil
+}
+
+func averageGreen(source image.Image, area image.Rectangle) float64 {
+	area = area.Intersect(source.Bounds())
+	if area.Empty() {
+		return 0
+	}
+	total := 0
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			total += int(rgba(source.At(x, y)).g)
+		}
+	}
+	return float64(total) / float64(area.Dx()*area.Dy())
 }
 
 func validateReadmeScreenPair(upperPath string, lowerPath string, sourcePath string) error {
