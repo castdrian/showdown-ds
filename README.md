@@ -24,7 +24,7 @@ The active panel areas are approximately 132.83 × 74.72 mm on top and 75.11 × 
 ./scripts/create-ayn-thor-avd.sh
 AEMU_SOURCE_ROOT=/path/to/aemu ./scripts/build-ayn-thor-emulator-overlay.sh
 ./scripts/run-ayn-thor-avd.sh
-gradle assembleDebug
+./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
