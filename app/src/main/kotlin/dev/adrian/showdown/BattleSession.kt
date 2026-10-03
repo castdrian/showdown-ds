@@ -2031,14 +2031,7 @@ class BattleSession {
                             }
                         )
                     }
-                    "-immune" -> {
-                        val target = fields.getOrNull(2)?.takeIf(::isProtocolActor)
-                        appendProtocolAnnouncement(
-                            fields,
-                            if (target == null) "But it had no effect!"
-                            else "It doesn't affect ${battleActor(target)}..."
-                        )
-                    }
+                    "-immune" -> applyImmune(fields)
                     "-prepare" -> applyPrepare(fields)
                     "-mustrecharge" -> Unit
                     "-end" -> applyEnd(fields)
@@ -2067,7 +2060,7 @@ class BattleSession {
                     )
                     "-clearallboost" -> clearAllBoosts()
                     "-clearboost" -> clearBoosts(fields)
-                    "-restoreboost" -> clearNegativeBoosts(fields, restored = true)
+                    "-restoreboost" -> clearNegativeBoosts(fields)
                     "-clearnegativeboost" -> clearNegativeBoosts(fields)
                     "-clearpositiveboost" -> clearPositiveBoosts(fields)
                     "-copyboost" -> copyBoosts(fields)
@@ -3143,11 +3136,12 @@ class BattleSession {
                 updateOpponentPartyForSlot(slot) { details -> details.copy(condition = opponentCondition) }
             }
         }
-        if (!isSilent(fields)) {
-            appendLog(
-                if (cured) formatStatusCureAnnouncement(actor, fields.getOrNull(3).orEmpty(), fields)
-                else formatStatusAnnouncement(actor, status)
-            )
+        if (isSilent(fields)) return
+        if (cured) {
+            formatStatusCureAnnouncements(actor, fields.getOrNull(3).orEmpty(), fields).forEach(::appendLog)
+        } else {
+            protocolAbilityAnnouncement(fields)?.let(::appendLog)
+            appendLog(formatStatusAnnouncement(actor, status, fields))
         }
     }
 
@@ -4149,11 +4143,19 @@ class BattleSession {
         val actorId = fields.getOrNull(2) ?: return
         clearMoveEffects(actorId)
         val actor = battleActor(actorId)
-        val reason = battleEffectName(fields.getOrNull(3)).ifBlank { "that status" }
-        when (normalizeBattleTextKey(reason)) {
+        val reasonField = fields.getOrNull(3).orEmpty()
+        val reason = battleEffectName(reasonField).ifBlank { "that status" }
+        val move = fields.getOrNull(4)
+            ?.takeIf(String::isNotBlank)
+            ?.let(::battleEffectName)
+            ?.let { moveNameResolver?.invoke(it) ?: it }
+        val reasonId = normalizeBattleTextKey(reason)
+        if (reasonField.startsWith("ability:", true)) {
+            appendLog("[$actor's ${abilityNameResolver?.invoke(reason) ?: reason}]")
+        }
+        when (reasonId) {
             "nopp" -> {
-                val move = battleEffectName(fields.getOrNull(4)).ifBlank { "the move" }
-                appendLog("$actor used $move!")
+                appendLog("$actor used ${move ?: "the move"}!")
                 appendLog("But there was no PP left for the move!")
             }
             "recharge" -> appendLog("$actor must recharge!")
@@ -4161,12 +4163,17 @@ class BattleSession {
             "frz" -> appendLog("$actor is frozen solid!")
             "par" -> appendLog("$actor is paralyzed! It can't move!")
             "flinch" -> appendLog("$actor flinched and couldn't move!")
+            "attract" -> appendLog("$actor is immobilized by love!")
             "focuspunch" -> appendLog("$actor lost its focus and couldn't move!")
+            "truant" -> appendLog("$actor is loafing around!")
+            "disable" -> appendLog(move?.let { "$actor's $it is disabled!" } ?: "$actor can't move!")
+            "healblock" -> appendLog(move?.let { "$actor is prevented from healing, so it can't use $it!" } ?: "$actor can't move!")
+            "taunt" -> appendLog(move?.let { "$actor can't use $it after the taunt!" } ?: "$actor can't move!")
+            "throatchop" -> appendLog("The effects of Throat Chop prevent $actor from using certain moves!")
             "gravity" -> {
-                val move = battleEffectName(fields.getOrNull(4)).ifBlank { "this move" }
-                appendLog("$actor can't use $move because of gravity!")
+                appendLog("$actor can't use ${move ?: "this move"} because of gravity!")
             }
-            else -> appendLog("$actor couldn't move because of $reason.")
+            else -> appendLog(move?.let { "$actor cannot use $it!" } ?: "$actor can't move!")
         }
     }
 
@@ -4260,6 +4267,18 @@ class BattleSession {
         val count = fields.getOrNull(3)?.toIntOrNull() ?: return
         val suffix = if (count == 1) "time" else "times"
         appendProtocolAnnouncement(fields, "The Pokémon was hit $count $suffix!")
+    }
+
+    private fun applyImmune(fields: List<String>) {
+        val target = fields.getOrNull(2)?.takeIf(::isProtocolActor)
+        val abilityAnnouncement = protocolAbilityAnnouncement(fields, sourceIndex = 3)
+        val announcement = when {
+            target == null -> "But it had no effect!"
+            fields.any { it.trim().equals("[ohko]", true) } -> "${battleActor(target)} is unaffected!"
+            else -> "It doesn't affect ${battleActor(target)}..."
+        }
+        appendProtocolAnnouncement(fields, abilityAnnouncement)
+        appendProtocolAnnouncement(fields, announcement)
     }
 
     private fun applyCanDynamax(fields: List<String>) {
@@ -4528,7 +4547,8 @@ class BattleSession {
         updateBoost(boosts, stat, (boosts[stat] ?: 0) + delta)
         removeEmptyBoostSlot(side)
         refreshVisibleBoosts()
-        if (!isSilent(fields) && delta != 0) appendLog(formatStatChange(side, stat, delta))
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 5))
+        appendProtocolAnnouncement(fields, formatStatChange(side, stat, delta, direction, fields))
     }
 
     private fun applySetBoost(fields: List<String>) {
@@ -4539,7 +4559,8 @@ class BattleSession {
         updateBoost(boosts, stat, amount)
         removeEmptyBoostSlot(side)
         refreshVisibleBoosts()
-        if (!isSilent(fields)) appendLog("${battleActor(side)}'s ${statLabel(stat)} was set to $amount.")
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 3))
+        appendProtocolAnnouncement(fields, "${battleActor(side)}'s ${statLabel(stat)} was set to $amount.")
     }
 
     private fun clearAllBoosts() {
@@ -4547,17 +4568,18 @@ class BattleSession {
         opponentBoostsBySlot.clear()
         playerBoosts.clear()
         opponentBoosts.clear()
-        appendLog("All stat changes were reset.")
+        appendLog("All stat changes were eliminated!")
     }
 
     private fun clearBoosts(fields: List<String>) {
         val side = fields.getOrNull(2) ?: return
         boostSlots(side).remove(targetSlot(side))
         refreshVisibleBoosts()
-        appendLog("${if (isPlayerSide(side)) "Your" else "The opponent's"} stat changes were reset.")
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 3))
+        appendProtocolAnnouncement(fields, "${battleActor(side)}'s stat changes were removed!")
     }
 
-    private fun clearNegativeBoosts(fields: List<String>, restored: Boolean = false) {
+    private fun clearNegativeBoosts(fields: List<String>) {
         val side = fields.getOrNull(2) ?: return
         boostSlots(side)[targetSlot(side)]?.let { boosts ->
             boosts.filterValues { it < 0 }.keys.toList().forEach(boosts::remove)
@@ -4565,10 +4587,8 @@ class BattleSession {
             refreshVisibleBoosts()
         }
         if (!isSilent(fields)) {
-            appendLog(
-                if (restored) "${battleActor(side)} restored its lowered stats."
-                else "${battleActor(side)}'s negative stat changes were removed."
-            )
+            appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 3))
+            appendLog("${battleActor(side)}'s stat changes were removed!")
         }
     }
 
@@ -4579,17 +4599,19 @@ class BattleSession {
             removeEmptyBoostSlot(side)
             refreshVisibleBoosts()
         }
-        if (!isSilent(fields)) appendLog("${battleActor(side)}'s positive stat changes were removed.")
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 3))
+        appendProtocolAnnouncement(fields, "${battleActor(side)}'s stat changes were removed!")
     }
 
     private fun copyBoosts(fields: List<String>) {
-        val source = fields.getOrNull(2) ?: return
+        val pokemon = fields.getOrNull(2) ?: return
         val target = fields.getOrNull(3) ?: return
-        val copied = boostSlots(source)[targetSlot(source)].orEmpty().toMap()
-        val destination = boostSlots(target)
-        if (copied.isEmpty()) destination.remove(targetSlot(target)) else destination[targetSlot(target)] = copied.toMutableMap()
+        val copied = boostSlots(target)[targetSlot(target)].orEmpty().toMap()
+        val destination = boostSlots(pokemon)
+        if (copied.isEmpty()) destination.remove(targetSlot(pokemon)) else destination[targetSlot(pokemon)] = copied.toMutableMap()
         refreshVisibleBoosts()
-        appendLog("${battleActor(target)} copied stat changes from ${battleActor(source)}.")
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+        appendProtocolAnnouncement(fields, "${battleActor(pokemon)} copied ${battleActor(target)}'s stat changes!")
     }
 
     private fun invertBoosts(fields: List<String>) {
@@ -4599,7 +4621,8 @@ class BattleSession {
             removeEmptyBoostSlot(side)
             refreshVisibleBoosts()
         }
-        appendLog("${battleActor(side)}'s stat changes were inverted.")
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 3))
+        appendProtocolAnnouncement(fields, "All stat changes on ${battleActor(side)} were inverted!")
     }
 
     private fun swapBoosts(fields: List<String>) {
@@ -4629,7 +4652,14 @@ class BattleSession {
         removeEmptyBoostSlot(first)
         removeEmptyBoostSlot(second)
         refreshVisibleBoosts()
-        appendLog("${battleActor(first)} and ${battleActor(second)} swapped stat changes.")
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+        val source = normalizeBattleTextKey(protocolSource(fields).orEmpty())
+        val announcement = when (source) {
+            "guardswap" -> "${battleActor(first)} switched all changes to its Defense and Sp. Def with its target!"
+            "powerswap" -> "${battleActor(first)} switched all changes to its Attack and Sp. Atk with its target!"
+            else -> "${battleActor(first)} switched stat changes with its target!"
+        }
+        appendProtocolAnnouncement(fields, announcement)
     }
 
     private fun swapSideConditions() {
@@ -4712,21 +4742,53 @@ class BattleSession {
 
     private fun normalizeBattleTextKey(value: String) = value.lowercase().filter(Char::isLetterOrDigit)
 
-    private fun formatStatChange(actor: String, stat: String, delta: Int): String {
+    private fun formatStatChange(actor: String, stat: String, delta: Int, direction: Int, fields: List<String>): String {
+        val pokemon = battleActor(actor)
+        val statName = statLabel(stat)
+        val stage = kotlin.math.abs(delta)
+        val source = protocolSource(fields, sourceIndex = 5)
+        val sourceKind = source?.substringBefore(':')?.trim()?.lowercase()
+        val sourceName = source?.let(::battleEffectName).orEmpty()
+        if (delta == 0) {
+            return "$pokemon's $statName won't go ${if (direction > 0) "any higher" else "any lower"}!"
+        }
+        if (fields.any { it.trim().equals("[zeffect]", true) }) {
+            if (fields.any { it.trim().equals("[multiple]", true) }) {
+                return "$pokemon boosted its stats using its Z-Power!"
+            }
+            val degree = when (stage) {
+                1 -> ""
+                2 -> " sharply"
+                else -> " drastically"
+            }
+            return "$pokemon boosted its $statName$degree using its Z-Power!"
+        }
+        if (sourceKind == "item" && sourceName.isNotBlank()) {
+            val item = itemNameResolver?.invoke(sourceName) ?: sourceName
+            val action = when {
+                direction > 0 && stage >= 3 -> "drastically raised"
+                direction > 0 && stage == 2 -> "sharply raised"
+                direction > 0 -> "raised"
+                stage >= 3 -> "drastically lowered"
+                stage == 2 -> "harshly lowered"
+                else -> "lowered"
+            }
+            return "The $item $action $pokemon's $statName!"
+        }
         val strength = when (kotlin.math.abs(delta)) {
             1 -> ""
             2 -> " sharply"
             else -> " drastically"
         }
         val verb = if (delta > 0) "rose$strength" else "fell${if (strength.isBlank()) "" else if (kotlin.math.abs(delta) == 2) " harshly" else " severely"}"
-        return "${battleActor(actor)}'s ${statLabel(stat)} $verb."
+        return "$pokemon's $statName $verb."
     }
 
     private fun statLabel(stat: String) = when (stat.lowercase()) {
         "atk" -> "Attack"
         "def" -> "Defense"
-        "spa" -> "Special Attack"
-        "spd" -> "Special Defense"
+        "spa" -> "Sp. Atk"
+        "spd" -> "Sp. Def"
         "spe" -> "Speed"
         "accuracy" -> "accuracy"
         "evasion" -> "evasiveness"
@@ -5066,8 +5128,26 @@ class BattleSession {
         else -> status.lowercase()
     }
 
-    private fun formatStatusAnnouncement(actor: String, status: String): String {
+    private fun formatStatusAnnouncement(actor: String, status: String, fields: List<String>): String {
         val pokemon = battleActor(actor)
+        val source = protocolSource(fields)
+        val sourceKind = source?.substringBefore(':')?.trim()?.lowercase()
+        val sourceName = source?.let(::battleEffectName).orEmpty()
+        if (sourceKind == "item" && sourceName.isNotBlank()) {
+            val item = itemNameResolver?.invoke(sourceName) ?: sourceName
+            return when (status) {
+                "BRN" -> "$pokemon was burned by the $item!"
+                "TOX" -> "$pokemon was badly poisoned by the $item!"
+                else -> formatStatusAnnouncement(status, pokemon)
+            }
+        }
+        if (sourceKind == "move" && normalizeBattleTextKey(sourceName) == "rest" && status == "SLP") {
+            return "$pokemon slept and became healthy!"
+        }
+        return formatStatusAnnouncement(status, pokemon)
+    }
+
+    private fun formatStatusAnnouncement(status: String, pokemon: String): String {
         return when (status) {
             "BRN" -> "$pokemon was burned!"
             "FRZ" -> "$pokemon was frozen solid!"
@@ -5079,23 +5159,36 @@ class BattleSession {
         }
     }
 
-    private fun formatStatusCureAnnouncement(actor: String, status: String, fields: List<String>): String {
+    private fun formatStatusCureAnnouncements(actor: String, status: String, fields: List<String>): List<String> {
         val pokemon = battleActor(actor)
-        val source = fields.drop(4).firstOrNull { it.startsWith("[from]", true) }
-        val sourceKind = source?.removePrefix("[from]")?.trim()?.substringBefore(':')?.lowercase()
+        val source = protocolSource(fields)
+        val sourceKind = source?.substringBefore(':')?.trim()?.lowercase()
         val sourceName = source?.let(::battleEffectName).orEmpty()
-        return when {
-            sourceKind == "item" && sourceName.isNotBlank() && status.equals("brn", true) -> "$pokemon's $sourceName healed its burn!"
-            sourceKind == "item" && sourceName.isNotBlank() && status.equals("frz", true) -> "$pokemon's $sourceName defrosted it!"
-            sourceKind == "item" && sourceName.isNotBlank() && status.equals("par", true) -> "$pokemon's $sourceName cured its paralysis!"
-            sourceKind == "item" && sourceName.isNotBlank() && status.equals("psn", true) -> "$pokemon's $sourceName cured its poison!"
-            sourceKind == "item" && sourceName.isNotBlank() && status.equals("slp", true) -> "$pokemon's $sourceName woke it up!"
-            sourceKind == "move" && sourceName.isNotBlank() && status.equals("frz", true) -> "$pokemon's $sourceName melted the ice!"
-            status.equals("brn", true) -> "$pokemon's burn was healed!"
-            status.equals("frz", true) -> "$pokemon thawed out!"
-            status.equals("par", true) -> "$pokemon was cured of paralysis!"
-            status.equals("psn", true) || status.equals("tox", true) -> "$pokemon was cured of its poisoning!"
-            status.equals("slp", true) -> "$pokemon woke up!"
+        if (sourceKind == "ability" && normalizeBattleTextKey(sourceName) == "naturalcure") {
+            return listOf("($pokemon is cured by its ${abilityNameResolver?.invoke(sourceName) ?: sourceName}!)")
+        }
+        val abilityAnnouncement = protocolAbilityAnnouncement(fields)?.let(::listOf).orEmpty()
+        if (sourceKind == "item" && sourceName.isNotBlank()) {
+            val item = itemNameResolver?.invoke(sourceName) ?: sourceName
+            return abilityAnnouncement + when (status.lowercase()) {
+                "brn" -> "$pokemon's $item healed its burn!"
+                "frz" -> "$pokemon's $item defrosted it!"
+                "par" -> "$pokemon's $item cured its paralysis!"
+                "psn", "tox" -> "$pokemon's $item cured its poison!"
+                "slp" -> "$pokemon's $item woke it up!"
+                else -> "$pokemon was cured of its status condition!"
+            }
+        }
+        if (sourceKind == "move" && fields.any { it.trim().equals("[thaw]", true) } && status.equals("frz", true)) {
+            val move = moveNameResolver?.invoke(sourceName) ?: sourceName
+            return abilityAnnouncement + "$pokemon's $move melted the ice!"
+        }
+        return abilityAnnouncement + when (status.lowercase()) {
+            "brn" -> "$pokemon's burn was healed!"
+            "frz" -> "$pokemon thawed out!"
+            "par" -> "$pokemon was cured of paralysis!"
+            "psn", "tox" -> "$pokemon was cured of its poisoning!"
+            "slp" -> "$pokemon woke up!"
             else -> "$pokemon was cured of its status condition!"
         }
     }

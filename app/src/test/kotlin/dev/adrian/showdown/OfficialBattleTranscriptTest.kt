@@ -1094,7 +1094,7 @@ class OfficialBattleTranscriptTest {
             )
         )
 
-        assertTrue(session.battleLog().contains("Mewtwo's Special Attack rose sharply."))
+        assertTrue(session.battleLog().contains("Mewtwo's Sp. Atk rose sharply."))
         assertTrue(session.battleLog().contains("Mewtwo's Attack fell harshly."))
         assertFalse(session.battleLog().any { it.contains("Speed") })
     }
@@ -1128,7 +1128,7 @@ class OfficialBattleTranscriptTest {
                 "|-curestatus|p1a: Mewtwo|psn",
                 "|-curestatus|p1a: Mewtwo|slp",
                 "|-curestatus|p1a: Mewtwo|brn|[from] item: Lum Berry",
-                "|-curestatus|p1a: Mewtwo|frz|[from] move: Flamethrower",
+                "|-curestatus|p1a: Mewtwo|frz|[from] move: Flamethrower|[thaw]",
                 "|cant|p1a: Mewtwo|slp",
                 "|cant|p1a: Mewtwo|frz",
                 "|cant|p1a: Mewtwo|par",
@@ -1154,6 +1154,84 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsStatusCausesAndNaturalCureLikeShowdown() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-status|p1a: Mewtwo|brn|[from] item: Flame Orb",
+                "|-status|p1a: Mewtwo|tox|[from] item: Toxic Orb",
+                "|-status|p1a: Mewtwo|slp|[from] move: Rest",
+                "|-curestatus|p1a: Mewtwo|tox|[from] item: Lum Berry",
+                "|-curestatus|p1a: Mewtwo|slp|[from] ability: Natural Cure",
+                "|-status|p1a: Mewtwo|brn|[from] item: Flame Orb|[silent]"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo was burned by the Flame Orb!"))
+        assertTrue(session.battleLog().contains("Mewtwo was badly poisoned by the Toxic Orb!"))
+        assertTrue(session.battleLog().contains("Mewtwo slept and became healthy!"))
+        assertTrue(session.battleLog().contains("Mewtwo's Lum Berry cured its poison!"))
+        assertTrue(session.battleLog().contains("(Mewtwo is cured by its Natural Cure!)"))
+        assertEquals(1, session.battleLog().count { it == "Mewtwo was burned by the Flame Orb!" })
+    }
+
+    @Test
+    fun formatsUnrecognizedCantEventsWithShowdownFallbacks() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|cant|p1a: Mewtwo|mysteryeffect|Thunder Wave",
+                "|cant|p1a: Mewtwo|unknownreason"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo cannot use Thunder Wave!"))
+        assertTrue(session.battleLog().contains("Mewtwo can't move!"))
+    }
+
+    @Test
+    fun formatsMoveAndAbilityCantTemplatesLikeShowdown() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|cant|p1a: Mewtwo|taunt|Thunder Wave",
+                "|cant|p1a: Mewtwo|disable|Psystrike",
+                "|cant|p1a: Mewtwo|ability: Truant",
+                "|cant|p1a: Mewtwo|attract|Psystrike",
+                "|cant|p1a: Mewtwo|throatchop|Hyper Voice"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo can't use Thunder Wave after the taunt!"))
+        assertTrue(session.battleLog().contains("Mewtwo's Psystrike is disabled!"))
+        assertTrue(session.battleLog().contains("[Mewtwo's Truant]"))
+        assertTrue(session.battleLog().contains("Mewtwo is loafing around!"))
+        assertTrue(session.battleLog().contains("Mewtwo is immobilized by love!"))
+        assertTrue(session.battleLog().contains("The effects of Throat Chop prevent Mewtwo from using certain moves!"))
+    }
+
+    @Test
+    fun formatsImmunityAndOhkoAvoidanceLikeShowdown() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-immune|p2a: Magikarp|[from] ability: Wonder Guard",
+                "|-immune|p2a: Magikarp|[ohko]",
+                "|-immune"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("[The opposing Magikarp's Wonder Guard]"))
+        assertTrue(session.battleLog().contains("It doesn't affect the opposing Magikarp..."))
+        assertTrue(session.battleLog().contains("The opposing Magikarp is unaffected!"))
+        assertTrue(session.battleLog().contains("But it had no effect!"))
+    }
+
+    @Test
     fun appliesOfficialBoostTransferDirectionAndAnnouncements() {
         val session = BattleSession()
         session.applyProtocolPacket(
@@ -1161,19 +1239,41 @@ class OfficialBattleTranscriptTest {
                 "|switch|p1a: Mewtwo|Mewtwo, L50|100/100",
                 "|switch|p1b: Mimikyu|Mimikyu, L50|100/100",
                 "|-boost|p1a: Mewtwo|spa|2",
+                "|-boost|p1b: Mimikyu|atk|1",
                 "|-copyboost|p1a: Mewtwo|p1b: Mimikyu",
                 "|-invertboost|p1b: Mimikyu",
                 "|-clearnegativeboost|p1b: Mimikyu",
-                "|-unboost|p1a: Mewtwo|atk|2",
+                "|-unboost|p1a: Mewtwo|def|2",
                 "|-restoreboost|p1a: Mewtwo"
             )
         )
 
-        assertTrue(session.battleInfo().playerBoosts.containsKey("spa"))
-        assertTrue(session.battleLog().any { it.contains("Mimikyu copied stat changes from Mewtwo.") })
-        assertTrue(session.battleLog().any { it.contains("Mimikyu's stat changes were inverted.") })
-        assertTrue(session.battleLog().any { it.contains("Mimikyu's negative stat changes were removed.") })
-        assertTrue(session.battleLog().any { it.contains("Mewtwo restored its lowered stats.") })
+        assertTrue(session.battleInfo().playerBoosts.containsKey("atk"))
+        assertTrue(session.battleLog().any { it.contains("Mewtwo copied Mimikyu's stat changes!") })
+        assertTrue(session.battleLog().any { it.contains("All stat changes on Mimikyu were inverted!") })
+        assertEquals(1, session.battleLog().count { it == "Mimikyu's stat changes were removed!" })
+        assertTrue(session.battleLog().contains("Mewtwo's stat changes were removed!"))
+    }
+
+    @Test
+    fun formatsItemAndZPowerStatChangesLikeShowdown() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|-boost|p1a: Mewtwo|atk|1|[from] item: Adrenaline Orb",
+                "|-unboost|p2a: Magikarp|def|2|[from] item: Flame Orb",
+                "|-boost|p1a: Mewtwo|spa|2|[zeffect]",
+                "|-boost|p1a: Mewtwo|spe|0",
+                "|-unboost|p1a: Mewtwo|atk|0"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("The Adrenaline Orb raised Mewtwo's Attack!"))
+        assertTrue(session.battleLog().contains("The Flame Orb harshly lowered the opposing Magikarp's Defense!"))
+        assertTrue(session.battleLog().contains("Mewtwo boosted its Sp. Atk sharply using its Z-Power!"))
+        assertTrue(session.battleLog().contains("Mewtwo's Speed won't go any higher!"))
+        assertTrue(session.battleLog().contains("Mewtwo's Attack won't go any lower!"))
     }
 
     @Test
@@ -1198,7 +1298,7 @@ class OfficialBattleTranscriptTest {
 
         session.applyProtocolLine("|-clearallboost")
 
-        assertTrue(session.battleLog().contains("All stat changes were reset."))
+        assertTrue(session.battleLog().contains("All stat changes were eliminated!"))
     }
 
     @Test
@@ -1589,11 +1689,12 @@ class OfficialBattleTranscriptTest {
         session.applyProtocolLine("|-transform|p1a: Mewtwo|p2a: Dragapult")
         assertEquals(mapOf("spa" to 2), session.battleInfo().playerBoosts)
 
+        session.applyProtocolLine("|-boost|p1b: Mimikyu|def|1")
         session.applyProtocolLine("|-copyboost|p1a: Dragapult|p1b: Mimikyu")
         session.applyProtocolLine("|-invertboost|p1b: Mimikyu")
         session.applyProtocolLine("|-clearnegativeboost|p1b: Mimikyu")
 
-        assertEquals(mapOf("spa" to 2), session.battleInfo().playerBoosts)
+        assertEquals(mapOf("def" to 1), session.battleInfo().playerBoosts)
 
         session.applyProtocolLine("|faint|p1a: Dragapult")
         assertTrue(session.battleInfo().playerBoosts.isEmpty())
