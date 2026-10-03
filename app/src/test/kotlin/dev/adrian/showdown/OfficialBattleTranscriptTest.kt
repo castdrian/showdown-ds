@@ -905,9 +905,11 @@ class OfficialBattleTranscriptTest {
 
     @Test
     fun revealsAbilitiesFromOfficialActivatePackets() {
-        val session = BattleSession()
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         session.applyProtocolPacket(
             listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
                 "|switch|p1a: Iron Valiant|Iron Valiant|100/100",
                 "|-activate|p1a: Iron Valiant|ability: Quark Drive|[fromitem]",
                 "|switch|p2a: Kingambit|Kingambit, L50, M|100/100",
@@ -917,7 +919,44 @@ class OfficialBattleTranscriptTest {
 
         assertEquals("Quark Drive", session.playerDetails().ability)
         assertEquals("Supreme Overlord", session.opponentDetails().ability)
-        assertTrue(session.battleLog().any { it.contains("Iron Valiant activated Quark Drive.") })
+        assertTrue(session.battleLog().contains("[Iron Valiant's Quark Drive]"))
+        assertTrue(session.battleLog().contains("Iron Valiant used its Booster Energy to activate its Quark Drive!"))
+        assertTrue(session.battleLog().contains("[The opposing Kingambit's Supreme Overlord]"))
+        assertTrue(session.battleLog().contains("The opposing Kingambit gained strength from the fallen!"))
+    }
+
+    @Test
+    fun formatsOfficialMoveAndAbilityActivationsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|-activate|p2a: Suicune|move: Poltergeist|Leftovers",
+                "|-activate|p2a: Suicune|move: Protect",
+                "|-activate|p2a: Glaceon|move: Protect",
+                "|-activate|p1a: Greninja|ability: Battle Bond",
+                "|-activate|p2a: Walking Wake|ability: Protosynthesis|[fromitem]",
+                "|-activate|p2a: Walking Wake|ability: Protosynthesis",
+                "|-activate|p2a: Gardevoir|ability: Telepathy"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "The opposing Suicune is about to be attacked by its Leftovers!",
+                "The opposing Suicune protected itself!",
+                "The opposing Glaceon protected itself!",
+                "[Greninja's Battle Bond]",
+                "Greninja became fully charged due to its bond with its Trainer!",
+                "[The opposing Walking Wake's Protosynthesis]",
+                "The opposing Walking Wake used its Booster Energy to activate Protosynthesis!",
+                "[The opposing Walking Wake's Protosynthesis]",
+                "The harsh sunlight activated the opposing Walking Wake's Protosynthesis!",
+                "The opposing Gardevoir can't be hit by attacks from its ally Pokémon!"
+            ),
+            session.battleLog().takeLast(10)
+        )
     }
 
     @Test

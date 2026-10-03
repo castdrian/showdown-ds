@@ -4214,22 +4214,58 @@ class BattleSession {
             fields.drop(2).firstOrNull { it.isNotBlank() && !it.trim().startsWith("[") }.orEmpty()
         }
         val effect = battleEffectName(rawEffect).ifBlank { "an effect" }
+        val normalizedEffect = normalizeBattleTextKey(effect)
         if (!hasActor && normalizeBattleTextKey(effect) == "splash") {
             appendProtocolAnnouncement(fields, "But nothing happened!")
             return
         }
-        if (hasActor && rawEffect.substringBefore(":").equals("ability", true)) {
-            rawEffect.substringAfter(":", "").trim().takeIf { it.isNotBlank() }?.let { ability ->
-                updateActorDetails(actor) { details ->
-                    details.copy(ability = abilityNameResolver?.invoke(ability) ?: ability)
-                }
-            }
+        val ability = rawEffect.takeIf { it.substringBefore(":").equals("ability", true) }
+            ?.substringAfter(":", "")
+            ?.trim()
+            ?.takeIf { hasActor && it.isNotBlank() }
+            ?.let { abilityNameResolver?.invoke(it) ?: it }
+        ability?.let { revealedAbility ->
+            updateActorDetails(actor) { details -> details.copy(ability = revealedAbility) }
         }
-        if (hasActor && effect.equals("Baton Pass", true)) {
+        if (hasActor && normalizedEffect in SHOWDOWN_ACTIVATE_BLOCK_EFFECTS) {
+            applyBlock(fields)
+            return
+        }
+        if (hasActor && normalizedEffect == "batonpass") {
             val slot = targetSlot(actor)
             pendingBatonPassBySide[sideForSlot(slot)] = slot
         }
-        appendLog(if (hasActor) "${battleActor(actor)} activated $effect." else "$effect activated.")
+        val announcements = when {
+            normalizedEffect == "poltergeist" -> {
+                val item = fields.getOrNull(4)
+                    ?.takeUnless { it.trim().startsWith("[") }
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { itemNameResolver?.invoke(it) ?: it }
+                listOfNotNull(item?.let { "${battleActor(actor)} is about to be attacked by its $it!" })
+            }
+            ability != null -> {
+                val actorName = battleActor(actor)
+                val abilityNotice = "[$actorName's $ability]"
+                val abilityAnnouncement = when (normalizeBattleTextKey(ability)) {
+                    "battlebond" -> "$actorName became fully charged due to its bond with its Trainer!"
+                    "protosynthesis" -> if (fields.any { it.trim().equals("[fromitem]", true) }) {
+                        "$actorName used its Booster Energy to activate Protosynthesis!"
+                    } else {
+                        "The harsh sunlight activated $actorName's Protosynthesis!"
+                    }
+                    "quarkdrive" -> if (fields.any { it.trim().equals("[fromitem]", true) }) {
+                        "$actorName used its Booster Energy to activate its Quark Drive!"
+                    } else {
+                        "The Electric Terrain activated $actorName's Quark Drive!"
+                    }
+                    "supremeoverlord" -> "$actorName gained strength from the fallen!"
+                    else -> null
+                }
+                listOfNotNull(abilityNotice, abilityAnnouncement)
+            }
+            else -> listOf("($effect activated!)")
+        }
+        if (!isSilent(fields)) announcements.forEach(::appendLog)
     }
 
     private fun applyItem(fields: List<String>, replacement: String? = null) {
@@ -6233,6 +6269,28 @@ class BattleSession {
             "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|Format: .+|Rule: .+|.+ team size: \\d+|Rated battle\\.)$"
         )
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+        private val SHOWDOWN_ACTIVATE_BLOCK_EFFECTS = setOf(
+            "ingrain",
+            "quickguard",
+            "wideguard",
+            "craftyshield",
+            "matblock",
+            "protect",
+            "mist",
+            "safeguard",
+            "electricterrain",
+            "mistyterrain",
+            "psychicterrain",
+            "telepathy",
+            "stickyhold",
+            "suctioncups",
+            "aromaveil",
+            "flowerveil",
+            "sweetveil",
+            "disguise",
+            "safetygoggles",
+            "protectivepads"
+        )
 
         fun displayPokemonName(name: String, species: String = name): String {
             val label = name.trim()
