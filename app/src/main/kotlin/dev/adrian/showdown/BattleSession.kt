@@ -3009,7 +3009,7 @@ class BattleSession {
         val source = protocolSource(fields)
         return when (actualKind) {
             HealthChangeKind.DAMAGE -> damageMessage(actor, transition, source, fields)
-            HealthChangeKind.HEAL -> healMessage(actor, source)
+            HealthChangeKind.HEAL -> healMessage(actor, source, fields)
             HealthChangeKind.SET_HP -> null
         }
     }
@@ -3037,16 +3037,41 @@ class BattleSession {
         }
     }
 
-    private fun healMessage(actor: String, source: String?): String {
+    private fun healMessage(actor: String, source: String?, fields: List<String>): String {
         val effect = battleEffectName(source).trim()
         val effectId = effect.lowercase().filter(Char::isLetterOrDigit)
+        if (source?.startsWith("ability:", true) == true) {
+            if (effectId != "hospitality") return "$actor had its HP restored."
+            val abilityHolder = protocolSourceActor(fields) ?: return "$actor had its HP restored."
+            return "$actor drank down all the matcha that ${battleActor(abilityHolder)} made!"
+        }
+        val wisher = protocolWisher(fields)
         return when {
             effectId == "zpower" || effectId == "zmove" -> "$actor restored its HP using its Z-Power!"
+            effectId == "aquaring" -> "A veil of water restored $actor's HP!"
             effectId == "grassyterrain" -> "$actor's HP was restored."
+            effectId == "healingwish" -> "The healing wish came true for $actor!"
+            effectId == "ingrain" -> "$actor absorbed nutrients with its roots!"
+            effectId == "lunardance" -> "$actor became cloaked in mystical moonlight!"
+            effectId == "memento" || effectId == "partingshot" -> "$actor's HP was restored by the Z-Power!"
+            effectId == "revivalblessing" -> "$actor was revived and is ready to fight again!"
+            effectId == "wish" && wisher != null -> "$wisher's wish came true!"
             effect.isBlank() -> "$actor had its HP restored."
             else -> "$actor restored HP using its $effect!"
         }
     }
+
+    private fun protocolSourceActor(fields: List<String>): String? = fields.drop(4)
+        .firstOrNull { it.trim().startsWith("[of]", true) }
+        ?.substringAfter(']')
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+
+    private fun protocolWisher(fields: List<String>): String? = fields.drop(4)
+        .firstOrNull { it.trim().startsWith("[wisher]", true) }
+        ?.substringAfter(']')
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
 
     private fun healthActor(actor: String): String {
         return battleActor(actor)

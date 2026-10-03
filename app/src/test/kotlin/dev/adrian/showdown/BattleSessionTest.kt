@@ -280,6 +280,51 @@ class BattleSessionTest {
     }
 
     @Test
+    fun hospitalityHealingNamesTheAbilityHolderLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|doubles",
+                "|switch|p1a: Ogerpon|Ogerpon, L50|100/100",
+                "|switch|p1b: Poltchageist|Poltchageist, L50|90/100",
+                "|-heal|p1b: Poltchageist|100/100|[from] ability: Hospitality|[of] p1a: Ogerpon",
+                "|-heal|p1b: Poltchageist|100/100|[from] ability: Dry Skin|[of] p1b: Poltchageist"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Poltchageist drank down all the matcha that Ogerpon made!"))
+        assertTrue(session.battleLog().contains("Poltchageist had its HP restored."))
+    }
+
+    @Test
+    fun moveHealingUsesShowdownSpecificMessages() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|doubles",
+                "|switch|p1a: Ogerpon|Ogerpon, L50|100/100",
+                "|switch|p1b: Poltchageist|Poltchageist, L50|90/100",
+                "|-heal|p1b: Poltchageist|91/100|[from] move: Aqua Ring",
+                "|-heal|p1b: Poltchageist|92/100|[from] move: Healing Wish",
+                "|-heal|p1b: Poltchageist|93/100|[from] move: Ingrain",
+                "|-heal|p1b: Poltchageist|94/100|[from] move: Lunar Dance",
+                "|-heal|p1b: Poltchageist|95/100|[from] move: Memento",
+                "|-heal|p1b: Poltchageist|96/100|[from] move: Parting Shot",
+                "|-heal|p1b: Poltchageist|97/100|[from] move: Revival Blessing",
+                "|-heal|p1b: Poltchageist|98/100|[from] move: Wish|[wisher] Ogerpon"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("A veil of water restored Poltchageist's HP!"))
+        assertTrue(session.battleLog().contains("The healing wish came true for Poltchageist!"))
+        assertTrue(session.battleLog().contains("Poltchageist absorbed nutrients with its roots!"))
+        assertTrue(session.battleLog().contains("Poltchageist became cloaked in mystical moonlight!"))
+        assertTrue(session.battleLog().contains("Poltchageist's HP was restored by the Z-Power!"))
+        assertTrue(session.battleLog().contains("Poltchageist was revived and is ready to fight again!"))
+        assertTrue(session.battleLog().contains("Ogerpon's wish came true!"))
+    }
+
+    @Test
     fun protocolHintsKeepShowdownParenthesesSeparateFromMessages() {
         val session = BattleSession()
 
