@@ -49,6 +49,7 @@ class BattleSceneView(
     private val itemSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
     private val requestedItemSprites = mutableSetOf<String>()
     private var requestedBackdrop = ""
+    private var requestedSwitchOutVisual: BattleSession.SwitchOutVisual? = null
     private var resourcesRequested = false
     private val effectAssets = mutableMapOf<String, Bitmap>()
     private val requestedEffects = mutableSetOf<String>()
@@ -350,8 +351,6 @@ class BattleSceneView(
         val playerY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.PLAYER_Y) else height * 0.67f
         val opponentX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.OPPONENT_X) else width * 0.73f
         val opponentY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.OPPONENT_Y) else height * 0.42f
-        val playerCombatants = session.playerActiveCombatants()
-        val opponentCombatants = session.opponentActiveCombatants()
         val nowNanos = System.nanoTime()
         if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) {
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
@@ -380,15 +379,52 @@ class BattleSceneView(
             accessibilityNodeProvider?.refreshIfChanged()
             return
         }
+        val battleFeedTime = SystemClock.elapsedRealtime()
+        battleFeedPresentation.updateMessages(
+            session.battleFeedMessages(),
+            session.battleFeedVisible,
+            battleFeedTime,
+            session.battleResult()
+        )
+        val battleFeedFrame = battleFeedPresentation.frame(battleFeedTime)
+        val switchOutVisual = session.switchOutVisualForBattleFeed(battleFeedFrame?.messageId)
+        if (requestedSwitchOutVisual != switchOutVisual) {
+            requestedSwitchOutVisual = switchOutVisual
+            resourcesRequested = false
+        }
+        val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+            session.playerActiveCombatants(),
+            true,
+            switchOutVisual
+        )
+        val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+            session.opponentActiveCombatants(),
+            false,
+            switchOutVisual
+        )
+        val playerCombatant = playerCombatants.firstOrNull()
+        val opponentCombatant = opponentCombatants.firstOrNull()
         val fieldVisuals = BattleFieldVisualComposer.compose(session.battleInfo())
-        val playerStatusAlpha = statusCardAlpha(session.playerPokemon, session.playerCondition, nowNanos) *
-            BattleSceneTiming.summonStatusCardAlpha(session.playerEntryAtNanos, nowNanos)
-        val opponentStatusAlpha = statusCardAlpha(session.opponentPokemon, session.opponentCondition, nowNanos) *
-            BattleSceneTiming.summonStatusCardAlpha(session.opponentEntryAtNanos, nowNanos)
+        val playerStatusAlpha = statusCardAlpha(
+            playerCombatant?.name ?: session.playerPokemon,
+            playerCombatant?.condition ?: session.playerCondition,
+            nowNanos
+        ) * BattleSceneTiming.summonStatusCardAlpha(
+            playerCombatant?.entryAtNanos ?: session.playerEntryAtNanos,
+            nowNanos
+        )
+        val opponentStatusAlpha = statusCardAlpha(
+            opponentCombatant?.name ?: session.opponentPokemon,
+            opponentCombatant?.condition ?: session.opponentCondition,
+            nowNanos
+        ) * BattleSceneTiming.summonStatusCardAlpha(
+            opponentCombatant?.entryAtNanos ?: session.opponentEntryAtNanos,
+            nowNanos
+        )
         playerInspectBounds.set(width * 0.05f, height * 0.28f, width * 0.57f, height * 0.88f)
         opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
         if (!resourcesRequested) {
-            requestResources()
+            requestResources(playerCombatants, opponentCombatants)
             resourcesRequested = true
         }
         drawBackdrop(canvas, width, height)
@@ -413,9 +449,9 @@ class BattleSceneView(
                 opponentX,
                 opponentY,
                 scale * if (singles) ShowdownBattleLayout.OPPONENT_SCALE else 1.05f,
-                session.opponentPokemon,
-                session.opponentCondition,
-                session.opponentEntryAtNanos,
+                opponentCombatant?.name ?: session.opponentPokemon,
+                opponentCombatant?.condition ?: session.opponentCondition,
+                opponentCombatant?.entryAtNanos ?: session.opponentEntryAtNanos,
                 nowNanos,
                 opponentSprite,
                 showdownPlacement = singles
@@ -441,9 +477,9 @@ class BattleSceneView(
                 playerX,
                 playerY,
                 scale * if (singles) ShowdownBattleLayout.PLAYER_SCALE else 1.16f,
-                session.playerPokemon,
-                session.playerCondition,
-                session.playerEntryAtNanos,
+                playerCombatant?.name ?: session.playerPokemon,
+                playerCombatant?.condition ?: session.playerCondition,
+                playerCombatant?.entryAtNanos ?: session.playerEntryAtNanos,
                 nowNanos,
                 playerSprite,
                 showdownPlacement = singles
@@ -487,15 +523,23 @@ class BattleSceneView(
                             ShowdownBattleLayout.singlePlayerCardRight(width, scale),
                             height * 0.98f
                         ),
-                        session.playerDetails(),
-                        session.playerHp,
+                        BattleFeedSceneState.detailsForMessage(session.playerDetails(), true, switchOutVisual),
+                        playerCombatant?.hp ?: session.playerHp,
                         scale,
                         playerStatusAlpha,
                         session.playerPartyDetails()
                     )
                 }
             } else {
-                drawActiveStatusCards(canvas, width, height, scale, true, fieldCombatants(playerCombatants, true))
+                drawActiveStatusCards(
+                    canvas,
+                    width,
+                    height,
+                    scale,
+                    true,
+                    fieldCombatants(playerCombatants, true),
+                    switchOutVisual
+                )
             }
             if (singles) {
                 if (opponentStatusAlpha > 0f) {
@@ -507,17 +551,25 @@ class BattleSceneView(
                             width * ShowdownBattleLayout.SINGLE_CARD_RIGHT_FRACTION,
                             height * 0.20f
                         ),
-                        session.opponentDetails(),
-                        session.opponentHp,
+                        BattleFeedSceneState.detailsForMessage(session.opponentDetails(), false, switchOutVisual),
+                        opponentCombatant?.hp ?: session.opponentHp,
                         scale,
                         opponentStatusAlpha,
                         session.opponentPartyDetails()
                     )
                 }
             } else {
-                drawActiveStatusCards(canvas, width, height, scale, false, fieldCombatants(opponentCombatants, false))
+                drawActiveStatusCards(
+                    canvas,
+                    width,
+                    height,
+                    scale,
+                    false,
+                    fieldCombatants(opponentCombatants, false),
+                    switchOutVisual
+                )
             }
-            drawBattleFeed(canvas, width, height, scale)
+            drawBattleFeed(canvas, width, height, scale, battleFeedFrame)
         }
         drawInspectSheet(canvas, width, height, scale)
         if (
@@ -871,7 +923,10 @@ class BattleSceneView(
         return true
     }
 
-    private fun requestResources() {
+    private fun requestResources(
+        playerActiveCombatants: List<BattleSession.ActiveCombatant> = session.playerActiveCombatants(),
+        opponentActiveCombatants: List<BattleSession.ActiveCombatant> = session.opponentActiveCombatants()
+    ) {
         val backdropName = session.showdownBackdrop()
         if (backdropName != requestedBackdrop) {
             requestedBackdrop = backdropName
@@ -885,8 +940,6 @@ class BattleSceneView(
         }
         requestTeamPreviewSprites()
         if (session.battlePhase == BattleSession.BattlePhase.TEAM_PREVIEW) return
-        val playerActiveCombatants = session.playerActiveCombatants()
-        val opponentActiveCombatants = session.opponentActiveCombatants()
         if (session.isSinglesBattle() || playerActiveCombatants.isEmpty()) {
             val playerCombatant = playerActiveCombatants.firstOrNull()
             val playerSpecies = playerCombatant?.species
@@ -2443,7 +2496,8 @@ class BattleSceneView(
         height: Float,
         scale: Float,
         player: Boolean,
-        combatants: List<BattleSession.ActiveCombatant>
+        combatants: List<BattleSession.ActiveCombatant>,
+        switchOutVisual: BattleSession.SwitchOutVisual? = null
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
         val nowNanos = System.nanoTime()
@@ -2457,7 +2511,11 @@ class BattleSceneView(
                     BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF(),
                     BattleCardContent.from(
                         combatant,
-                        session.detailsForActiveCombatant(player, combatant.slot)?.item.orEmpty()
+                        switchOutVisual
+                            ?.takeIf { it.playerSide == player && it.combatant.slot == combatant.slot }
+                            ?.details
+                            ?.item
+                            ?: session.detailsForActiveCombatant(player, combatant.slot)?.item.orEmpty()
                     ),
                     scale,
                     alpha,
@@ -2728,13 +2786,16 @@ class BattleSceneView(
         )
     }
 
-    private fun drawBattleFeed(canvas: Canvas, width: Float, height: Float, scale: Float) {
+    private fun drawBattleFeed(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        scale: Float,
+        frame: BattleFeedFrame?
+    ) {
         val nowMillis = SystemClock.elapsedRealtime()
         battleFeedBounds.setEmpty()
-        val feedEntries = session.battleFeedEntries()
-        val persistentText = session.battleResult()
-        battleFeedPresentation.update(feedEntries, session.battleFeedVisible, nowMillis, persistentText)
-        val frame = battleFeedPresentation.frame(nowMillis) ?: return
+        frame ?: return
         val alpha = frame.alpha
         val glassAlpha = alpha.pow(0.62f)
         val textAlpha = alpha.pow(0.25f)

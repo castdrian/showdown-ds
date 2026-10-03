@@ -263,6 +263,64 @@ class ShowdownReplayIdentityTest {
     }
 
     @Test
+    fun replaySwitchOutMessageKeepsTheOutgoingPokemonOnScreen() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p2a: Eevee|Eevee, L50|100/100"
+            )
+        )
+        val presentation = BattleFeedPresentation()
+        presentation.setPlaybackSpeed(0.75f)
+        presentation.updateMessages(session.battleFeedMessages(), true, 1_000L)
+        val switchPacket = listOf("|switch|p1a: Raichu|Raichu, L50|100/100")
+        val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
+        session.applyProtocolPacket(switchPacket)
+        val generatedMessages = session.battleFeedMessages().filter { it.id !in previousMessageIds }
+        assertEquals(listOf("Pikachu, come back!", "Go! Raichu!"), generatedMessages.map { it.text })
+        assertEquals(
+            6_400L,
+            BattlePlaybackTiming.scaledPause(
+                BattlePlaybackTiming.pauseAfter(switchPacket, generatedMessages.size),
+                0.75f
+            )
+        )
+        presentation.updateMessages(session.battleFeedMessages(), true, 5_000L)
+
+        val switchOutFrame = presentation.frame(5_000L)
+        val currentCombatant = session.playerActiveCombatants()
+        val switchOutVisual = session.switchOutVisualForBattleFeed(switchOutFrame?.messageId)
+        val displayedDuringSwitchOut = BattleFeedSceneState.combatantsForMessage(
+            currentCombatant,
+            true,
+            switchOutVisual
+        )
+
+        assertEquals("Pikachu, come back!", switchOutFrame?.visibleText)
+        assertEquals("Raichu", currentCombatant.single().name)
+        assertEquals("Pikachu", displayedDuringSwitchOut.single().name)
+        assertEquals("Pikachu", displayedDuringSwitchOut.single().species)
+
+        val switchInFrame = presentation.frame(8_200L)
+        val switchInVisual = session.switchOutVisualForBattleFeed(switchInFrame?.messageId)
+        val displayedDuringSwitchIn = BattleFeedSceneState.combatantsForMessage(
+            currentCombatant,
+            true,
+            switchInVisual
+        )
+
+        assertEquals("Go! Raichu!", switchInFrame?.visibleText)
+        assertEquals("Raichu", displayedDuringSwitchIn.single().name)
+    }
+
+    @Test
     fun keepsReplayNicknameAndSpriteSpeciesAlignedAfterPermanentFormChange() {
         val session = BattleSession().apply {
             setLocalUsername("RED")

@@ -50,14 +50,13 @@ func main() {
 		}
 	}
 
-	fmt.Printf("validated %d corresponding README screen(s) with both battle Pokémon visible on the upper display\n", len(paths))
+	fmt.Printf("validated %d corresponding README dual-screen capture(s) with both battle Pokémon visible on the upper display\n", len(paths))
 }
 
 func validateReadme(readme string) error {
-	for _, asset := range []string{"media/showdown-battle-upper-screen-hd.png", "media/showdown-battle-lower-screen-hd.png"} {
-		if !strings.Contains(readme, asset) {
-			return fmt.Errorf("README.md does not embed %s", asset)
-		}
+	asset := "media/showdown-battle-hd-both-sides.png"
+	if !strings.Contains(readme, asset) {
+		return fmt.Errorf("README.md does not embed %s", asset)
 	}
 	if len(readmeScreenshotPaths(readme)) == 0 {
 		return fmt.Errorf("README.md does not embed any PNG screenshots")
@@ -186,8 +185,12 @@ func validateScreenshot(path string) error {
 		return fmt.Errorf("%s must be PNG, got %s", path, format)
 	}
 
-	if decoded.Bounds().Dx() != 1920 || decoded.Bounds().Dy() != 1080 {
-		return fmt.Errorf("%s must be 1920x1080, got %dx%d", path, decoded.Bounds().Dx(), decoded.Bounds().Dy())
+	expectedHeight := 1080
+	if strings.HasSuffix(path, "showdown-battle-hd-both-sides.png") {
+		expectedHeight = 2160
+	}
+	if decoded.Bounds().Dx() != 1920 || decoded.Bounds().Dy() != expectedHeight {
+		return fmt.Errorf("%s must be 1920x%d, got %dx%d", path, expectedHeight, decoded.Bounds().Dx(), decoded.Bounds().Dy())
 	}
 
 	templates := spriteTemplates(path)
@@ -205,7 +208,7 @@ func validateScreenshot(path string) error {
 
 func spriteTemplates(path string) []spriteTemplate {
 	switch {
-	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"):
+	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"):
 		return []spriteTemplate{
 			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(420, 350)},
 			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1050, 150)},

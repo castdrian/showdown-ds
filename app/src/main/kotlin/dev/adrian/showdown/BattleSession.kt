@@ -376,6 +376,12 @@ class BattleSession {
         val shiny: Boolean = false
     )
 
+    data class SwitchOutVisual(
+        val playerSide: Boolean,
+        val combatant: ActiveCombatant,
+        val details: PokemonDetails
+    )
+
     private class ActiveCombatantMap(
         private val onChanged: () -> Unit
     ) : LinkedHashMap<String, ActiveCombatant>() {
@@ -486,6 +492,7 @@ class BattleSession {
     )
 
     private data class ShowdownBattleLogEntry(
+        val id: Long,
         val plainText: String,
         val feedMarkup: String
     )
@@ -503,6 +510,9 @@ class BattleSession {
     private val showdownBattleLogEntries = mutableListOf<ShowdownBattleLogEntry>()
     private val showdownBattleMarkupEntries = mutableMapOf<String, List<ShowdownBattleLogEntry>>()
     private val protocolBattleFeedMarkupEntries = mutableListOf<ShowdownBattleLogEntry>()
+    private val battleLogMessageIds = mutableListOf(0L, 1L, 2L)
+    private var nextBattleFeedMessageId = 3L
+    private val switchOutVisualsByMessageId = mutableMapOf<Long, SwitchOutVisual>()
     private var battleRoomPresenceLog: BattleRoomPresenceLog? = null
     private var battleRoomRenameFallback: String? = null
     private var battleLogGeneration = 0L
@@ -511,6 +521,7 @@ class BattleSession {
     private var protocolTimestampSeconds: Long? = null
     private var battleGeneration = 9
     private val battleFeedEntriesCache = mutableMapOf<Int, List<String>>()
+    private val battleFeedMessagesCache = mutableMapOf<Int, List<BattleFeedMessage>>()
     private var hasBattleProtocolTranscript = false
     private var moveTypeResolver: ((String) -> String?)? = null
     private var moveInfoResolver: ((String) -> MoveInfo?)? = null
@@ -935,7 +946,7 @@ class BattleSession {
         if (generation != battleLogGeneration) return
         nativeBattleLogGeneration = generation
         nativeBattleLogPending = false
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
         notifyListeners()
     }
 
@@ -968,7 +979,45 @@ class BattleSession {
         return entries
     }
 
+    fun battleFeedMessages(limit: Int = SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT): List<BattleFeedMessage> {
+        val normalizedLimit = limit.coerceAtLeast(0)
+        battleFeedMessagesCache[normalizedLimit]?.let { return it }
+        val protocolEntries = battleLog.mapIndexedNotNull { index, text ->
+            if (isBattleFeedEntry(text)) BattleFeedMessage(battleLogMessageIds[index], text) else null
+        }
+        val nativeEntries = if (nativeBattleLogGeneration == battleLogGeneration) {
+            showdownBattleLogEntries
+                .filter { isBattleFeedEntry(it.plainText) }
+                .map { BattleFeedMessage(it.id, it.plainText) }
+        } else {
+            emptyList()
+        }
+        val source = when {
+            !hasBattleProtocolTranscript && nativeEntries.isNotEmpty() -> nativeEntries
+            nativeEntries.isEmpty() -> protocolEntries
+            else -> mergeBattleFeedMessages(protocolEntries, nativeEntries)
+        }
+        val entries = source
+            .fold(mutableListOf<BattleFeedMessage>()) { uniqueEntries, entry ->
+                if (uniqueEntries.lastOrNull()?.let { BattleFeedMessageIdentity.matches(it.text, entry.text) } != true) {
+                    uniqueEntries += entry
+                }
+                uniqueEntries
+            }
+            .takeLast(normalizedLimit)
+            .toList()
+        battleFeedMessagesCache[normalizedLimit] = entries
+        return entries
+    }
+
     fun latestBattleFeedEntry() = battleFeedEntries(1).lastOrNull()
+
+    fun switchOutVisualForBattleFeed(messageId: Long?) = messageId?.let(switchOutVisualsByMessageId::get)
+
+    private fun clearBattleFeedEntriesCache() {
+        battleFeedEntriesCache.clear()
+        battleFeedMessagesCache.clear()
+    }
 
     fun showdownBattleLog() = showdownBattleLogEntries.map { it.plainText }
 
@@ -989,7 +1038,7 @@ class BattleSession {
         protocolBattleFeedMarkupEntries.clear()
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = false
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
         notifyListeners()
     }
 
@@ -999,7 +1048,7 @@ class BattleSession {
         if (entries.isEmpty()) return
         appendNormalizedShowdownEntries(entries)
         if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
         entries.forEach { appendNativeActivity(it.plainText) }
         latestBattleEvent = entries.last().plainText
         latestBattleEventAtNanos = System.nanoTime()
@@ -1015,10 +1064,10 @@ class BattleSession {
             return
         }
         val previous = showdownBattleMarkupEntries[normalizedKey]
-        val entries = normalizedShowdownEntries(value)
+        val entries = normalizedShowdownEntries(value, previous.orEmpty())
         if (previous == entries) return
         showdownBattleMarkupEntries.remove(normalizedKey)
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
         previous?.forEach { entry ->
             showdownBattleLogEntries.indexOfLast { it == entry }
                 .takeIf { it >= 0 }
@@ -1417,13 +1466,16 @@ class BattleSession {
         spectatorMode = false
         protocolHistory.clear()
         battleLog.clear()
+        battleLogMessageIds.clear()
+        switchOutVisualsByMessageId.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
         protocolBattleFeedMarkupEntries.clear()
         battleRoomPresenceLog = null
         battleRoomRenameFallback = null
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
         battleLog += "No battle in progress."
+        battleLogMessageIds += newBattleFeedMessageId()
         chatMessages.clear()
         chatMessages += "[System] Ready for a battle."
         activityMessages.clear()
@@ -1453,7 +1505,10 @@ class BattleSession {
     fun prepareForReplay() {
         prepareForLobby()
         battleLog.clear()
+        battleLogMessageIds.clear()
         battleLog += "Loading replay…"
+        battleLogMessageIds += newBattleFeedMessageId()
+        clearBattleFeedEntriesCache()
         activityMessages.clear()
         activityMessages += battleLog
         activityOrigins.clear()
@@ -2144,17 +2199,20 @@ class BattleSession {
         if (fields.getOrNull(2) != "battle") return
         hasBattleProtocolTranscript = true
         battleLog.clear()
+        battleLogMessageIds.clear()
+        switchOutVisualsByMessageId.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
         protocolBattleFeedMarkupEntries.clear()
         battleRoomPresenceLog = null
         battleRoomRenameFallback = null
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
         battleLogGeneration += 1L
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = true
         protocolTimestampSeconds = null
         battleLog += "Battle started."
+        battleLogMessageIds += newBattleFeedMessageId()
         markupEntries.clear()
         chatMessages.clear()
         activityMessages.clear()
@@ -2293,6 +2351,7 @@ class BattleSession {
         val slot = fields[2].substringBefore(":").trim()
         val side = sideForSlot(slot)
         val previousCombatant = (if (playerSide) playerActiveCombatants else opponentActiveCombatants)[slot]
+        val previousDetails = previousCombatant?.let { detailsForActiveCombatant(playerSide, slot) }
         restoreTransformedPartySnapshot(slot)
         val shiny = detailsAreShiny(fields[3])
         if (fields.drop(5).any { it.contains("Baton Pass", true) }) pendingBatonPassBySide[side] = slot
@@ -2496,7 +2555,12 @@ class BattleSession {
             eventKind == SwitchEventKind.NORMAL &&
             shouldAnnounceSwitchOut(fields)
         ) {
-            appendLog(switchOutMessage(fields[2], previousCombatant))
+            previousDetails?.let { details ->
+                appendLog(
+                    switchOutMessage(fields[2], previousCombatant),
+                    switchOutVisual = SwitchOutVisual(playerSide, previousCombatant, details)
+                )
+            } ?: appendLog(switchOutMessage(fields[2], previousCombatant))
         }
         val message = when (eventKind) {
             SwitchEventKind.ILLUSION_REPLACEMENT -> "${battleActor(fields[2])} was revealed as ${displayPokemonName(pokemon)}."
@@ -5063,9 +5127,11 @@ class BattleSession {
 
     private fun removeBattleRoomFallback(entry: String?) {
         if (entry == null) return
-        battleLog.indexOfLast { it == entry }
-            .takeIf { it >= 0 }
-            ?.let(battleLog::removeAt)
+        val logIndex = battleLog.indexOfLast { it == entry }
+        if (logIndex >= 0) {
+            battleLog.removeAt(logIndex)
+            switchOutVisualsByMessageId.remove(battleLogMessageIds.removeAt(logIndex))
+        }
         activityMessages.indices.reversed().firstOrNull { index ->
             activityOrigins[index] == ActivityOrigin.PROTOCOL &&
                 BattleFeedMessageIdentity.matches(activityMessages[index], entry)
@@ -5074,7 +5140,7 @@ class BattleSession {
         collectedEvents?.indices?.reversed()?.firstOrNull { index ->
             BattleFeedMessageIdentity.matches(collectedEvents[index], entry)
         }?.let(collectedEvents::removeAt)
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
     }
 
     private fun capitalizeBattleActorAtSentenceStart(entry: String): String {
@@ -5099,27 +5165,36 @@ class BattleSession {
         return "$formattedActor used **$move**!"
     }
 
-    private fun appendLog(entry: String, feedMarkup: String = entry) {
-        if (protocolLogSuppressed) return
+    private fun appendLog(
+        entry: String,
+        feedMarkup: String = entry,
+        switchOutVisual: SwitchOutVisual? = null
+    ): Long? {
+        if (protocolLogSuppressed) return null
         val message = capitalizeBattleActorAtSentenceStart(entry)
-        if (battleLog.lastOrNull() == message) return
+        if (battleLog.lastOrNull() == message) return null
         battleFeedVisible = true
+        val messageId = newBattleFeedMessageId()
         battleLog += message
-        if (feedMarkup != message) protocolBattleFeedMarkupEntries += ShowdownBattleLogEntry(message, feedMarkup)
+        battleLogMessageIds += messageId
+        switchOutVisual?.let { switchOutVisualsByMessageId[messageId] = it }
+        if (feedMarkup != message) protocolBattleFeedMarkupEntries += ShowdownBattleLogEntry(messageId, message, feedMarkup)
         if (battleLog.size > 32) {
             val removed = battleLog.removeAt(0)
+            switchOutVisualsByMessageId.remove(battleLogMessageIds.removeAt(0))
             if (battleLog.none { it == removed }) {
                 protocolBattleFeedMarkupEntries.removeAll { it.plainText == removed }
             }
         }
         battleLogGeneration += 1L
-        battleFeedEntriesCache.clear()
+        clearBattleFeedEntriesCache()
         nativeBattleLogPending = true
         appendActivity(message, ActivityOrigin.PROTOCOL)
         protocolEventCollector?.add(message) ?: run {
             latestBattleEvent = message
             latestBattleEventAtNanos = System.nanoTime()
         }
+        return messageId
     }
 
     private fun appendActivity(entry: String, origin: ActivityOrigin = ActivityOrigin.PROTOCOL) {
@@ -5221,15 +5296,27 @@ class BattleSession {
         while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
     }
 
-    private fun normalizedShowdownEntries(value: String): List<ShowdownBattleLogEntry> {
+    private fun normalizedShowdownEntries(
+        value: String,
+        previous: List<ShowdownBattleLogEntry> = emptyList()
+    ): List<ShowdownBattleLogEntry> {
         val plainEntries = ShowdownBattleLogFilter
             .visibleEntries(value.replace("**", ""))
             .mapNotNull(::sanitizeShowdownMarkup)
         val feedMarkupEntries = ShowdownBattleLogFilter
             .visibleMarkupEntries(value)
             .mapNotNull(::sanitizeShowdownMarkup)
+        var protocolSearchStart = 0
         return plainEntries.mapIndexed { index, plainText ->
-            ShowdownBattleLogEntry(plainText, feedMarkupEntries.getOrElse(index) { plainText })
+            val previousId = previous.getOrNull(index)
+                ?.takeIf { BattleFeedMessageIdentity.matches(it.plainText, plainText) }
+                ?.id
+            val protocolIndex = battleLog.indices
+                .drop(protocolSearchStart)
+                .firstOrNull { BattleFeedMessageIdentity.matches(battleLog[it], plainText) }
+            if (protocolIndex != null) protocolSearchStart = protocolIndex + 1
+            val id = previousId ?: protocolIndex?.let(battleLogMessageIds::get) ?: newBattleFeedMessageId()
+            ShowdownBattleLogEntry(id, plainText, feedMarkupEntries.getOrElse(index) { plainText })
         }
     }
 
@@ -6033,6 +6120,32 @@ class BattleSession {
         while (nativeIndex < nativeEntries.size) merged += nativeEntries[nativeIndex++]
         return merged
     }
+
+    private fun mergeBattleFeedMessages(
+        protocolEntries: List<BattleFeedMessage>,
+        nativeEntries: List<BattleFeedMessage>
+    ): List<BattleFeedMessage> {
+        val merged = mutableListOf<BattleFeedMessage>()
+        var nativeIndex = 0
+        protocolEntries.forEach { protocolEntry ->
+            val relativeNativeMatch = nativeEntries.subList(nativeIndex, nativeEntries.size)
+                .indexOfFirst { nativeEntry ->
+                    BattleFeedMessageIdentity.matches(protocolEntry.text, nativeEntry.text)
+                }
+            val nativeMatch = if (relativeNativeMatch >= 0) nativeIndex + relativeNativeMatch else -1
+            if (nativeMatch >= 0) {
+                while (nativeIndex < nativeMatch) merged += nativeEntries[nativeIndex++]
+                merged += nativeEntries[nativeMatch].copy(id = protocolEntry.id)
+                nativeIndex = nativeMatch + 1
+            } else if (protocolEntry.text != "Battle started." || nativeEntries.isEmpty()) {
+                merged += protocolEntry
+            }
+        }
+        while (nativeIndex < nativeEntries.size) merged += nativeEntries[nativeIndex++]
+        return merged
+    }
+
+    private fun newBattleFeedMessageId() = nextBattleFeedMessageId++
 
     private fun isPlayerSide(side: String): Boolean {
         val normalizedSide = side.substringBefore(':').trim()

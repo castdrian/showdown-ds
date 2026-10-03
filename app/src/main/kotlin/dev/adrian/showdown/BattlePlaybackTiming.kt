@@ -19,7 +19,7 @@ object BattlePlaybackTiming {
         return chunks
     }
 
-    fun pauseAfter(lines: List<String>): Long {
+    fun pauseAfter(lines: List<String>, generatedMessageCount: Int = 0): Long {
         val actionPause = when {
             lines.any {
                 it.startsWith("|win|") ||
@@ -34,7 +34,8 @@ object BattlePlaybackTiming {
             lines.any { it.startsWith("|turn|") } -> TURN_PAUSE_MILLIS
             else -> 0L
         }
-        return maxOf(actionPause, readableMessageCount(lines) * MESSAGE_PAUSE_MILLIS)
+        val messageCount = maxOf(readableMessageCount(lines), generatedMessageCount.coerceAtLeast(0).toLong())
+        return maxOf(actionPause, messageCount * MESSAGE_PAUSE_MILLIS)
     }
 
     fun isDecisionChunk(lines: List<String>): Boolean = lines.any { it.startsWith("|request|") }

@@ -12,10 +12,8 @@ import (
 )
 
 func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
-	for _, path := range []string{"../media/showdown-battle-upper-screen-hd.png", "../media/showdown-battle-lower-screen-hd.png"} {
-		if err := validateScreenshot(path); err != nil {
-			t.Fatalf("validateScreenshot(%q): %v", path, err)
-		}
+	if err := validateScreenshot("../media/showdown-battle-hd-both-sides.png"); err != nil {
+		t.Fatalf("validateScreenshot(%q): %v", "../media/showdown-battle-hd-both-sides.png", err)
 	}
 	if err := validateReadmeScreenPair(
 		"../media/showdown-battle-upper-screen-hd.png",

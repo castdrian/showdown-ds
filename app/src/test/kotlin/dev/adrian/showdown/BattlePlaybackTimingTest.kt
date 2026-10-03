@@ -45,6 +45,17 @@ class BattlePlaybackTimingTest {
     }
 
     @Test
+    fun givesEveryGeneratedSwitchMessageTimeToBeRead() {
+        val pause = BattlePlaybackTiming.pauseAfter(
+            listOf("|switch|p1a: Raichu|Raichu, L50|100/100"),
+            generatedMessageCount = 2
+        )
+
+        assertEquals(4_800L, pause)
+        assertEquals(6_400L, BattlePlaybackTiming.scaledPause(pause, 0.75f))
+    }
+
+    @Test
     fun givesStandaloneAnimationPacketsHumanReadableTiming() {
         assertEquals(
             2_600L,

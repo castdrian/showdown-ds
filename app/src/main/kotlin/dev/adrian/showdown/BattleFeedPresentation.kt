@@ -5,17 +5,55 @@ import java.util.ArrayDeque
 data class BattleFeedFrame(
     val text: String,
     val alpha: Float,
-    val visibleText: String
+    val visibleText: String,
+    val messageId: Long? = null
 )
+
+data class BattleFeedMessage(
+    val id: Long,
+    val text: String
+)
+
+object BattleFeedSceneState {
+    fun combatantsForMessage(
+        currentCombatants: List<BattleSession.ActiveCombatant>,
+        playerSide: Boolean,
+        switchOutVisual: BattleSession.SwitchOutVisual?
+    ): List<BattleSession.ActiveCombatant> {
+        val visual = switchOutVisual ?: return currentCombatants
+        if (visual.playerSide != playerSide) return currentCombatants
+        var replaced = false
+        val visibleCombatants = currentCombatants.map { combatant ->
+            if (combatant.slot == visual.combatant.slot) {
+                replaced = true
+                visual.combatant
+            } else {
+                combatant
+            }
+        }
+        return if (replaced) visibleCombatants else currentCombatants
+    }
+
+    fun detailsForMessage(
+        currentDetails: BattleSession.PokemonDetails,
+        playerSide: Boolean,
+        switchOutVisual: BattleSession.SwitchOutVisual?
+    ): BattleSession.PokemonDetails {
+        val visual = switchOutVisual ?: return currentDetails
+        return if (visual.playerSide == playerSide) visual.details else currentDetails
+    }
+}
 
 class BattleFeedPresentation(
     private val minimumMessageDurationMillis: Long = DEFAULT_MESSAGE_DWELL_MILLIS,
     private val holdDurationMillis: Long = DEFAULT_MESSAGE_DWELL_MILLIS,
     private val fadeDurationMillis: Long = DEFAULT_MESSAGE_FADE_MILLIS
 ) {
-    private val pendingMessages = ArrayDeque<String>()
-    private var observedEntries: List<String>? = null
-    private var currentText: String? = null
+    private val pendingMessages = ArrayDeque<BattleFeedMessage>()
+    private var observedEntries: List<BattleFeedMessage>? = null
+    private var legacyObservedEntries: List<BattleFeedMessage>? = null
+    private var nextLegacyMessageId = -1L
+    private var currentMessage: BattleFeedMessage? = null
     private var currentStartedAtMillis = 0L
     private var playbackSpeed = 1f
     private var feedVisible = true
@@ -59,10 +97,9 @@ class BattleFeedPresentation(
         if (persistentText != null) return
         if (playbackPaused || !feedVisible) return
         val presentationNowMillis = presentationNowMillis(nowMillis)
-        val text = currentText
-        if (text == null) {
+        if (currentMessage == null) {
             if (pendingMessages.isNotEmpty()) {
-                currentText = pendingMessages.removeFirst()
+                currentMessage = pendingMessages.removeFirst()
                 currentStartedAtMillis = presentationNowMillis
             }
             return
@@ -72,15 +109,34 @@ class BattleFeedPresentation(
         if (ageMillis < fadeDuration) {
             currentStartedAtMillis = presentationNowMillis - fadeDuration
         } else if (pendingMessages.isNotEmpty()) {
-            currentText = pendingMessages.removeFirst()
+            currentMessage = pendingMessages.removeFirst()
             currentStartedAtMillis = presentationNowMillis
         } else {
-            currentText = null
+            currentMessage = null
             promotePendingPersistentTextIfIdle()
         }
     }
 
     fun update(entries: List<String>, visible: Boolean, nowMillis: Long, persistentText: String? = null) {
+        val previous = legacyObservedEntries.orEmpty().toMutableList()
+        val messages = entries.map { text ->
+            val matchIndex = previous.indexOfFirst { BattleFeedMessageIdentity.matches(it.text, text) }
+            if (matchIndex < 0) {
+                BattleFeedMessage(nextLegacyMessageId--, text)
+            } else {
+                previous.removeAt(matchIndex).copy(text = text)
+            }
+        }
+        legacyObservedEntries = messages
+        updateMessages(messages, visible, nowMillis, persistentText)
+    }
+
+    fun updateMessages(
+        entries: List<BattleFeedMessage>,
+        visible: Boolean,
+        nowMillis: Long,
+        persistentText: String? = null
+    ) {
         val normalizedPersistentText = persistentText?.trim()?.takeIf(String::isNotBlank)
         if (observedEntries === entries && feedVisible == visible && this.persistentText == normalizedPersistentText) return
         val presentationNowMillis = presentationNowMillis(nowMillis)
@@ -91,7 +147,7 @@ class BattleFeedPresentation(
             }
             pendingPersistentText = normalizedPersistentText
             updateEntries(
-                entries.filterNot { BattleFeedMessageIdentity.matches(it, normalizedPersistentText) },
+                entries.filterNot { BattleFeedMessageIdentity.matches(it.text, normalizedPersistentText) },
                 visible,
                 presentationNowMillis
             )
@@ -104,11 +160,11 @@ class BattleFeedPresentation(
         updateEntries(entries, visible, presentationNowMillis)
     }
 
-    private fun updateEntries(entries: List<String>, visible: Boolean, presentationNowMillis: Long) {
+    private fun updateEntries(entries: List<BattleFeedMessage>, visible: Boolean, presentationNowMillis: Long) {
         feedVisible = visible
         if (entries.isEmpty()) {
             pendingMessages.clear()
-            currentText = null
+            currentMessage = null
             observedEntries = entries
             promotePendingPersistentTextIfIdle()
             return
@@ -117,23 +173,23 @@ class BattleFeedPresentation(
         reconcileMessageWording(entries)
         if (previousEntries == null) {
             pendingMessages.clear()
-            currentText = entries.last()
+            currentMessage = entries.last()
             currentStartedAtMillis = presentationNowMillis
         } else if (previousEntries.isEmpty()) {
             pendingMessages.clear()
-            currentText = entries.last()
+            currentMessage = entries.last()
             currentStartedAtMillis = presentationNowMillis
         } else if (isContinuation(previousEntries, entries)) {
-            newEntries(previousEntries, entries).forEach { message ->
+            newMessages(previousEntries, entries).forEach { message ->
                 enqueue(message)
             }
             if (!playbackPaused) advance(presentationNowMillis)
         } else if (isSnapshotReplacement(previousEntries, entries)) {
             pendingMessages.clear()
-            currentText = entries.last()
+            currentMessage = entries.last()
             currentStartedAtMillis = presentationNowMillis
         } else {
-            newEntries(previousEntries, entries).forEach { message ->
+            newMessages(previousEntries, entries).forEach { message ->
                 enqueue(message)
             }
             if (!playbackPaused) advance(presentationNowMillis)
@@ -141,16 +197,20 @@ class BattleFeedPresentation(
         observedEntries = entries
     }
 
-    private fun reconcileMessageWording(entries: List<String>) {
-        currentText = currentText?.let { current ->
-            entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(current, entry) } ?: current
+    private fun reconcileMessageWording(entries: List<BattleFeedMessage>) {
+        currentMessage = currentMessage?.let { current ->
+            entries.firstOrNull { it.id == current.id }
+                ?: entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(current.text, entry.text) }
+                ?: current
         }
         if (pendingMessages.isEmpty()) return
         val queued = pendingMessages.toList()
         pendingMessages.clear()
         queued.forEach { message ->
             pendingMessages.addLast(
-                entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(message, entry) } ?: message
+                entries.firstOrNull { it.id == message.id }
+                    ?: entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(message.text, entry.text) }
+                    ?: message
             )
         }
     }
@@ -161,14 +221,14 @@ class BattleFeedPresentation(
         persistentText?.let { text ->
             return BattleFeedFrame(text = text, alpha = 1f, visibleText = text)
         }
-        val text = currentText ?: return null
+        val message = currentMessage ?: return null
         val ageMillis = (presentationNowMillis - currentStartedAtMillis).coerceAtLeast(0L)
         val fadeStartMillis = messageVisibleDurationMillis()
         val fadeDuration = scaledFadeDurationMillis()
         val endMillis = fadeStartMillis + fadeDuration
         if (ageMillis >= endMillis) {
             if (!feedVisible || pendingMessages.isEmpty()) {
-                currentText = null
+                currentMessage = null
                 return null
             }
         }
@@ -178,26 +238,27 @@ class BattleFeedPresentation(
             else -> 1f - easedProgress((ageMillis - fadeStartMillis).toFloat() / fadeDuration)
         }
         return BattleFeedFrame(
-            text = text,
+            text = message.text,
             alpha = alpha.coerceIn(0f, 1f),
-            visibleText = text
+            visibleText = message.text,
+            messageId = message.id
         )
     }
 
     fun needsAnimation(nowMillis: Long): Boolean {
         if (persistentText != null) return false
         if (playbackPaused) return false
-        val text = currentText ?: return pendingMessages.isNotEmpty() || pendingPersistentText != null
+        val message = currentMessage ?: return pendingMessages.isNotEmpty() || pendingPersistentText != null
         val ageMillis = (presentationNowMillis(nowMillis) - currentStartedAtMillis).coerceAtLeast(0L)
-        return pendingMessages.isNotEmpty() || (text.isNotBlank() && ageMillis < messageVisibleDurationMillis() + scaledFadeDurationMillis())
+        return pendingMessages.isNotEmpty() || (message.text.isNotBlank() && ageMillis < messageVisibleDurationMillis() + scaledFadeDurationMillis())
     }
 
     private fun advance(nowMillis: Long) {
         if (!feedVisible) return
-        val current = currentText
+        val current = currentMessage
         if (current == null) {
             if (pendingMessages.isNotEmpty()) {
-                currentText = pendingMessages.removeFirst()
+                currentMessage = pendingMessages.removeFirst()
                 currentStartedAtMillis = nowMillis
             } else {
                 promotePendingPersistentTextIfIdle()
@@ -206,31 +267,32 @@ class BattleFeedPresentation(
         }
         val ageMillis = (nowMillis - currentStartedAtMillis).coerceAtLeast(0L)
         if (pendingMessages.isNotEmpty() && ageMillis >= messageVisibleDurationMillis() + scaledFadeDurationMillis()) {
-            currentText = pendingMessages.removeFirst()
+            currentMessage = pendingMessages.removeFirst()
             currentStartedAtMillis = nowMillis
         } else if (pendingMessages.isEmpty() && ageMillis >= messageVisibleDurationMillis() + scaledFadeDurationMillis()) {
-            currentText = null
+            currentMessage = null
             promotePendingPersistentTextIfIdle()
         }
     }
 
     private fun promotePendingPersistentTextIfIdle() {
-        if (currentText != null || pendingMessages.isNotEmpty()) return
+        if (currentMessage != null || pendingMessages.isNotEmpty()) return
         pendingPersistentText?.let {
             persistentText = it
             pendingPersistentText = null
         }
     }
 
-    private fun enqueue(message: String) {
-        if (message.isBlank()) return
+    private fun enqueue(message: BattleFeedMessage) {
+        if (message.text.isBlank()) return
         pendingMessages.addLast(message)
     }
 
     private fun clearMessageState() {
         pendingMessages.clear()
         observedEntries = null
-        currentText = null
+        legacyObservedEntries = null
+        currentMessage = null
         currentStartedAtMillis = 0L
         persistentText = null
         pendingPersistentText = null
@@ -262,12 +324,12 @@ class BattleFeedPresentation(
         return progress * progress * (3f - 2f * progress)
     }
 
-    private fun newEntries(previous: List<String>, current: List<String>): List<String> {
+    private fun newMessages(previous: List<BattleFeedMessage>, current: List<BattleFeedMessage>): List<BattleFeedMessage> {
         if (isContinuation(previous, current)) {
-            val additions = mutableListOf<String>()
+            val additions = mutableListOf<BattleFeedMessage>()
             var previousIndex = 0
             current.forEach { entry ->
-                if (previousIndex < previous.size && BattleFeedMessageIdentity.matches(previous[previousIndex], entry)) {
+                if (previousIndex < previous.size && previous[previousIndex].id == entry.id) {
                     previousIndex += 1
                 } else {
                     additions += entry
@@ -275,7 +337,7 @@ class BattleFeedPresentation(
             }
             return additions
         }
-        if (current.size >= previous.size && current.take(previous.size) == previous) {
+        if (current.size >= previous.size && current.take(previous.size).map { it.id } == previous.map { it.id }) {
             return current.drop(previous.size)
         }
         if (sameSequence(previous, current)) return emptyList()
@@ -285,28 +347,26 @@ class BattleFeedPresentation(
         return current.drop(overlap)
     }
 
-    private fun isSnapshotReplacement(previous: List<String>, current: List<String>): Boolean {
+    private fun isSnapshotReplacement(previous: List<BattleFeedMessage>, current: List<BattleFeedMessage>): Boolean {
         if (sameSequence(previous, current)) return false
         if (isContinuation(previous, current)) return false
         if (current.size < previous.size) return true
-        if (current.size == 1 && !BattleFeedMessageIdentity.matches(current.firstOrNull().orEmpty(), previous.firstOrNull().orEmpty())) return true
+        if (current.size == 1 && current.firstOrNull()?.id != previous.firstOrNull()?.id) return true
         if (previous.isEmpty() || current.isEmpty()) return false
         return (minOf(previous.size, current.size) downTo 1).none { size ->
             sameSequence(previous.takeLast(size), current.take(size))
         }
     }
 
-    private fun isContinuation(previous: List<String>, current: List<String>): Boolean {
+    private fun isContinuation(previous: List<BattleFeedMessage>, current: List<BattleFeedMessage>): Boolean {
         if (previous.isEmpty() || current.size < previous.size) return false
         var previousIndex = 0
         current.forEach { entry ->
-            if (previousIndex < previous.size && BattleFeedMessageIdentity.matches(previous[previousIndex], entry)) previousIndex += 1
+            if (previousIndex < previous.size && previous[previousIndex].id == entry.id) previousIndex += 1
         }
         return previousIndex == previous.size
     }
 
-    private fun sameSequence(first: List<String>, second: List<String>): Boolean =
-        first.size == second.size && first.indices.all { index ->
-            BattleFeedMessageIdentity.matches(first[index], second[index])
-        }
+    private fun sameSequence(first: List<BattleFeedMessage>, second: List<BattleFeedMessage>): Boolean =
+        first.size == second.size && first.indices.all { index -> first[index].id == second[index].id }
 }
