@@ -58,22 +58,40 @@ object BattlePlaybackTiming {
 
     private fun isActionBoundary(line: String) =
         line.startsWith("|move|") ||
+            line.startsWith("|cant|") ||
             line.startsWith("|switch|") ||
+            line.startsWith("|switchout|") ||
             line.startsWith("|drag|") ||
             line.startsWith("|replace|") ||
+            line == "|start" ||
+            line.startsWith("|faint|") ||
+            line.startsWith("|-damage|") && line.contains("|[from] confusion", ignoreCase = true) ||
+            line.startsWith("|-curestatus|") && line.contains("|[from] ability: Natural Cure", ignoreCase = true) ||
+            line.startsWith("|-start|") && line.contains("|[from] ability: Protean", ignoreCase = true) ||
+            isPreMajorActivation(line) ||
             line.startsWith("|detailschange|") ||
             line.startsWith("|swap|") ||
             line.startsWith("|-formechange|") ||
             line.startsWith("|-transform|") ||
             line.startsWith("|-burst|") ||
             line.startsWith("|-mega|") ||
+            line.startsWith("|-candynamax|") ||
             line.startsWith("|-primal|") ||
+            line.startsWith("|-terastallize|") ||
+            line == "|upkeep" ||
             line.startsWith("|turn|") ||
             line.startsWith("|request|") ||
             line.startsWith("|win|") ||
             line.startsWith("|tie|") ||
             line.startsWith("|draw|") ||
             line.startsWith("|prematureend|")
+
+    private fun isPreMajorActivation(line: String): Boolean {
+        if (!line.startsWith("|-activate|")) return false
+        val effect = line.split('|').getOrNull(3).orEmpty()
+        val effectId = effect.substringAfterLast(':').filter(Char::isLetterOrDigit).lowercase()
+        return effectId in PRE_MAJOR_ACTIVATIONS
+    }
 
     private const val MOVE_PAUSE_MILLIS = EVENT_PAUSE_MILLIS
     private const val FAINT_PAUSE_MILLIS = 3_200L
@@ -92,8 +110,11 @@ object BattlePlaybackTiming {
         "move",
         "prematureend",
         "replace",
+        "start",
         "switch",
+        "switchout",
         "tie",
         "win"
     )
+    private val PRE_MAJOR_ACTIVATIONS = setOf("confusion", "attract", "pursuit")
 }

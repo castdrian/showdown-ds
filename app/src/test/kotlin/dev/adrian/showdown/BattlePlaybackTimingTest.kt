@@ -51,9 +51,9 @@ class BattlePlaybackTimingTest {
                 ),
                 listOf(
                     "|move|p2a: Gyarados|Earthquake|p1a: Pikachu",
-                    "|-damage|p1a: Pikachu|0 fnt",
-                    "|faint|p1a: Pikachu"
+                    "|-damage|p1a: Pikachu|0 fnt"
                 ),
+                listOf("|faint|p1a: Pikachu"),
                 listOf("|request|{}")
             ),
             BattlePlaybackTiming.chunks(lines)
@@ -69,7 +69,8 @@ class BattlePlaybackTimingTest {
             "|-transform|p1a: Ditto|p2a: Dragapult",
             "|-burst|p1a: Necrozma|Necrozma-Ultra|Ultranecrozium Z",
             "|-mega|p1a: Charizard|Charizardite X",
-            "|-primal|p1a: Kyogre|Blue Orb"
+            "|-primal|p1a: Kyogre|Blue Orb",
+            "|-candynamax|p1a: Charizard"
         ).forEach { transition ->
             assertEquals(
                 listOf(listOf(move), listOf(transition)),
@@ -95,6 +96,103 @@ class BattlePlaybackTimingTest {
                 )
             )
         )
+    }
+
+    @Test
+    fun isolatesTerastallizationBetweenMovesInTheSameTurn() {
+        val lines = listOf(
+            "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados",
+            "|-damage|p2a: Gyarados|120/200",
+            "|-terastallize|p2a: Gyarados|WATER",
+            "|move|p2a: Gyarados|Earthquake|p1a: Pikachu"
+        )
+
+        assertEquals(
+            listOf(
+                listOf(
+                    "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados",
+                    "|-damage|p2a: Gyarados|120/200"
+                ),
+                listOf("|-terastallize|p2a: Gyarados|WATER"),
+                listOf("|move|p2a: Gyarados|Earthquake|p1a: Pikachu")
+            ),
+            BattlePlaybackTiming.chunks(lines)
+        )
+    }
+
+    @Test
+    fun isolatesEndOfTurnResidualChangesFromThePrecedingMove() {
+        val lines = listOf(
+            "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados",
+            "|-damage|p2a: Gyarados|120/200",
+            "|upkeep",
+            "|-weather|none",
+            "|-heal|p2a: Gyarados|130/200|[from] item: Leftovers",
+            "|turn|2"
+        )
+
+        assertEquals(
+            listOf(
+                listOf(
+                    "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados",
+                    "|-damage|p2a: Gyarados|120/200"
+                ),
+                listOf(
+                    "|upkeep",
+                    "|-weather|none",
+                    "|-heal|p2a: Gyarados|130/200|[from] item: Leftovers"
+                ),
+                listOf("|turn|2")
+            ),
+            BattlePlaybackTiming.chunks(lines)
+        )
+    }
+
+    @Test
+    fun isolatesMajorBattleMessagesAndFaintsBetweenActions() {
+        val precedingMove = listOf(
+            "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados",
+            "|-damage|p2a: Gyarados|120/200"
+        )
+        listOf(
+            "|cant|p2a: Gyarados|par",
+            "|start",
+            "|-candynamax|p2a: Gyarados"
+        ).forEach { majorMessage ->
+            assertEquals(
+                listOf(precedingMove, listOf(majorMessage)),
+                BattlePlaybackTiming.chunks(precedingMove + majorMessage)
+            )
+        }
+
+        assertEquals(
+            listOf(precedingMove, listOf("|faint|p2a: Gyarados")),
+            BattlePlaybackTiming.chunks(precedingMove + "|faint|p2a: Gyarados")
+        )
+        assertEquals(
+            BattleFeedPresentation.DEFAULT_MESSAGE_CYCLE_MILLIS,
+            BattlePlaybackTiming.pauseAfter(listOf("|start"))
+        )
+        assertEquals(
+            BattleFeedPresentation.DEFAULT_MESSAGE_CYCLE_MILLIS,
+            BattlePlaybackTiming.pauseAfter(listOf("|switchout|p1a: Pikachu|U-turn"))
+        )
+    }
+
+    @Test
+    fun isolatesShowdownPreMajorAndConfusionDamageMessages() {
+        val precedingMove = "|move|p1a: Pikachu|Thunderbolt|p2a: Gyarados"
+        listOf(
+            "|-damage|p1a: Pikachu|80/100|[from] confusion",
+            "|-curestatus|p1a: Pikachu|par|[from] ability: Natural Cure",
+            "|-start|p1a: Pikachu|typechange|Fire|[from] ability: Protean",
+            "|-activate|p1a: Pikachu|confusion"
+        ).forEach { transition ->
+            assertEquals(
+                listOf(listOf(precedingMove), listOf(transition)),
+                BattlePlaybackTiming.chunks(listOf(precedingMove, transition))
+            )
+        }
     }
 
     @Test
