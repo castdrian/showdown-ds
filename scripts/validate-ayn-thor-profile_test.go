@@ -48,3 +48,19 @@ func TestThorAVDResourceProfileBoundsCPU(t *testing.T) {
 		}
 	}
 }
+
+func TestThorAVDAllowsColdAndroidBootToFinish(t *testing.T) {
+	script, err := os.ReadFile("run-ayn-thor-avd.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, expected := range []string{
+		"boot_attempts=300",
+		"while (( attempt < boot_attempts )); do",
+	} {
+		if !strings.Contains(string(script), expected) {
+			t.Errorf("resource-limited AVD startup missing %q", expected)
+		}
+	}
+}

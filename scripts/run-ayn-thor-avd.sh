@@ -31,6 +31,7 @@ low_ram_args=(-lowram)
 renderer_feature_args=(-feature Vulkan)
 multidisplay_args=(-feature MultiDisplay -multidisplay "1,1240,1080,420,1347")
 secondary_display_attempts=60
+boot_attempts=300
 
 verify_thor_layout_patch() {
     local upper_y_count
@@ -226,7 +227,7 @@ wait_for_android_boot() {
     local attempt=0
     local boot_completed
     local device_state
-    while (( attempt < 120 )); do
+    while (( attempt < boot_attempts )); do
         (( attempt += 1 ))
         device_state="$(adb_command -s "$device_serial" get-state 2>/dev/null || true)"
         if [[ "$device_state" == "device" ]]; then
