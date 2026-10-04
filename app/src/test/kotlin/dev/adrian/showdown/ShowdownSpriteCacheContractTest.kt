@@ -378,9 +378,10 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(source.contains("boundedAnimatedFrameSize"))
         assertTrue(source.contains("private fun decodeMovie(file: File, maxFrameDimension: Int = maxAnimatedFrameDimension): SpriteAsset?"))
         assertTrue(source.contains("ShowdownStreamingGif.fromFile("))
-        assertTrue(source.contains("streamingGif?.frameAt"))
+        assertTrue(source.contains("streamingGif.drawFrameAt("))
         assertTrue(source.contains("Executors.newFixedThreadPool(2)"))
         assertTrue(source.contains("Executors.newSingleThreadExecutor()"))
+        assertTrue(File("src/main/kotlin/dev/adrian/showdown/ShowdownStreamingGif.kt").readText().contains("LatestFrameDecodeScheduler(frameExecutor, ::decodeRequestedFrame)"))
     }
 
     @Test

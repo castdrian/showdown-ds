@@ -45,7 +45,7 @@ class ShowdownStreamingGifTest {
         val decoder = GifLzwDecoder()
         val codes = listOf(4 to 3, 0 to 3, 1 to 3, 0 to 3, 1 to 4, 0 to 4, 5 to 4)
 
-        decoder.decode(2, packCodes(codes), output::add)
+        decoder.decode(2, packCodes(codes), GifPixelConsumer { output.add(it) })
 
         assertEquals(listOf(0, 1, 0, 1, 0), output)
     }
@@ -56,12 +56,12 @@ class ShowdownStreamingGifTest {
         val decoder = GifLzwDecoder()
         val imageData = packCodes(listOf(4 to 3, 0 to 3, 6 to 3, 5 to 3))
 
-        decoder.decode(2, imageData, output::add)
+        decoder.decode(2, imageData, GifPixelConsumer { output.add(it) })
 
         assertEquals(listOf(0, 0, 0), output)
         output.clear()
 
-        decoder.decode(2, imageData, output::add)
+        decoder.decode(2, imageData, GifPixelConsumer { output.add(it) })
 
         assertEquals(listOf(0, 0, 0), output)
     }

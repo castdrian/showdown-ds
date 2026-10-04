@@ -1,10 +1,15 @@
 package dev.adrian.showdown
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.Arrays
+import java.util.concurrent.Executor
 
 private const val MAX_LZW_CODES = 4096
 private const val MAX_LZW_BITS = 12
@@ -18,12 +23,17 @@ internal class ShowdownStreamingGif private constructor(
     private val canvasPixels: IntArray,
     private val outputBitmap: Bitmap,
     private val memoryBytes: Int,
+    private val frameExecutor: Executor,
     private val lzwDecoder: GifLzwDecoder
 ) {
     private val outputX = IntArray(width) { it * outputWidth / width }
     private val outputY = IntArray(height) { it * outputHeight / height }
+    private val outputLock = Any()
+    private val frameScheduler = LatestFrameDecodeScheduler(frameExecutor, ::decodeRequestedFrame)
     private var currentFrameIndex = -1
+    private var publishedFrameIndex = -1
     private var savedCanvas: IntArray? = null
+    @Volatile
     private var released = false
     private var currentFrameHasVisiblePixels = false
 
@@ -33,26 +43,37 @@ internal class ShowdownStreamingGif private constructor(
     val sourceHeight: Int get() = height
     val frameWidth: Int get() = outputWidth
     val frameHeight: Int get() = outputHeight
-    val hasVisiblePixels: Boolean get() = !released && currentFrameHasVisiblePixels
+    val hasVisiblePixels: Boolean get() = synchronized(outputLock) { !released && currentFrameHasVisiblePixels }
 
-    fun frameAt(elapsedMillis: Long): Bitmap? {
-        if (!isAnimated) return null
-        val targetFrame = frameIndexAt(elapsedMillis)
-        if (targetFrame < currentFrameIndex) reset()
-        while (currentFrameIndex < targetFrame) {
-            renderFrame(currentFrameIndex + 1, currentFrameIndex + 1 == targetFrame)
+    fun drawFrameAt(
+        canvas: Canvas,
+        source: Rect,
+        destination: RectF,
+        paint: Paint,
+        elapsedMillis: Long,
+        animate: Boolean
+    ): Boolean {
+        if (!isAnimated) return false
+        val targetFrame = frameIndexAt(if (animate) elapsedMillis else 0L)
+        if (synchronized(outputLock) { publishedFrameIndex != targetFrame }) frameScheduler.request(targetFrame)
+        return synchronized(outputLock) {
+            if (released || publishedFrameIndex < 0 || !currentFrameHasVisiblePixels) {
+                false
+            } else {
+                canvas.drawBitmap(outputBitmap, source, destination, paint)
+                true
+            }
         }
-        if (currentFrameIndex < 0) renderFrame(0, true)
-        return outputBitmap
     }
 
     fun release() {
-        if (released) return
-        released = true
-        outputBitmap.recycle()
-        savedCanvas = null
-        currentFrameIndex = -1
-        currentFrameHasVisiblePixels = false
+        synchronized(outputLock) {
+            if (released) return
+            released = true
+            outputBitmap.recycle()
+            publishedFrameIndex = -1
+            currentFrameHasVisiblePixels = false
+        }
     }
 
     private fun frameIndexAt(elapsedMillis: Long): Int {
@@ -71,15 +92,25 @@ internal class ShowdownStreamingGif private constructor(
         Arrays.fill(canvasPixels, 0)
         savedCanvas = null
         currentFrameIndex = -1
-        currentFrameHasVisiblePixels = false
+    }
+
+    private fun decodeRequestedFrame(targetFrame: Int) {
+        if (released) return
+        if (targetFrame < currentFrameIndex) reset()
+        if (currentFrameIndex < 0) renderFrame(0, targetFrame == 0)
+        while (currentFrameIndex < targetFrame && !released) {
+            val nextFrame = currentFrameIndex + 1
+            renderFrame(nextFrame, nextFrame == targetFrame)
+        }
     }
 
     private fun renderFrame(index: Int, publish: Boolean) {
+        if (released) return
         if (currentFrameIndex >= 0) applyDisposal(frames[currentFrameIndex])
         val frame = frames[index]
         savedCanvas = if (frame.disposal == DISPOSAL_PREVIOUS) canvasPixels.copyOf() else null
         decodeFrame(frame)
-        if (publish) publishFrame()
+        if (publish) publishFrame(index)
         currentFrameIndex = index
     }
 
@@ -118,26 +149,32 @@ internal class ShowdownStreamingGif private constructor(
         var x = frame.left
         var rowIndex = 0
         var y = frame.top + (rows?.get(0) ?: 0)
-        lzwDecoder.decode(frame.minimumCodeSize, frame.imageData) framePixels@{ colorIndex ->
-            if (pixelIndex >= framePixelCount) return@framePixels
-            if (colorIndex != transparentIndex) {
-                val outputIndex = outputY[y] * outputWidth + outputX[x]
-                val color = if (colorIndex < palette.size) palette[colorIndex] else 0
-                canvasPixels[outputIndex] = color
+        lzwDecoder.decode(frame.minimumCodeSize, frame.imageData, GifPixelConsumer { colorIndex ->
+            if (pixelIndex < framePixelCount) {
+                if (colorIndex != transparentIndex) {
+                    val outputIndex = outputY[y] * outputWidth + outputX[x]
+                    val color = if (colorIndex < palette.size) palette[colorIndex] else 0
+                    canvasPixels[outputIndex] = color
+                }
+                pixelIndex += 1
+                x += 1
+                if (x == frameRight) {
+                    x = frame.left
+                    rowIndex += 1
+                    if (rowIndex < frame.height) y = frame.top + (rows?.get(rowIndex) ?: rowIndex)
+                }
             }
-            pixelIndex += 1
-            x += 1
-            if (x == frameRight) {
-                x = frame.left
-                rowIndex += 1
-                if (rowIndex < frame.height) y = frame.top + (rows?.get(rowIndex) ?: rowIndex)
-            }
-        }
+        })
     }
 
-    private fun publishFrame() {
-        outputBitmap.setPixels(canvasPixels, 0, outputWidth, 0, 0, outputWidth, outputHeight)
-        currentFrameHasVisiblePixels = canvasPixels.any { it ushr 24 != 0 }
+    private fun publishFrame(frameIndex: Int) {
+        val hasVisiblePixels = canvasPixels.any { it ushr 24 != 0 }
+        synchronized(outputLock) {
+            if (released) return
+            outputBitmap.setPixels(canvasPixels, 0, outputWidth, 0, 0, outputWidth, outputHeight)
+            currentFrameHasVisiblePixels = hasVisiblePixels
+            publishedFrameIndex = frameIndex
+        }
     }
 
     private data class Frame(
@@ -207,6 +244,7 @@ internal class ShowdownStreamingGif private constructor(
 
         fun fromFile(
             file: File,
+            frameExecutor: Executor,
             maxFrameDimension: Int,
             maxSourceDimension: Int,
             maxSourcePixels: Long,
@@ -217,6 +255,7 @@ internal class ShowdownStreamingGif private constructor(
             val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null
             return parse(
                 bytes,
+                frameExecutor,
                 maxFrameDimension,
                 maxSourceDimension,
                 maxSourcePixels,
@@ -226,6 +265,7 @@ internal class ShowdownStreamingGif private constructor(
 
         private fun parse(
             bytes: ByteArray,
+            frameExecutor: Executor,
             maxFrameDimension: Int,
             maxSourceDimension: Int,
             maxSourcePixels: Long,
@@ -336,8 +376,9 @@ internal class ShowdownStreamingGif private constructor(
                     canvasPixels,
                     outputBitmap,
                     memoryBytes,
+                    frameExecutor,
                     GifLzwDecoder()
-                )
+                ).apply { decodeRequestedFrame(0) }
             }.getOrElse {
                 outputBitmap.recycle()
                 null
@@ -427,7 +468,7 @@ internal class GifLzwDecoder {
     private val stack = ByteArray(MAX_LZW_CODES)
     private val bitReader = GifBitReader()
 
-    fun decode(minimumCodeSize: Int, imageData: ByteArray, emit: (Int) -> Unit) {
+    fun decode(minimumCodeSize: Int, imageData: ByteArray, emit: GifPixelConsumer) {
         if (minimumCodeSize !in 2..8) return
         val clearCode = 1 shl minimumCodeSize
         val endCode = clearCode + 1
@@ -454,7 +495,7 @@ internal class GifLzwDecoder {
                 previousCode < 0 -> {
                     if (code >= clearCode) return
                     firstColor = code
-                    emit(code)
+                    emit.accept(code)
                     previousCode = code
                 }
                 else -> {
@@ -474,7 +515,7 @@ internal class GifLzwDecoder {
                     if (resolvedCode < 0 || resolvedCode >= clearCode || stackSize == outputStack.size) return
                     firstColor = resolvedCode
                     outputStack[stackSize++] = firstColor.toByte()
-                    while (stackSize > 0) emit(outputStack[--stackSize].toInt() and 0xff)
+                    while (stackSize > 0) emit.accept(outputStack[--stackSize].toInt() and 0xff)
                     if (availableCode < MAX_LZW_CODES) {
                         prefixCodes[availableCode] = previousCode
                         suffixCodes[availableCode] = firstColor.toByte()
@@ -486,4 +527,8 @@ internal class GifLzwDecoder {
             }
         }
     }
+}
+
+internal fun interface GifPixelConsumer {
+    fun accept(colorIndex: Int)
 }

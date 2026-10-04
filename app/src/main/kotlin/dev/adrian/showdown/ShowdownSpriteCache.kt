@@ -341,19 +341,36 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             canvas.save()
             if (flipHorizontally) canvas.scale(-1f, 1f, destination.centerX(), destination.centerY())
             if (alpha < 255) canvas.saveLayerAlpha(destination, alpha.coerceIn(0, 255))
-            val image = bitmap ?: streamingGif?.frameAt(if (animate) elapsedMillis else 0L) ?: animatedFrameAt(elapsedMillis)
-            val imageHasVisiblePixels = when {
-                image == null -> false
-                bitmap != null -> bitmapHasVisiblePixels ?: image.hasVisiblePixels().also { bitmapHasVisiblePixels = it }
-                streamingGif != null -> streamingGif.hasVisiblePixels
-                else -> animatedFrameHasVisiblePixels
+            val source = Rect(0, 0, width, height)
+            val destinationRect = RectF(left, top, left + drawWidth, top + drawHeight)
+            val rendered = if (streamingGif != null) {
+                streamingGif.drawFrameAt(
+                    canvas,
+                    source,
+                    destinationRect,
+                    bitmapPaint,
+                    elapsedMillis,
+                    animate
+                )
+            } else {
+                val image = bitmap ?: animatedFrameAt(elapsedMillis)
+                val imageHasVisiblePixels = when {
+                    image == null -> false
+                    bitmap != null -> bitmapHasVisiblePixels ?: image.hasVisiblePixels().also { bitmapHasVisiblePixels = it }
+                    else -> animatedFrameHasVisiblePixels
+                }
+                if (image == null || !imageHasVisiblePixels) {
+                    false
+                } else {
+                    canvas.drawBitmap(image, source, destinationRect, bitmapPaint)
+                    true
+                }
             }
-            if (image == null || !imageHasVisiblePixels) {
+            if (!rendered) {
                 if (alpha < 255) canvas.restore()
                 canvas.restore()
                 return false
             }
-            canvas.drawBitmap(image, Rect(0, 0, width, height), RectF(left, top, left + drawWidth, top + drawHeight), bitmapPaint)
             if (alpha < 255) canvas.restore()
             canvas.restore()
             return true
@@ -1440,6 +1457,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private fun decodeStreamedGif(file: File): SpriteAsset? {
         val gif = ShowdownStreamingGif.fromFile(
             file = file,
+            frameExecutor = decodeExecutor,
             maxFrameDimension = maxAnimatedFrameDimension,
             maxSourceDimension = maxAnimatedSourceDimension,
             maxSourcePixels = maxAnimatedSourcePixels,
@@ -1459,6 +1477,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         ) return null
         val gif = ShowdownStreamingGif.fromFile(
             file = file,
+            frameExecutor = decodeExecutor,
             maxFrameDimension = maxAnimatedFrameDimension,
             maxSourceDimension = maxStreamedHdSourceDimension,
             maxSourcePixels = maxStreamedHdSourcePixels,
