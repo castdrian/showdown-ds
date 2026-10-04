@@ -4,8 +4,8 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
 <table>
   <tr>
-    <td width="50%"><img src="media/showdown-battle-hd-both-sides.png?v=dc7e959ef7a64013" alt="Live Gen 9 battle with Duraludon and Arcanine above its matching move-choice screen"></td>
-    <td width="50%"><img src="media/showdown-battle-party-both-sides.png?v=2db153e83258ea67" alt="The same live matchup above its matching Pokémon party screen"></td>
+    <td width="50%"><img src="media/showdown-battle-hd-both-sides.png?v=4dbfb7310e4bda5b" alt="Live Gen 9 random battle: Cobalion versus Sandy Shocks above Cobalion’s matching move-choice screen"></td>
+    <td width="50%"><img src="media/showdown-battle-party-both-sides.png?v=a914fcd42495b6ff" alt="The same live Cobalion versus Sandy Shocks battle above Cobalion’s matching party screen"></td>
   </tr>
 </table>
 
