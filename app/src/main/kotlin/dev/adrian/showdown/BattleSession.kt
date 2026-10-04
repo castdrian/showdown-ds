@@ -130,13 +130,29 @@ private val BATTLE_SIDE_CONDITION_ANNOUNCEMENTS = mapOf(
         start = "Aurora Veil made {TEAM} stronger against physical and special moves!",
         end = "{TEAM}'s Aurora Veil wore off!"
     ),
+    "craftyshield" to BattleSideConditionAnnouncement(
+        start = "  Crafty Shield protected {TEAM}!"
+    ),
+    "firepledge" to BattleSideConditionAnnouncement(
+        start = "  A sea of fire enveloped {TEAM}!",
+        end = "  The sea of fire around {TEAM} disappeared!",
+        damage = "  {POKEMON} was hurt by the sea of fire!"
+    ),
     "gmaxcannonade" to BattleSideConditionAnnouncement(
         start = "  {PARTY} got caught in the vortex of water!",
         damage = "  {POKEMON} is hurt by G-Max Cannonade’s vortex!"
     ),
+    "grasspledge" to BattleSideConditionAnnouncement(
+        start = "  A swamp enveloped {TEAM}!",
+        end = "  The swamp around {TEAM} disappeared!"
+    ),
     "lightscreen" to BattleSideConditionAnnouncement(
         start = "Light Screen made {TEAM} stronger against special moves!",
         end = "{TEAM}'s Light Screen wore off!"
+    ),
+    "luckychant" to BattleSideConditionAnnouncement(
+        start = "  Lucky Chant shielded {TEAM} from critical hits!",
+        end = "  {TEAM}'s Lucky Chant wore off!"
     ),
     "mist" to BattleSideConditionAnnouncement(
         start = "{TEAM} became shrouded in mist!",
@@ -169,6 +185,10 @@ private val BATTLE_SIDE_CONDITION_ANNOUNCEMENTS = mapOf(
     "toxicspikes" to BattleSideConditionAnnouncement(
         start = "Poison spikes were scattered on the ground all around {TEAM}!",
         end = "The poison spikes disappeared from the ground around {TEAM}!"
+    ),
+    "waterpledge" to BattleSideConditionAnnouncement(
+        start = "  A rainbow appeared in the sky on {TEAM}'s side!",
+        end = "  The rainbow on {TEAM}'s side disappeared!"
     )
 )
 
