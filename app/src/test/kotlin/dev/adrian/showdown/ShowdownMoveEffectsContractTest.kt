@@ -100,7 +100,8 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("window.ShowdownNativeBattleLog.synced(Number(generation) || 0);"))
         assertTrue(source.contains("nativeBattleLogSynchronized(generation);"))
         assertTrue(source.contains("receive: function (lines, generation, synchronizeBattleLog)"))
-        assertTrue(source.contains("if (synchronizeBattleLog) nativeBattleLogSynchronized(generation);"))
+        assertTrue(source.contains("function add(lines, generation, synchronizeBattleLog)"))
+        assertTrue(source.contains("add(lines, generation, synchronizeBattleLog);"))
         assertTrue(source.contains("ShowdownBattleLogFilter.visibleEntries(value)"))
         assertTrue(source.contains("const val NATIVE_BATTLE_LOG_BRIDGE = \"ShowdownNativeBattleLog\""))
         assertTrue(source.contains("new MutationObserver(function ()"))
@@ -188,15 +189,32 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(runHookStart >= 0)
         val runHookEnd = source.indexOf("};", runHookStart)
         val runHook = source.substring(runHookStart, runHookEnd)
-        assertTrue(runHook.contains("nativeBattleLogGenerationByStep[this.currentStep]"))
+        assertTrue(runHook.contains("nativeBattleLogGenerationByStep[stepIndex]"))
         assertTrue(runHook.contains("if (generation === null)"))
         assertTrue(source.contains("var nativeBattleLogGenerationByStep = [];"))
         assertTrue(source.contains("nativeBattleLogGenerationByStep = [];"))
         assertTrue(source.contains("nativeBattleLogGenerationByStep[stepIndex] = generation === undefined ? null : Number(generation) || 0;"))
         assertTrue(source.contains("var stepIndex = battle.stepQueue.length;"))
-        assertTrue(source.contains("function add(lines, generation)"))
-        assertTrue(source.contains("add(lines, generation);"))
+        assertTrue(source.contains("function add(lines, generation, synchronizeBattleLog)"))
+        assertTrue(source.contains("add(lines, generation, synchronizeBattleLog);"))
         assertFalse(source.contains("nativeBattleLogGeneration = Number(generation) || 0;"))
+    }
+
+    @Test
+    fun nativeBattleLogSyncWaitsUntilItsLastQueuedStepIsParsed() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val runHookStart = source.indexOf("Battle.prototype.run = function")
+        val receiveStart = source.indexOf("receive: function (lines, generation, synchronizeBattleLog)")
+        val receiveEnd = source.indexOf("setSpeed: function (speed)", receiveStart)
+        val runHook = source.substring(runHookStart, source.indexOf("};", runHookStart))
+        val receive = source.substring(receiveStart, receiveEnd)
+
+        assertTrue(source.contains("var nativeBattleLogSyncGenerationByStep = [];"))
+        assertTrue(runHook.contains("nativeBattleLogSyncGenerationByStep[stepIndex]"))
+        assertTrue(runHook.contains("if (!preempt && this.currentStep === stepIndex)"))
+        assertTrue(runHook.contains("nativeBattleLogSynchronized(synchronizedGeneration);"))
+        assertTrue(source.contains("nativeBattleLogSyncGenerationByStep[finalStepIndex] = Number(generation) || 0;"))
+        assertFalse(receive.contains("nativeBattleLogSynchronized(generation);"))
     }
 
     @Test

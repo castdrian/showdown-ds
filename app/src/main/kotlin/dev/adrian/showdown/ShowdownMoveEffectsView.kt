@@ -298,6 +298,7 @@ class ShowdownMoveEffectsView(
                         }
                         var nativeBattleLogGeneration = 0;
                         var nativeBattleLogGenerationByStep = [];
+                        var nativeBattleLogSyncGenerationByStep = [];
                         var nativeBattleLogMarkupActive = false;
                         var nativeIdlePauseTimer = null;
                         function clearNativeIdlePauseTimer() {
@@ -341,8 +342,9 @@ class ShowdownMoveEffectsView(
                             if (!Battle.prototype.__showdownNativeBattleLogGenerationHooked) {
                                 var originalRun = Battle.prototype.run;
                                 Battle.prototype.run = function (line, preempt) {
+                                    var stepIndex = this.currentStep;
                                     if (!preempt) {
-                                        var generation = nativeBattleLogGenerationByStep[this.currentStep];
+                                        var generation = nativeBattleLogGenerationByStep[stepIndex];
                                         if (generation === null) {
                                             captureNativeBattleLog = false;
                                         } else if (generation !== undefined) {
@@ -350,7 +352,15 @@ class ShowdownMoveEffectsView(
                                             captureNativeBattleLog = true;
                                         }
                                     }
-                                    return originalRun.apply(this, arguments);
+                                    var result = originalRun.apply(this, arguments);
+                                    if (!preempt && this.currentStep === stepIndex) {
+                                        var synchronizedGeneration = nativeBattleLogSyncGenerationByStep[stepIndex];
+                                        if (synchronizedGeneration !== undefined) {
+                                            delete nativeBattleLogSyncGenerationByStep[stepIndex];
+                                            nativeBattleLogSynchronized(synchronizedGeneration);
+                                        }
+                                    }
+                                    return result;
                                 };
                                 Battle.prototype.__showdownNativeBattleLogGenerationHooked = true;
                             }
@@ -725,6 +735,7 @@ class ShowdownMoveEffectsView(
                             }
                             destroyBattle();
                             nativeBattleLogGenerationByStep = [];
+                            nativeBattleLogSyncGenerationByStep = [];
                             document.getElementById('battle').innerHTML = '';
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', paused: true, ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
@@ -740,13 +751,19 @@ class ShowdownMoveEffectsView(
                             observeChrome();
                             layout();
                         }
-                        function add(lines, generation) {
-                            lines.forEach(function (line) {
-                                if (line.indexOf('|request|') !== 0) {
-                                    var stepIndex = battle.stepQueue.length;
-                                    nativeBattleLogGenerationByStep[stepIndex] = generation === undefined ? null : Number(generation) || 0;
-                                    battle.add(line);
-                                }
+                        function add(lines, generation, synchronizeBattleLog) {
+                            var queuedLines = lines.filter(function (line) { return line.indexOf('|request|') !== 0; });
+                            var finalStepIndex = queuedLines.length ? battle.stepQueue.length + queuedLines.length - 1 : battle.stepQueue.length - 1;
+                            var synchronizationQueued = synchronizeBattleLog && finalStepIndex >= battle.currentStep;
+                            if (synchronizationQueued) {
+                                nativeBattleLogSyncGenerationByStep[finalStepIndex] = Number(generation) || 0;
+                            } else if (synchronizeBattleLog) {
+                                nativeBattleLogSynchronized(generation);
+                            }
+                            queuedLines.forEach(function (line) {
+                                var stepIndex = battle.stepQueue.length;
+                                nativeBattleLogGenerationByStep[stepIndex] = generation === undefined ? null : Number(generation) || 0;
+                                battle.add(line);
                             });
                         }
                         window.addEventListener('resize', layout);
@@ -765,9 +782,8 @@ class ShowdownMoveEffectsView(
                                 clearNativeIdlePauseTimer();
                                 if (!battle || lines.some(function (line) { return line.indexOf('|init|battle') === 0; })) createBattle();
                                 captureNativeBattleLog = true;
-                                add(lines, generation);
+                                add(lines, generation, synchronizeBattleLog);
                                 if (battle.paused) battle.play();
-                                if (synchronizeBattleLog) nativeBattleLogSynchronized(generation);
                             },
                             setSpeed: function (speed) {
                                 animationSpeed = Math.max(${BattlePlaybackSpeed.MINIMUM}, Math.min(${BattlePlaybackSpeed.MAXIMUM}, Number(speed) || 1));

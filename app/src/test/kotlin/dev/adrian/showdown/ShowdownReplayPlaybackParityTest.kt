@@ -21,14 +21,27 @@ class ShowdownReplayPlaybackParityTest {
     @Test
     fun officialReplayMoveActorsStayAlignedWithTheVisibleSprites() {
         listOf(
+            ReplayCase("gen1ou-2692779867.json", emptySet()),
+            ReplayCase("gen2ou-2692782179.json", emptySet()),
+            ReplayCase("gen3ou-2692783639.json", emptySet()),
+            ReplayCase("gen8ou-2692756742.json", setOf("-formechange")),
             ReplayCase("gen9randombattle-2691947817.json", emptySet()),
             ReplayCase("gen9doublesou-2691960998.json", emptySet()),
             ReplayCase("gen9randombattle-2691989691.json", setOf("-formechange", "-transform")),
             ReplayCase("gen9randombattle-2691985124.json", setOf("-formechange")),
             ReplayCase("gen9randombattle-2691982973.json", setOf("replace"))
         ).forEach { replayCase ->
-            listOf(0.75f, 1f).forEach { speed ->
-                assertReplayMoveActorsMatchSprites(replayCase, speed)
+            val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}"))
+                .bufferedReader()
+                .use { it.readText() }
+            val replayPlayers = ShowdownReplayImporter.payload(replayJson).players.distinct()
+            assertEquals(replayCase.fileName, 2, replayPlayers.size)
+            replayPlayers.forEach { localUsername ->
+                listOf(false, true).forEach { replayMode ->
+                    listOf(0.5f, 0.75f, 1f, 1.5f, 2f).forEach { speed ->
+                        assertReplayMoveActorsMatchSprites(replayCase, speed, localUsername, replayMode)
+                    }
+                }
             }
         }
     }
@@ -71,6 +84,39 @@ class ShowdownReplayPlaybackParityTest {
             session.spriteStyle
         ).single().request
         assertEquals("Cramorant-Gulping", changedSprite.species)
+    }
+
+    @Test
+    fun replayUpdatesAegislashFormAndSpriteTogether() {
+        val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/gen8ou-2692756742.json"))
+            .bufferedReader()
+            .use { it.readText() }
+        val replay = ShowdownReplayImporter.payload(replayJson)
+        val chunks = BattlePlaybackTiming.chunks(replay.log.lines())
+        val formChangeChunkIndex = chunks.indexOfFirst { chunk ->
+            chunk.any { it.startsWith("|-formechange|p1a: Aegislash|Aegislash-Blade|") }
+        }
+        assertTrue("replay fixture has no Aegislash Blade form change", formChangeChunkIndex >= 0)
+
+        val session = BattleSession().apply {
+            setLocalUsername(replay.players.firstOrNull().orEmpty())
+            setReplayMode(true)
+        }
+        chunks.take(formChangeChunkIndex).forEach(session::applyProtocolPacket)
+
+        val originalForm = session.playerActiveCombatants().single { it.slot == "p1a" }
+        assertEquals("Aegislash", originalForm.species)
+
+        session.applyProtocolPacket(chunks[formChangeChunkIndex])
+
+        val changedForm = session.playerActiveCombatants().single { it.slot == "p1a" }
+        assertEquals("Aegislash-Blade", changedForm.species)
+        val changedSprite = BattleSpriteRequests.active(
+            session.playerActiveCombatants(),
+            BattleSpriteSide.PLAYER,
+            session.spriteStyle
+        ).single { it.slot == "p1a" }.request
+        assertEquals("Aegislash-Blade", changedSprite.species)
     }
 
     @Test
@@ -192,18 +238,23 @@ class ShowdownReplayPlaybackParityTest {
         assertEquals(9, moveCount)
     }
 
-    private fun assertReplayMoveActorsMatchSprites(replayCase: ReplayCase, speed: Float) {
-        val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}"))
-            .bufferedReader()
-            .use { it.readText() }
+    private fun assertReplayMoveActorsMatchSprites(
+        replayCase: ReplayCase,
+        speed: Float,
+        localUsername: String,
+        replayMode: Boolean
+    ) {
+        val replayJson = checkNotNull(
+            javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}")
+        ).bufferedReader().use { it.readText() }
         val replay = ShowdownReplayImporter.payload(replayJson)
         val observedIdentityTransitions = replay.log.lines().mapNotNull { line ->
             line.split('|').getOrNull(1)?.takeIf { it in replayCase.requiredIdentityTransitions }
         }.toSet()
         assertEquals(replayCase.fileName, replayCase.requiredIdentityTransitions, observedIdentityTransitions)
         val session = BattleSession().apply {
-            setLocalUsername(replay.players.firstOrNull().orEmpty())
-            setReplayMode(true)
+            setLocalUsername(localUsername)
+            setReplayMode(replayMode)
         }
         val presentation = BattleFeedPresentation().apply { setPlaybackSpeed(speed) }
         val expectedMoves = linkedMapOf<Long, ExpectedMove>()

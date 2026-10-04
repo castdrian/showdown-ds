@@ -142,6 +142,23 @@ private val BATTLE_SIDE_CONDITION_ANNOUNCEMENTS = mapOf(
         start = "  {PARTY} got caught in the vortex of water!",
         damage = "  {POKEMON} is hurt by G-Max Cannonade’s vortex!"
     ),
+    "gmaxsteelsurge" to BattleSideConditionAnnouncement(
+        start = "  Sharp-pointed pieces of steel started floating around {PARTY}!",
+        end = "  The pieces of steel surrounding {PARTY} disappeared!",
+        damage = "  The sharp steel bit into {POKEMON}!"
+    ),
+    "gmaxvinelash" to BattleSideConditionAnnouncement(
+        start = "  {PARTY} got trapped with vines!",
+        damage = "  {POKEMON} is hurt by G-Max Vine Lash’s ferocious beating!"
+    ),
+    "gmaxvolcalith" to BattleSideConditionAnnouncement(
+        start = "  {PARTY} became surrounded by rocks!",
+        damage = "  {POKEMON} is hurt by the rocks thrown out by G-Max Volcalith!"
+    ),
+    "gmaxwildfire" to BattleSideConditionAnnouncement(
+        start = "  {PARTY} were surrounded by fire!",
+        damage = "  {POKEMON} is burning up within G-Max Wildfire’s flames!"
+    ),
     "grasspledge" to BattleSideConditionAnnouncement(
         start = "  A swamp enveloped {TEAM}!",
         end = "  The swamp around {TEAM} disappeared!"
@@ -4594,11 +4611,11 @@ class BattleSession {
 
     private fun sideConditionAnnouncement(effect: String, side: String, enabled: Boolean): String {
         val team = if (isPlayerSide(side)) "your team" else "the opposing team"
-        val party = if (isPlayerSide(side)) "Your ally Pokémon" else "The opposing Pokémon"
+        val party = if (isPlayerSide(side)) "your ally Pokémon" else "the opposing Pokémon"
         val announcement = BATTLE_SIDE_CONDITION_ANNOUNCEMENTS[normalizeBattleTextKey(effect)]
         val template = if (enabled) announcement?.start else announcement?.end
         return template?.replace("{TEAM}", team)?.replace("{PARTY}", party)
-            ?: if (enabled) "($effect started on $team!)" else "($effect ended on $team!)"
+            ?: if (enabled) " ($effect started on $team!)" else " ($effect ended on $team!)"
     }
 
     private fun applyBoost(fields: List<String>, direction: Int) {
@@ -5494,11 +5511,14 @@ class BattleSession {
         val prefixLength = entry.takeWhile { it.isWhitespace() || it in "([{" }.length
         val leading = entry.substring(0, prefixLength)
         val content = entry.substring(prefixLength)
-        val opposingPrefix = "the opposing"
-        if (!content.startsWith(opposingPrefix, true) || content.getOrNull(opposingPrefix.length)?.isWhitespace() != true) {
-            return entry
+        val sentencePrefix = when {
+            content.startsWith("the opposing", true) -> "the opposing"
+            content.startsWith("your ally", true) -> "your ally"
+            content.startsWith("your team", true) -> "your team"
+            else -> return entry
         }
-        return "$leading${opposingPrefix.replaceFirstChar(Char::uppercase)}${content.substring(opposingPrefix.length)}"
+        if (content.getOrNull(sentencePrefix.length)?.isWhitespace() != true) return entry
+        return "$leading${sentencePrefix.replaceFirstChar(Char::uppercase)}${content.substring(sentencePrefix.length)}"
     }
 
     private fun battleMoveMarkup(actor: String, move: String): String {

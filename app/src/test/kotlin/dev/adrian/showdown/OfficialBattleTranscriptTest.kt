@@ -577,7 +577,7 @@ class OfficialBattleTranscriptTest {
                 "A sticky web has been laid out on the ground around your team!",
                 "The sticky web has disappeared from the ground around your team!",
                 "  The opposing Pokémon got caught in the vortex of water!",
-                "(G-Max Cannonade ended on the opposing team!)"
+                " (G-Max Cannonade ended on the opposing team!)"
             ),
             session.battleLog().takeLast(6)
         )
@@ -600,6 +600,51 @@ class OfficialBattleTranscriptTest {
 
         assertTrue(session.battleLog().contains("  The opposing Pokémon got caught in the vortex of water!"))
         assertTrue(session.battleLog().contains("  The opposing Pikachu is hurt by G-Max Cannonade’s vortex!"))
+    }
+
+    @Test
+    fun formatsGigantamaxResidualSideConditionsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Pikachu|Pikachu, L50|100/100",
+                "|-sidestart|p2: OPPONENT|move: G-Max Steelsurge",
+                "|-damage|p2a: Pikachu|85/100|[from] move: G-Max Steelsurge",
+                "|-sideend|p2: OPPONENT|move: G-Max Steelsurge",
+                "|-sidestart|p2: OPPONENT|move: G-Max Vine Lash",
+                "|-damage|p2a: Pikachu|70/100|[from] move: G-Max Vine Lash",
+                "|-sideend|p2: OPPONENT|move: G-Max Vine Lash",
+                "|-sidestart|p2: OPPONENT|move: G-Max Volcalith",
+                "|-damage|p2a: Pikachu|55/100|[from] move: G-Max Volcalith",
+                "|-sideend|p2: OPPONENT|move: G-Max Volcalith",
+                "|-sidestart|p2: OPPONENT|move: G-Max Wildfire",
+                "|-damage|p2a: Pikachu|40/100|[from] move: G-Max Wildfire",
+                "|-sideend|p2: OPPONENT|move: G-Max Wildfire",
+                "|-sidestart|p1: ADRIAN|move: G-Max Cannonade",
+                "|-sidestart|p1: ADRIAN|move: G-Max Steelsurge",
+                "|-sideend|p1: ADRIAN|move: G-Max Steelsurge"
+            )
+        )
+
+        val log = session.battleLog()
+        assertTrue(log.contains("  Sharp-pointed pieces of steel started floating around the opposing Pokémon!"))
+        assertTrue(log.contains("  The sharp steel bit into the opposing Pikachu!"))
+        assertTrue(log.contains("  The pieces of steel surrounding the opposing Pokémon disappeared!"))
+        assertTrue(log.contains("  The opposing Pokémon got trapped with vines!"))
+        assertTrue(log.contains("  The opposing Pikachu is hurt by G-Max Vine Lash’s ferocious beating!"))
+        assertTrue(log.contains("  The opposing Pokémon became surrounded by rocks!"))
+        assertTrue(log.contains("  The opposing Pikachu is hurt by the rocks thrown out by G-Max Volcalith!"))
+        assertTrue(log.contains("  The opposing Pokémon were surrounded by fire!"))
+        assertTrue(log.contains("  The opposing Pikachu is burning up within G-Max Wildfire’s flames!"))
+        assertTrue(log.contains(" (G-Max Vine Lash ended on the opposing team!)"))
+        assertTrue(log.contains(" (G-Max Volcalith ended on the opposing team!)"))
+        assertTrue(log.contains(" (G-Max Wildfire ended on the opposing team!)"))
+        assertTrue(log.contains("  Your ally Pokémon got caught in the vortex of water!"))
+        assertTrue(log.contains("  Sharp-pointed pieces of steel started floating around your ally Pokémon!"))
+        assertTrue(log.contains("  The pieces of steel surrounding your ally Pokémon disappeared!"))
     }
 
     @Test
