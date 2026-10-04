@@ -558,6 +558,7 @@ class BattleSession {
     private var battleRoomPresenceLog: BattleRoomPresenceLog? = null
     private var battleRoomRenameFallback: String? = null
     private var battleLogGeneration = 0L
+    private var battleLogGenerationFloor = 0L
     private var nativeBattleLogGeneration = -1L
     private var nativeBattleLogPending = false
     private var lastNativeProtocolMessageId = Long.MIN_VALUE
@@ -987,6 +988,9 @@ class BattleSession {
 
     fun battleLogGeneration() = battleLogGeneration
 
+    private fun acceptsNativeBattleLogGeneration(generation: Long) =
+        generation in battleLogGenerationFloor..battleLogGeneration
+
     fun protocolTimestampSeconds() = protocolTimestampSeconds
 
     fun markNativeBattleLogSynchronized(generation: Long) {
@@ -1067,7 +1071,7 @@ class BattleSession {
     }
 
     fun appendShowdownBattleLog(value: String, generation: Long = battleLogGeneration) {
-        if (generation != battleLogGeneration) return
+        if (!acceptsNativeBattleLogGeneration(generation)) return
         val entries = normalizedShowdownEntries(value)
         if (entries.isEmpty()) return
         appendNormalizedShowdownEntries(entries)
@@ -1081,7 +1085,7 @@ class BattleSession {
     }
 
     fun replaceShowdownBattleMarkup(key: String, value: String, generation: Long = battleLogGeneration) {
-        if (generation != battleLogGeneration) return
+        if (!acceptsNativeBattleLogGeneration(generation)) return
         val normalizedKey = key.trim()
         if (normalizedKey.isBlank()) {
             appendShowdownBattleLog(value, generation)
@@ -2233,6 +2237,7 @@ class BattleSession {
         battleRoomRenameFallback = null
         clearBattleFeedEntriesCache()
         battleLogGeneration += 1L
+        battleLogGenerationFloor = battleLogGeneration
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = true
         lastNativeProtocolMessageId = Long.MIN_VALUE

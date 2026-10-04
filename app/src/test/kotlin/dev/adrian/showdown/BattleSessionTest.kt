@@ -580,10 +580,43 @@ class BattleSessionTest {
         session.applyProtocolLine("|init|battle")
 
         session.appendShowdownBattleLog("Old battle move", oldGeneration)
+        session.replaceShowdownBattleMarkup("old-status", "<div>Old battle status</div>", oldGeneration)
         session.markNativeBattleLogSynchronized(oldGeneration)
 
         assertFalse(session.battleFeedEntries().contains("Old battle move"))
+        assertFalse(session.showdownBattleLog().contains("Old battle status"))
         assertEquals(listOf("Battle started."), session.battleFeedEntries())
+    }
+
+    @Test
+    fun acceptsDelayedNativeEntriesFromEarlierChunksOfTheSameBattle() {
+        val session = BattleSession()
+        session.applyProtocolLine("|init|battle")
+        session.applyProtocolLine("|move|p1a: Pikachu|Thunderbolt|p2a: Eevee")
+        val firstMoveGeneration = session.battleLogGeneration()
+        session.applyProtocolLine("|move|p2a: Eevee|Tackle|p1a: Pikachu")
+        val latestGeneration = session.battleLogGeneration()
+
+        session.appendShowdownBattleLog("Pikachu used Thunderbolt!", firstMoveGeneration)
+        session.replaceShowdownBattleMarkup(
+            "weather-status",
+            "<div>Rain began to fall!</div>",
+            firstMoveGeneration
+        )
+
+        assertEquals(
+            listOf("Pikachu used Thunderbolt!", "Rain began to fall!"),
+            session.showdownBattleLog()
+        )
+        assertEquals("The opposing Eevee used Tackle!", session.battleFeedEntries().last())
+
+        session.appendShowdownBattleLog("The opposing Eevee used Tackle!", latestGeneration)
+        session.markNativeBattleLogSynchronized(latestGeneration)
+
+        assertEquals(
+            listOf("Pikachu used Thunderbolt!", "Rain began to fall!", "The opposing Eevee used Tackle!"),
+            session.battleFeedEntries()
+        )
     }
 
     @Test
