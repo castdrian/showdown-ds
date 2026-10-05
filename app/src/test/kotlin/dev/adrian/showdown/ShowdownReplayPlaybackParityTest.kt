@@ -47,6 +47,44 @@ class ShowdownReplayPlaybackParityTest {
     }
 
     @Test
+    fun multiBattleMoveActorsStayAlignedWithSpritesForEveryPlayerPerspective() {
+        val transcript = listOf(
+            "|player|p1|RED||",
+            "|player|p2|BLUE||",
+            "|player|p3|GREEN||",
+            "|player|p4|GOLD||",
+            "|gametype|multi",
+            "|switch|p1a: Wing|Moltres, L50|100/100",
+            "|switch|p2a: Spark|Magmar, L50|100/100",
+            "|switch|p3b: Cinder|Skeledirge, L50|100/100",
+            "|switch|p4b: Shell|Drednaw, L50|100/100",
+            "|move|p1a: Wing|Flamethrower|p2a: Spark",
+            "|-damage|p2a: Spark|75/100",
+            "|move|p2a: Spark|Fire Blast|p3b: Cinder",
+            "|-damage|p3b: Cinder|70/100",
+            "|move|p3b: Cinder|Torch Song|p4b: Shell",
+            "|-damage|p4b: Shell|65/100",
+            "|move|p4b: Shell|Liquidation|p1a: Wing",
+            "|-damage|p1a: Wing|80/100"
+        )
+        listOf("RED", "BLUE", "GREEN", "GOLD").forEach { localUsername ->
+            listOf(false, true).forEach { replayMode ->
+                listOf(0.75f, 1.5f).forEach { speed ->
+                    assertMoveActorsMatchSprites(
+                        transcript,
+                        "anonymized-multi-replay",
+                        emptySet(),
+                        speed,
+                        localUsername,
+                        replayMode,
+                        minimumMoveCount = 4
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun replayKeepsTheOriginalFormVisibleUntilItsMoveMessageHasPlayed() {
         val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/gen9randombattle-2691985124.json"))
             .bufferedReader()
@@ -252,6 +290,30 @@ class ShowdownReplayPlaybackParityTest {
             line.split('|').getOrNull(1)?.takeIf { it in replayCase.requiredIdentityTransitions }
         }.toSet()
         assertEquals(replayCase.fileName, replayCase.requiredIdentityTransitions, observedIdentityTransitions)
+        assertMoveActorsMatchSprites(
+            replay.log.lines(),
+            replay.id,
+            replayCase.requiredIdentityTransitions,
+            speed,
+            localUsername,
+            replayMode,
+            minimumMoveCount = 10
+        )
+    }
+
+    private fun assertMoveActorsMatchSprites(
+        lines: List<String>,
+        replayId: String,
+        requiredIdentityTransitions: Set<String>,
+        speed: Float,
+        localUsername: String,
+        replayMode: Boolean,
+        minimumMoveCount: Int
+    ) {
+        val observedIdentityTransitions = lines.mapNotNull { line ->
+            line.split('|').getOrNull(1)?.takeIf { it in requiredIdentityTransitions }
+        }.toSet()
+        assertEquals(replayId, requiredIdentityTransitions, observedIdentityTransitions)
         val session = BattleSession().apply {
             setLocalUsername(localUsername)
             setReplayMode(replayMode)
@@ -261,7 +323,7 @@ class ShowdownReplayPlaybackParityTest {
         var nowMillis = 0L
         var moveCount = 0
 
-        BattlePlaybackTiming.chunks(replay.log.lines()).forEach { packet ->
+        BattlePlaybackTiming.chunks(lines).forEach { packet ->
             val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
             session.applyProtocolPacket(packet)
             val messages = session.battleFeedMessages()
@@ -283,7 +345,7 @@ class ShowdownReplayPlaybackParityTest {
                 val actorIdent = fields.getOrElse(2) { "" }
                 val actorSlot = actorIdent.substringBefore(':').trim()
                 val actorName = actorIdent.substringAfter(": ", actorIdent).substringBefore(',').trim()
-                val context = "${replay.id} at $line"
+                val context = "$replayId at $line"
                 val moveMessage = generatedMessages.firstOrNull { message ->
                     message.text.contains(" used ") && messageActor(message.text).equals(actorName, true)
                 }
@@ -318,7 +380,7 @@ class ShowdownReplayPlaybackParityTest {
                 if (frame != null) {
                     val expectedMove = frame.messageId?.let(expectedMoves::get)
                     if (expectedMove != null) {
-                        val context = "${replay.id} at ${expectedMove.line}"
+                        val context = "$replayId at ${expectedMove.line}"
                         observedPacketMoveMessages += expectedMove.messageId
                         assertEquals(context, expectedMove.actorName.lowercase(), messageActor(frame.visibleText).lowercase())
                         val playerCombatants = BattleFeedSceneState.combatantsForMessage(
@@ -372,14 +434,14 @@ class ShowdownReplayPlaybackParityTest {
             packetMoveMessageIds.forEach { messageId ->
                 val expectedMove = checkNotNull(expectedMoves[messageId])
                 assertTrue(
-                    "${replay.id} at ${expectedMove.line} was not shown during its action dwell",
-                    messageId in observedPacketMoveMessages
-                )
+            "$replayId at ${expectedMove.line} was not shown during its action dwell",
+                messageId in observedPacketMoveMessages
+            )
             }
             nowMillis += pauseMillis
         }
 
-        assertTrue("${replayCase.fileName} did not exercise enough move events", moveCount >= 10)
+        assertTrue("$replayId did not exercise enough move events", moveCount >= minimumMoveCount)
     }
 
     private fun messageActor(message: String): String = message
