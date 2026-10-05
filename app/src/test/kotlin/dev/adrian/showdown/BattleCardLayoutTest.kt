@@ -69,8 +69,8 @@ class BattleCardLayoutTest {
     fun multiBattleCardsKeepTheirPartyIndicatorStripBeforePartyReveal() {
         val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
 
-        assertTrue(source.contains("val party = if (player) session.playerPartyDetails() else session.opponentPartyDetails()"))
-        assertTrue(source.contains("layout,\n                    party\n                )"))
+        assertTrue(source.contains("partyDetails: List<BattleSession.PokemonDetails>"))
+        assertTrue(source.contains("layout,\n                    partyDetails\n                )"))
         assertTrue(!source.contains("partyIndicatorAnchorIndex"))
         assertTrue(source.contains("party: List<BattleSession.PokemonDetails>"))
         assertTrue(source.contains("drawPartyIndicators(canvas, party, ballStart, ballTop, ballSize, ballGap)"))

@@ -424,6 +424,18 @@ class BattleSession {
         val details: PokemonDetails
     )
 
+    data class BattleSceneSnapshot(
+        val playerCombatants: List<ActiveCombatant>,
+        val opponentCombatants: List<ActiveCombatant>,
+        val playerDetails: PokemonDetails,
+        val opponentDetails: PokemonDetails,
+        val playerDetailsBySlot: Map<String, PokemonDetails>,
+        val opponentDetailsBySlot: Map<String, PokemonDetails>,
+        val playerPartyDetails: List<PokemonDetails>,
+        val opponentPartyDetails: List<PokemonDetails>,
+        val battleInfo: BattleInfo
+    )
+
     private class ActiveCombatantMap(
         private val onChanged: () -> Unit
     ) : LinkedHashMap<String, ActiveCombatant>() {
@@ -555,6 +567,7 @@ class BattleSession {
     private val battleLogMessageIds = mutableListOf(0L, 1L, 2L)
     private var nextBattleFeedMessageId = 3L
     private val switchOutVisualsByMessageId = mutableMapOf<Long, SwitchOutVisual>()
+    private val battleSceneSnapshotsByMessageId = mutableMapOf<Long, BattleSceneSnapshot>()
     private var battleRoomPresenceLog: BattleRoomPresenceLog? = null
     private var battleRoomRenameFallback: String? = null
     private var battleLogGeneration = 0L
@@ -1041,6 +1054,8 @@ class BattleSession {
 
     fun switchOutVisualForBattleFeed(messageId: Long?) = messageId?.let(switchOutVisualsByMessageId::get)
 
+    fun battleSceneSnapshotForFeedMessage(messageId: Long?) = messageId?.let(battleSceneSnapshotsByMessageId::get)
+
     private fun clearBattleFeedEntriesCache() {
         battleFeedEntriesCache.clear()
         battleFeedMessagesCache.clear()
@@ -1050,7 +1065,7 @@ class BattleSession {
 
     fun battleFeedMarkupFor(value: String): String {
         val nativeIndex = if (nativeBattleLogGeneration == battleLogGeneration) {
-            showdownBattleLogEntries.indexOfLast { BattleFeedMessageIdentity.matches(it.plainText, value) }
+            showdownBattleLogEntries.indexOfLast { BattleFeedMessageIdentity.matchesProtocolFallback(it.plainText, value) }
         } else {
             -1
         }
@@ -1509,6 +1524,7 @@ class BattleSession {
         battleLog.clear()
         battleLogMessageIds.clear()
         switchOutVisualsByMessageId.clear()
+        battleSceneSnapshotsByMessageId.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
         protocolBattleFeedMarkupEntries.clear()
@@ -2241,6 +2257,7 @@ class BattleSession {
         battleLog.clear()
         battleLogMessageIds.clear()
         switchOutVisualsByMessageId.clear()
+        battleSceneSnapshotsByMessageId.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
         protocolBattleFeedMarkupEntries.clear()
@@ -5517,7 +5534,9 @@ class BattleSession {
         val logIndex = battleLog.indexOfLast { it == entry }
         if (logIndex >= 0) {
             battleLog.removeAt(logIndex)
-            switchOutVisualsByMessageId.remove(battleLogMessageIds.removeAt(logIndex))
+            val messageId = battleLogMessageIds.removeAt(logIndex)
+            switchOutVisualsByMessageId.remove(messageId)
+            battleSceneSnapshotsByMessageId.remove(messageId)
         }
         activityMessages.indices.reversed().firstOrNull { index ->
             activityOrigins[index] == ActivityOrigin.PROTOCOL &&
@@ -5567,10 +5586,13 @@ class BattleSession {
         battleLog += message
         battleLogMessageIds += messageId
         switchOutVisual?.let { switchOutVisualsByMessageId[messageId] = it }
+        battleSceneSnapshotsByMessageId[messageId] = createBattleSceneSnapshot()
         if (feedMarkup != message) protocolBattleFeedMarkupEntries += ShowdownBattleLogEntry(messageId, message, feedMarkup)
         if (battleLog.size > 32) {
             val removed = battleLog.removeAt(0)
-            switchOutVisualsByMessageId.remove(battleLogMessageIds.removeAt(0))
+            val removedMessageId = battleLogMessageIds.removeAt(0)
+            switchOutVisualsByMessageId.remove(removedMessageId)
+            battleSceneSnapshotsByMessageId.remove(removedMessageId)
             if (battleLog.none { it == removed }) {
                 protocolBattleFeedMarkupEntries.removeAll { it.plainText == removed }
             }
@@ -5585,6 +5607,46 @@ class BattleSession {
         }
         return messageId
     }
+
+    private fun createBattleSceneSnapshot(): BattleSceneSnapshot {
+        val playerCombatants = playerActiveCombatants().map(::snapshotActiveCombatant)
+        val opponentCombatants = opponentActiveCombatants().map(::snapshotActiveCombatant)
+        val battleInfo = battleInfo()
+        return BattleSceneSnapshot(
+            playerCombatants = playerCombatants,
+            opponentCombatants = opponentCombatants,
+            playerDetails = snapshotPokemonDetails(playerDetails),
+            opponentDetails = snapshotPokemonDetails(opponentDetails),
+            playerDetailsBySlot = playerCombatants.associate { combatant ->
+                combatant.slot to snapshotPokemonDetails(detailsForActiveCombatant(true, combatant.slot) ?: playerDetails)
+            },
+            opponentDetailsBySlot = opponentCombatants.associate { combatant ->
+                combatant.slot to snapshotPokemonDetails(detailsForActiveCombatant(false, combatant.slot) ?: opponentDetails)
+            },
+            playerPartyDetails = teamDetails.map(::snapshotPokemonDetails),
+            opponentPartyDetails = opponentTeamDetails.map(::snapshotPokemonDetails),
+            battleInfo = battleInfo.copy(
+                playerSideConditions = battleInfo.playerSideConditions.toList(),
+                opponentSideConditions = battleInfo.opponentSideConditions.toList(),
+                playerBoosts = battleInfo.playerBoosts.toMap(),
+                opponentBoosts = battleInfo.opponentBoosts.toMap(),
+                fieldEffects = battleInfo.fieldEffects.toList()
+            )
+        )
+    }
+
+    private fun snapshotActiveCombatant(combatant: ActiveCombatant) = combatant.copy(
+        types = combatant.types.toList(),
+        volatileEffects = combatant.volatileEffects.toList(),
+        turnEffects = combatant.turnEffects.toList(),
+        moveEffects = combatant.moveEffects.toList()
+    )
+
+    private fun snapshotPokemonDetails(details: PokemonDetails) = details.copy(
+        types = details.types.toList(),
+        moves = details.moves.toList(),
+        possibleAbilities = details.possibleAbilities.toList()
+    )
 
     private fun appendActivity(entry: String, origin: ActivityOrigin = ActivityOrigin.PROTOCOL) {
         val followsTail = activityMessages.isEmpty() || focusedMessage >= activityMessages.lastIndex
@@ -5607,9 +5669,9 @@ class BattleSession {
     }
 
     private fun nativeMatchesProtocolFallback(protocolEntry: String, nativeEntry: String): Boolean {
-        if (BattleFeedMessageIdentity.matches(protocolEntry, nativeEntry)) return true
+        if (BattleFeedMessageIdentity.matchesProtocolFallback(protocolEntry, nativeEntry)) return true
         val withoutOpponentPrefix = nativeEntry.replace(Regex("(?i)^the opposing\\s+"), "")
-        return BattleFeedMessageIdentity.matches(protocolEntry, withoutOpponentPrefix)
+        return BattleFeedMessageIdentity.matchesProtocolFallback(protocolEntry, withoutOpponentPrefix)
     }
 
     private fun removeActivityAt(index: Int) {
@@ -5633,7 +5695,13 @@ class BattleSession {
         val previous = key?.let { markupEntries.put(it, message) }
         if (previous == message) return
         previous?.let { oldMessage ->
-            battleLog.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(battleLog::removeAt)
+            val logIndex = battleLog.indexOfLast { it == oldMessage }
+            if (logIndex >= 0) {
+                battleLog.removeAt(logIndex)
+                val oldMessageId = battleLogMessageIds.removeAt(logIndex)
+                switchOutVisualsByMessageId.remove(oldMessageId)
+                battleSceneSnapshotsByMessageId.remove(oldMessageId)
+            }
             activityMessages.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(::removeActivityAt)
         }
         appendLog(message)
@@ -5697,12 +5765,12 @@ class BattleSession {
         var protocolSearchAfterMessageId = lastNativeProtocolMessageId
         val entries = plainEntries.mapIndexed { index, plainText ->
             val previousId = previous.getOrNull(index)
-                ?.takeIf { BattleFeedMessageIdentity.matches(it.plainText, plainText) }
+                ?.takeIf { BattleFeedMessageIdentity.matchesProtocolFallback(it.plainText, plainText) }
                 ?.id
             val protocolIndex = if (previousId == null) {
                 battleLog.indices.firstOrNull { candidateIndex ->
                     battleLogMessageIds[candidateIndex] > protocolSearchAfterMessageId &&
-                        BattleFeedMessageIdentity.matches(battleLog[candidateIndex], plainText)
+                        BattleFeedMessageIdentity.matchesProtocolFallback(battleLog[candidateIndex], plainText)
                 }
             } else {
                 null

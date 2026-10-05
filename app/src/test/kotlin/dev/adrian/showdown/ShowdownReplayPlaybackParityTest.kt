@@ -118,15 +118,17 @@ class ShowdownReplayPlaybackParityTest {
 
                             while (frameTimeMillis <= deadlineMillis) {
                                 presentation.frame(frameTimeMillis)?.let { frame ->
+                                    val sceneSnapshot = session.battleSceneSnapshotForFeedMessage(frame.messageId)
+                                    val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
                                     val playerCombatants = BattleFeedSceneState.combatantsForMessage(
-                                        session.playerActiveCombatants(),
+                                        sceneSnapshot?.playerCombatants ?: session.playerActiveCombatants(),
                                         true,
-                                        session.switchOutVisualForBattleFeed(frame.messageId)
+                                        switchOutVisual
                                     )
                                     val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
-                                        session.opponentActiveCombatants(),
+                                        sceneSnapshot?.opponentCombatants ?: session.opponentActiveCombatants(),
                                         false,
-                                        session.switchOutVisualForBattleFeed(frame.messageId)
+                                        switchOutVisual
                                     )
                                     val spriteRequests = BattleSpriteRequests.forScene(
                                         playerCombatants = playerCombatants,
@@ -442,6 +444,74 @@ class ShowdownReplayPlaybackParityTest {
 
         assertTrue("replay never presented Perrserker's damage narration", sawPerrserkerDamageMessage)
         assertTrue("replay never presented Lugia's switch-in narration", sawLugiaSendoutMessage)
+    }
+
+    @Test
+    fun delayedDamageNarrationKeepsItsOriginalPokemonVisibleAfterTheNextSwitch() {
+        val session = BattleSession().apply {
+            setLocalUsername("T0RcH3D")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|T0RcH3D||",
+                "|player|p2|iluvgermany||",
+                "|gametype|singles",
+                "|switch|p1a: Cramorant|Cramorant, L86, M|261/261",
+                "|switch|p2a: Perrserker|Perrserker, L89, M|269/269"
+            )
+        )
+        val presentation = BattleFeedPresentation()
+        presentation.updateMessages(session.battleFeedMessages(), true, 0L)
+        session.applyProtocolPacket(
+            listOf("|-damage|p2a: Perrserker|155/269|[from] move: Surf|[of] p1a: Cramorant")
+        )
+        val firstDamageMessage = session.battleFeedMessages().last()
+        presentation.updateMessages(session.battleFeedMessages(), true, 100L)
+        session.applyProtocolPacket(
+            listOf("|-damage|p2a: Perrserker|88/269|[from] ability: Gulp Missile|[of] p1a: Cramorant")
+        )
+        presentation.updateMessages(session.battleFeedMessages(), true, 200L)
+        val damageMessage = session.battleFeedMessages().last { it.text.contains("Perrserker lost 25%", true) }
+        session.applyProtocolPacket(listOf("|switch|p2a: Lugia|Lugia, L73|275/275"))
+        presentation.updateMessages(session.battleFeedMessages(), true, 300L)
+        session.appendShowdownBattleLog(
+            "The opposing Perrserker lost 42% of its health!\nThe opposing Perrserker lost some of its HP!",
+            session.battleLogGeneration()
+        )
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        val frame = checkNotNull(presentation.frame(4_900L))
+        assertTrue(frame.visibleText.contains("Perrserker", true))
+        assertEquals("Lugia", session.opponentActiveCombatants().single().name)
+        assertEquals(
+            "${damageMessage.text} -> ${session.showdownBattleLog()}",
+            listOf(firstDamageMessage.id, damageMessage.id),
+            session.battleFeedMessages().map { it.id }
+        )
+        val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
+        val sceneSnapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(frame.messageId))
+        val visiblePlayerCombatants = BattleFeedSceneState.combatantsForMessage(
+            sceneSnapshot.playerCombatants,
+            true,
+            switchOutVisual
+        )
+        val visibleOpponents = BattleFeedSceneState.combatantsForMessage(
+            sceneSnapshot.opponentCombatants,
+            false,
+            switchOutVisual
+        )
+        assertEquals("Perrserker", visibleOpponents.single().name)
+        val sprites = BattleSpriteRequests.forScene(
+            playerCombatants = visiblePlayerCombatants,
+            opponentCombatants = visibleOpponents,
+            singlesBattle = true,
+            style = session.spriteStyle,
+            playerFallbackSpecies = session.playerPokemon,
+            opponentFallbackSpecies = session.opponentPokemon
+        )
+        assertEquals("Perrserker", sprites.opponentLead?.species)
     }
 
     @Test

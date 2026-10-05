@@ -3049,6 +3049,47 @@ class BattleSessionTest {
     }
 
     @Test
+    fun battleSceneSnapshotsRetainFieldStateAtEachFeedMessage() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|-weather|RainDance")
+        val rainMessage = session.battleFeedMessages().last()
+        val rainSnapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(rainMessage.id))
+
+        session.applyProtocolLine("|-weather|none")
+
+        assertEquals("RainDance", rainSnapshot.battleInfo.weather)
+        assertEquals("", session.battleInfo().weather)
+    }
+
+    @Test
+    fun replacingMarkupKeepsFeedMessageIdsAlignedWithSceneSnapshots() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|gametype|singles",
+                "|switch|p1a: Cramorant|Cramorant, L86|261/261",
+                "|switch|p2a: Perrserker|Perrserker, L89|269/269",
+                "|uhtml|battle-scene|Perrserker used Surf!"
+            )
+        )
+        val oldMessage = session.battleFeedMessages().last()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Lugia|Lugia, L73|275/275",
+                "|uhtmlchange|battle-scene|Cramorant used Surf!"
+            )
+        )
+
+        val newMessage = session.battleFeedMessages().last()
+        val snapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(newMessage.id))
+        assertTrue(oldMessage.id != newMessage.id)
+        assertEquals("Lugia", snapshot.opponentCombatants.single().name)
+    }
+
+    @Test
     fun protocolStreamForwardsRenderablePacketsAndResetsItsBattleHistory() {
         val session = BattleSession()
         val received = mutableListOf<List<String>>()

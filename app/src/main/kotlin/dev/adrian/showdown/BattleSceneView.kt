@@ -65,6 +65,8 @@ class BattleSceneView(
     private val battleFeedBounds = RectF()
     private val fieldEffectBounds = RectF()
     private val battleFeedPresentation = BattleFeedPresentation()
+    private var displayedBattleSceneSnapshot: BattleSession.BattleSceneSnapshot? = null
+    private var displayedSwitchOutVisual: BattleSession.SwitchOutVisual? = null
     private var cachedBattleFeedText: String? = null
     private var cachedBattleFeedVisibleText: String? = null
     private var cachedBattleFeedMarkup: String? = null
@@ -370,18 +372,24 @@ class BattleSceneView(
         val opponentY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.OPPONENT_Y) else height * 0.42f
         val nowNanos = System.nanoTime()
         if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) {
+            displayedBattleSceneSnapshot = null
+            displayedSwitchOutVisual = null
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
             accessibilityNodeProvider?.refreshIfChanged()
             return
         }
         if (!session.isLiveBattleActive() && !session.isBattleFinished() && !teamPreview && !publicTeamPreview) {
+            displayedBattleSceneSnapshot = null
+            displayedSwitchOutVisual = null
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             drawLobby(canvas, width, height, scale)
             accessibilityNodeProvider?.refreshIfChanged()
             return
         }
         if (teamPreview || publicTeamPreview) {
+            displayedBattleSceneSnapshot = null
+            displayedSwitchOutVisual = null
             battleFeedPresentation.update(emptyList(), false, SystemClock.elapsedRealtime())
             battleFeedBounds.setEmpty()
             requestTeamPreviewSprites()
@@ -402,18 +410,21 @@ class BattleSceneView(
             session.battleResult()
         )
         val battleFeedFrame = battleFeedPresentation.frame(battleFeedTime)
+        val sceneSnapshot = session.battleSceneSnapshotForFeedMessage(battleFeedFrame?.messageId)
+        displayedBattleSceneSnapshot = sceneSnapshot
         val switchOutVisual = session.switchOutVisualForBattleFeed(battleFeedFrame?.messageId)
+        displayedSwitchOutVisual = switchOutVisual
         if (requestedSwitchOutVisual != switchOutVisual) {
             requestedSwitchOutVisual = switchOutVisual
             resourcesRequested = false
         }
         val playerCombatants = BattleFeedSceneState.combatantsForMessage(
-            session.playerActiveCombatants(),
+            sceneSnapshot?.playerCombatants ?: session.playerActiveCombatants(),
             true,
             switchOutVisual
         )
         val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
-            session.opponentActiveCombatants(),
+            sceneSnapshot?.opponentCombatants ?: session.opponentActiveCombatants(),
             false,
             switchOutVisual
         )
@@ -422,16 +433,18 @@ class BattleSceneView(
         val playerCombatant = playerCombatants.firstOrNull()
         val opponentCombatant = opponentCombatants.firstOrNull()
         val playerDetails = BattleFeedSceneState.detailsForMessage(
-            session.playerDetails(),
+            sceneSnapshot?.playerDetails ?: session.playerDetails(),
             true,
             switchOutVisual
         )
         val opponentDetails = BattleFeedSceneState.detailsForMessage(
-            session.opponentDetails(),
+            sceneSnapshot?.opponentDetails ?: session.opponentDetails(),
             false,
             switchOutVisual
         )
-        val fieldVisuals = BattleFieldVisualComposer.compose(session.battleInfo())
+        val playerPartyDetails = sceneSnapshot?.playerPartyDetails ?: session.playerPartyDetails()
+        val opponentPartyDetails = sceneSnapshot?.opponentPartyDetails ?: session.opponentPartyDetails()
+        val fieldVisuals = BattleFieldVisualComposer.compose(sceneSnapshot?.battleInfo ?: session.battleInfo())
         val playerStatusAlpha = statusCardAlpha(
             playerCombatant?.name ?: session.playerPokemon,
             playerCombatant?.condition ?: session.playerCondition,
@@ -564,7 +577,7 @@ class BattleSceneView(
                         playerCombatant?.hp ?: session.playerHp,
                         scale,
                         playerStatusAlpha,
-                        session.playerPartyDetails()
+                        playerPartyDetails
                     )
                 }
             } else {
@@ -575,7 +588,9 @@ class BattleSceneView(
                     scale,
                     true,
                     fieldCombatants(playerCombatants, true),
-                    switchOutVisual
+                    switchOutVisual,
+                    sceneSnapshot?.playerDetailsBySlot.orEmpty(),
+                    playerPartyDetails
                 )
             }
             if (singles) {
@@ -592,7 +607,7 @@ class BattleSceneView(
                         opponentCombatant?.hp ?: session.opponentHp,
                         scale,
                         opponentStatusAlpha,
-                        session.opponentPartyDetails()
+                        opponentPartyDetails
                     )
                 }
             } else {
@@ -603,7 +618,9 @@ class BattleSceneView(
                     scale,
                     false,
                     fieldCombatants(opponentCombatants, false),
-                    switchOutVisual
+                    switchOutVisual,
+                    sceneSnapshot?.opponentDetailsBySlot.orEmpty(),
+                    opponentPartyDetails
                 )
             }
             drawBattleFeed(canvas, width, height, scale, battleFeedFrame)
@@ -635,6 +652,39 @@ class BattleSceneView(
         ::accessibilityNodes
     ).also { accessibilityNodeProvider = it }
 
+    private fun displayedPlayerCombatants() = BattleFeedSceneState.combatantsForMessage(
+        displayedBattleSceneSnapshot?.playerCombatants ?: session.playerActiveCombatants(),
+        true,
+        displayedSwitchOutVisual
+    )
+
+    private fun displayedOpponentCombatants() = BattleFeedSceneState.combatantsForMessage(
+        displayedBattleSceneSnapshot?.opponentCombatants ?: session.opponentActiveCombatants(),
+        false,
+        displayedSwitchOutVisual
+    )
+
+    private fun displayedPlayerDetails() = BattleFeedSceneState.detailsForMessage(
+        displayedBattleSceneSnapshot?.playerDetails ?: session.playerDetails(),
+        true,
+        displayedSwitchOutVisual
+    )
+
+    private fun displayedOpponentDetails() = BattleFeedSceneState.detailsForMessage(
+        displayedBattleSceneSnapshot?.opponentDetails ?: session.opponentDetails(),
+        false,
+        displayedSwitchOutVisual
+    )
+
+    private fun displayedDetailsForActiveCombatant(playerSide: Boolean, slot: String): BattleSession.PokemonDetails? {
+        displayedSwitchOutVisual?.takeIf { it.playerSide == playerSide && it.combatant.slot == slot }?.let {
+            return it.details
+        }
+        val snapshot = displayedBattleSceneSnapshot
+        val detailsBySlot = if (playerSide) snapshot?.playerDetailsBySlot else snapshot?.opponentDetailsBySlot
+        return detailsBySlot?.get(slot) ?: session.detailsForActiveCombatant(playerSide, slot)
+    }
+
     private fun accessibilityDescription(): String {
         if (session.isReplayMode() && !session.hasBattleProtocolTranscript()) return "Showdown replay. Loading battle."
         if (!session.isLiveBattleActive() && !session.isBattleFinished() && session.battlePhase != BattleSession.BattlePhase.TEAM_PREVIEW && !shouldShowPublicTeamPreview()) {
@@ -647,10 +697,10 @@ class BattleSceneView(
             val pageSummary = if (pageCount > 1) " Page ${opponentPreviewPageIndex + 1} of $pageCount." else ""
             return "Pokémon team preview. Opponent team: ${party.size} Pokémon.$pageSummary ${visibleIndices.size} shown."
         }
-        val playerDetails = session.playerDetails()
-        val opponentDetails = session.opponentDetails()
-        val playerCombatant = session.playerActiveCombatants().firstOrNull()
-        val opponentCombatant = session.opponentActiveCombatants().firstOrNull()
+        val playerDetails = displayedPlayerDetails()
+        val opponentDetails = displayedOpponentDetails()
+        val playerCombatant = displayedPlayerCombatants().firstOrNull()
+        val opponentCombatant = displayedOpponentCombatants().firstOrNull()
         val requireActiveCombatant = session.isReplayMode() || session.isSpectatorMode()
         val playerKnown = BattleFeedSceneState.hasKnownPokemon(
             playerCombatant,
@@ -691,10 +741,10 @@ class BattleSceneView(
         val nodes = mutableListOf<CanvasAccessibilityNode>()
         val scale = min(width / 1920f, height / 1080f)
         if (session.isSinglesBattle()) {
-            val player = session.playerDetails()
-            val opponent = session.opponentDetails()
-            val playerCombatant = session.playerActiveCombatants().firstOrNull()
-            val opponentCombatant = session.opponentActiveCombatants().firstOrNull()
+            val player = displayedPlayerDetails()
+            val opponent = displayedOpponentDetails()
+            val playerCombatant = displayedPlayerCombatants().firstOrNull()
+            val opponentCombatant = displayedOpponentCombatants().firstOrNull()
             val requireActiveCombatant = session.isReplayMode() || session.isSpectatorMode()
             if (BattleFeedSceneState.hasKnownPokemon(playerCombatant, player, requireActiveCombatant)) {
                 addAccessibilityNode(
@@ -796,12 +846,12 @@ class BattleSceneView(
 
     private fun inspectSheetAccessibilityNodes(width: Float, height: Float): List<CanvasAccessibilityNode> {
         val playerSide = inspectedPlayer ?: return emptyList()
-        val details = inspectedSlot?.let { session.detailsForActiveCombatant(playerSide, it) }
-            ?: if (playerSide) session.playerDetails() else session.opponentDetails()
+        val details = inspectedSlot?.let { displayedDetailsForActiveCombatant(playerSide, it) }
+            ?: if (playerSide) displayedPlayerDetails() else displayedOpponentDetails()
         val combatants = inspectedSlot?.let { slot ->
-            (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+            (if (playerSide) displayedPlayerCombatants() else displayedOpponentCombatants())
                 .filter { it.slot == slot }
-        } ?: (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+        } ?: (if (playerSide) displayedPlayerCombatants() else displayedOpponentCombatants())
         val effects = combatants.flatMap { it.volatileEffects + it.turnEffects + it.moveEffects }.distinct()
         val name = BattleSession.displayPokemonName(details.name, details.species)
         val description = BattleAccessibilityText.inspectDetails(details, name, effects)
@@ -830,13 +880,13 @@ class BattleSceneView(
         player: Boolean
     ) {
         val combatants = fieldCombatants(
-            if (player) session.playerActiveCombatants() else session.opponentActiveCombatants(),
+            if (player) displayedPlayerCombatants() else displayedOpponentCombatants(),
             player
         )
         val centerY = height * if (player) 0.67f else 0.42f
         val centeredSlot = BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), combatants)
         combatants.forEachIndexed { index, combatant ->
-            val details = session.detailsForActiveCombatant(player, combatant.slot) ?: return@forEachIndexed
+            val details = displayedDetailsForActiveCombatant(player, combatant.slot) ?: return@forEachIndexed
             val centerX = BattleCombatantLayout.x(width, player, index, combatants.size, centeredSlot, combatant.slot)
             val bounds = RectF(
                 centerX - 220f * scale,
@@ -994,8 +1044,8 @@ class BattleSceneView(
                 else -> null
             }
         }
-        val playerCombatants = fieldCombatants(session.playerActiveCombatants(), true)
-        val opponentCombatants = fieldCombatants(session.opponentActiveCombatants(), false)
+        val playerCombatants = fieldCombatants(displayedPlayerCombatants(), true)
+        val opponentCombatants = fieldCombatants(displayedOpponentCombatants(), false)
         val playerTarget = findMultiInspectTarget(x, y, viewWidth, viewHeight, scale, true, playerCombatants)
         val opponentTarget = findMultiInspectTarget(x, y, viewWidth, viewHeight, scale, false, opponentCombatants)
         return playerTarget ?: opponentTarget ?: when {
@@ -1831,13 +1881,13 @@ class BattleSceneView(
 
     private fun requestHeldItemSprites() {
         val itemNames = buildList {
-            add(session.playerDetails().item)
-            add(session.opponentDetails().item)
-            session.playerActiveCombatants().forEach { combatant ->
-                add(session.detailsForActiveCombatant(true, combatant.slot)?.item.orEmpty())
+            add(displayedPlayerDetails().item)
+            add(displayedOpponentDetails().item)
+            displayedPlayerCombatants().forEach { combatant ->
+                add(displayedDetailsForActiveCombatant(true, combatant.slot)?.item.orEmpty())
             }
-            session.opponentActiveCombatants().forEach { combatant ->
-                add(session.detailsForActiveCombatant(false, combatant.slot)?.item.orEmpty())
+            displayedOpponentCombatants().forEach { combatant ->
+                add(displayedDetailsForActiveCombatant(false, combatant.slot)?.item.orEmpty())
             }
         }
         itemNames.forEach { item ->
@@ -2505,12 +2555,12 @@ class BattleSceneView(
 
     private fun drawInspectSheet(canvas: Canvas, width: Float, height: Float, scale: Float) {
         val playerSide = inspectedPlayer ?: return
-        val details = inspectedSlot?.let { session.detailsForActiveCombatant(playerSide, it) }
-            ?: if (playerSide) session.playerDetails() else session.opponentDetails()
+        val details = inspectedSlot?.let { displayedDetailsForActiveCombatant(playerSide, it) }
+            ?: if (playerSide) displayedPlayerDetails() else displayedOpponentDetails()
         val visibleCombatants = inspectedSlot?.let { slot ->
-            (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+            (if (playerSide) displayedPlayerCombatants() else displayedOpponentCombatants())
                 .filter { it.slot == slot }
-        } ?: (if (playerSide) session.playerActiveCombatants() else session.opponentActiveCombatants())
+        } ?: (if (playerSide) displayedPlayerCombatants() else displayedOpponentCombatants())
         val activeEffects = visibleCombatants.flatMap { combatant ->
             val effects = combatant.volatileEffects + combatant.turnEffects + combatant.moveEffects
             effects.map { effect -> "${BattleSession.displayPokemonName(combatant.name, combatant.species)}: $effect" }
@@ -2696,11 +2746,12 @@ class BattleSceneView(
         scale: Float,
         player: Boolean,
         combatants: List<BattleSession.ActiveCombatant>,
-        switchOutVisual: BattleSession.SwitchOutVisual? = null
+        switchOutVisual: BattleSession.SwitchOutVisual? = null,
+        detailsBySlot: Map<String, BattleSession.PokemonDetails> = emptyMap(),
+        partyDetails: List<BattleSession.PokemonDetails>
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
         val nowNanos = System.nanoTime()
-        val party = if (player) session.playerPartyDetails() else session.opponentPartyDetails()
         combatants.forEachIndexed { index, combatant ->
             val alpha = statusCardAlpha(combatant.name, combatant.condition, nowNanos) *
                 BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, nowNanos)
@@ -2714,12 +2765,13 @@ class BattleSceneView(
                             ?.takeIf { it.playerSide == player && it.combatant.slot == combatant.slot }
                             ?.details
                             ?.item
+                            ?: detailsBySlot[combatant.slot]?.item
                             ?: session.detailsForActiveCombatant(player, combatant.slot)?.item.orEmpty()
                     ),
                     scale,
                     alpha,
                     layout,
-                    party
+                    partyDetails
                 )
             }
         }
