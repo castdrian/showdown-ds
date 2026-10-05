@@ -17,6 +17,64 @@ class ShowdownBattleLogRendererParityTest {
     val activityRule = ActivityScenarioRule(ShowdownLogParityHarnessActivity::class.java)
 
     @Test
+    fun nativeNarrationKeepsMultiBattlePartnerOnTheLocalSide() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p3")
+        }
+        val transcript = listOf(
+            "|player|p1|PARTNER||",
+            "|player|p2|FOE||",
+            "|player|p3|ALLY||",
+            "|player|p4|FOE2||",
+            "|gametype|multi",
+            "|switch|p1a: Partner|Incineroar, L50|100/100",
+            "|switch|p2a: Foe|Tapu Koko, L50|100/100",
+            "|switch|p3a: Local|Mimikyu, L50|100/100",
+            "|switch|p4a: Foe2|Landorus, L50|100/100",
+            "|move|p1a: Partner|Flare Blitz|p2a: Foe",
+            "|-damage|p2a: Foe|80/100"
+        )
+        val session = BattleSession().apply {
+            setLocalUsername("ALLY")
+            setReplayMode(true)
+        }
+        val narrationIdentityFailures = mutableListOf<String>()
+
+        BattlePlaybackTiming.chunks(transcript).forEach { packet ->
+            val entryCount = activity.nativeEntries.size
+            val syncCount = activity.synchronizedGenerations.size
+            val combatantsBefore = battleCombatants(session)
+            session.applyProtocolPacket(packet)
+            val generation = session.battleLogGeneration()
+            activity.renderer.applyProtocol(packet, generation)
+            awaitSynchronization(activity, syncCount, generation)
+            val nativeEntries = activity.nativeEntries.drop(entryCount)
+                .filter { it.first == generation }
+                .map { it.second }
+            if (nativeEntries.isNotEmpty()) {
+                session.appendShowdownBattleLog(nativeEntries.joinToString("<br />"), generation)
+            }
+            session.markNativeBattleLogSynchronized(generation)
+            val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
+            val eventCombatants = (combatantsBefore + battleCombatants(session))
+                .distinctBy { Triple(it.slot, it.name, it.species) }
+            assertNativePokemonNarrationUsesMatchingScene(
+                session,
+                nativeTexts,
+                eventCombatants,
+                narrationIdentityFailures
+            )
+        }
+
+        assertTrue(
+            "Multi partner narration was paired with the wrong Pokémon side: $narrationIdentityFailures",
+            narrationIdentityFailures.isEmpty()
+        )
+    }
+
+    @Test
     fun testUpstreamReplayNarrationKeepsTheCorrectCombatantSnapshot() {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity { activity = it }
@@ -160,7 +218,7 @@ class ShowdownBattleLogRendererParityTest {
             )
 
             mentionedCombatants.forEach { eventCombatant ->
-                val playerSide = eventCombatant.slot.take(2).equals(session.battlePlayerSlot(), true)
+                val playerSide = session.isLocalBattleSide(eventCombatant.slot)
                 val combatants = if (playerSide) playerCombatants else opponentCombatants
                 val combatant = combatants.singleOrNull { it.slot.equals(eventCombatant.slot, true) }
                 assertNotNull("Showdown narration was paired with the wrong Pokémon slot: $text", combatant)
