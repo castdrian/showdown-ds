@@ -125,6 +125,100 @@ class ShowdownReplayPlaybackParityTest {
     }
 
     @Test
+    fun replayDamageNarrationStaysWithThePokemonShownUntilThatMessageClears() {
+        val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/gen9randombattle-2691985124.json"))
+            .bufferedReader()
+            .use { it.readText() }
+        val replay = ShowdownReplayImporter.payload(replayJson)
+        val chunks = BattlePlaybackTiming.chunks(replay.log.lines())
+        val lugiaSwitchIndex = chunks.indexOfFirst { chunk ->
+            chunk.any { it.startsWith("|switch|p2a: Lugia|") }
+        }
+        assertTrue("replay fixture has no Perrserker to Lugia switch", lugiaSwitchIndex >= 0)
+
+        val session = BattleSession().apply {
+            setLocalUsername(replay.players.firstOrNull().orEmpty())
+            setReplayMode(true)
+        }
+        val presentation = BattleFeedPresentation().apply { setPlaybackSpeed(0.75f) }
+        var nowMillis = 0L
+        var sawPerrserkerDamageMessage = false
+        var sawLugiaSendoutMessage = false
+
+        chunks.take(lugiaSwitchIndex + 1).forEach { packet ->
+            val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
+            session.applyProtocolPacket(packet)
+            val messages = session.battleFeedMessages()
+            val generatedMessageCount = messages.count { it.id !in previousMessageIds }
+            presentation.updateMessages(messages, session.battleFeedVisible, nowMillis)
+            val pauseMillis = BattlePlaybackTiming.scaledPause(
+                BattlePlaybackTiming.pauseAfter(
+                    packet,
+                    generatedMessageCount,
+                    presentation.remainingPlaybackBudgetMillis(nowMillis)
+                ),
+                0.75f
+            )
+            var frameTimeMillis = nowMillis
+            val deadlineMillis = nowMillis + pauseMillis
+
+            while (frameTimeMillis <= deadlineMillis) {
+                presentation.frame(frameTimeMillis)?.let { frame ->
+                    if (
+                        frame.visibleText.contains("Perrserker", true) &&
+                        (frame.visibleText.contains("lost", true) || frame.visibleText.contains("fell", true))
+                    ) {
+                        sawPerrserkerDamageMessage = true
+                    }
+                    if (frame.visibleText.contains("sent out Lugia", true)) sawLugiaSendoutMessage = true
+                    val mentionedOpponent = listOf("Perrserker", "Lugia").firstOrNull {
+                        frame.visibleText.contains(it, ignoreCase = true)
+                    }
+                    if (mentionedOpponent != null) {
+                        val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
+                        val visiblePlayerCombatants = BattleFeedSceneState.combatantsForMessage(
+                            session.playerActiveCombatants(),
+                            true,
+                            switchOutVisual
+                        )
+                        val visibleOpponents = BattleFeedSceneState.combatantsForMessage(
+                            session.opponentActiveCombatants(),
+                            false,
+                            switchOutVisual
+                        )
+                        val visibleOpponent = visibleOpponents.firstOrNull {
+                            it.name.equals(mentionedOpponent, true)
+                        }
+                        assertTrue(
+                            "${frame.visibleText} was shown with ${visibleOpponents.map { it.name }} active at $frameTimeMillis ms",
+                            visibleOpponent != null
+                        )
+                        val sprites = BattleSpriteRequests.forScene(
+                            playerCombatants = visiblePlayerCombatants,
+                            opponentCombatants = visibleOpponents,
+                            singlesBattle = session.isSinglesBattle(),
+                            style = session.spriteStyle,
+                            playerFallbackSpecies = session.playerPokemon,
+                            opponentFallbackSpecies = session.opponentPokemon
+                        )
+                        assertEquals(
+                            "${frame.visibleText} sprite at $frameTimeMillis ms",
+                            checkNotNull(visibleOpponent).species,
+                            checkNotNull(sprites.opponentLead).species
+                        )
+                        assertEquals(BattleSpriteSide.OPPONENT, sprites.opponentLead?.side)
+                    }
+                }
+                frameTimeMillis += 100L
+            }
+            nowMillis = deadlineMillis
+        }
+
+        assertTrue("replay never presented Perrserker's damage narration", sawPerrserkerDamageMessage)
+        assertTrue("replay never presented Lugia's switch-in narration", sawLugiaSendoutMessage)
+    }
+
+    @Test
     fun replayUpdatesAegislashFormAndSpriteTogether() {
         val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/gen8ou-2692756742.json"))
             .bufferedReader()
