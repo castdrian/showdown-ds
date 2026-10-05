@@ -4,8 +4,8 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
 <table>
   <tr>
-    <td width="50%"><img src="media/showdown-battle-hd-both-sides.png?v=e444051840184d8b" alt="Live Gen 9 battle showing Corviknight and Gengar on the upper screen and the matching move-choice screen below"></td>
-    <td width="50%"><img src="media/showdown-battle-party-both-sides.png?v=b07172805ead0004" alt="The same live Corviknight versus Gengar battle on the upper screen with its matching party screen below"></td>
+    <td width="50%"><img src="media/showdown-battle-hd-both-sides.png?v=69a5b8bb00ddf595" alt="Live Gen 9 battle showing Mismagius and Dondozo above the matching move-choice screen"></td>
+    <td width="50%"><img src="media/showdown-battle-party-both-sides.png?v=fec7dc5e42c72791" alt="The same live Mismagius versus Dondozo battle above its matching party screen"></td>
   </tr>
 </table>
 

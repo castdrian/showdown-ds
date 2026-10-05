@@ -266,8 +266,8 @@ func spriteTemplates(path string) []spriteTemplate {
 	switch {
 	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"), strings.HasSuffix(path, "showdown-battle-party-both-sides.png"):
 		return []spriteTemplate{
-			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(420, 350)},
-			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1050, 150)},
+			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(480, 520)},
+			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1138, 335)},
 		}
 	default:
 		return nil
