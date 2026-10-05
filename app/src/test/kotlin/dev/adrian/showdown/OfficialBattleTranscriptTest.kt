@@ -1486,6 +1486,17 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsGenericSetBoostAnnouncementLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf("|-setboost|p1a: Mewtwo|atk|2|[from] move: Unknown Source")
+        )
+
+        assertTrue(session.battleLog().contains("Mewtwo's Attack rose!"))
+        assertFalse(session.battleLog().any { it.contains("was set to 2") })
+    }
+
+    @Test
     fun formatsItemAndZPowerStatChangesLikeShowdown() {
         val session = BattleSession()
 
