@@ -421,6 +421,16 @@ class BattleSceneView(
         ensureResourcesRequested(playerCombatants, opponentCombatants)
         val playerCombatant = playerCombatants.firstOrNull()
         val opponentCombatant = opponentCombatants.firstOrNull()
+        val playerDetails = BattleFeedSceneState.detailsForMessage(
+            session.playerDetails(),
+            true,
+            switchOutVisual
+        )
+        val opponentDetails = BattleFeedSceneState.detailsForMessage(
+            session.opponentDetails(),
+            false,
+            switchOutVisual
+        )
         val fieldVisuals = BattleFieldVisualComposer.compose(session.battleInfo())
         val playerStatusAlpha = statusCardAlpha(
             playerCombatant?.name ?: session.playerPokemon,
@@ -438,6 +448,10 @@ class BattleSceneView(
             opponentCombatant?.entryAtNanos ?: session.opponentEntryAtNanos,
             nowNanos
         )
+        val playerStatusCardVisible = playerStatusAlpha > 0f &&
+            BattleFeedSceneState.hasKnownPokemon(playerCombatant, playerDetails)
+        val opponentStatusCardVisible = opponentStatusAlpha > 0f &&
+            BattleFeedSceneState.hasKnownPokemon(opponentCombatant, opponentDetails)
         playerInspectBounds.set(width * 0.05f, height * 0.28f, width * 0.57f, height * 0.88f)
         opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
         drawBackdrop(canvas, width, height)
@@ -529,7 +543,7 @@ class BattleSceneView(
         }
         if (inspectedPlayer == null) {
             if (singles) {
-                if (playerStatusAlpha > 0f) {
+                if (playerStatusCardVisible) {
                     drawStatusCard(
                         canvas,
                         RectF(
@@ -538,7 +552,7 @@ class BattleSceneView(
                             ShowdownBattleLayout.singlePlayerCardRight(width, scale),
                             height * 0.98f
                         ),
-                        BattleFeedSceneState.detailsForMessage(session.playerDetails(), true, switchOutVisual),
+                        playerDetails,
                         playerCombatant?.hp ?: session.playerHp,
                         scale,
                         playerStatusAlpha,
@@ -557,7 +571,7 @@ class BattleSceneView(
                 )
             }
             if (singles) {
-                if (opponentStatusAlpha > 0f) {
+                if (opponentStatusCardVisible) {
                     drawStatusCard(
                         canvas,
                         RectF(
@@ -566,7 +580,7 @@ class BattleSceneView(
                             width * ShowdownBattleLayout.SINGLE_CARD_RIGHT_FRACTION,
                             height * 0.20f
                         ),
-                        BattleFeedSceneState.detailsForMessage(session.opponentDetails(), false, switchOutVisual),
+                        opponentDetails,
                         opponentCombatant?.hp ?: session.opponentHp,
                         scale,
                         opponentStatusAlpha,
