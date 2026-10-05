@@ -5855,7 +5855,15 @@ class BattleSession {
 
     private fun appendNormalizedShowdownEntries(entries: List<ShowdownBattleLogEntry>) {
         showdownBattleLogEntries += entries
-        while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) showdownBattleLogEntries.removeAt(0)
+        while (showdownBattleLogEntries.size > BATTLE_HISTORY_LIMIT) {
+            val removed = showdownBattleLogEntries.removeAt(0)
+            val isProtocolMessage = battleLogMessageIds.any { it == removed.id }
+            val isStillInNativeLog = showdownBattleLogEntries.any { it.id == removed.id }
+            if (!isProtocolMessage && !isStillInNativeLog) {
+                switchOutVisualsByMessageId.remove(removed.id)
+                battleSceneSnapshotsByMessageId.remove(removed.id)
+            }
+        }
     }
 
     private fun normalizedShowdownEntries(
@@ -5890,6 +5898,9 @@ class BattleSession {
             val protocolId = protocolIndex?.let { battleLogMessageIds[it] }
             if (protocolId != null) protocolSearchAfterMessageId = protocolId
             val id = previousId ?: protocolId ?: newBattleFeedMessageId()
+            if (previousId == null && protocolId == null) {
+                battleSceneSnapshotsByMessageId[id] = createBattleSceneSnapshot()
+            }
             ShowdownBattleLogEntry(id, plainText, feedMarkupEntries.getOrElse(index) { plainText })
         }
         lastNativeProtocolMessageId = maxOf(lastNativeProtocolMessageId, protocolSearchAfterMessageId)

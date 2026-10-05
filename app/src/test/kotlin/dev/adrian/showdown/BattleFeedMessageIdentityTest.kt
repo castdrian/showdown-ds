@@ -73,6 +73,54 @@ class BattleFeedMessageIdentityTest {
     }
 
     @Test
+    fun matchesOfficialSwitchWordingAcrossPlayerAndOpponentPerspectives() {
+        val trainers = listOf("Casual dot exe", "qiuescent")
+
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "Casual dot exe sent out Gliscor!",
+                "Go! Gliscor!",
+                trainers
+            )
+        )
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "Casual dot exe sent out Minior (Minior-Yellow)!",
+                "Go! Minior (Minior-Red)!",
+                trainers
+            )
+        )
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "qiuescent sent out Swanna!",
+                "The opposing Swanna was sent out!",
+                trainers
+            )
+        )
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "Casual dot exe withdrew Gliscor!",
+                "Gliscor, come back!",
+                trainers
+            )
+        )
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "qiuescent withdrew Swanna!",
+                "The opposing Swanna was withdrawn!",
+                trainers
+            )
+        )
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "Casual dot exe withdrew Dewgong!",
+                "Dewgong went back to Casual dot exe!",
+                trainers
+            )
+        )
+    }
+
+    @Test
     fun matchesTrainerPerspectiveForMultiWordPokemonNames() {
         assertTrue(
             BattleFeedMessageIdentity.matchesProtocolFallback(

@@ -39,14 +39,16 @@ class ShowdownBattleLogRendererParityTest {
         var sawLeftovers = false
         var sawEncore = false
         var sawWhiteHerb = false
+        val narrationIdentityFailures = mutableListOf<String>()
 
         BattlePlaybackTiming.chunks(playbackLines).forEach { packet ->
             val entryCount = activity.nativeEntries.size
             val syncCount = activity.synchronizedGenerations.size
+            val combatantsBefore = battleCombatants(session)
             session.applyProtocolPacket(packet)
             val generation = session.battleLogGeneration()
             activity.renderer.applyProtocol(packet, generation)
-            awaitSynchronization(activity, syncCount)
+            awaitSynchronization(activity, syncCount, generation)
             val nativeEntries = activity.nativeEntries.drop(entryCount)
                 .filter { it.first == generation }
                 .map { it.second }
@@ -55,21 +57,25 @@ class ShowdownBattleLogRendererParityTest {
             }
             session.markNativeBattleLogSynchronized(generation)
             val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
+            val eventCombatants = (combatantsBefore + battleCombatants(session))
+                .distinctBy { Triple(it.slot, it.name, it.species) }
+            assertNativePokemonNarrationUsesMatchingScene(
+                session,
+                nativeTexts,
+                eventCombatants,
+                narrationIdentityFailures
+            )
 
             if (packet.any { it.startsWith("|-heal|p2a: Salazzle|55/249") }) {
                 assertTrue("Upstream Showdown did not render its known Leftovers narration: $nativeTexts", expectedLeftoversText in nativeTexts)
-                assertActorSnapshot(session, expectedLeftoversText, "p2a", "Salazzle", "Salazzle", false)
                 sawLeftovers = true
             }
             if (packet.any { it.startsWith("|-start|p2a: Salazzle|Encore") }) {
                 assertTrue("Upstream Showdown did not render its Encore narration: $nativeTexts", nativeTexts.any { it.contains("Salazzle", true) && it.contains("encore", true) })
-                val encoreText = nativeTexts.last { it.contains("Salazzle", true) && it.contains("encore", true) }
-                assertActorSnapshot(session, encoreText, "p2a", "Salazzle", "Salazzle", false)
                 sawEncore = true
             }
             if (packet.any { it.startsWith("|-enditem|p1a: Minior|White Herb") }) {
                 assertTrue("Upstream Showdown did not render its known White Herb narration: $nativeTexts", expectedWhiteHerbText in nativeTexts)
-                assertActorSnapshot(session, expectedWhiteHerbText, "p1a", "Minior", "Minior-Meteor", true)
                 sawWhiteHerb = true
             }
         }
@@ -77,35 +83,100 @@ class ShowdownBattleLogRendererParityTest {
         assertTrue("The real renderer never emitted the Leftovers event", sawLeftovers)
         assertTrue("The real renderer never emitted the Encore event", sawEncore)
         assertTrue("The real renderer never emitted the White Herb event", sawWhiteHerb)
+        assertTrue("Native Showdown battle lines lost their protocol scene identities: $narrationIdentityFailures", narrationIdentityFailures.isEmpty())
     }
 
-    private fun awaitSynchronization(activity: ShowdownLogParityHarnessActivity, previousCount: Int) {
+    private fun awaitSynchronization(
+        activity: ShowdownLogParityHarnessActivity,
+        previousCount: Int,
+        generation: Long
+    ) {
         val deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(2)
-        while (activity.synchronizedGenerations.size <= previousCount && System.currentTimeMillis() < deadline) {
+        while (
+            activity.synchronizedGenerations.drop(previousCount).none { it == generation } &&
+            System.currentTimeMillis() < deadline
+        ) {
             Thread.sleep(25L)
         }
         assertTrue(
-            "The upstream renderer did not finish the queued protocol packet",
-            activity.synchronizedGenerations.size > previousCount
+            "The upstream renderer did not finish protocol generation $generation; synchronized ${activity.synchronizedGenerations.drop(previousCount)}",
+            activity.synchronizedGenerations.drop(previousCount).any { it == generation }
         )
     }
 
-    private fun assertActorSnapshot(
+    private fun battleCombatants(session: BattleSession) =
+        session.playerActiveCombatants() + session.opponentActiveCombatants()
+
+    private fun assertNativePokemonNarrationUsesMatchingScene(
         session: BattleSession,
-        text: String,
-        slot: String,
-        name: String,
-        species: String,
-        playerSide: Boolean
+        nativeTexts: List<String>,
+        eventCombatants: List<BattleSession.ActiveCombatant>,
+        failures: MutableList<String>
     ) {
-        val message = session.battleFeedMessages().lastOrNull { it.text == text }
-        assertNotNull("The actual Showdown line was not associated with a battle-feed entry: $text", message)
-        val snapshot = session.battleSceneSnapshotForFeedMessage(message!!.id)
-        assertNotNull("The actual Showdown line lost its protocol scene snapshot: $text", snapshot)
-        val combatants = if (playerSide) snapshot!!.playerCombatants else snapshot!!.opponentCombatants
-        val combatant = combatants.singleOrNull { it.slot.equals(slot, true) }
-        assertNotNull("The actual Showdown line points at the wrong side or slot: $text", combatant)
-        assertEquals(text, name, combatant!!.name)
-        assertEquals(text, species, combatant.species)
+        nativeTexts.forEach { text ->
+            val mentionedCombatants = eventCombatants.filter { combatant -> mentionsPokemon(text, combatant.name) }
+            if (mentionedCombatants.isEmpty()) return@forEach
+            val message = session.battleFeedMessages().lastOrNull {
+                BattleFeedMessageIdentity.matches(it.text, text)
+            }
+            if (message == null) {
+                failures += "No protocol feed entry matched '$text'"
+                return@forEach
+            }
+            val messageId = message.id
+            val snapshot = session.battleSceneSnapshotForFeedMessage(messageId)
+            val feedDiagnostics = session.battleFeedMessages().takeLast(12).joinToString {
+                "${it.id}:${it.text}:${session.battleSceneSnapshotForFeedMessage(it.id) != null}"
+            }
+            if (snapshot == null) {
+                failures += "'$text' has no scene snapshot; protocol=${session.battleLog().takeLast(12)}; feed=$feedDiagnostics"
+                return@forEach
+            }
+            val switchOutVisual = session.switchOutVisualForBattleFeed(messageId)
+            val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+                snapshot.playerCombatants,
+                true,
+                switchOutVisual
+            )
+            val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+                snapshot.opponentCombatants,
+                false,
+                switchOutVisual
+            )
+            val spriteRequests = BattleSpriteRequests.forScene(
+                playerCombatants = playerCombatants,
+                opponentCombatants = opponentCombatants,
+                singlesBattle = session.isSinglesBattle(),
+                style = session.spriteStyle,
+                playerFallbackSpecies = session.playerPokemon,
+                opponentFallbackSpecies = session.opponentPokemon
+            )
+
+            mentionedCombatants.forEach { eventCombatant ->
+                val playerSide = eventCombatant.slot.take(2).equals(session.battlePlayerSlot(), true)
+                val combatants = if (playerSide) playerCombatants else opponentCombatants
+                val combatant = combatants.singleOrNull { it.slot.equals(eventCombatant.slot, true) }
+                assertNotNull("Showdown narration was paired with the wrong Pokémon slot: $text", combatant)
+                val matchedCombatant = checkNotNull(combatant)
+                assertEquals(text, eventCombatant.name, matchedCombatant.name)
+                val sprite = when {
+                    playerSide && spriteRequests.singlesBattle -> spriteRequests.playerLead
+                    !playerSide && spriteRequests.singlesBattle -> spriteRequests.opponentLead
+                    playerSide -> spriteRequests.playerActive.singleOrNull { it.slot == eventCombatant.slot }?.request
+                    else -> spriteRequests.opponentActive.singleOrNull { it.slot == eventCombatant.slot }?.request
+                }
+                val matchedSprite = checkNotNull(sprite)
+                assertEquals(text, matchedCombatant.species, matchedSprite.species)
+                assertEquals(
+                    text,
+                    if (playerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
+                    matchedSprite.side
+                )
+            }
+        }
     }
+
+    private fun mentionsPokemon(text: String, name: String): Boolean =
+        Regex("(?<![\\p{L}\\p{N}])${Regex.escape(name)}(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
+            .containsMatchIn(text)
 }

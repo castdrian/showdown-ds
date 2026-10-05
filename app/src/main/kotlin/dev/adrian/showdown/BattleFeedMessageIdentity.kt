@@ -14,16 +14,49 @@ object BattleFeedMessageIdentity {
 
     private fun normalizedVariants(value: String, trainerNames: Collection<String>): Set<String> {
         val plainText = value.lowercase().trim().removeSurrounding("(", ")")
-        return buildSet {
-            add(normalizedText(plainText, true))
+        val perspectiveVariants = buildSet {
+            add(plainText)
             trainerNames.asSequence()
                 .map { it.trim().lowercase() }
                 .filter(String::isNotEmpty)
-                .map { "${it}'s " }
-                .filter(plainText::startsWith)
-                .map(plainText::removePrefix)
-                .forEach { add(normalizedText(it, true)) }
+                .forEach { trainerName ->
+                    listOf("$trainerName's ")
+                        .filter(plainText::startsWith)
+                        .map(plainText::removePrefix)
+                        .forEach(::add)
+                    "$trainerName sent out "
+                        .takeIf(plainText::startsWith)
+                        ?.let { prefix -> add("sent out ${plainText.removePrefix(prefix)}") }
+                    "$trainerName withdrew "
+                        .takeIf(plainText::startsWith)
+                        ?.let { prefix -> add("withdrew ${plainText.removePrefix(prefix)}") }
+                }
         }
+        return perspectiveVariants.flatMapTo(mutableSetOf()) { variant ->
+            val normalized = normalizedText(variant, true)
+            listOf(normalized) + normalizedSwitchNarrations(normalized)
+        }
+    }
+
+    private fun normalizedSwitchNarrations(value: String): List<String> {
+        val normalized = when {
+            value.startsWith("sent out ") -> value
+            value.startsWith("go! ") -> "sent out ${value.removePrefix("go! ").removeSuffix("!")}"
+            value.endsWith(" was sent out") -> "sent out ${value.removeSuffix(" was sent out")}"
+            value.endsWith(", come back") -> "withdrew ${value.removeSuffix(", come back")}"
+            value.endsWith(" was withdrawn") -> "withdrew ${value.removeSuffix(" was withdrawn")}"
+            else -> Regex("^(.+) went back to .+$")
+                .matchEntire(value)
+                ?.groupValues
+                ?.get(1)
+                ?.let { "withdrew $it" }
+        } ?: return emptyList()
+        val nicknameOnly = Regex("^sent out (.+?) \\([^()]+\\)$")
+            .matchEntire(normalized)
+            ?.groupValues
+            ?.get(1)
+            ?.let { "sent out $it" }
+        return listOfNotNull(normalized, nicknameOnly)
     }
 
     private fun normalizedText(value: String, protocolFallback: Boolean = false): String {
