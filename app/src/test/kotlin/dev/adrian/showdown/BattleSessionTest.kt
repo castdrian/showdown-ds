@@ -1515,6 +1515,38 @@ class BattleSessionTest {
     }
 
     @Test
+    fun freeForAllSubmitsTheSelectedFourPlayerTargetUsingItsShowdownRelativeLocation() {
+        val decisions = mutableListOf<String>()
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER1")
+            addDecisionListener(decisions::add)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|freeforall",
+                "|player|p1|PLAYER1||",
+                "|player|p2|PLAYER2||",
+                "|player|p3|PLAYER3||",
+                "|player|p4|PLAYER4||",
+                "|switch|p1a: Local|Incineroar, L50|100/100",
+                "|switch|p2a: FoeTwo|Tapu Koko, L50|100/100",
+                "|switch|p3b: FoeThree|Galvantula, L50|100/100",
+                "|switch|p4b: FoeFour|Passimian, L50|100/100",
+                "|request|{\"rqid\":123,\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]}]}"
+            )
+        )
+
+        assertEquals(
+            listOf("Foe: FoeTwo", "Foe: FoeThree", "Foe: FoeFour"),
+            session.targetOptions().map { it.label }
+        )
+
+        session.selectTargetWithTouch(2)
+
+        assertEquals(listOf("/choose move 1 +2|123"), decisions)
+    }
+
+    @Test
     fun liveProtocolEventsCanBePresentedSeparatelyFromAuthoritativeState() {
         val session = BattleSession()
         val initialEvent = session.latestBattleEvent

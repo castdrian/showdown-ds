@@ -76,56 +76,19 @@ class ShowdownBattleLogRendererParityTest {
 
     @Test
     fun officialDoublesReplayNarrationMatchesItsVisibleCombatants() {
-        lateinit var activity: ShowdownLogParityHarnessActivity
-        activityRule.scenario.onActivity {
-            activity = it
-            it.renderer.setPerspective("p1")
-        }
-        val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
-            .open("gen9doublesou-2691960998.json")
-            .bufferedReader()
-            .use { it.readText() }
-        val replay = ShowdownReplayImporter.payload(replayJson)
-        val playbackLines = listOf("|init|battle") + replay.log.lines()
-        val session = BattleSession().apply {
-            setLocalUsername(replay.players.first())
-            setReplayMode(true)
-        }
-        val narrationIdentityFailures = mutableListOf<String>()
-        var renderedMoveCount = 0
+        assertOfficialReplayNarrationMatchesItsVisibleCombatants(
+            "gen9doublesou-2691960998.json",
+            requiredPlayerSlots = setOf("p1a", "p1b"),
+            requiredOpponentSlots = setOf("p2a", "p2b")
+        )
+    }
 
-        BattlePlaybackTiming.chunks(playbackLines).forEach { packet ->
-            val entryCount = activity.nativeEntries.size
-            val syncCount = activity.synchronizedGenerations.size
-            val combatantsBefore = battleCombatants(session)
-            session.applyProtocolPacket(packet)
-            val generation = session.battleLogGeneration()
-            activity.renderer.applyProtocol(packet, generation)
-            awaitSynchronization(activity, syncCount, generation)
-            val nativeEntries = activity.nativeEntries.drop(entryCount)
-                .filter { it.first == generation }
-                .map { it.second }
-            if (nativeEntries.isNotEmpty()) {
-                session.appendShowdownBattleLog(nativeEntries.joinToString("<br />"), generation)
-            }
-            session.markNativeBattleLogSynchronized(generation)
-            val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
-            renderedMoveCount += nativeTexts.count { it.contains(" used ", true) }
-            val eventCombatants = (combatantsBefore + battleCombatants(session))
-                .distinctBy { Triple(it.slot, it.name, it.species) }
-            assertNativePokemonNarrationUsesMatchingScene(
-                session,
-                nativeTexts,
-                eventCombatants,
-                narrationIdentityFailures
-            )
-        }
-
-        assertTrue("The official doubles replay did not reach its winner event", session.isBattleFinished())
-        assertTrue("The official doubles replay rendered no moves", renderedMoveCount > 0)
-        assertTrue(
-            "Official doubles narration was paired with the wrong Pokémon scene: $narrationIdentityFailures",
-            narrationIdentityFailures.isEmpty()
+    @Test
+    fun officialFreeForAllReplayNarrationMatchesAllFourCombatantSlots() {
+        assertOfficialReplayNarrationMatchesItsVisibleCombatants(
+            "gen9freeforallrandombattle-2547390602.json",
+            requiredPlayerSlots = setOf("p1a"),
+            requiredOpponentSlots = setOf("p2a", "p3b", "p4b")
         )
     }
 
@@ -221,6 +184,71 @@ class ShowdownBattleLogRendererParityTest {
         assertTrue(
             "The upstream renderer did not finish protocol generation $generation; synchronized ${activity.synchronizedGenerations.drop(previousCount)}",
             activity.synchronizedGenerations.drop(previousCount).any { it == generation }
+        )
+    }
+
+    private fun assertOfficialReplayNarrationMatchesItsVisibleCombatants(
+        replayFileName: String,
+        requiredPlayerSlots: Set<String>,
+        requiredOpponentSlots: Set<String>
+    ) {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p1")
+        }
+        val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
+            .open(replayFileName)
+            .bufferedReader()
+            .use { it.readText() }
+        val replay = ShowdownReplayImporter.payload(replayJson)
+        val playbackLines = listOf("|init|battle") + replay.log.lines()
+        val session = BattleSession().apply {
+            setLocalUsername(replay.players.first())
+            setReplayMode(true)
+        }
+        val narrationIdentityFailures = mutableListOf<String>()
+        var renderedMoveCount = 0
+        var sawRequiredCombatantSlots = false
+
+        BattlePlaybackTiming.chunks(playbackLines).forEach { packet ->
+            val entryCount = activity.nativeEntries.size
+            val syncCount = activity.synchronizedGenerations.size
+            val combatantsBefore = battleCombatants(session)
+            session.applyProtocolPacket(packet)
+            val generation = session.battleLogGeneration()
+            activity.renderer.applyProtocol(packet, generation)
+            awaitSynchronization(activity, syncCount, generation)
+            val nativeEntries = activity.nativeEntries.drop(entryCount)
+                .filter { it.first == generation }
+                .map { it.second }
+            if (nativeEntries.isNotEmpty()) {
+                session.appendShowdownBattleLog(nativeEntries.joinToString("<br />"), generation)
+            }
+            session.markNativeBattleLogSynchronized(generation)
+            val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
+            renderedMoveCount += nativeTexts.count { it.contains(" used ", true) }
+            val eventCombatants = (combatantsBefore + battleCombatants(session))
+                .distinctBy { Triple(it.slot, it.name, it.species) }
+            assertNativePokemonNarrationUsesMatchingScene(
+                session,
+                nativeTexts,
+                eventCombatants,
+                narrationIdentityFailures
+            )
+            val playerSlots = session.playerActiveCombatants().mapTo(mutableSetOf()) { it.slot }
+            val opponentSlots = session.opponentActiveCombatants().mapTo(mutableSetOf()) { it.slot }
+            if (requiredPlayerSlots.all(playerSlots::contains) && requiredOpponentSlots.all(opponentSlots::contains)) {
+                sawRequiredCombatantSlots = true
+            }
+        }
+
+        assertTrue("$replayFileName did not reach its winner event", session.isBattleFinished())
+        assertTrue("$replayFileName rendered no move narration", renderedMoveCount > 0)
+        assertTrue("$replayFileName never had its required active slot layout", sawRequiredCombatantSlots)
+        assertTrue(
+            "$replayFileName narration was paired with the wrong Pokémon scene: $narrationIdentityFailures",
+            narrationIdentityFailures.isEmpty()
         )
     }
 
