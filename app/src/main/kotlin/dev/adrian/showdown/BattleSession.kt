@@ -4784,9 +4784,15 @@ class BattleSession {
         removeEmptyBoostSlot(side)
         refreshVisibleBoosts()
         appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 3))
+        val pokemon = battleActor(side)
         val announcement = when (normalizeBattleTextKey(battleEffectName(protocolSource(fields, 3)))) {
-            "bellydrum" -> "${battleActor(side)} cut its own HP and maximized its Attack!"
-            else -> "${battleActor(side)}'s ${statLabel(stat)} rose!"
+            "bellydrum" -> "$pokemon cut its own HP and maximized its Attack!"
+            "angerpoint" -> "$pokemon maxed its Attack!"
+            "embodyaspectcornerstone" -> "The Cornerstone Mask worn by $pokemon shone brilliantly, and $pokemon's Defense rose!"
+            "embodyaspecthearthflame" -> "The Hearthflame Mask worn by $pokemon shone brilliantly, and $pokemon's Attack rose!"
+            "embodyaspectteal" -> "The Teal Mask worn by $pokemon shone brilliantly, and $pokemon's Speed rose!"
+            "embodyaspectwellspring" -> "The Wellspring Mask worn by $pokemon shone brilliantly, and $pokemon's Sp. Def rose!"
+            else -> "$pokemon's ${statLabel(stat)} rose!"
         }
         appendProtocolAnnouncement(fields, announcement)
     }

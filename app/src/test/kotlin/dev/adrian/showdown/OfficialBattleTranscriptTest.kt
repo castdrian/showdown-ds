@@ -1461,6 +1461,31 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsAbilitySpecificSetBoostAnnouncementsLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|-setboost|p1a: Tauros|atk|12|[from] ability: Anger Point",
+                "|-setboost|p1a: Ogerpon|def|1|[from] ability: Embody Aspect (Cornerstone)",
+                "|-setboost|p1a: Ogerpon|atk|1|[from] ability: Embody Aspect (Hearthflame)",
+                "|-setboost|p1a: Ogerpon|spe|1|[from] ability: Embody Aspect (Teal)",
+                "|-setboost|p1a: Ogerpon|spd|1|[from] ability: Embody Aspect (Wellspring)"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Tauros maxed its Attack!",
+                "The Cornerstone Mask worn by Ogerpon shone brilliantly, and Ogerpon's Defense rose!",
+                "The Hearthflame Mask worn by Ogerpon shone brilliantly, and Ogerpon's Attack rose!",
+                "The Teal Mask worn by Ogerpon shone brilliantly, and Ogerpon's Speed rose!",
+                "The Wellspring Mask worn by Ogerpon shone brilliantly, and Ogerpon's Sp. Def rose!"
+            ),
+            session.battleLog().filter { it.contains("maxed its Attack!") || it.contains("shone brilliantly") }
+        )
+    }
+
+    @Test
     fun formatsItemAndZPowerStatChangesLikeShowdown() {
         val session = BattleSession()
 
