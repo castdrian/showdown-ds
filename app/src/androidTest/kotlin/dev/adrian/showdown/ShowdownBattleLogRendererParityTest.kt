@@ -58,6 +58,7 @@ class ShowdownBattleLogRendererParityTest {
             }
             session.markNativeBattleLogSynchronized(generation)
             val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
+            assertNativeMoveNarrationMatchesProtocolActors(packet, nativeTexts, narrationIdentityFailures)
             val eventCombatants = (combatantsBefore + battleCombatants(session))
                 .distinctBy { Triple(it.slot, it.name, it.species) }
             assertNativePokemonNarrationUsesMatchingScene(
@@ -167,6 +168,7 @@ class ShowdownBattleLogRendererParityTest {
             }
             session.markNativeBattleLogSynchronized(generation)
             val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
+            assertNativeMoveNarrationMatchesProtocolActors(packet, nativeTexts, narrationIdentityFailures)
             val eventCombatants = (combatantsBefore + battleCombatants(session))
                 .distinctBy { Triple(it.slot, it.name, it.species) }
             assertNativePokemonNarrationUsesMatchingScene(
@@ -261,6 +263,7 @@ class ShowdownBattleLogRendererParityTest {
             session.markNativeBattleLogSynchronized(generation)
             val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
             renderedMoveCount += nativeTexts.count { it.contains(" used ", true) }
+            assertNativeMoveNarrationMatchesProtocolActors(packet, nativeTexts, narrationIdentityFailures)
             val eventCombatants = (combatantsBefore + battleCombatants(session))
                 .distinctBy { Triple(it.slot, it.name, it.species) }
             assertNativePokemonNarrationUsesMatchingScene(
@@ -287,6 +290,33 @@ class ShowdownBattleLogRendererParityTest {
 
     private fun battleCombatants(session: BattleSession) =
         session.playerActiveCombatants() + session.opponentActiveCombatants()
+
+    private fun assertNativeMoveNarrationMatchesProtocolActors(
+        packet: List<String>,
+        nativeTexts: List<String>,
+        failures: MutableList<String>
+    ) {
+        val protocolActors = packet.mapNotNull { line ->
+            val fields = line.split('|')
+            if (fields.getOrNull(1) != "move") return@mapNotNull null
+            if (line.contains("|[from] ability: Magic Bounce", true)) return@mapNotNull null
+            val actor = fields.getOrNull(2)?.substringAfter(": ", "")?.trim().orEmpty()
+            if (actor.isEmpty()) null else line to actor
+        }
+        if (protocolActors.isEmpty()) return
+
+        val narratedMoves = nativeTexts.filter { it.contains(" used ", true) }
+        if (protocolActors.size != narratedMoves.size) {
+            failures += "Protocol move actors ${protocolActors.map { it.second }} did not match rendered move narration $narratedMoves; protocol=${protocolActors.map { it.first }}"
+            return
+        }
+        protocolActors.zip(narratedMoves).forEach { (protocolMove, narration) ->
+            val actor = protocolMove.second
+            if (!mentionsPokemon(narration, actor)) {
+                failures += "Protocol move actor '$actor' did not match rendered narration '$narration'; protocol=${protocolMove.first}"
+            }
+        }
+    }
 
     private fun assertNativePokemonNarrationUsesMatchingScene(
         session: BattleSession,
