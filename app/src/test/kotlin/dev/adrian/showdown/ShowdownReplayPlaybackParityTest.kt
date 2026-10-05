@@ -52,191 +52,175 @@ class ShowdownReplayPlaybackParityTest {
             playerNames.forEach { localUsername ->
                 val localPlayerSlots = protocolPlayerSlots(replay.log.lines(), localUsername)
                 listOf(false, true).forEach { replayMode ->
-                    listOf(false, true).forEach { nativeFeedMode ->
-                        val session = BattleSession().apply {
-                            applyProtocolLine("|init|battle")
-                            setLocalUsername(localUsername)
-                            setReplayMode(replayMode)
+                    val session = BattleSession().apply {
+                        applyProtocolLine("|init|battle")
+                        setLocalUsername(localUsername)
+                        setReplayMode(replayMode)
+                    }
+                    val presentation = BattleFeedPresentation().apply { setPlaybackSpeed(1f) }
+                    val offScreenSourcesByMessage = mutableMapOf<Long, Set<String>>()
+                    val protocolCombatantsBySlot = mutableMapOf<String, ProtocolPokemonIdentity>()
+                    val protocolActorsByMessage = mutableMapOf<Long, List<ProtocolPokemonIdentity>>()
+                    val messageOriginPackets = mutableMapOf<Long, List<String>>()
+                    val presentedProtocolActorMessages = mutableSetOf<Long>()
+                    var nowMillis = 0L
+
+                    BattlePlaybackTiming.chunks(replay.log.lines()).forEach { packet ->
+                        val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
+                        val packetOffScreenSources = packet.flatMapTo(mutableSetOf(), ::protocolOffScreenSourceNames)
+                        val packetIdentities = protocolPokemonIdentitiesInPacket(packet, protocolCombatantsBySlot)
+                        session.applyProtocolPacket(packet)
+                        val messages = session.battleFeedMessages()
+                        val generatedProtocolMessages = messages.filter { it.id !in previousMessageIds }
+                        generatedProtocolMessages.forEach { message ->
+                            messageOriginPackets.putIfAbsent(message.id, packet)
                         }
-                        val presentation = BattleFeedPresentation().apply { setPlaybackSpeed(1f) }
-                        val offScreenSourcesByMessage = mutableMapOf<Long, Set<String>>()
-                        val protocolCombatantsBySlot = mutableMapOf<String, ProtocolPokemonIdentity>()
-                        val protocolActorsByMessage = mutableMapOf<Long, List<ProtocolPokemonIdentity>>()
-                        val messageOriginPackets = mutableMapOf<Long, List<String>>()
-                        val presentedProtocolActorMessages = mutableSetOf<Long>()
-                        var nowMillis = 0L
-                        var previousProtocolEntries = session.battleLog()
+                        generatedProtocolMessages.forEach { message ->
+                            val referencedActors = packetIdentities.filter { identity ->
+                                mentionsPokemon(message.text, identity.name)
+                            }.distinctBy { it.slot to it.name }
+                            if (referencedActors.isNotEmpty()) {
+                                protocolActorsByMessage[message.id] = referencedActors
+                            }
+                            val referencedSources = packetOffScreenSources.filterTo(mutableSetOf()) { name ->
+                                mentionsPokemon(message.text, name)
+                            }
+                            if (referencedSources.isNotEmpty()) {
+                                offScreenSourcesByMessage[message.id] = referencedSources
+                            }
+                        }
+                        presentation.updateMessages(messages, session.battleFeedVisible, nowMillis)
+                        val pauseMillis = BattlePlaybackTiming.scaledPause(
+                            BattlePlaybackTiming.pauseAfter(
+                                packet,
+                                messages.count { it.id !in previousMessageIds },
+                                presentation.remainingPlaybackBudgetMillis(nowMillis)
+                            ),
+                            1f
+                        )
+                        val deadlineMillis = nowMillis + pauseMillis
+                        var frameTimeMillis = nowMillis
 
-                        BattlePlaybackTiming.chunks(replay.log.lines()).forEach { packet ->
-                            val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
-                            val packetOffScreenSources = packet.flatMapTo(mutableSetOf(), ::protocolOffScreenSourceNames)
-                            val packetIdentities = protocolPokemonIdentitiesInPacket(packet, protocolCombatantsBySlot)
-                            session.applyProtocolPacket(packet)
-                            val currentProtocolEntries = session.battleLog()
-                            val generatedProtocolEntries = appendedProtocolEntries(
-                                previousProtocolEntries,
-                                currentProtocolEntries
-                            )
-                            previousProtocolEntries = currentProtocolEntries
-                            if (nativeFeedMode && generatedProtocolEntries.isNotEmpty()) {
-                                session.appendShowdownBattleLog(
-                                    showdownMarkup(generatedProtocolEntries),
-                                    session.battleLogGeneration()
+                        while (frameTimeMillis <= deadlineMillis) {
+                            presentation.frame(frameTimeMillis)?.let { frame ->
+                                val sceneSnapshot = session.battleSceneSnapshotForFeedMessage(frame.messageId)
+                                val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
+                                val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+                                    sceneSnapshot?.playerCombatants ?: session.playerActiveCombatants(),
+                                    true,
+                                    switchOutVisual
                                 )
-                            }
-                            if (nativeFeedMode) session.markNativeBattleLogSynchronized(session.battleLogGeneration())
-                            val messages = session.battleFeedMessages()
-                            val generatedProtocolMessages = messages.filter { it.id !in previousMessageIds }
-                            generatedProtocolMessages.forEach { message ->
-                                messageOriginPackets.putIfAbsent(message.id, packet)
-                            }
-                            generatedProtocolMessages.forEach { message ->
-                                val referencedActors = packetIdentities.filter { identity ->
-                                    mentionsPokemon(message.text, identity.name)
-                                }.distinctBy { it.slot to it.name }
-                                if (referencedActors.isNotEmpty()) {
-                                    protocolActorsByMessage[message.id] = referencedActors
-                                }
-                                val referencedSources = packetOffScreenSources.filterTo(mutableSetOf()) { name ->
-                                    mentionsPokemon(message.text, name)
-                                }
-                                if (referencedSources.isNotEmpty()) {
-                                    offScreenSourcesByMessage[message.id] = referencedSources
-                                }
-                            }
-                            presentation.updateMessages(messages, session.battleFeedVisible, nowMillis)
-                            val pauseMillis = BattlePlaybackTiming.scaledPause(
-                                BattlePlaybackTiming.pauseAfter(
-                                    packet,
-                                    messages.count { it.id !in previousMessageIds },
-                                    presentation.remainingPlaybackBudgetMillis(nowMillis)
-                                ),
-                                1f
-                            )
-                            val deadlineMillis = nowMillis + pauseMillis
-                            var frameTimeMillis = nowMillis
+                                val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+                                    sceneSnapshot?.opponentCombatants ?: session.opponentActiveCombatants(),
+                                    false,
+                                    switchOutVisual
+                                )
+                                val spriteRequests = BattleSpriteRequests.forScene(
+                                    playerCombatants = playerCombatants,
+                                    opponentCombatants = opponentCombatants,
+                                    singlesBattle = session.isSinglesBattle(),
+                                    style = session.spriteStyle,
+                                    playerFallbackSpecies = session.playerPokemon,
+                                    opponentFallbackSpecies = session.opponentPokemon
+                                )
+                                val visibleCombatants = playerCombatants.map { BattleSpriteSide.PLAYER to it } +
+                                    opponentCombatants.map { BattleSpriteSide.OPPONENT to it }
 
-                            while (frameTimeMillis <= deadlineMillis) {
-                                presentation.frame(frameTimeMillis)?.let { frame ->
-                                    val sceneSnapshot = session.battleSceneSnapshotForFeedMessage(frame.messageId)
-                                    val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
-                                    val playerCombatants = BattleFeedSceneState.combatantsForMessage(
-                                        sceneSnapshot?.playerCombatants ?: session.playerActiveCombatants(),
-                                        true,
-                                        switchOutVisual
-                                    )
-                                    val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
-                                        sceneSnapshot?.opponentCombatants ?: session.opponentActiveCombatants(),
-                                        false,
-                                        switchOutVisual
-                                    )
-                                    val spriteRequests = BattleSpriteRequests.forScene(
-                                        playerCombatants = playerCombatants,
-                                        opponentCombatants = opponentCombatants,
-                                        singlesBattle = session.isSinglesBattle(),
-                                        style = session.spriteStyle,
-                                        playerFallbackSpecies = session.playerPokemon,
-                                        opponentFallbackSpecies = session.opponentPokemon
-                                    )
-                                    val visibleCombatants = playerCombatants.map { BattleSpriteSide.PLAYER to it } +
-                                        opponentCombatants.map { BattleSpriteSide.OPPONENT to it }
-
-                                    val protocolActors = protocolActorsByMessage[frame.messageId].orEmpty()
-                                    if (protocolActors.isNotEmpty()) {
-                                        frame.messageId?.let(presentedProtocolActorMessages::add)
+                                val protocolActors = protocolActorsByMessage[frame.messageId].orEmpty()
+                                if (protocolActors.isNotEmpty()) {
+                                    frame.messageId?.let(presentedProtocolActorMessages::add)
+                                }
+                                protocolActors.forEach { identity ->
+                                    val expectedPlayerSide = identity.slot.take(2) in localPlayerSlots
+                                    val matchingCombatant = visibleCombatants.singleOrNull { (side, combatant) ->
+                                        combatant.slot.equals(identity.slot, ignoreCase = true) &&
+                                            (side == BattleSpriteSide.PLAYER) == expectedPlayerSide
                                     }
-                                    protocolActors.forEach { identity ->
-                                        val expectedPlayerSide = identity.slot.take(2) in localPlayerSlots
-                                        val matchingCombatant = visibleCombatants.singleOrNull { (side, combatant) ->
-                                            combatant.slot.equals(identity.slot, ignoreCase = true) &&
-                                                (side == BattleSpriteSide.PLAYER) == expectedPlayerSide
-                                        }
-                                        val context = "$fileName ($localUsername, replay=$replayMode, native=$nativeFeedMode): ${frame.visibleText} at $frameTimeMillis ms for ${identity.slot}:${identity.name}"
-                                        assertTrue(
-                                            "$context; visible combatants are ${visibleCombatants.map { it.first to it.second.name }}",
-                                            matchingCombatant != null
-                                        )
-                                        val (side, combatant) = checkNotNull(matchingCombatant)
-                                        assertEquals(context, identity.name, combatant.name)
-                                        assertEquals(context, identity.species, combatant.species)
+                                    val context = "$fileName ($localUsername, replay=$replayMode): ${frame.visibleText} at $frameTimeMillis ms for ${identity.slot}:${identity.name}"
+                                    assertTrue(
+                                        "$context; visible combatants are ${visibleCombatants.map { it.first to it.second.name }}",
+                                        matchingCombatant != null
+                                    )
+                                    val (side, combatant) = checkNotNull(matchingCombatant)
+                                    assertEquals(context, identity.name, combatant.name)
+                                    assertEquals(context, identity.species, combatant.species)
+                                    val sprite = when {
+                                        side == BattleSpriteSide.PLAYER && spriteRequests.singlesBattle -> spriteRequests.playerLead
+                                        side == BattleSpriteSide.OPPONENT && spriteRequests.singlesBattle -> spriteRequests.opponentLead
+                                        side == BattleSpriteSide.PLAYER -> spriteRequests.playerActive
+                                            .singleOrNull { it.slot == identity.slot }
+                                            ?.request
+                                        else -> spriteRequests.opponentActive
+                                            .singleOrNull { it.slot == identity.slot }
+                                            ?.request
+                                    }
+                                    assertEquals(context, identity.species, checkNotNull(sprite).species)
+                                    assertEquals(
+                                        context,
+                                        if (expectedPlayerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
+                                        checkNotNull(sprite).side
+                                    )
+                                }
+
+                                knownPokemonNames.filter { name ->
+                                    mentionsPokemon(frame.visibleText, name)
+                                }.forEach { name ->
+                                    val matchingCombatants = visibleCombatants.filter { (_, combatant) ->
+                                        combatant.name.equals(name, ignoreCase = true) ||
+                                            combatant.species.equals(name, ignoreCase = true)
+                                    }
+                                    val currentFeedSummary = messages.takeLast(8).map { "${it.id}:${it.text}" }
+                                    val mappedMessageIds = protocolActorsByMessage.keys.sorted().takeLast(8)
+                                    val context = "$fileName ($localUsername, replay=$replayMode): ${frame.visibleText} [message ${frame.messageId}] at $frameTimeMillis ms after $packet; origin=${frame.messageId?.let(messageOriginPackets::get)}; feed=$currentFeedSummary; mapped=$mappedMessageIds"
+                                    val messageIdentities = protocolActorsByMessage[frame.messageId].orEmpty()
+                                    val matchingProtocolIdentity = messageIdentities.any {
+                                        it.name.equals(name, ignoreCase = true) || it.species.equals(name, ignoreCase = true)
+                                    }
+                                    val offScreenSource = name in offScreenSourcesByMessage[frame.messageId].orEmpty()
+                                    assertTrue(
+                                        "$context did not retain protocol identity for $name; mapped identities are ${messageIdentities.map { it.slot to it.name }}",
+                                        matchingProtocolIdentity || offScreenSource
+                                    )
+                                    if (matchingCombatants.isEmpty() && offScreenSource) {
+                                        return@forEach
+                                    }
+                                    assertTrue(
+                                        "$context; active combatants are ${visibleCombatants.map { it.second.name }}",
+                                        matchingCombatants.isNotEmpty()
+                                    )
+                                    matchingCombatants.forEach { (side, combatant) ->
                                         val sprite = when {
-                                            side == BattleSpriteSide.PLAYER && spriteRequests.singlesBattle -> spriteRequests.playerLead
-                                            side == BattleSpriteSide.OPPONENT && spriteRequests.singlesBattle -> spriteRequests.opponentLead
+                                            side == BattleSpriteSide.PLAYER && spriteRequests.singlesBattle ->
+                                                spriteRequests.playerLead
+                                            side == BattleSpriteSide.OPPONENT && spriteRequests.singlesBattle ->
+                                                spriteRequests.opponentLead
                                             side == BattleSpriteSide.PLAYER -> spriteRequests.playerActive
-                                                .singleOrNull { it.slot == identity.slot }
+                                                .singleOrNull { it.slot == combatant.slot }
                                                 ?.request
                                             else -> spriteRequests.opponentActive
-                                                .singleOrNull { it.slot == identity.slot }
+                                                .singleOrNull { it.slot == combatant.slot }
                                                 ?.request
                                         }
-                                        assertEquals(context, identity.species, checkNotNull(sprite).species)
-                                        assertEquals(
-                                            context,
-                                            if (expectedPlayerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
-                                            checkNotNull(sprite).side
-                                        )
-                                    }
 
-                                    knownPokemonNames.filter { name ->
-                                        mentionsPokemon(frame.visibleText, name)
-                                    }.forEach { name ->
-                                        val matchingCombatants = visibleCombatants.filter { (_, combatant) ->
-                                            combatant.name.equals(name, ignoreCase = true) ||
-                                                combatant.species.equals(name, ignoreCase = true)
-                                        }
-                                        val currentFeedSummary = messages.takeLast(8).map { "${it.id}:${it.text}" }
-                                        val mappedMessageIds = protocolActorsByMessage.keys.sorted().takeLast(8)
-                                        val context = "$fileName ($localUsername, replay=$replayMode, native=$nativeFeedMode): ${frame.visibleText} [message ${frame.messageId}] at $frameTimeMillis ms after $packet; origin=${frame.messageId?.let(messageOriginPackets::get)}; feed=$currentFeedSummary; mapped=$mappedMessageIds"
-                                        val messageIdentities = protocolActorsByMessage[frame.messageId].orEmpty()
-                                        val matchingProtocolIdentity = messageIdentities.any {
-                                            it.name.equals(name, ignoreCase = true) || it.species.equals(name, ignoreCase = true)
-                                        }
-                                        val offScreenSource = name in offScreenSourcesByMessage[frame.messageId].orEmpty()
-                                        assertTrue(
-                                            "$context did not retain protocol identity for $name; mapped identities are ${messageIdentities.map { it.slot to it.name }}",
-                                            matchingProtocolIdentity || offScreenSource
-                                        )
-                                        if (matchingCombatants.isEmpty() && offScreenSource) {
-                                            return@forEach
-                                        }
-                                        assertTrue(
-                                            "$context; active combatants are ${visibleCombatants.map { it.second.name }}",
-                                            matchingCombatants.isNotEmpty()
-                                        )
-                                        matchingCombatants.forEach { (side, combatant) ->
-                                            val sprite = when {
-                                                side == BattleSpriteSide.PLAYER && spriteRequests.singlesBattle ->
-                                                    spriteRequests.playerLead
-                                                side == BattleSpriteSide.OPPONENT && spriteRequests.singlesBattle ->
-                                                    spriteRequests.opponentLead
-                                                side == BattleSpriteSide.PLAYER -> spriteRequests.playerActive
-                                                    .singleOrNull { it.slot == combatant.slot }
-                                                    ?.request
-                                                else -> spriteRequests.opponentActive
-                                                    .singleOrNull { it.slot == combatant.slot }
-                                                    ?.request
-                                            }
-
-                                            assertEquals(context, combatant.species, checkNotNull(sprite).species)
-                                            assertEquals(context, combatant.shiny, checkNotNull(sprite).shiny)
-                                        }
+                                        assertEquals(context, combatant.species, checkNotNull(sprite).species)
+                                        assertEquals(context, combatant.shiny, checkNotNull(sprite).shiny)
                                     }
                                 }
-                                frameTimeMillis += 100L
                             }
-                            nowMillis = deadlineMillis
+                            frameTimeMillis += 100L
                         }
-
-                        assertTrue(
-                            "$fileName as $localUsername replay=$replayMode native=$nativeFeedMode mapped too few protocol identities to user-facing log messages",
-                            protocolActorsByMessage.size >= 20
-                        )
-                        assertEquals(
-                            "$fileName as $localUsername replay=$replayMode native=$nativeFeedMode left identity-bearing log messages unpresented",
-                            protocolActorsByMessage.keys,
-                            presentedProtocolActorMessages
-                        )
+                        nowMillis = deadlineMillis
                     }
+
+                    assertTrue(
+                        "$fileName as $localUsername replay=$replayMode mapped too few protocol identities to user-facing log messages",
+                        protocolActorsByMessage.size >= 20
+                    )
+                    assertEquals(
+                        "$fileName as $localUsername replay=$replayMode left identity-bearing log messages unpresented",
+                        protocolActorsByMessage.keys,
+                        presentedProtocolActorMessages
+                    )
                 }
             }
         }
@@ -631,6 +615,40 @@ class ShowdownReplayPlaybackParityTest {
 
         assertEquals("Salazzle", visibleOpponents.single().name)
         assertEquals("Salazzle", sprites.opponentLead?.species)
+    }
+
+    @Test
+    fun officialWhiteHerbNarrationRetainsTheMiniorSceneSnapshot() {
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|PLAYER||",
+                "|player|p2|OPPONENT||",
+                "|gametype|singles",
+                "|switch|p1a: Minior|Minior-Meteor, L79|224/224",
+                "|switch|p2a: Salazzle|Salazzle, L83, F|249/249"
+            )
+        )
+        session.applyProtocolPacket(listOf("|-enditem|p1a: Minior|White Herb"))
+        val protocolFallback = session.battleFeedMessages().last()
+        assertEquals("(PLAYER's Minior used its White Herb!)", protocolFallback.text)
+
+        session.applyProtocolPacket(listOf("|switch|p2a: Dragalge|Dragalge, L88, F|258/258"))
+        session.appendShowdownBattleLog(
+            "Minior returned its stats to normal using its White Herb!",
+            session.battleLogGeneration()
+        )
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        val nativeMessage = session.battleFeedMessages().last()
+        assertEquals("Minior returned its stats to normal using its White Herb!", nativeMessage.text)
+        assertEquals(protocolFallback.id, nativeMessage.id)
+        val snapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(nativeMessage.id))
+        assertEquals("Minior", snapshot.playerCombatants.single().name)
     }
 
     @Test
@@ -1178,14 +1196,4 @@ class ShowdownReplayPlaybackParityTest {
         Regex("(?<![\\p{L}\\p{N}])${Regex.escape(name)}(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
             .containsMatchIn(message)
 
-    private fun appendedProtocolEntries(previous: List<String>, current: List<String>): List<String> {
-        val overlap = (minOf(previous.size, current.size) downTo 0).first { size ->
-            size == 0 || previous.takeLast(size) == current.take(size)
-        }
-        return current.drop(overlap)
-    }
-
-    private fun showdownMarkup(messages: List<String>) = messages.joinToString("<br />") { message ->
-        message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    }
 }

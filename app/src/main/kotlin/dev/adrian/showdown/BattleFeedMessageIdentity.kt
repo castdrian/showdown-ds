@@ -34,6 +34,7 @@ object BattleFeedMessageIdentity {
             .replace("had its hp restored", "recovered health")
             .replace("restored health", "recovered health")
             .replace("recovered hp", "recovered health")
+            .replace("used its white herb", "returned its stats to normal using its white herb")
             .let(::collapseWhitespace)
             .trimEnd { it == '.' || it == '!' || it == '?' }
         return if (protocolFallback) {

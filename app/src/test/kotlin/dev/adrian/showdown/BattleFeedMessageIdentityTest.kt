@@ -32,6 +32,16 @@ class BattleFeedMessageIdentityTest {
     }
 
     @Test
+    fun matchesOfficialWhiteHerbWordingToProtocolItemFallback() {
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "(Minior used its White Herb!)",
+                "Minior returned its stats to normal using its White Herb!"
+            )
+        )
+    }
+
+    @Test
     fun matchesPerspectiveWordingForKnownTrainerRegardlessOfActionVerb() {
         assertTrue(
             BattleFeedMessageIdentity.matchesProtocolFallback(
