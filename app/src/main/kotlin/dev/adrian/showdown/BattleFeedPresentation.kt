@@ -18,8 +18,10 @@ data class BattleFeedMessage(
 object BattleFeedSceneState {
     fun hasKnownPokemon(
         combatant: BattleSession.ActiveCombatant?,
-        details: BattleSession.PokemonDetails
+        details: BattleSession.PokemonDetails,
+        requireActiveCombatant: Boolean = false
     ): Boolean {
+        if (requireActiveCombatant && combatant == null) return false
         val species = combatant?.let { it.species.ifBlank { it.name } }
             ?: details.species.ifBlank { details.name }
         return isUsableSpriteSpecies(species)

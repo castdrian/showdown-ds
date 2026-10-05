@@ -449,9 +449,17 @@ class BattleSceneView(
             nowNanos
         )
         val playerStatusCardVisible = playerStatusAlpha > 0f &&
-            BattleFeedSceneState.hasKnownPokemon(playerCombatant, playerDetails)
+            BattleFeedSceneState.hasKnownPokemon(
+                playerCombatant,
+                playerDetails,
+                requireActiveCombatant = session.isReplayMode() || session.isSpectatorMode()
+            )
         val opponentStatusCardVisible = opponentStatusAlpha > 0f &&
-            BattleFeedSceneState.hasKnownPokemon(opponentCombatant, opponentDetails)
+            BattleFeedSceneState.hasKnownPokemon(
+                opponentCombatant,
+                opponentDetails,
+                requireActiveCombatant = session.isReplayMode() || session.isSpectatorMode()
+            )
         playerInspectBounds.set(width * 0.05f, height * 0.28f, width * 0.57f, height * 0.88f)
         opponentInspectBounds.set(width * 0.47f, height * 0.11f, width * 0.95f, height * 0.67f)
         drawBackdrop(canvas, width, height)
