@@ -3,8 +3,28 @@ package dev.adrian.showdown
 object BattleFeedMessageIdentity {
     fun matches(first: String, second: String): Boolean = normalizedText(first) == normalizedText(second)
 
-    fun matchesProtocolFallback(protocolText: String, nativeText: String): Boolean =
-        normalizedText(protocolText, true) == normalizedText(nativeText, true)
+    fun matchesProtocolFallback(
+        protocolText: String,
+        nativeText: String,
+        trainerNames: Collection<String> = emptyList()
+    ): Boolean {
+        val nativeVariants = normalizedVariants(nativeText, trainerNames)
+        return normalizedVariants(protocolText, trainerNames).any(nativeVariants::contains)
+    }
+
+    private fun normalizedVariants(value: String, trainerNames: Collection<String>): Set<String> {
+        val plainText = value.lowercase().trim().removeSurrounding("(", ")")
+        return buildSet {
+            add(normalizedText(plainText, true))
+            trainerNames.asSequence()
+                .map { it.trim().lowercase() }
+                .filter(String::isNotEmpty)
+                .map { "${it}'s " }
+                .filter(plainText::startsWith)
+                .map(plainText::removePrefix)
+                .forEach { add(normalizedText(it, true)) }
+        }
+    }
 
     private fun normalizedText(value: String, protocolFallback: Boolean = false): String {
         val plainText = value.lowercase().trim().removeSurrounding("(", ")")

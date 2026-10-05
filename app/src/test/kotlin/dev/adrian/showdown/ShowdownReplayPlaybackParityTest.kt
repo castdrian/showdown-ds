@@ -581,6 +581,59 @@ class ShowdownReplayPlaybackParityTest {
     }
 
     @Test
+    fun delayedEncoreNarrationKeepsItsOriginalPokemonVisibleAfterTheNextSwitch() {
+        val session = BattleSession().apply {
+            setLocalUsername("T0RcH3D")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|T0RcH3D||",
+                "|player|p2|iluvgermany||",
+                "|gametype|singles",
+                "|switch|p1a: Cramorant|Cramorant, L86, M|261/261",
+                "|switch|p2a: Salazzle|Salazzle, L83, F|73/249"
+            )
+        )
+        session.applyProtocolPacket(listOf("|-start|p2a: Salazzle|Encore"))
+        val encoreProtocolMessage = session.battleFeedMessages().last()
+        assertEquals("iluvgermany's Salazzle must do an encore!", encoreProtocolMessage.text)
+
+        session.applyProtocolPacket(
+            listOf("|switch|p2a: Dragalge|Dragalge, L88, F|258/258")
+        )
+        session.appendShowdownBattleLog(
+            "The opposing Salazzle must do an encore!",
+            session.battleLogGeneration()
+        )
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        val presentation = BattleFeedPresentation()
+        presentation.updateMessages(session.battleFeedMessages(), true, 0L)
+        val frame = checkNotNull(presentation.frame(0L))
+        assertEquals("The opposing Salazzle must do an encore!", frame.visibleText)
+
+        val scene = checkNotNull(session.battleSceneSnapshotForFeedMessage(frame.messageId))
+        val visibleOpponents = BattleFeedSceneState.combatantsForMessage(
+            scene.opponentCombatants,
+            false,
+            session.switchOutVisualForBattleFeed(frame.messageId)
+        )
+        val sprites = BattleSpriteRequests.forScene(
+            playerCombatants = scene.playerCombatants,
+            opponentCombatants = visibleOpponents,
+            singlesBattle = true,
+            style = session.spriteStyle,
+            playerFallbackSpecies = session.playerPokemon,
+            opponentFallbackSpecies = session.opponentPokemon
+        )
+
+        assertEquals("Salazzle", visibleOpponents.single().name)
+        assertEquals("Salazzle", sprites.opponentLead?.species)
+    }
+
+    @Test
     fun replayUpdatesAegislashFormAndSpriteTogether() {
         val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/gen8ou-2692756742.json"))
             .bufferedReader()

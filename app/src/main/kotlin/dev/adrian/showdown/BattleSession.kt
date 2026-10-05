@@ -1068,7 +1068,9 @@ class BattleSession {
 
     fun battleFeedMarkupFor(value: String): String {
         val nativeIndex = if (nativeBattleLogGeneration == battleLogGeneration) {
-            showdownBattleLogEntries.indexOfLast { BattleFeedMessageIdentity.matchesProtocolFallback(it.plainText, value) }
+            showdownBattleLogEntries.indexOfLast {
+                BattleFeedMessageIdentity.matchesProtocolFallback(it.plainText, value, sideNames.values)
+            }
         } else {
             -1
         }
@@ -5773,9 +5775,9 @@ class BattleSession {
     }
 
     private fun nativeMatchesProtocolFallback(protocolEntry: String, nativeEntry: String): Boolean {
-        if (BattleFeedMessageIdentity.matchesProtocolFallback(protocolEntry, nativeEntry)) return true
+        if (BattleFeedMessageIdentity.matchesProtocolFallback(protocolEntry, nativeEntry, sideNames.values)) return true
         val withoutOpponentPrefix = nativeEntry.replace(Regex("(?i)^the opposing\\s+"), "")
-        return BattleFeedMessageIdentity.matchesProtocolFallback(protocolEntry, withoutOpponentPrefix)
+        return BattleFeedMessageIdentity.matchesProtocolFallback(protocolEntry, withoutOpponentPrefix, sideNames.values)
     }
 
     private fun removeActivityAt(index: Int) {
@@ -5869,12 +5871,18 @@ class BattleSession {
         var protocolSearchAfterMessageId = lastNativeProtocolMessageId
         val entries = plainEntries.mapIndexed { index, plainText ->
             val previousId = previous.getOrNull(index)
-                ?.takeIf { BattleFeedMessageIdentity.matchesProtocolFallback(it.plainText, plainText) }
+                ?.takeIf {
+                    BattleFeedMessageIdentity.matchesProtocolFallback(it.plainText, plainText, sideNames.values)
+                }
                 ?.id
             val protocolIndex = if (previousId == null) {
                 battleLog.indices.firstOrNull { candidateIndex ->
                     battleLogMessageIds[candidateIndex] > protocolSearchAfterMessageId &&
-                        BattleFeedMessageIdentity.matchesProtocolFallback(battleLog[candidateIndex], plainText)
+                        BattleFeedMessageIdentity.matchesProtocolFallback(
+                            battleLog[candidateIndex],
+                            plainText,
+                            sideNames.values
+                        )
                 }
             } else {
                 null

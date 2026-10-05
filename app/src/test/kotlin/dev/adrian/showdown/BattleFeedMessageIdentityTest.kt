@@ -32,6 +32,17 @@ class BattleFeedMessageIdentityTest {
     }
 
     @Test
+    fun matchesPerspectiveWordingForKnownTrainerRegardlessOfActionVerb() {
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "iluvgermany's Salazzle must do an encore!",
+                "The opposing Salazzle must do an encore!",
+                listOf("T0RcH3D", "iluvgermany")
+            )
+        )
+    }
+
+    @Test
     fun doesNotTreatDifferentDamagePercentagesAsTheSameFeedMessage() {
         assertFalse(
             BattleFeedMessageIdentity.matches(
