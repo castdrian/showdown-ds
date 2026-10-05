@@ -192,21 +192,8 @@ class ShowdownConnection(
 
     private fun dispatchProtocol(webSocket: WebSocket, generation: Long, message: String) {
         if (!isCurrent(webSocket, generation)) return
-        val packets = mutableListOf<Pair<String?, MutableList<String>>>()
-        var roomId: String? = null
-        var lines = mutableListOf<String>()
-        message.lineSequence().forEach { line ->
-            if (line.startsWith(">")) {
-                if (lines.isNotEmpty()) packets += roomId to lines
-                roomId = line.drop(1).ifBlank { null }
-                lines = mutableListOf()
-            } else if (line.isNotEmpty()) {
-                lines += line
-            }
-        }
-        if (lines.isNotEmpty()) packets += roomId to lines
-        packets.forEach { (packetRoomId, packetLines) ->
-            if (isCurrent(webSocket, generation)) listener.onProtocol(packetRoomId, packetLines)
+        ShowdownProtocolPackets.decode(message).forEach { packet ->
+            if (isCurrent(webSocket, generation)) listener.onProtocol(packet.roomId, packet.lines)
         }
     }
 
