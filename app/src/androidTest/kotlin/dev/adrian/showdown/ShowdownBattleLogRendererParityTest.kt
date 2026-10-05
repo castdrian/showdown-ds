@@ -13,6 +13,12 @@ import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class ShowdownBattleLogRendererParityTest {
+    private data class ProtocolMoveActor(
+        val line: String,
+        val slot: String,
+        val name: String
+    )
+
     @get:Rule
     val activityRule = ActivityScenarioRule(ShowdownLogParityHarnessActivity::class.java)
 
@@ -58,7 +64,12 @@ class ShowdownBattleLogRendererParityTest {
             }
             session.markNativeBattleLogSynchronized(generation)
             val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
-            assertNativeMoveNarrationMatchesProtocolActors(packet, nativeTexts, narrationIdentityFailures)
+            assertNativeMoveNarrationMatchesProtocolActors(
+                session,
+                packet,
+                nativeTexts,
+                narrationIdentityFailures
+            )
             val eventCombatants = (combatantsBefore + battleCombatants(session))
                 .distinctBy { Triple(it.slot, it.name, it.species) }
             assertNativePokemonNarrationUsesMatchingScene(
@@ -168,7 +179,12 @@ class ShowdownBattleLogRendererParityTest {
             }
             session.markNativeBattleLogSynchronized(generation)
             val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
-            assertNativeMoveNarrationMatchesProtocolActors(packet, nativeTexts, narrationIdentityFailures)
+            assertNativeMoveNarrationMatchesProtocolActors(
+                session,
+                packet,
+                nativeTexts,
+                narrationIdentityFailures
+            )
             val eventCombatants = (combatantsBefore + battleCombatants(session))
                 .distinctBy { Triple(it.slot, it.name, it.species) }
             assertNativePokemonNarrationUsesMatchingScene(
@@ -263,7 +279,12 @@ class ShowdownBattleLogRendererParityTest {
             session.markNativeBattleLogSynchronized(generation)
             val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
             renderedMoveCount += nativeTexts.count { it.contains(" used ", true) }
-            assertNativeMoveNarrationMatchesProtocolActors(packet, nativeTexts, narrationIdentityFailures)
+            assertNativeMoveNarrationMatchesProtocolActors(
+                session,
+                packet,
+                nativeTexts,
+                narrationIdentityFailures
+            )
             val eventCombatants = (combatantsBefore + battleCombatants(session))
                 .distinctBy { Triple(it.slot, it.name, it.species) }
             assertNativePokemonNarrationUsesMatchingScene(
@@ -292,6 +313,7 @@ class ShowdownBattleLogRendererParityTest {
         session.playerActiveCombatants() + session.opponentActiveCombatants()
 
     private fun assertNativeMoveNarrationMatchesProtocolActors(
+        session: BattleSession,
         packet: List<String>,
         nativeTexts: List<String>,
         failures: MutableList<String>
@@ -300,20 +322,82 @@ class ShowdownBattleLogRendererParityTest {
             val fields = line.split('|')
             if (fields.getOrNull(1) != "move") return@mapNotNull null
             if (line.contains("|[from] ability: Magic Bounce", true)) return@mapNotNull null
-            val actor = fields.getOrNull(2)?.substringAfter(": ", "")?.trim().orEmpty()
-            if (actor.isEmpty()) null else line to actor
+            val actorId = fields.getOrNull(2).orEmpty()
+            val slot = actorId.substringBefore(':').trim()
+            val name = actorId.substringAfter(": ", "").trim()
+            if (slot.isEmpty() || name.isEmpty()) null else ProtocolMoveActor(line, slot, name)
         }
         if (protocolActors.isEmpty()) return
 
         val narratedMoves = nativeTexts.filter { it.contains(" used ", true) }
         if (protocolActors.size != narratedMoves.size) {
-            failures += "Protocol move actors ${protocolActors.map { it.second }} did not match rendered move narration $narratedMoves; protocol=${protocolActors.map { it.first }}"
+            failures += "Protocol move actors ${protocolActors.map { it.name }} did not match rendered move narration $narratedMoves; protocol=${protocolActors.map { it.line }}"
             return
         }
         protocolActors.zip(narratedMoves).forEach { (protocolMove, narration) ->
-            val actor = protocolMove.second
-            if (!mentionsPokemon(narration, actor)) {
-                failures += "Protocol move actor '$actor' did not match rendered narration '$narration'; protocol=${protocolMove.first}"
+            val context = "protocol=${protocolMove.line}; narration='$narration'"
+            if (!mentionsPokemon(narration, protocolMove.name)) {
+                failures += "Protocol move actor '${protocolMove.name}' did not match rendered narration; $context"
+                return@forEach
+            }
+            val message = session.battleFeedMessages().lastOrNull {
+                BattleFeedMessageIdentity.matches(it.text, narration)
+            }
+            if (message == null) {
+                failures += "No battle feed message matched protocol move actor '${protocolMove.name}'; $context"
+                return@forEach
+            }
+            val snapshot = session.battleSceneSnapshotForFeedMessage(message.id)
+            if (snapshot == null) {
+                failures += "No scene snapshot matched protocol move actor '${protocolMove.name}'; $context"
+                return@forEach
+            }
+            val playerSide = session.isLocalBattleSide(protocolMove.slot)
+            val switchOutVisual = session.switchOutVisualForBattleFeed(message.id)
+            val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+                snapshot.playerCombatants,
+                true,
+                switchOutVisual
+            )
+            val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+                snapshot.opponentCombatants,
+                false,
+                switchOutVisual
+            )
+            val combatants = if (playerSide) playerCombatants else opponentCombatants
+            val actor = combatants.singleOrNull { it.slot.equals(protocolMove.slot, true) }
+            if (actor == null) {
+                failures += "Protocol move actor slot '${protocolMove.slot}' was absent from its message scene; $context; player=${playerCombatants.map { it.slot to it.name }}; opponent=${opponentCombatants.map { it.slot to it.name }}"
+                return@forEach
+            }
+            if (!actor.name.equals(protocolMove.name, true)) {
+                failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' did not match the scene's '${actor.slot}:${actor.name}'; $context"
+                return@forEach
+            }
+            val spriteRequests = BattleSpriteRequests.forScene(
+                playerCombatants = playerCombatants,
+                opponentCombatants = opponentCombatants,
+                singlesBattle = session.isSinglesBattle(),
+                style = session.spriteStyle,
+                playerFallbackSpecies = session.playerPokemon,
+                opponentFallbackSpecies = session.opponentPokemon
+            )
+            val sprite = when {
+                playerSide && spriteRequests.singlesBattle -> spriteRequests.playerLead
+                !playerSide && spriteRequests.singlesBattle -> spriteRequests.opponentLead
+                playerSide -> spriteRequests.playerActive.singleOrNull { it.slot == protocolMove.slot }?.request
+                else -> spriteRequests.opponentActive.singleOrNull { it.slot == protocolMove.slot }?.request
+            }
+            if (sprite == null) {
+                failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' had no visible sprite request; $context"
+                return@forEach
+            }
+            if (sprite.species != actor.species) {
+                failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' showed ${sprite.species}, expected ${actor.species}; $context"
+            }
+            val saysOpposing = narration.startsWith("The opposing ", true)
+            if (saysOpposing == playerSide) {
+                failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' narration used the wrong battle side; $context"
             }
         }
     }
