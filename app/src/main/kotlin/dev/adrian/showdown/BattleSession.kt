@@ -4486,15 +4486,16 @@ class BattleSession {
 
     private fun applyCanDynamax(fields: List<String>) {
         val side = fields.getOrNull(2)?.trim().orEmpty()
-        if (side.isBlank() || (turn == 1 && isPlayerSide(side))) {
-            if (side.isNotBlank() && isPlayerSide(side)) {
-                val trainer = sideNames[side] ?: playerName
-                appendProtocolAnnouncement(fields, "Dynamax Energy gathered around $trainer!")
-            }
-            return
+        if (side.isBlank()) return
+        val isViewerTrainer = side.equals(playerSlot, true)
+        if (turn == 1 && !isViewerTrainer) return
+        val trainer = sideNames[side] ?: if (isViewerTrainer) playerName else side
+        val announcement = if (isViewerTrainer) {
+            "Dynamax Energy gathered around $trainer!"
+        } else {
+            "$trainer can dynamax now!"
         }
-        val trainer = sideNames[side] ?: side
-        appendProtocolAnnouncement(fields, "$trainer can dynamax now!")
+        appendProtocolAnnouncement(fields, announcement)
     }
 
     private fun applyAbility(fields: List<String>) {

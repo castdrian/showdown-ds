@@ -7,6 +7,41 @@ import org.junit.Test
 
 class OfficialBattleTranscriptTest {
     @Test
+    fun formatsMultiDynamaxAnnouncementsForTheExactTrainerLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|player|p3|ALLY||",
+                "|player|p4|OPPONENT ALLY||",
+                "|gametype|multi",
+                "|turn|1",
+                "|-candynamax|p1",
+                "|-candynamax|p2",
+                "|-candynamax|p3",
+                "|-candynamax|p4",
+                "|turn|2",
+                "|-candynamax|p1",
+                "|-candynamax|p2",
+                "|-candynamax|p3",
+                "|-candynamax|p4"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Dynamax Energy gathered around ADRIAN!",
+                "Dynamax Energy gathered around ADRIAN!",
+                "OPPONENT can dynamax now!",
+                "ALLY can dynamax now!",
+                "OPPONENT ALLY can dynamax now!"
+            ),
+            session.battleLog().filter { it.contains("dynamax", true) }
+        )
+    }
+
+    @Test
     fun formatsTurnAndPercentageDamageAnnouncementsLikeShowdown() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         session.applyProtocolPacket(
