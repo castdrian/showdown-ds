@@ -29,6 +29,18 @@ class ShowdownMoveEffectsQueueTest {
     }
 
     @Test
+    fun recoverySeedPreservesTheAnimationBarrierToken() {
+        val queue = ShowdownMoveEffectsQueue()
+        val history = listOf("|init|battle", "|switch|p1a: Pikachu|Pikachu, L50|100/100")
+
+        queue.add(listOf("|move|old|Tackle|target"), effectsBarrierToken = 94L)
+        queue.resetWith(history, effectsBarrierToken = 95L)
+
+        assertEquals(ShowdownMoveEffectsQueue.Packet.Seed(history, 95L), queue.poll())
+        assertEquals(null, queue.poll())
+    }
+
+    @Test
     fun finalChunkCarriesTheNativeTranscriptSynchronizationBoundary() {
         val queue = ShowdownMoveEffectsQueue()
         queue.add(listOf("|move|Pikachu|Tackle|Eevee"), 12L, false)

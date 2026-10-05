@@ -198,6 +198,20 @@ class ShowdownMoveEffectsContractTest {
     }
 
     @Test
+    fun rendererRecoveryReseedsHistorySilentlyAndKeepsItsBarrierToken() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+
+        assertTrue(source.contains("fun recoverFromProtocolHistory(lines: List<String>, effectsBarrierToken: Long)"))
+        assertTrue(source.contains("pendingPackets.resetWith(packet, effectsBarrierToken)"))
+        assertTrue(source.contains("seed: function (lines, effectsBarrierToken)"))
+        assertTrue(source.contains("add(lines, 0, false, barrierToken);"))
+        assertTrue(source.contains("nativeSeedAnimationOff"))
+        assertTrue(source.contains("nativeBattleRecovered()"))
+        assertTrue(source.contains("nativeBattleEffectsReachedQueueEnd();"))
+        assertTrue(source.contains("fun battleRecovered()"))
+    }
+
+    @Test
     fun nativeBattleLogUsesTheGenerationOfItsQueuedShowdownStep() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
         val runHookStart = source.indexOf("Battle.prototype.run = function")

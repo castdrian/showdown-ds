@@ -4,7 +4,7 @@ import java.util.ArrayDeque
 
 class ShowdownMoveEffectsQueue {
     sealed interface Packet {
-        data class Seed(val lines: List<String>) : Packet
+        data class Seed(val lines: List<String>, val effectsBarrierToken: Long = 0L) : Packet
         data class Receive(
             val lines: List<String>,
             val battleLogGeneration: Long = 0L,
@@ -26,9 +26,9 @@ class ShowdownMoveEffectsQueue {
         )
     }
 
-    fun resetWith(history: List<String>) {
+    fun resetWith(history: List<String>, effectsBarrierToken: Long = 0L) {
         packets.clear()
-        if (history.isNotEmpty()) packets.addLast(Packet.Seed(history))
+        if (history.isNotEmpty()) packets.addLast(Packet.Seed(history, effectsBarrierToken))
     }
 
     fun clear() {

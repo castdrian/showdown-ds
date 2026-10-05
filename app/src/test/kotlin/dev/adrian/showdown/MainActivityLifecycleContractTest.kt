@@ -11,14 +11,20 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val advance = source.substringAfter("private fun advanceBattlePlayback()").substringBefore("private fun scheduleBattlePlayback")
 
-        assertTrue(source.contains("battlePlaybackBarrier.begin(effectsBarrierToken)"))
+        assertTrue(source.contains("battlePlaybackBarrier.begin(effectsBarrierToken, SystemClock.elapsedRealtime())"))
         assertTrue(source.contains("battlePlaybackBarrier.effectsCompleted(token)"))
         assertTrue(advance.contains("battlePlaybackBarrier.minimumDwellElapsed()"))
-        assertTrue(source.contains("if (activeBattleEffectsBarrierToken == token && battlePlaybackBarrier.effectsCompleted(token))"))
+        assertTrue(advance.contains("battlePlaybackBarrier.recoveryDue(nowMillis)"))
+        assertTrue(advance.contains("recoverFromProtocolHistory(session.protocolHistory(), token)"))
+        assertTrue(advance.contains("2 -> restartShowdownMoveEffectsFromProtocolHistory(token)"))
+        assertTrue(advance.contains("battlePlaybackBarrier.recoveryTimedOut(nowMillis)"))
+        assertTrue(source.contains("private fun restartShowdownMoveEffectsFromProtocolHistory(token: Long)"))
+        assertTrue(source.contains("ensureShowdownMoveEffects(emptyList())?.recoverFromProtocolHistory(session.protocolHistory(), token)"))
+        assertTrue(source.contains("showdownMoveEffects === effectsView && activeBattleEffectsBarrierToken == token && battlePlaybackBarrier.effectsCompleted(token)"))
         assertTrue(source.contains("advanceBattlePlayback()"))
         assertFalse(source.contains("EFFECTS_BARRIER_POLL_MILLIS"))
-        assertFalse(source.contains("battlePlaybackBarrier.pause("))
-        assertFalse(source.contains("battlePlaybackBarrier.resume("))
+        assertTrue(source.contains("battlePlaybackBarrier.pause(SystemClock.elapsedRealtime())"))
+        assertTrue(source.contains("battlePlaybackBarrier.resume(SystemClock.elapsedRealtime())"))
     }
 
     @Test
