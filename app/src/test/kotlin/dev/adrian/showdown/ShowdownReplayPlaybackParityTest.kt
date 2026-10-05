@@ -134,7 +134,11 @@ class ShowdownReplayPlaybackParityTest {
         val lugiaSwitchIndex = chunks.indexOfFirst { chunk ->
             chunk.any { it.startsWith("|switch|p2a: Lugia|") }
         }
+        val lugiaDamageIndex = chunks.indexOfFirst { chunk ->
+            chunk.any { it.startsWith("|-damage|p2a: Lugia|") }
+        }
         assertTrue("replay fixture has no Perrserker to Lugia switch", lugiaSwitchIndex >= 0)
+        assertTrue("replay fixture has no damage to Lugia after the switch", lugiaDamageIndex > lugiaSwitchIndex)
 
         val session = BattleSession().apply {
             setLocalUsername(replay.players.firstOrNull().orEmpty())
@@ -145,7 +149,7 @@ class ShowdownReplayPlaybackParityTest {
         var sawPerrserkerDamageMessage = false
         var sawLugiaSendoutMessage = false
 
-        chunks.take(lugiaSwitchIndex + 1).forEach { packet ->
+        chunks.take(lugiaDamageIndex + 1).forEach { packet ->
             val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
             session.applyProtocolPacket(packet)
             val messages = session.battleFeedMessages()
