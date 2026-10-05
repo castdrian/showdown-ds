@@ -1,6 +1,18 @@
 package dev.adrian.showdown
 
 object BattleCombatantLayout {
+    fun xForSlot(
+        width: Float,
+        player: Boolean,
+        combatants: List<BattleSession.ActiveCombatant>,
+        centeredSlot: String?,
+        slot: String
+    ): Float? {
+        val index = combatants.indexOfFirst { it.slot.equals(slot, true) }
+        if (index < 0) return null
+        return x(width, player, index, combatants.size, centeredSlot, combatants[index].slot)
+    }
+
     fun centeredSlot(
         triplesCentered: Boolean,
         combatants: List<BattleSession.ActiveCombatant>

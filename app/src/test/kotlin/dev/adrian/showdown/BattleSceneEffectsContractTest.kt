@@ -24,6 +24,8 @@ class BattleSceneEffectsContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
         val drawEffect = source.substringAfter("private fun drawLightweightMoveEffect(").substringBefore("private fun drawAttackMoveEffect(")
 
+        assertTrue(drawEffect.contains("lightweightMoveActorSlot?.let"))
+        assertTrue(drawEffect.contains("lightweightMoveTargetSlot?.let"))
         assertTrue(drawEffect.contains("when (lightweightMoveStyle)"))
         assertTrue(source.contains("private fun drawTypedMoveEffect("))
         assertTrue(source.contains("BattleMoveVisualStyleResolver.resolve("))

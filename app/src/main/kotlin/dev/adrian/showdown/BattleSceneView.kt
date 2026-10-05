@@ -85,7 +85,9 @@ class BattleSceneView(
     private var lightweightMoveStartedAtNanos = 0L
     private var lightweightMoveAnimationEnabled = true
     private var lightweightMoveActorPlayer = true
+    private var lightweightMoveActorSlot: String? = null
     private var lightweightMoveTargetPlayer: Boolean? = null
+    private var lightweightMoveTargetSlot: String? = null
     private var lightweightImpactAtNanos = 0L
     private var lightweightImpactTargets = emptyList<String>()
     private var lightweightMoveName = ""
@@ -204,7 +206,9 @@ class BattleSceneView(
         lightweightMoveStartedAtNanos = 0L
         lightweightMoveAnimationEnabled = true
         lightweightMoveActorPlayer = true
+        lightweightMoveActorSlot = null
         lightweightMoveTargetPlayer = null
+        lightweightMoveTargetSlot = null
         lightweightImpactAtNanos = 0L
         lightweightImpactTargets = emptyList()
         lightweightMoveName = ""
@@ -244,7 +248,10 @@ class BattleSceneView(
                     lightweightMoveAnimationEnabled = ShowdownBattleMovePresentation.shouldAnimate(moveArguments)
                     lightweightMoveStartedAtNanos = if (lightweightMoveAnimationEnabled) nowNanos else 0L
                     lightweightMoveActorPlayer = session.isLocalBattleSide(actor)
-                    lightweightMoveTargetPlayer = fields.getOrNull(4)?.let(session::isLocalBattleSide)
+                    lightweightMoveActorSlot = protocolSlot(actor)
+                    val target = fields.getOrNull(4)
+                    lightweightMoveTargetPlayer = target?.takeIf(String::isNotBlank)?.let(session::isLocalBattleSide)
+                    lightweightMoveTargetSlot = protocolSlot(target)
                     lightweightImpactAtNanos = 0L
                     lightweightImpactTargets = emptyList()
                     lightweightImpactSoundPending = false
@@ -272,14 +279,18 @@ class BattleSceneView(
                 "-anim" -> {
                     val animation = ShowdownBattleMovePresentation.protocolAnimation(fields) ?: return@forEachIndexed
                     val localActor = session.isLocalBattleSide(animation.actor)
+                    val actorSlot = protocolSlot(animation.actor)
                     val continuesCurrentMove =
                         lightweightMoveStartedAtNanos > 0L &&
                             lightweightMoveName.equals(animation.moveName, true) &&
-                            lightweightMoveActorPlayer == localActor
+                            lightweightMoveActorPlayer == localActor &&
+                            lightweightMoveActorSlot == actorSlot
                     if (!continuesCurrentMove) {
                         lightweightMoveStartedAtNanos = if (animation.shouldAnimate) nowNanos else 0L
                         lightweightMoveActorPlayer = localActor
+                        lightweightMoveActorSlot = actorSlot
                         lightweightMoveTargetPlayer = animation.target?.let(session::isLocalBattleSide)
+                        lightweightMoveTargetSlot = protocolSlot(animation.target)
                         lightweightImpactAtNanos = 0L
                         lightweightImpactTargets = emptyList()
                         lightweightImpactSoundPending = false
@@ -287,6 +298,7 @@ class BattleSceneView(
                         lightweightLateImpactSoundCue = null
                     } else if (animation.target != null) {
                         lightweightMoveTargetPlayer = session.isLocalBattleSide(animation.target)
+                        lightweightMoveTargetSlot = protocolSlot(animation.target)
                     }
                     lightweightMoveAnimationEnabled = animation.shouldAnimate
                     lightweightMoveName = animation.moveName
@@ -1311,12 +1323,18 @@ class BattleSceneView(
         val playerY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.PLAYER_Y) else height * 0.67f
         val opponentX = if (singles) ShowdownBattleLayout.x(width, ShowdownBattleLayout.OPPONENT_X) else width * 0.73f
         val opponentY = if (singles) ShowdownBattleLayout.y(height, ShowdownBattleLayout.OPPONENT_Y) else height * 0.42f
-        val actorX = if (lightweightMoveActorPlayer) playerX else opponentX
-        val actorY = if (lightweightMoveActorPlayer) playerY else opponentY
+        val actorCenter = lightweightMoveActorSlot?.let {
+            lightweightTargetCenter(width, height, it, playerX, playerY, opponentX, opponentY)
+        }
+        val actorX = actorCenter?.first ?: if (lightweightMoveActorPlayer) playerX else opponentX
+        val actorY = actorCenter?.second ?: if (lightweightMoveActorPlayer) playerY else opponentY
         val impactAt = lightweightImpactAtNanos
         val targetPlayer = lightweightMoveTargetPlayer ?: !lightweightMoveActorPlayer
-        val targetX = if (targetPlayer) playerX else opponentX
-        val targetY = if (targetPlayer) playerY else opponentY
+        val targetCenter = lightweightMoveTargetSlot?.let {
+            lightweightTargetCenter(width, height, it, playerX, playerY, opponentX, opponentY)
+        }
+        val targetX = targetCenter?.first ?: if (targetPlayer) playerX else opponentX
+        val targetY = targetCenter?.second ?: if (targetPlayer) playerY else opponentY
         val palette = lightweightMovePalette(lightweightMoveType)
         if (lightweightMoveAnimationEnabled) {
             when (lightweightMoveStyle) {
@@ -1866,19 +1884,20 @@ class BattleSceneView(
         val player = session.isLocalBattleSide(target)
         if (session.isSinglesBattle()) return if (player) playerX to playerY else opponentX to opponentY
         val combatants = if (player) fieldCombatants(session.playerActiveCombatants(), true) else fieldCombatants(session.opponentActiveCombatants(), false)
-        val index = combatants.indexOfFirst { combatant ->
-            BattleDamageCueResolver.targetKey(combatant.slot) == BattleDamageCueResolver.targetKey(target)
-        }
-        if (index < 0) return if (player) playerX to playerY else opponentX to opponentY
-        return BattleCombatantLayout.x(
+        val x = BattleCombatantLayout.xForSlot(
             width,
             player,
-            index,
-            combatants.size,
+            combatants,
             BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), combatants),
-            combatants[index].slot
-        ) to if (player) height * 0.67f else height * 0.42f
+            target
+        ) ?: return if (player) playerX to playerY else opponentX to opponentY
+        return x to if (player) height * 0.67f else height * 0.42f
     }
+
+    private fun protocolSlot(actor: String?): String? = actor
+        ?.substringBefore(':')
+        ?.trim()
+        ?.takeIf { it.matches(Regex("p[1-4][a-z]")) }
 
     private fun requestHeldItemSprites() {
         val itemNames = buildList {

@@ -46,6 +46,23 @@ class BattleCombatantLayoutTest {
         )
     }
 
+    @Test
+    fun resolvesMoveEffectOriginToTheActingPokemonLane() {
+        val playerCombatants = listOf(combatant("p1a"), combatant("p1b"))
+        val opponentCombatants = listOf(combatant("p2b"), combatant("p2a"))
+
+        assertEquals(
+            360f,
+            checkNotNull(BattleCombatantLayout.xForSlot(1000f, true, playerCombatants, null, "p1b")),
+            0.001f
+        )
+        assertEquals(
+            800f,
+            checkNotNull(BattleCombatantLayout.xForSlot(1000f, false, opponentCombatants, null, "p2a")),
+            0.001f
+        )
+    }
+
     private fun combatant(slot: String, condition: String = "100/100") =
         BattleSession.ActiveCombatant(
             slot = slot,
