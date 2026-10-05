@@ -169,7 +169,8 @@ class ShowdownProtocolContractTest {
                 "|request|{\"side\":{\"pokemon\":[{\"ident\":\"p1: Nebby\",\"details\":\"Necrozma-Dusk-Mane, L50\",\"condition\":\"153/153\",\"active\":true}]}}",
                 "|switch|p1a: Nebby|Necrozma-Dusk-Mane, L82, M|153/153",
                 "|switch|p2a: Charizard|Charizard, L50|153/153",
-                "|-burst|p1a: Nebby|Necrozma-Ultra|ultranecroziumz"
+                "|detailschange|p1a: Nebby|Necrozma-Ultra, L82, M|153/153",
+                "|-burst|p1a: Nebby|Necrozma|ultranecroziumz"
             )
         )
 
@@ -181,5 +182,12 @@ class ShowdownProtocolContractTest {
         assertEquals("Ultranecrozium Z", session.playerDetails().item)
         assertEquals("Necrozma-Ultra", session.playerPartyDetails().first().species)
         assertEquals("Ultranecrozium Z", session.playerPartyDetails().first().item)
+        assertEquals(
+            listOf(
+                "Bright light is about to burst out of Nebby!",
+                "Nebby regained its true power through Ultra Burst!"
+            ),
+            session.battleFeedMessages().takeLast(2).map { it.text }
+        )
     }
 }

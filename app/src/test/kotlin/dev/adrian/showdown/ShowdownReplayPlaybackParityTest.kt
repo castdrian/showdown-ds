@@ -11,10 +11,7 @@ class ShowdownReplayPlaybackParityTest {
     )
 
     private data class ExpectedMove(
-        val line: String,
-        val actorName: String,
-        val actorSlot: String,
-        val actorSpecies: String,
+        val identity: ProtocolMoveIdentity,
         val playerSide: Boolean,
         val messageId: Long
     )
@@ -264,6 +261,87 @@ class ShowdownReplayPlaybackParityTest {
     }
 
     @Test
+    fun permanentFormChangesKeepReplayMoveActorsAlignedWithProtocolSpecies() {
+        assertMoveActorsMatchSprites(
+            lines = listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|gametype|singles",
+                "|switch|p1a: Crown|Zacian, L50|100/100",
+                "|switch|p2a: Rival|Eternatus, L50|100/100",
+                "|detailschange|p1a: Crown|Zacian-Crowned, L50|100/100",
+                "|move|p1a: Crown|Behemoth Blade|p2a: Rival",
+                "|-damage|p2a: Rival|75/100"
+            ),
+            replayId = "permanent-form-change",
+            requiredIdentityTransitions = setOf("detailschange"),
+            speed = 1f,
+            localUsername = "RED",
+            replayMode = true,
+            minimumMoveCount = 1
+        )
+    }
+
+    @Test
+    fun megaAndPrimalMovesKeepTheirProtocolFormsDuringReplayDwell() {
+        listOf(
+            listOf(
+                "|switch|p1a: Crown|Mawile, L50|100/100",
+                "|detailschange|p1a: Crown|Mawile-Mega, L50|100/100",
+                "|-mega|p1a: Crown|Mawile|Mawilite",
+                "|move|p1a: Crown|Play Rough|p2a: Rival"
+            ) to setOf("detailschange", "-mega"),
+            listOf(
+                "|switch|p1a: Terra|Groudon, L50|100/100",
+                "|detailschange|p1a: Terra|Groudon-Primal, L50|100/100",
+                "|-primal|p1a: Terra",
+                "|move|p1a: Terra|Precipice Blades|p2a: Rival"
+            ) to setOf("detailschange", "-primal")
+        ).forEachIndexed { index, (transitionLines, requiredTransitions) ->
+            assertMoveActorsMatchSprites(
+                lines = listOf(
+                    "|player|p1|RED||",
+                    "|player|p2|BLUE||",
+                    "|gametype|singles",
+                    *transitionLines.take(1).toTypedArray(),
+                    "|switch|p2a: Rival|Eternatus, L50|100/100",
+                    *transitionLines.drop(1).toTypedArray(),
+                    "|-damage|p2a: Rival|75/100"
+                ),
+                replayId = "permanent-gimmick-form-$index",
+                requiredIdentityTransitions = requiredTransitions,
+                speed = 1f,
+                localUsername = "RED",
+                replayMode = true,
+                minimumMoveCount = 1
+            )
+        }
+    }
+
+    @Test
+    fun ultraBurstKeepsThePermanentFormForFollowingReplayMoves() {
+        assertMoveActorsMatchSprites(
+            lines = listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|gametype|singles",
+                "|switch|p1a: Necrozma|Necrozma, L50|100/100",
+                "|switch|p2a: Rival|Eternatus, L50|100/100",
+                "|detailschange|p1a: Necrozma|Necrozma-Ultra, L50|100/100",
+                "|-burst|p1a: Necrozma|Necrozma|Ultranecrozium Z",
+                "|move|p1a: Necrozma|Photon Geyser|p2a: Rival",
+                "|-damage|p2a: Rival|75/100"
+            ),
+            replayId = "ultra-burst-form-change",
+            requiredIdentityTransitions = setOf("detailschange", "-burst"),
+            speed = 1f,
+            localUsername = "RED",
+            replayMode = true,
+            minimumMoveCount = 1
+        )
+    }
+
+    @Test
     fun doubleBattleMoveFrameUsesTheSlotLayoutFromBeforeItsFollowingSwap() {
         val chunks = BattlePlaybackTiming.chunks(
             listOf(
@@ -328,58 +406,15 @@ class ShowdownReplayPlaybackParityTest {
                 "|move|p2c: Atlas|Dragon Claw|p1c: Tide"
             )
         )
-        val expectedSpecies = mapOf(
-            "Spark" to "Pikachu",
-            "Tide" to "Gyarados",
-            "Leaf" to "Meowscarada",
-            "Atlas" to "Dragonite",
-            "Volt" to "Zapdos",
-            "Stone" to "Garchomp"
+        assertMoveActorsMatchSprites(
+            lines = chunks.flatten(),
+            replayId = "anonymized-triple-replay",
+            requiredIdentityTransitions = setOf("swap"),
+            speed = 1f,
+            localUsername = "RED",
+            replayMode = true,
+            minimumMoveCount = 6
         )
-        val session = BattleSession().apply {
-            setLocalUsername("RED")
-            setReplayMode(true)
-        }
-        var moveCount = 0
-
-        chunks.forEach { packet ->
-            session.applyProtocolPacket(packet)
-            packet.filter { it.startsWith("|move|") }.forEach { line ->
-                val actorIdent = line.split('|').getOrElse(2) { "" }
-                val actorSlot = actorIdent.substringBefore(':').trim()
-                val actorName = actorIdent.substringAfter(": ", actorIdent).substringBefore(',').trim()
-                val playerSide = actorSlot.startsWith(session.battlePlayerSlot())
-                val combatants = if (playerSide) {
-                    session.playerActiveCombatants()
-                } else {
-                    session.opponentActiveCombatants()
-                }
-                val context = "after triple-slot swaps at $line"
-                val activeActor = combatants.singleOrNull { it.slot == actorSlot }
-
-                assertTrue("$context has no active actor in ${combatants.map { it.slot to it.name }}", activeActor != null)
-                assertEquals(context, actorName, checkNotNull(activeActor).name)
-                assertEquals(context, expectedSpecies[actorName], activeActor.species)
-
-                val spriteRequest = BattleSpriteRequests.active(
-                    combatants,
-                    if (playerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
-                    session.spriteStyle
-                ).singleOrNull { it.slot == actorSlot }?.request
-
-                assertEquals(context, expectedSpecies[actorName], checkNotNull(spriteRequest).species)
-                assertEquals(
-                    context,
-                    if (playerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
-                    checkNotNull(spriteRequest).side
-                )
-                val moveMessage = session.battleFeedMessages().lastOrNull { it.text.contains(" used ") }?.text
-                assertEquals(context, actorName, messageActor(checkNotNull(moveMessage)))
-                moveCount += 1
-            }
-        }
-
-        assertEquals(9, moveCount)
     }
 
     private fun assertReplayMoveActorsMatchSprites(
@@ -484,10 +519,7 @@ class ShowdownReplayPlaybackParityTest {
                 assertEquals(context, protocolMove.actorName.lowercase(), messageActor(expectedMessage.text).lowercase())
 
                 expectedMoves[expectedMessage.id] = ExpectedMove(
-                    protocolMove.line,
-                    protocolMove.actorName,
-                    actorSlot,
-                    protocolMove.actorSpecies,
+                    protocolMove,
                     playerSide,
                     expectedMessage.id
                 )
@@ -502,9 +534,9 @@ class ShowdownReplayPlaybackParityTest {
                 if (frame != null) {
                     val expectedMove = frame.messageId?.let(expectedMoves::get)
                     if (expectedMove != null) {
-                        val context = "$replayId at ${expectedMove.line}"
+                        val context = "$replayId at ${expectedMove.identity.line}"
                         observedPacketMoveMessages += expectedMove.messageId
-                        assertEquals(context, expectedMove.actorName.lowercase(), messageActor(frame.visibleText).lowercase())
+                        assertEquals(context, expectedMove.identity.actorName.lowercase(), messageActor(frame.visibleText).lowercase())
                         val playerCombatants = BattleFeedSceneState.combatantsForMessage(
                             session.playerActiveCombatants(),
                             true,
@@ -516,15 +548,15 @@ class ShowdownReplayPlaybackParityTest {
                             session.switchOutVisualForBattleFeed(frame.messageId)
                         )
                         val visibleCombatants = if (expectedMove.playerSide) playerCombatants else opponentCombatants
-                        val visibleActor = visibleCombatants.singleOrNull { it.slot == expectedMove.actorSlot }
+                        val visibleActor = visibleCombatants.singleOrNull { it.slot == expectedMove.identity.actorSlot }
                         val frameContext = "$context was rendered at simulated time $frameTimeMillis for $packet with message ${frame.messageId}"
                         assertTrue(
                             "$frameContext while active Pokémon are ${visibleCombatants.map { it.name }}",
                             visibleActor != null
                         )
                         val activeActor = checkNotNull(visibleActor)
-                        assertEquals(frameContext, expectedMove.actorName.lowercase(), activeActor.name.lowercase())
-                        assertEquals(frameContext, expectedMove.actorSpecies, activeActor.species)
+                        assertEquals(frameContext, expectedMove.identity.actorName.lowercase(), activeActor.name.lowercase())
+                        assertEquals(frameContext, expectedMove.identity.actorSpecies, activeActor.species)
                         val spriteRequests = BattleSpriteRequests.forScene(
                             playerCombatants = playerCombatants,
                             opponentCombatants = opponentCombatants,
@@ -537,13 +569,13 @@ class ShowdownReplayPlaybackParityTest {
                             expectedMove.playerSide && spriteRequests.singlesBattle -> spriteRequests.playerLead
                             !expectedMove.playerSide && spriteRequests.singlesBattle -> spriteRequests.opponentLead
                             expectedMove.playerSide -> spriteRequests.playerActive
-                                .singleOrNull { it.slot == expectedMove.actorSlot }
+                                .singleOrNull { it.slot == expectedMove.identity.actorSlot }
                                 ?.request
                             else -> spriteRequests.opponentActive
-                                .singleOrNull { it.slot == expectedMove.actorSlot }
+                                .singleOrNull { it.slot == expectedMove.identity.actorSlot }
                                 ?.request
                         }
-                        assertEquals(frameContext, expectedMove.actorSpecies, checkNotNull(renderedSprite).species)
+                        assertEquals(frameContext, expectedMove.identity.actorSpecies, checkNotNull(renderedSprite).species)
                         assertEquals(frameContext, activeActor.shiny, checkNotNull(renderedSprite).shiny)
                         assertEquals(
                             frameContext,
@@ -557,9 +589,9 @@ class ShowdownReplayPlaybackParityTest {
             packetMoveMessageIds.forEach { messageId ->
                 val expectedMove = checkNotNull(expectedMoves[messageId])
                 assertTrue(
-            "$replayId at ${expectedMove.line} was not shown during its action dwell",
-                messageId in observedPacketMoveMessages
-            )
+                    "$replayId at ${expectedMove.identity.line} was not shown during its action dwell",
+                    messageId in observedPacketMoveMessages
+                )
             }
             nowMillis += pauseMillis
         }
@@ -584,6 +616,8 @@ class ShowdownReplayPlaybackParityTest {
                     ?.let { speciesBySlot[actorSlot] = it }
                 "detailschange", "-formechange" -> fields.getOrNull(3)
                     ?.takeIf(String::isNotBlank)
+                    ?.substringBefore(',')
+                    ?.trim()
                     ?.let { speciesBySlot[actorSlot] = it }
                 "-transform" -> {
                     val targetSlot = fields.getOrNull(3)?.substringBefore(':')?.trim().orEmpty()

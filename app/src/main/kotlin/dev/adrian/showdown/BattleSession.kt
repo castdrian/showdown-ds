@@ -3227,13 +3227,13 @@ class BattleSession {
     }
 
     private fun applyBurst(fields: List<String>) {
-        applyFormChange(fields)
         val actor = fields.getOrNull(2) ?: return
         fields.getOrNull(4)
             ?.takeUnless { it.trim().startsWith("[") }
             ?.takeIf(String::isNotBlank)
             ?.let { itemNameResolver?.invoke(it) ?: it }
             ?.let { item -> updateActorDetails(actor) { details -> details.copy(item = item) } }
+        appendProtocolAnnouncement(fields, "${battleActor(actor)} regained its true power through Ultra Burst!")
     }
 
     private fun applyTransform(fields: List<String>) {
@@ -3388,7 +3388,14 @@ class BattleSession {
         }
         when (fields.getOrNull(1)) {
             "detailschange", "-formechange", "-transform" -> {
-                appendProtocolAnnouncement(fields, "${battleActor(actor)} transformed!")
+                val announcement = if (
+                    fields.getOrNull(1) != "-transform" && species.equals("Necrozma-Ultra", ignoreCase = true)
+                ) {
+                    "Bright light is about to burst out of ${battleActor(actor)}!"
+                } else {
+                    "${battleActor(actor)} transformed!"
+                }
+                appendProtocolAnnouncement(fields, announcement)
             }
             else -> appendLog("$species changed form.")
         }
