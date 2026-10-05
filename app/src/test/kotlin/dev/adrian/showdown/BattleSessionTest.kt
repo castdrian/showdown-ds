@@ -1515,35 +1515,44 @@ class BattleSessionTest {
     }
 
     @Test
-    fun freeForAllSubmitsTheSelectedFourPlayerTargetUsingItsShowdownRelativeLocation() {
-        val decisions = mutableListOf<String>()
-        val session = BattleSession().apply {
-            setLocalUsername("PLAYER1")
-            addDecisionListener(decisions::add)
-        }
-        session.applyProtocolPacket(
-            listOf(
-                "|gametype|freeforall",
-                "|player|p1|PLAYER1||",
-                "|player|p2|PLAYER2||",
-                "|player|p3|PLAYER3||",
-                "|player|p4|PLAYER4||",
-                "|switch|p1a: Local|Incineroar, L50|100/100",
-                "|switch|p2a: FoeTwo|Tapu Koko, L50|100/100",
-                "|switch|p3b: FoeThree|Galvantula, L50|100/100",
-                "|switch|p4b: FoeFour|Passimian, L50|100/100",
-                "|request|{\"rqid\":123,\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]}]}"
+    fun freeForAllSubmitsRelativeTargetsFromEveryParticipantPerspective() {
+        val perspectives = listOf(
+            Triple(1, setOf("+1", "-2", "+2"), "Foe: FoeFour" to "+2"),
+            Triple(2, setOf("+1", "+2", "-2"), "Foe: FoeFour" to "-2"),
+            Triple(3, setOf("-1", "+1", "+2"), "Foe: FoeFour" to "+2"),
+            Triple(4, setOf("+1", "-1", "+2"), "Foe: FoeThree" to "+2")
+        )
+
+        perspectives.forEach { (playerSide, expectedChoices, selectedTarget) ->
+            val decisions = mutableListOf<String>()
+            val session = BattleSession().apply {
+                setLocalUsername("PLAYER$playerSide")
+                addDecisionListener(decisions::add)
+            }
+            session.applyProtocolPacket(
+                listOf(
+                    "|gametype|freeforall",
+                    "|player|p1|PLAYER1||",
+                    "|player|p2|PLAYER2||",
+                    "|player|p3|PLAYER3||",
+                    "|player|p4|PLAYER4||",
+                    "|switch|p1a: Local|Incineroar, L50|100/100",
+                    "|switch|p2a: FoeTwo|Tapu Koko, L50|100/100",
+                    "|switch|p3b: FoeThree|Galvantula, L50|100/100",
+                    "|switch|p4b: FoeFour|Passimian, L50|100/100",
+                    "|request|{\"rqid\":123,\"targetable\":true,\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"normal\"}]}]}"
+                )
             )
-        )
 
-        assertEquals(
-            listOf("Foe: FoeTwo", "Foe: FoeThree", "Foe: FoeFour"),
-            session.targetOptions().map { it.label }
-        )
+            val targetOptions = session.targetOptions()
+            assertEquals(expectedChoices, targetOptions.map { it.choice }.toSet())
+            val targetIndex = targetOptions.indexOfFirst { it.label == selectedTarget.first }
+            assertTrue("Missing target ${selectedTarget.first} for player side $playerSide", targetIndex >= 0)
 
-        session.selectTargetWithTouch(2)
+            session.selectTargetWithTouch(targetIndex)
 
-        assertEquals(listOf("/choose move 1 +2|123"), decisions)
+            assertEquals(listOf("/choose move 1 ${selectedTarget.second}|123"), decisions)
+        }
     }
 
     @Test
