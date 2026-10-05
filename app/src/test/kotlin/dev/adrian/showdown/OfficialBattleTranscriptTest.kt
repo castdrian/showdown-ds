@@ -1847,7 +1847,7 @@ class OfficialBattleTranscriptTest {
         assertEquals(listOf("Ditto", "Pikachu"), session.playerPartyDetails().map { it.species })
         assertEquals(listOf("Copycat", "Bolt"), session.team())
         assertEquals("Pikachu", spriteRequest.species)
-        assertTrue(session.battleLog().contains("RED's Copycat used Shadow Ball!"))
+        assertTrue(session.battleLog().contains("Copycat used Shadow Ball!"))
     }
 
     @Test
@@ -1907,7 +1907,7 @@ class OfficialBattleTranscriptTest {
 
         assertEquals(listOf("Ditto", "Eevee"), session.opponentPartyDetails().map { it.species })
         assertEquals("Eevee", spriteRequest.species)
-        assertTrue(session.battleLog().contains("BLUE's Ditto transformed!"))
+        assertTrue(session.battleLog().contains("The opposing Ditto transformed!"))
     }
 
     @Test

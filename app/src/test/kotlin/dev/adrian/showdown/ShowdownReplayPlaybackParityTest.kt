@@ -524,7 +524,7 @@ class ShowdownReplayPlaybackParityTest {
         )
         val leftoversProtocolMessage = session.battleFeedMessages().last()
         assertEquals(
-            "iluvgermany's Salazzle restored HP using its Leftovers!",
+            "The opposing Salazzle restored HP using its Leftovers!",
             leftoversProtocolMessage.text
         )
 
@@ -587,7 +587,7 @@ class ShowdownReplayPlaybackParityTest {
         )
         session.applyProtocolPacket(listOf("|-start|p2a: Salazzle|Encore"))
         val encoreProtocolMessage = session.battleFeedMessages().last()
-        assertEquals("iluvgermany's Salazzle must do an encore!", encoreProtocolMessage.text)
+        assertEquals("The opposing Salazzle must do an encore!", encoreProtocolMessage.text)
 
         session.applyProtocolPacket(
             listOf("|switch|p2a: Dragalge|Dragalge, L88, F|258/258")
@@ -640,7 +640,7 @@ class ShowdownReplayPlaybackParityTest {
         )
         session.applyProtocolPacket(listOf("|-enditem|p1a: Minior|White Herb"))
         val protocolFallback = session.battleFeedMessages().last()
-        assertEquals("(PLAYER's Minior used its White Herb!)", protocolFallback.text)
+        assertEquals("(Minior used its White Herb!)", protocolFallback.text)
 
         session.applyProtocolPacket(listOf("|switch|p2a: Dragalge|Dragalge, L88, F|258/258"))
         session.appendShowdownBattleLog(
