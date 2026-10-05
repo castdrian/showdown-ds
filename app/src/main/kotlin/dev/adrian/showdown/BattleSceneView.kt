@@ -647,10 +647,35 @@ class BattleSceneView(
             val pageSummary = if (pageCount > 1) " Page ${opponentPreviewPageIndex + 1} of $pageCount." else ""
             return "Pokémon team preview. Opponent team: ${party.size} Pokémon.$pageSummary ${visibleIndices.size} shown."
         }
-        val player = BattleSession.displayPokemonName(session.playerDetails().name, session.playerDetails().species)
-        val opponent = BattleSession.displayPokemonName(session.opponentDetails().name, session.opponentDetails().species)
+        val playerDetails = session.playerDetails()
+        val opponentDetails = session.opponentDetails()
+        val playerCombatant = session.playerActiveCombatants().firstOrNull()
+        val opponentCombatant = session.opponentActiveCombatants().firstOrNull()
+        val requireActiveCombatant = session.isReplayMode() || session.isSpectatorMode()
+        val playerKnown = BattleFeedSceneState.hasKnownPokemon(
+            playerCombatant,
+            playerDetails,
+            requireActiveCombatant
+        )
+        val opponentKnown = BattleFeedSceneState.hasKnownPokemon(
+            opponentCombatant,
+            opponentDetails,
+            requireActiveCombatant
+        )
+        val player = playerCombatant?.let {
+            BattleSession.displayPokemonName(it.name, it.species)
+        } ?: BattleSession.displayPokemonName(playerDetails.name, playerDetails.species)
+        val opponent = opponentCombatant?.let {
+            BattleSession.displayPokemonName(it.name, it.species)
+        } ?: BattleSession.displayPokemonName(opponentDetails.name, opponentDetails.species)
+        val matchup = when {
+            playerKnown && opponentKnown -> "Battle. $player versus $opponent."
+            playerKnown -> "Battle. Your active Pokémon is $player. The opponent has not sent out a Pokémon yet."
+            opponentKnown -> "Battle. The opponent's active Pokémon is $opponent. Your Pokémon has not been sent out yet."
+            else -> "Battle is waiting for Pokémon to enter."
+        }
         val log = cachedBattleFeedVisibleText?.takeIf(String::isNotBlank)?.let { "Battle log: $it" }
-        return listOfNotNull("Battle. $player versus $opponent.", session.status, log).joinToString(" ")
+        return listOfNotNull(matchup, session.status, log).joinToString(" ")
     }
 
     private fun accessibilityNodes(): List<CanvasAccessibilityNode> {
@@ -668,33 +693,40 @@ class BattleSceneView(
         if (session.isSinglesBattle()) {
             val player = session.playerDetails()
             val opponent = session.opponentDetails()
-            addAccessibilityNode(
-                nodes,
-                ACCESSIBLE_PLAYER_ID,
-                "Your active Pokémon, ${pokemonAccessibilitySummary(player)}",
-                RectF(
-                    width * ShowdownBattleLayout.SINGLE_CARD_LEFT_FRACTION,
-                    height * 0.80f,
-                    ShowdownBattleLayout.singlePlayerCardRight(width, scale),
-                    height * 0.98f
-                ),
-                selected = inspectedPlayer == true
-            ) {
-                selectInspectedPokemon(true, null)
+            val playerCombatant = session.playerActiveCombatants().firstOrNull()
+            val opponentCombatant = session.opponentActiveCombatants().firstOrNull()
+            val requireActiveCombatant = session.isReplayMode() || session.isSpectatorMode()
+            if (BattleFeedSceneState.hasKnownPokemon(playerCombatant, player, requireActiveCombatant)) {
+                addAccessibilityNode(
+                    nodes,
+                    ACCESSIBLE_PLAYER_ID,
+                    "Your active Pokémon, ${pokemonAccessibilitySummary(player)}",
+                    RectF(
+                        width * ShowdownBattleLayout.SINGLE_CARD_LEFT_FRACTION,
+                        height * 0.80f,
+                        ShowdownBattleLayout.singlePlayerCardRight(width, scale),
+                        height * 0.98f
+                    ),
+                    selected = inspectedPlayer == true
+                ) {
+                    selectInspectedPokemon(true, null)
+                }
             }
-            addAccessibilityNode(
-                nodes,
-                ACCESSIBLE_OPPONENT_ID,
-                "Opponent's active Pokémon, ${pokemonAccessibilitySummary(opponent)}",
-                RectF(
-                    ShowdownBattleLayout.singleOpponentCardLeft(width, scale),
-                    height * 0.02f,
-                    width * ShowdownBattleLayout.SINGLE_CARD_RIGHT_FRACTION,
-                    height * 0.20f
-                ),
-                selected = inspectedPlayer == false
-            ) {
-                selectInspectedPokemon(false, null)
+            if (BattleFeedSceneState.hasKnownPokemon(opponentCombatant, opponent, requireActiveCombatant)) {
+                addAccessibilityNode(
+                    nodes,
+                    ACCESSIBLE_OPPONENT_ID,
+                    "Opponent's active Pokémon, ${pokemonAccessibilitySummary(opponent)}",
+                    RectF(
+                        ShowdownBattleLayout.singleOpponentCardLeft(width, scale),
+                        height * 0.02f,
+                        width * ShowdownBattleLayout.SINGLE_CARD_RIGHT_FRACTION,
+                        height * 0.20f
+                    ),
+                    selected = inspectedPlayer == false
+                ) {
+                    selectInspectedPokemon(false, null)
+                }
             }
         } else {
             addMultiCombatantAccessibilityNodes(nodes, width, height, scale, true)
