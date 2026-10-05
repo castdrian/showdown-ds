@@ -7,6 +7,19 @@ import org.junit.Test
 
 class MainActivityLifecycleContractTest {
     @Test
+    fun battlePlaybackWaitsForReadableDwellAndNativeAnimationCompletion() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
+        val advance = source.substringAfter("private fun advanceBattlePlayback()").substringBefore("private fun scheduleBattlePlayback")
+
+        assertTrue(source.contains("battlePlaybackBarrier.begin(effectsBarrierToken, SystemClock.elapsedRealtime())"))
+        assertTrue(source.contains("battlePlaybackBarrier.effectsCompleted(token)"))
+        assertTrue(advance.contains("battlePlaybackBarrier.minimumDwellElapsed(SystemClock.elapsedRealtime())"))
+        assertTrue(advance.contains("EFFECTS_BARRIER_POLL_MILLIS"))
+        assertTrue(source.contains("battlePlaybackBarrier.pause(SystemClock.elapsedRealtime())"))
+        assertTrue(source.contains("battlePlaybackBarrier.resume(SystemClock.elapsedRealtime())"))
+    }
+
+    @Test
     fun liveEffectsPauseAndResumeWithTheActivityLifecycle() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val audioSource = File("src/main/kotlin/dev/adrian/showdown/BattleAudio.kt").readText()
@@ -356,7 +369,7 @@ class MainActivityLifecycleContractTest {
     @Test
     fun releasesTheAnimationWebViewAfterFinishedPlaybackDrains() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val playback = source.substringAfter("private val playbackAdvanceRunnable").substringBefore("private var shouldMaintainConnection")
+        val playback = source.substringAfter("private fun advanceBattlePlayback()").substringBefore("private fun scheduleBattlePlayback")
 
         assertTrue(playback.contains("pendingBattlePackets.isEmpty()"))
         assertTrue(playback.contains("session.isBattleFinished()"))
@@ -425,7 +438,7 @@ class MainActivityLifecycleContractTest {
         val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
 
         assertTrue(listener.contains("runOnUiThread {"))
-        assertTrue(listener.contains("applyBattleProtocolToEffects(lines)"))
+        assertTrue(listener.contains("applyBattleProtocolToEffects(lines, applyingBattleEffectsBarrierToken ?: 0L)"))
         assertTrue(source.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
         assertTrue(source.contains("if (!effectsAlreadyCreated && battleInit) return"))
     }

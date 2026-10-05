@@ -246,6 +246,10 @@ class MainActivity : Activity() {
         }
     }
     private val pendingBattlePackets = ArrayDeque<PendingBattlePacket>()
+    private val battlePlaybackBarrier = BattlePlaybackBarrier()
+    private var battleEffectsBarrierSequence = 0L
+    private var applyingBattleEffectsBarrierToken: Long? = null
+    private var activeBattleEffectsBarrierToken: Long? = null
     private var battlePacketPlaybackScheduled = false
     private var replayStatus: String? = null
     private var replayPaused = false
@@ -263,13 +267,7 @@ class MainActivity : Activity() {
     private var playbackScheduledAtMillis = 0L
     private var playbackScheduledSpeed = 1f
     private var playbackPausedRemainingMillis: Long? = null
-    private val playbackAdvanceRunnable = Runnable {
-        battlePacketPlaybackScheduled = false
-        flushBattlePlayback()
-        if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty() && session.isBattleFinished()) {
-            releaseShowdownMoveEffects()
-        }
-    }
+    private val playbackAdvanceRunnable = Runnable { advanceBattlePlayback() }
     private var shouldMaintainConnection = false
     private var reconnectAttempt = 0
     private var reconnectScheduled = false
@@ -284,7 +282,7 @@ class MainActivity : Activity() {
             if (lightweightBattlePlayback) {
                 applyLightweightBattleProtocol(lines)
             } else {
-                applyBattleProtocolToEffects(lines)
+                applyBattleProtocolToEffects(lines, applyingBattleEffectsBarrierToken ?: 0L)
             }
         }
     }
@@ -746,6 +744,13 @@ class MainActivity : Activity() {
             },
             battleLogSyncListener = { generation ->
                 runOnUiThread { session.markNativeBattleLogSynchronized(generation) }
+            },
+            battleEffectsIdleListener = { token ->
+                runOnUiThread {
+                    if (activeBattleEffectsBarrierToken == token) {
+                        battlePlaybackBarrier.effectsCompleted(token)
+                    }
+                }
             }
         )
         showdownMoveEffects = effects
@@ -896,7 +901,7 @@ class MainActivity : Activity() {
         moveDex.loadBattleDetails(::bindMoveDexResolvers)
     }
 
-    private fun applyBattleProtocolToEffects(lines: List<String>) {
+    private fun applyBattleProtocolToEffects(lines: List<String>, effectsBarrierToken: Long = 0L) {
         if (showdownMoveEffectsNeedsReload && activityResumed) {
             showdownMoveEffectsNeedsReload = false
             ensureShowdownMoveEffects()
@@ -913,7 +918,7 @@ class MainActivity : Activity() {
         val effectsAlreadyCreated = showdownMoveEffects != null
         if (!effectsAlreadyCreated && battleInit) return
         showdownMoveEffects?.setPerspective(session.battlePlayerSlot())
-        showdownMoveEffects?.applyProtocol(lines, session.battleLogGeneration())
+        showdownMoveEffects?.applyProtocol(lines, session.battleLogGeneration(), effectsBarrierToken)
     }
 
     private fun applyLightweightBattleProtocol(lines: List<String>) {
@@ -1020,14 +1025,53 @@ class MainActivity : Activity() {
             flushBattlePlayback()
             return
         }
+        val effectsBarrierToken = createBattleEffectsBarrierToken(packet)
+        if (effectsBarrierToken != null) {
+            activeBattleEffectsBarrierToken = effectsBarrierToken
+            battlePlaybackBarrier.begin(effectsBarrierToken, SystemClock.elapsedRealtime())
+        }
         val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
-        session.applyProtocolPacket(packet.lines)
+        applyingBattleEffectsBarrierToken = effectsBarrierToken
+        try {
+            session.applyProtocolPacket(packet.lines)
+        } finally {
+            applyingBattleEffectsBarrierToken = null
+        }
+        if (effectsBarrierToken != null && showdownMoveEffects == null) {
+            battlePlaybackBarrier.reset()
+            activeBattleEffectsBarrierToken = null
+        }
         handleAppliedBattlePacket(packet)
         val generatedMessageCount = session.battleFeedMessages().count { it.id !in previousMessageIds }
         val feedPlaybackBudgetMillis = battleScene?.remainingBattleFeedPlaybackBudgetMillis() ?: 0L
         scheduleBattlePlayback(
             BattlePlaybackTiming.pauseAfter(packet.lines, generatedMessageCount, feedPlaybackBudgetMillis)
         )
+    }
+
+    private fun createBattleEffectsBarrierToken(packet: PendingBattlePacket): Long? {
+        if (lightweightBattlePlayback || !activityResumed) return null
+        val effectsAvailable = showdownMoveEffects != null || showdownMoveEffectsNeedsReload ||
+            packet.lines.any { it.startsWith("|init|battle") }
+        if (!effectsAvailable) return null
+        if (packet.lines.none { it.startsWith("|") && !it.startsWith("|request|") }) return null
+        battleEffectsBarrierSequence += 1L
+        return battleEffectsBarrierSequence
+    }
+
+    private fun advanceBattlePlayback() {
+        battlePacketPlaybackScheduled = false
+        val token = activeBattleEffectsBarrierToken
+        if (token != null && !battlePlaybackBarrier.minimumDwellElapsed(SystemClock.elapsedRealtime())) {
+            battlePacketPlaybackScheduled = true
+            battleEventHandler.postDelayed(playbackAdvanceRunnable, EFFECTS_BARRIER_POLL_MILLIS)
+            return
+        }
+        if (token != null) activeBattleEffectsBarrierToken = null
+        flushBattlePlayback()
+        if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty() && session.isBattleFinished()) {
+            releaseShowdownMoveEffects()
+        }
     }
 
     private fun scheduleBattlePlayback(pauseMillis: Long) {
@@ -1046,6 +1090,7 @@ class MainActivity : Activity() {
         replayPaused = value
         showdownMoveEffects?.setPlaybackPaused(value)
         if (value) {
+            battlePlaybackBarrier.pause(SystemClock.elapsedRealtime())
             pauseBattleAudio()
             if (battlePacketPlaybackScheduled) {
                 val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
@@ -1055,6 +1100,7 @@ class MainActivity : Activity() {
             battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
             battlePacketPlaybackScheduled = false
         } else {
+            battlePlaybackBarrier.resume(SystemClock.elapsedRealtime())
             resumeBattleAudioIfActive()
             playbackPausedRemainingMillis?.let { remainingMillis ->
                 playbackPausedRemainingMillis = null
@@ -1114,6 +1160,9 @@ class MainActivity : Activity() {
         if (!preserveQueuedPlayback) {
             pendingBattlePackets.clear()
             battlePacketPlaybackScheduled = false
+            battlePlaybackBarrier.reset()
+            activeBattleEffectsBarrierToken = null
+            applyingBattleEffectsBarrierToken = null
         }
         lightweightMoveCues.clear()
         lightweightHealthByTarget.clear()
@@ -1153,6 +1202,7 @@ class MainActivity : Activity() {
     private fun pauseLivePlaybackForLifecycle() {
         if (!::session.isInitialized || session.isReplayMode() || livePlaybackPausedForLifecycle) return
         livePlaybackPausedForLifecycle = true
+        battlePlaybackBarrier.pause(SystemClock.elapsedRealtime())
         showdownMoveEffects?.setPlaybackPaused(true)
         pauseBattleAudio()
         if (battlePacketPlaybackScheduled) {
@@ -1165,6 +1215,7 @@ class MainActivity : Activity() {
     private fun resumeLivePlaybackForLifecycle() {
         if (!livePlaybackPausedForLifecycle) return
         livePlaybackPausedForLifecycle = false
+        battlePlaybackBarrier.resume(SystemClock.elapsedRealtime())
         if (::session.isInitialized && !session.isReplayMode()) {
             showdownMoveEffects?.setPlaybackPaused(false)
             livePlaybackPausedRemainingMillis?.let { remainingMillis ->
@@ -6524,6 +6575,7 @@ class MainActivity : Activity() {
         const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
         const val SESSION_RESTORE_TIMEOUT_MILLIS = 5_000L
         const val DEFAULT_BATTLE_SPEED = 0.75f
+        private const val EFFECTS_BARRIER_POLL_MILLIS = 200L
         private val TEAM_STAT_NAMES = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
     }
 }

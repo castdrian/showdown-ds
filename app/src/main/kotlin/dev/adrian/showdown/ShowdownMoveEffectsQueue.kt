@@ -8,7 +8,8 @@ class ShowdownMoveEffectsQueue {
         data class Receive(
             val lines: List<String>,
             val battleLogGeneration: Long = 0L,
-            val synchronizeBattleLog: Boolean = true
+            val synchronizeBattleLog: Boolean = true,
+            val effectsBarrierToken: Long = 0L
         ) : Packet
     }
 
@@ -17,9 +18,12 @@ class ShowdownMoveEffectsQueue {
     fun add(
         lines: List<String>,
         battleLogGeneration: Long = 0L,
-        synchronizeBattleLog: Boolean = true
+        synchronizeBattleLog: Boolean = true,
+        effectsBarrierToken: Long = 0L
     ) {
-        if (lines.isNotEmpty()) packets.addLast(Packet.Receive(lines, battleLogGeneration, synchronizeBattleLog))
+        if (lines.isNotEmpty()) packets.addLast(
+            Packet.Receive(lines, battleLogGeneration, synchronizeBattleLog, effectsBarrierToken)
+        )
     }
 
     fun resetWith(history: List<String>) {

@@ -51,4 +51,29 @@ class ShowdownMoveEffectsQueueTest {
             queue.poll()
         )
     }
+
+    @Test
+    fun onlyTheFinalChunkCarriesItsAnimationBarrierToken() {
+        val queue = ShowdownMoveEffectsQueue()
+        queue.add(listOf("|move|Pikachu|Tackle|Eevee"), 12L, false)
+        queue.add(listOf("|-damage|Eevee|90/100"), 12L, true, 94L)
+
+        assertEquals(
+            ShowdownMoveEffectsQueue.Packet.Receive(
+                listOf("|move|Pikachu|Tackle|Eevee"),
+                12L,
+                false
+            ),
+            queue.poll()
+        )
+        assertEquals(
+            ShowdownMoveEffectsQueue.Packet.Receive(
+                listOf("|-damage|Eevee|90/100"),
+                12L,
+                true,
+                94L
+            ),
+            queue.poll()
+        )
+    }
 }

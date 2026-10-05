@@ -24,7 +24,8 @@ class ShowdownMoveEffectsView(
     private val announcerCueResetter: () -> Unit = {},
     private val battleLogListener: (String, Long) -> Unit = { _, _ -> },
     private val battleMarkupListener: (String, String, Long) -> Unit = { _, _, _ -> },
-    private val battleLogSyncListener: (Long) -> Unit = {}
+    private val battleLogSyncListener: (Long) -> Unit = {},
+    private val battleEffectsIdleListener: (Long) -> Unit = {}
 ) : WebView(context) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingPackets = ShowdownMoveEffectsQueue()
@@ -47,7 +48,12 @@ class ShowdownMoveEffectsView(
         announcerCueListener,
         announcerCueResetter
     )
-    private val nativeBattleLogBridge = NativeBattleLogBridge(battleLogListener, battleMarkupListener, battleLogSyncListener)
+    private val nativeBattleLogBridge = NativeBattleLogBridge(
+        battleLogListener,
+        battleMarkupListener,
+        battleLogSyncListener,
+        battleEffectsIdleListener
+    )
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
@@ -87,9 +93,13 @@ class ShowdownMoveEffectsView(
         if (packet.isNotEmpty()) flushPendingPackets(allowSeedWhilePaused = true)
     }
 
-    fun applyProtocol(lines: List<String>, battleLogGeneration: Long = 0L) {
+    fun applyProtocol(
+        lines: List<String>,
+        battleLogGeneration: Long = 0L,
+        effectsBarrierToken: Long = 0L
+    ) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post { applyProtocol(lines, battleLogGeneration) }
+            mainHandler.post { applyProtocol(lines, battleLogGeneration, effectsBarrierToken) }
             return
         }
         if (released) return
@@ -100,7 +110,12 @@ class ShowdownMoveEffectsView(
         }
         val chunks = BattlePlaybackTiming.chunks(packet)
         chunks.forEachIndexed { index, chunk ->
-            pendingPackets.add(chunk, battleLogGeneration, index == chunks.lastIndex)
+            pendingPackets.add(
+                chunk,
+                battleLogGeneration,
+                index == chunks.lastIndex,
+                if (index == chunks.lastIndex) effectsBarrierToken else 0L
+            )
         }
         flushPendingPackets()
     }
@@ -177,7 +192,7 @@ class ShowdownMoveEffectsView(
                     null
                 ).also { dispatched = true }
                 is ShowdownMoveEffectsQueue.Packet.Receive -> evaluateJavascript(
-                    "window.ShowdownNativeEffects.receive(${JSONArray(packet.lines)}, ${packet.battleLogGeneration}, ${packet.synchronizeBattleLog});",
+                    "window.ShowdownNativeEffects.receive(${JSONArray(packet.lines)}, ${packet.battleLogGeneration}, ${packet.synchronizeBattleLog}, ${packet.effectsBarrierToken});",
                     null
                 ).also { dispatched = true }
             }
@@ -299,6 +314,7 @@ class ShowdownMoveEffectsView(
                         var nativeBattleLogGeneration = 0;
                         var nativeBattleLogGenerationByStep = [];
                         var nativeBattleLogSyncGenerationByStep = [];
+                        var nativeEffectsBarrierTokenByStep = [];
                         var nativeBattleLogMarkupActive = false;
                         var nativeIdlePauseTimer = null;
                         function clearNativeIdlePauseTimer() {
@@ -329,6 +345,21 @@ class ShowdownMoveEffectsView(
                         }
                         function nativeBattleLogSynchronized(generation) {
                             if (window.ShowdownNativeBattleLog) window.ShowdownNativeBattleLog.synced(Number(generation) || 0);
+                        }
+                        function nativeBattleEffectsIdle(token) {
+                            var normalizedToken = Number(token) || 0;
+                            if (normalizedToken > 0 && window.ShowdownNativeBattleLog) {
+                                window.ShowdownNativeBattleLog.effectsIdle(normalizedToken);
+                            }
+                        }
+                        function nativeBattleEffectsReachedQueueEnd() {
+                            if (!battle) return;
+                            for (var stepIndex = 0; stepIndex < battle.currentStep; stepIndex++) {
+                                var token = nativeEffectsBarrierTokenByStep[stepIndex];
+                                if (!token) continue;
+                                delete nativeEffectsBarrierTokenByStep[stepIndex];
+                                nativeBattleEffectsIdle(token);
+                            }
                         }
                         function applyNativeBattlePerspective() {
                             if (!battle) return;
@@ -736,9 +767,13 @@ class ShowdownMoveEffectsView(
                             destroyBattle();
                             nativeBattleLogGenerationByStep = [];
                             nativeBattleLogSyncGenerationByStep = [];
+                            nativeEffectsBarrierTokenByStep = [];
                             document.getElementById('battle').innerHTML = '';
                             document.getElementById('log').innerHTML = '';
                             battle = new Battle({ id: 'showdownds', paused: true, ${'$'}frame: jQuery('#battle'), ${'$'}logFrame: jQuery('#log') });
+                            battle.subscription = function (state) {
+                                if (state === 'atqueueend') nativeBattleEffectsReachedQueueEnd();
+                            };
                             applyNativeBattlePerspective();
                             battle.setMute(true);
                             var scene = battle.scene;
@@ -751,7 +786,7 @@ class ShowdownMoveEffectsView(
                             observeChrome();
                             layout();
                         }
-                        function add(lines, generation, synchronizeBattleLog) {
+                        function add(lines, generation, synchronizeBattleLog, effectsBarrierToken) {
                             var queuedLines = lines.filter(function (line) { return line.indexOf('|request|') !== 0; });
                             var finalStepIndex = queuedLines.length ? battle.stepQueue.length + queuedLines.length - 1 : battle.stepQueue.length - 1;
                             var synchronizationQueued = synchronizeBattleLog && finalStepIndex >= battle.currentStep;
@@ -759,6 +794,10 @@ class ShowdownMoveEffectsView(
                                 nativeBattleLogSyncGenerationByStep[finalStepIndex] = Number(generation) || 0;
                             } else if (synchronizeBattleLog) {
                                 nativeBattleLogSynchronized(generation);
+                            }
+                            if (!queuedLines.length) nativeBattleEffectsIdle(effectsBarrierToken);
+                            if (queuedLines.length && Number(effectsBarrierToken) > 0) {
+                                nativeEffectsBarrierTokenByStep[finalStepIndex] = Number(effectsBarrierToken);
                             }
                             queuedLines.forEach(function (line) {
                                 var stepIndex = battle.stepQueue.length;
@@ -778,11 +817,11 @@ class ShowdownMoveEffectsView(
                                 battle.play();
                                 battle.scene.animationOn();
                             },
-                            receive: function (lines, generation, synchronizeBattleLog) {
+                            receive: function (lines, generation, synchronizeBattleLog, effectsBarrierToken) {
                                 clearNativeIdlePauseTimer();
                                 if (!battle || lines.some(function (line) { return line.indexOf('|init|battle') === 0; })) createBattle();
                                 captureNativeBattleLog = true;
-                                add(lines, generation, synchronizeBattleLog);
+                                add(lines, generation, synchronizeBattleLog, effectsBarrierToken);
                                 if (battle.paused) battle.play();
                             },
                             setSpeed: function (speed) {
@@ -860,7 +899,8 @@ class ShowdownMoveEffectsView(
     private class NativeBattleLogBridge(
         private val callback: (String, Long) -> Unit,
         private val markupCallback: (String, String, Long) -> Unit,
-        private val syncCallback: (Long) -> Unit
+        private val syncCallback: (Long) -> Unit,
+        private val effectsIdleCallback: (Long) -> Unit
     ) {
         @JavascriptInterface
         fun entry(value: String, generation: Long) {
@@ -876,6 +916,11 @@ class ShowdownMoveEffectsView(
         @JavascriptInterface
         fun synced(generation: Long) {
             syncCallback(generation)
+        }
+
+        @JavascriptInterface
+        fun effectsIdle(token: Long) {
+            effectsIdleCallback(token)
         }
     }
 }
