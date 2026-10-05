@@ -7,7 +7,8 @@ import org.junit.Test
 class ShowdownReplayPlaybackParityTest {
     private data class ReplayCase(
         val fileName: String,
-        val requiredIdentityTransitions: Set<String>
+        val requiredIdentityTransitions: Set<String>,
+        val expectedPlayerCount: Int = 2
     )
 
     private data class ExpectedMove(
@@ -40,7 +41,9 @@ class ShowdownReplayPlaybackParityTest {
             "gen9doublesou-2691960998.json",
             "gen9randombattle-2691989691.json",
             "gen9randombattle-2691985124.json",
-            "gen9randombattle-2691982973.json"
+            "gen9randombattle-2691982973.json",
+            "gen9multirandombattle-2641276114.json",
+            "gen9freeforallrandombattle-2547390602.json"
         ).forEach { fileName ->
             val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/$fileName"))
                 .bufferedReader()
@@ -237,13 +240,15 @@ class ShowdownReplayPlaybackParityTest {
             ReplayCase("gen9doublesou-2691960998.json", emptySet()),
             ReplayCase("gen9randombattle-2691989691.json", setOf("-formechange", "-transform")),
             ReplayCase("gen9randombattle-2691985124.json", setOf("-formechange")),
-            ReplayCase("gen9randombattle-2691982973.json", setOf("replace"))
+            ReplayCase("gen9randombattle-2691982973.json", setOf("replace")),
+            ReplayCase("gen9multirandombattle-2641276114.json", emptySet(), 4),
+            ReplayCase("gen9freeforallrandombattle-2547390602.json", emptySet(), 4)
         ).forEach { replayCase ->
             val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}"))
                 .bufferedReader()
                 .use { it.readText() }
             val replayPlayers = ShowdownReplayImporter.payload(replayJson).players.distinct()
-            assertEquals(replayCase.fileName, 2, replayPlayers.size)
+            assertEquals(replayCase.fileName, replayCase.expectedPlayerCount, replayPlayers.size)
             replayPlayers.forEach { localUsername ->
                 listOf(false, true).forEach { replayMode ->
                     listOf(0.5f, 0.75f, 1f, 1.5f, 2f).forEach { speed ->
