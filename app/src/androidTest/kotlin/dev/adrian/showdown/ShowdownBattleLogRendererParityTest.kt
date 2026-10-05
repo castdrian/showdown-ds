@@ -102,9 +102,21 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
-    fun testUpstreamReplayNarrationKeepsTheCorrectCombatantSnapshot() {
+    fun upstreamReplayPlayerOneNarrationKeepsTheCorrectCombatantSnapshot() {
+        assertUpstreamReplayNarrationKeepsTheCorrectCombatantSnapshot(localPlayerIndex = 0)
+    }
+
+    @Test
+    fun upstreamReplayPlayerTwoNarrationKeepsTheCorrectCombatantSnapshot() {
+        assertUpstreamReplayNarrationKeepsTheCorrectCombatantSnapshot(localPlayerIndex = 1)
+    }
+
+    private fun assertUpstreamReplayNarrationKeepsTheCorrectCombatantSnapshot(localPlayerIndex: Int) {
         lateinit var activity: ShowdownLogParityHarnessActivity
-        activityRule.scenario.onActivity { activity = it }
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective(if (localPlayerIndex == 0) "p1" else "p2")
+        }
         val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
             .open("gen9randombattle-2691989691.json")
             .bufferedReader()
@@ -115,12 +127,24 @@ class ShowdownBattleLogRendererParityTest {
         assertTrue("The saved official replay must include Minior's White Herb event", whiteHerbLine >= 0)
         val playbackLines = listOf("|init|battle") + lines
         val session = BattleSession().apply {
-            setLocalUsername(replay.players.first())
+            setLocalUsername(replay.players[localPlayerIndex])
             setReplayMode(true)
         }
-        val expectedLeftoversText = "The opposing Salazzle restored a little HP using its Leftovers!"
-        val expectedEncoreText = "The opposing Salazzle must do an encore!"
-        val expectedWhiteHerbText = "Minior returned its stats to normal using its White Herb!"
+        val expectedLeftoversText = if (localPlayerIndex == 0) {
+            "The opposing Salazzle restored a little HP using its Leftovers!"
+        } else {
+            "Salazzle restored a little HP using its Leftovers!"
+        }
+        val expectedEncoreText = if (localPlayerIndex == 0) {
+            "The opposing Salazzle must do an encore!"
+        } else {
+            "Salazzle must do an encore!"
+        }
+        val expectedWhiteHerbText = if (localPlayerIndex == 0) {
+            "Minior returned its stats to normal using its White Herb!"
+        } else {
+            "The opposing Minior returned its stats to normal using its White Herb!"
+        }
         var sawLeftovers = false
         var sawEncore = false
         var sawWhiteHerb = false
@@ -272,7 +296,13 @@ class ShowdownBattleLogRendererParityTest {
     ) {
         nativeTexts.forEach { text ->
             val mentionedCombatants = eventCombatants.filter { combatant -> mentionsPokemon(text, combatant.name) }
-            if (mentionedCombatants.isEmpty()) return@forEach
+            if (mentionedCombatants.isEmpty()) {
+                if (text.contains(" used ", true)) {
+                    val activeCombatants = eventCombatants.joinToString { "${it.slot}:${it.name}/${it.species}" }
+                    failures += "Move narration did not name an active combatant: '$text'; active=$activeCombatants"
+                }
+                return@forEach
+            }
             val message = session.battleFeedMessages().lastOrNull {
                 BattleFeedMessageIdentity.matches(it.text, text)
             }
