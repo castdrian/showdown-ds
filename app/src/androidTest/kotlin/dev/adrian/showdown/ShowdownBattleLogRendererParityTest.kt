@@ -87,6 +87,68 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun upstreamNarrationKeepsP3PartnerOnPlayerOneSideInMultiBattle() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p1")
+        }
+        val transcript = listOf(
+            "|init|battle",
+            "|gametype|multi",
+            "|player|p1|PLAYER1||",
+            "|player|p2|PLAYER2||",
+            "|player|p3|PLAYER3||",
+            "|player|p4|PLAYER4||",
+            "|start",
+            "|switch|p1a: Quagsire|Quagsire, L91|321/321",
+            "|switch|p2a: Iron Hands|Iron Hands, L77|364/364",
+            "|switch|p3b: Granbull|Granbull, L88, M|302/302",
+            "|switch|p4b: Hoopa|Hoopa, L86|278/278",
+            "|move|p3b: Granbull|Play Rough|p2a: Iron Hands"
+        )
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER1")
+            setReplayMode(true)
+        }
+        val renderedMoves = mutableListOf<String>()
+
+        BattlePlaybackTiming.chunks(transcript).forEach { packet ->
+            val entryCount = activity.nativeEntries.size
+            val syncCount = activity.synchronizedGenerations.size
+            session.applyProtocolPacket(packet)
+            val generation = session.battleLogGeneration()
+            activity.renderer.applyProtocol(packet, generation)
+            awaitSynchronization(activity, syncCount, generation)
+            val nativeEntries = activity.nativeEntries.drop(entryCount)
+                .filter { it.first == generation }
+                .map { it.second }
+            if (nativeEntries.isNotEmpty()) {
+                session.appendShowdownBattleLog(nativeEntries.joinToString("<br />"), generation)
+                renderedMoves += nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
+                    .filter { it.contains(" used ", true) }
+            }
+            session.markNativeBattleLogSynchronized(generation)
+        }
+
+        assertTrue("The test transcript must identify the Multi partner as local", session.isLocalBattleSide("p3b"))
+        val failures = mutableListOf<String>()
+        assertNativeMoveNarrationMatchesProtocolActors(
+            session,
+            listOf("|move|p3b: Granbull|Play Rough|p2a: Iron Hands"),
+            renderedMoves,
+            failures
+        )
+        assertNativePokemonNarrationUsesMatchingScene(
+            session,
+            renderedMoves,
+            battleCombatants(session),
+            failures
+        )
+        assertTrue("The upstream-rendered partner move must match its active Pokémon scene: $failures", failures.isEmpty())
+    }
+
+    @Test
     fun officialDoublesReplayNarrationMatchesItsVisibleCombatants() {
         assertOfficialReplayNarrationMatchesItsVisibleCombatants(
             "gen9doublesou-2691960998.json",
@@ -396,7 +458,10 @@ class ShowdownBattleLogRendererParityTest {
                 failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' showed ${sprite.species}, expected ${actor.species}; $context"
             }
             val saysOpposing = narration.startsWith("The opposing ", true)
-            if (saysOpposing == playerSide) {
+            val multiPartnerUsesShowdownOpposingLabel = session.gameType.equals("multi", true) &&
+                playerSide &&
+                !protocolMove.slot.take(2).equals(session.battlePlayerSlot(), true)
+            if (!multiPartnerUsesShowdownOpposingLabel && saysOpposing == playerSide) {
                 failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' narration used the wrong battle side; $context"
             }
         }
