@@ -3853,7 +3853,9 @@ class BattleSession {
                 status = "Waiting for a battle decision…"
                 return@runCatching
             }
-            requestTargetable = request.optBoolean("targetable", activeRequests.size > 1)
+            requestTargetable = request.optBoolean("targetable") ||
+                activeRequests.size > 1 ||
+                isMultiBattle()
             if (!prepareNextActiveRequest()) {
                 if (!spectatorMode && !submitAutomaticActivePasses()) {
                     decisionKind = DecisionKind.WAIT
@@ -5022,10 +5024,24 @@ class BattleSession {
         ?.trim()
         ?.takeIf(String::isNotBlank)
 
-    private fun activeSlotNumber(slot: String): Int? = slot.lastOrNull()
-        ?.lowercaseChar()
-        ?.takeIf { it in 'a'..'z' }
-        ?.let { it.code - 'a'.code + 1 }
+    private fun activeSlotNumber(slot: String): Int? {
+        if (isMultiBattle()) return multiBattlePosition(slot)
+        val position = slot.lastOrNull()
+            ?.lowercaseChar()
+            ?.takeIf { it in 'a'..'z' }
+            ?: return null
+        return position.code - 'a'.code + 1
+    }
+
+    private fun multiBattlePosition(slot: String): Int? {
+        val side = slot.substringBefore(':')
+            .removePrefix("p")
+            .takeWhile(Char::isDigit)
+            .toIntOrNull()
+            ?.takeIf { it > 0 }
+            ?: return null
+        return (side - 1) / 2 + 1
+    }
 
     private fun updatePlayerDetails(transform: (PokemonDetails) -> PokemonDetails) {
         val previous = playerDetails
@@ -5488,7 +5504,7 @@ class BattleSession {
         selectedTargetIndex = -1
         val move = displayedMoves().getOrNull(focusedMove) ?: return
         val freeForAll = isFreeForAllBattle()
-        if ((!freeForAll && activeRequests.size <= 1) || !requestTargetable) return
+        if (!requestTargetable) return
         val target = move.target.lowercase()
         if (freeForAll) {
             if (target !in setOf("normal", "adjacentfoe", "adjacentally", "any")) return
@@ -5501,12 +5517,18 @@ class BattleSession {
                 }
             return
         }
-        val selfPosition = activeSlotIndex + 1
-        val allyPositions = activeSlots(playerActiveCombatants, activeRequests.size)
-        val foePositions = activeSlots(opponentActiveCombatants, activeRequests.size)
+        val multi = isMultiBattle()
+        val activePositionCount = if (multi) 2 else activeRequests.size
+        val selfPosition = if (multi) {
+            multiBattlePosition(playerSlot) ?: activeSlotIndex + 1
+        } else {
+            activeSlotIndex + 1
+        }
+        val allyPositions = activeSlots(playerActiveCombatants, activePositionCount)
+        val foePositions = activeSlots(opponentActiveCombatants, activePositionCount)
         fun isAdjacentAlly(position: Int) = kotlin.math.abs(position - selfPosition) <= 1
         fun isAdjacentFoe(position: Int): Boolean {
-            val mirroredPosition = activeRequests.size + 1 - position
+            val mirroredPosition = activePositionCount + 1 - position
             return kotlin.math.abs(mirroredPosition - selfPosition) <= 1
         }
         fun targetOptions(positions: List<Int>, ally: Boolean, adjacent: Boolean): List<TargetOption> = positions
@@ -6779,6 +6801,8 @@ class BattleSession {
     }
 
     private fun isFreeForAllBattle() = gameType.equals("freeforall", true)
+
+    private fun isMultiBattle() = gameType.equals("multi", true)
 
     private fun isDisplayedOpponentPrimary(slot: String): Boolean {
         if (!isFreeForAllBattle()) return slot.endsWith('a') || opponentActiveCombatants.isEmpty()

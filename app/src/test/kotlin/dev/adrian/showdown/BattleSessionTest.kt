@@ -1164,6 +1164,34 @@ class BattleSessionTest {
     }
 
     @Test
+    fun multiBattleSingleActiveRequestOffersAndSubmitsBothOpposingTargets() {
+        listOf(1, 3).forEach { playerSide ->
+            val decisions = mutableListOf<String>()
+            val session = multiBattleSession(playerSide, "normal", decisions)
+
+            assertEquals(listOf("+1", "+2"), session.targetOptions().map { it.choice })
+
+            session.selectTargetWithTouch(1)
+
+            assertEquals(listOf("/choose move 1 +2|59"), decisions)
+        }
+    }
+
+    @Test
+    fun multiBattleTargetAnyUsesTheRightPartnerFromEachParticipant() {
+        listOf(1 to "-2", 3 to "-1").forEach { (playerSide, allyTarget) ->
+            val decisions = mutableListOf<String>()
+            val session = multiBattleSession(playerSide, "any", decisions, targetable = false)
+
+            assertEquals(listOf("+1", "+2", allyTarget), session.targetOptions().map { it.choice })
+
+            session.selectTargetWithTouch(2)
+
+            assertEquals(listOf("/choose move 1 $allyTarget|59"), decisions)
+        }
+    }
+
+    @Test
     fun multiActiveRequestsAllowExplicitTargets() {
         val decisions = mutableListOf<String>()
         val session = BattleSession()
@@ -2329,8 +2357,11 @@ class BattleSessionTest {
     @Test
     fun explicitlyUntargetableRequestsDoNotOpenTargetSelection() {
         val session = BattleSession()
-        session.applyProtocolLine(
-            "|request|{\"targetable\":false,\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"normal\"}]},{\"moves\":[{\"move\":\"Protect\",\"pp\":10,\"target\":\"self\"}]}]}"
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|singles",
+                "|request|{\"targetable\":false,\"active\":[{\"moves\":[{\"move\":\"Rock Slide\",\"pp\":10,\"target\":\"normal\"}]}]}"
+            )
         )
 
         session.focusMove(0)
@@ -4082,5 +4113,30 @@ class BattleSessionTest {
 
         assertEquals("Replay controls", session.menuItems()[13])
         assertEquals(listOf(BattleSession.ClientAction.OPEN_REPLAY_CONTROLS), actions)
+    }
+
+    private fun multiBattleSession(
+        playerSide: Int,
+        target: String,
+        decisions: MutableList<String>,
+        targetable: Boolean? = null
+    ): BattleSession = BattleSession().apply {
+        setLocalUsername("PLAYER$playerSide")
+        addDecisionListener(decisions::add)
+        val targetableField = targetable?.let { "\"targetable\":$it," }.orEmpty()
+        applyProtocolPacket(
+            listOf(
+                "|gametype|multi",
+                "|player|p1|PLAYER1||",
+                "|player|p2|PLAYER2||",
+                "|player|p3|PLAYER3||",
+                "|player|p4|PLAYER4||",
+                "|switch|p1a: PartnerOne|Incineroar, L50|100/100",
+                "|switch|p2a: OpponentOne|Tapu Koko, L50|100/100",
+                "|switch|p3b: PartnerTwo|Mimikyu, L50|100/100",
+                "|switch|p4b: OpponentTwo|Landorus, L50|100/100",
+                "|request|{\"rqid\":59,$targetableField\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"$target\"}]}]}"
+            )
+        )
     }
 }
