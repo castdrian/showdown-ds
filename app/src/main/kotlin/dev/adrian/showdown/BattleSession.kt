@@ -4784,7 +4784,11 @@ class BattleSession {
         removeEmptyBoostSlot(side)
         refreshVisibleBoosts()
         appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 3))
-        appendProtocolAnnouncement(fields, "${battleActor(side)}'s ${statLabel(stat)} was set to $amount.")
+        val announcement = when (normalizeBattleTextKey(battleEffectName(protocolSource(fields, 3)))) {
+            "bellydrum" -> "${battleActor(side)} cut its own HP and maximized its Attack!"
+            else -> "${battleActor(side)}'s ${statLabel(stat)} rose!"
+        }
+        appendProtocolAnnouncement(fields, announcement)
     }
 
     private fun clearAllBoosts() {

@@ -1442,6 +1442,25 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsBellyDrumSetBoostWithShowdownsMoveSpecificAnnouncement() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Charizard|Charizard, L50|100/100",
+                "|switch|p2a: Nidoking|Nidoking, L50|100/100",
+                "|move|p1a: Charizard|Belly Drum|p1a: Charizard",
+                "|-damage|p1a: Charizard|50/100",
+                "|-setboost|p1a: Charizard|atk|6|[from] move: Belly Drum"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Charizard cut its own HP and maximized its Attack!"))
+        assertFalse(session.battleLog().any { it.contains("was set to 6") })
+    }
+
+    @Test
     fun formatsItemAndZPowerStatChangesLikeShowdown() {
         val session = BattleSession()
 
