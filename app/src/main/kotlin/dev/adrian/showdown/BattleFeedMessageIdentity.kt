@@ -10,7 +10,7 @@ object BattleFeedMessageIdentity {
         val plainText = value.lowercase().trim().removeSurrounding("(", ")")
         val text = if (protocolFallback) normalizePerspective(plainText) else plainText
         val normalized = text
-            .replace("restored hp", "recovered health")
+            .replace(Regex("restored(?:\\s+(?:a little|some|a lot of))?\\s+hp"), "recovered health")
             .replace("had its hp restored", "recovered health")
             .replace("restored health", "recovered health")
             .replace("recovered hp", "recovered health")
@@ -29,7 +29,7 @@ object BattleFeedMessageIdentity {
         if (trainerBoundary <= 0) return withoutOpponentPrefix
         val attributedEvent = withoutOpponentPrefix.substring(trainerBoundary + 3)
         val includesPokemonPossessive = attributedEvent.contains("'s ")
-        val includesPokemonAction = Regex("\\s+(?:used|lost|was|is|fainted|transformed|recovered|returned|protected|became)\\b")
+        val includesPokemonAction = Regex("\\s+(?:used|lost|was|is|fainted|transformed|recovered|restored|returned|protected|became)\\b")
             .containsMatchIn(attributedEvent)
         return if (includesPokemonPossessive || includesPokemonAction) attributedEvent else withoutOpponentPrefix
     }

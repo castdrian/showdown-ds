@@ -22,6 +22,16 @@ class BattleFeedMessageIdentityTest {
     }
 
     @Test
+    fun matchesOfficialLeftoversWordingToProtocolHealingFallback() {
+        assertTrue(
+            BattleFeedMessageIdentity.matchesProtocolFallback(
+                "iluvgermany's Salazzle restored HP using its Leftovers!",
+                "The opposing Salazzle restored a little HP using its Leftovers!"
+            )
+        )
+    }
+
+    @Test
     fun doesNotTreatDifferentDamagePercentagesAsTheSameFeedMessage() {
         assertFalse(
             BattleFeedMessageIdentity.matches(
