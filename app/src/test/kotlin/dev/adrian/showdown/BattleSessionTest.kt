@@ -1165,7 +1165,7 @@ class BattleSessionTest {
 
     @Test
     fun multiBattleSingleActiveRequestOffersAndSubmitsBothOpposingTargets() {
-        listOf(1, 3).forEach { playerSide ->
+        listOf(1, 2, 3, 4).forEach { playerSide ->
             val decisions = mutableListOf<String>()
             val session = multiBattleSession(playerSide, "normal", decisions)
 
@@ -1179,7 +1179,7 @@ class BattleSessionTest {
 
     @Test
     fun multiBattleTargetAnyUsesTheRightPartnerFromEachParticipant() {
-        listOf(1 to "-2", 3 to "-1").forEach { (playerSide, allyTarget) ->
+        listOf(1 to "-2", 2 to "-2", 3 to "-1", 4 to "-1").forEach { (playerSide, allyTarget) ->
             val decisions = mutableListOf<String>()
             val session = multiBattleSession(playerSide, "any", decisions, targetable = false)
 
@@ -4133,8 +4133,8 @@ class BattleSessionTest {
                 "|player|p4|PLAYER4||",
                 "|switch|p1a: PartnerOne|Incineroar, L50|100/100",
                 "|switch|p2a: OpponentOne|Tapu Koko, L50|100/100",
-                "|switch|p3b: PartnerTwo|Mimikyu, L50|100/100",
-                "|switch|p4b: OpponentTwo|Landorus, L50|100/100",
+                "|switch|p3a: PartnerTwo|Mimikyu, L50|100/100",
+                "|switch|p4a: OpponentTwo|Landorus, L50|100/100",
                 "|request|{\"rqid\":59,$targetableField\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"$target\"}]}]}"
             )
         )
