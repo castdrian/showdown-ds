@@ -84,6 +84,15 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun officialMultiReplayNarrationMatchesItsVisiblePartnersAndOpponents() {
+        assertOfficialReplayNarrationMatchesItsVisibleCombatants(
+            "gen9multirandombattle-2641276114.json",
+            requiredPlayerSlots = setOf("p1a", "p3b"),
+            requiredOpponentSlots = setOf("p2a", "p4b")
+        )
+    }
+
+    @Test
     fun officialFreeForAllReplayNarrationMatchesAllFourCombatantSlots() {
         assertOfficialReplayNarrationMatchesItsVisibleCombatants(
             "gen9freeforallrandombattle-2547390602.json",
