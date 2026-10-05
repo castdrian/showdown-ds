@@ -28,7 +28,7 @@ class ShowdownBattleLogRendererParityTest {
         val lines = replay.log.lines()
         val whiteHerbLine = lines.indexOfFirst { it.startsWith("|-enditem|p1a: Minior|White Herb") }
         assertTrue("The saved official replay must include Minior's White Herb event", whiteHerbLine >= 0)
-        val playbackLines = listOf("|init|battle") + lines.take(whiteHerbLine + 1)
+        val playbackLines = listOf("|init|battle") + lines
         val session = BattleSession().apply {
             setLocalUsername(replay.players.first())
             setReplayMode(true)
@@ -39,6 +39,7 @@ class ShowdownBattleLogRendererParityTest {
         var sawLeftovers = false
         var sawEncore = false
         var sawWhiteHerb = false
+        var sawReplayWinner = false
         val narrationIdentityFailures = mutableListOf<String>()
 
         BattlePlaybackTiming.chunks(playbackLines).forEach { packet ->
@@ -78,11 +79,17 @@ class ShowdownBattleLogRendererParityTest {
                 assertTrue("Upstream Showdown did not render its known White Herb narration: $nativeTexts", expectedWhiteHerbText in nativeTexts)
                 sawWhiteHerb = true
             }
+            if (packet.any { it.startsWith("|win|qiuescent") }) {
+                assertTrue("Upstream Showdown did not render the replay's winner: $nativeTexts", nativeTexts.any { it.contains("won the battle", true) })
+                sawReplayWinner = true
+            }
         }
 
         assertTrue("The real renderer never emitted the Leftovers event", sawLeftovers)
         assertTrue("The real renderer never emitted the Encore event", sawEncore)
         assertTrue("The real renderer never emitted the White Herb event", sawWhiteHerb)
+        assertTrue("The complete official replay never reached its winner event", sawReplayWinner)
+        assertTrue("The native replay session did not finish", session.isBattleFinished())
         assertTrue("Native Showdown battle lines lost their protocol scene identities: $narrationIdentityFailures", narrationIdentityFailures.isEmpty())
     }
 
