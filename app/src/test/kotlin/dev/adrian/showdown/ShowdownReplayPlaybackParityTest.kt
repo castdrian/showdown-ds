@@ -14,8 +14,16 @@ class ShowdownReplayPlaybackParityTest {
         val line: String,
         val actorName: String,
         val actorSlot: String,
+        val actorSpecies: String,
         val playerSide: Boolean,
         val messageId: Long
+    )
+
+    private data class ProtocolMoveIdentity(
+        val line: String,
+        val actorName: String,
+        val actorSlot: String,
+        val actorSpecies: String
     )
 
     @Test
@@ -418,10 +426,25 @@ class ShowdownReplayPlaybackParityTest {
         }
         val presentation = BattleFeedPresentation().apply { setPlaybackSpeed(speed) }
         val expectedMoves = linkedMapOf<Long, ExpectedMove>()
+        val expectedSpeciesBySlot = mutableMapOf<String, String>()
+        val expectedPlayerSlot = lines.firstNotNullOfOrNull { line ->
+            val fields = line.split('|')
+            if (fields.getOrNull(1) == "player" && fields.getOrNull(3)?.equals(localUsername, true) == true) {
+                fields.getOrNull(2)
+            } else {
+                null
+            }
+        } ?: "p1"
+        val expectedPlayerSlots = if (lines.any { it == "|gametype|multi" }) {
+            if (expectedPlayerSlot == "p1" || expectedPlayerSlot == "p3") setOf("p1", "p3") else setOf("p2", "p4")
+        } else {
+            setOf(expectedPlayerSlot)
+        }
         var nowMillis = 0L
         var moveCount = 0
 
         BattlePlaybackTiming.chunks(lines).forEach { packet ->
+            val protocolMoves = protocolMovesInPacket(packet, expectedSpeciesBySlot, replayId)
             val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
             session.applyProtocolPacket(packet)
             val messages = session.battleFeedMessages()
@@ -438,18 +461,16 @@ class ShowdownReplayPlaybackParityTest {
                 speed
             )
 
-            packet.filter { it.startsWith("|move|") }.forEach { line ->
-                val fields = line.split('|')
-                val actorIdent = fields.getOrElse(2) { "" }
-                val actorSlot = actorIdent.substringBefore(':').trim()
-                val actorName = actorIdent.substringAfter(": ", actorIdent).substringBefore(',').trim()
-                val context = "$replayId at $line"
-                val moveMessage = generatedMessages.firstOrNull { message ->
-                    message.text.contains(" used ") && messageActor(message.text).equals(actorName, true)
+            val remainingMoveMessages = generatedMessages.filter { it.text.contains(" used ") }.toMutableList()
+            protocolMoves.forEach { protocolMove ->
+                val context = "$replayId at ${protocolMove.line}"
+                val actorSlot = protocolMove.actorSlot
+                val playerSide = actorSlot.dropLast(1) in expectedPlayerSlots
+                val messageIndex = remainingMoveMessages.indexOfFirst { message ->
+                    messageActor(message.text).equals(protocolMove.actorName, true)
                 }
-                assertTrue("$context produced no move feed message", moveMessage != null)
-                val expectedMessage = checkNotNull(moveMessage)
-                val playerSide = session.playerActiveCombatants().any { it.slot == actorSlot }
+                assertTrue("$context produced no move feed message", messageIndex >= 0)
+                val expectedMessage = remainingMoveMessages.removeAt(messageIndex)
                 val activeCombatants = if (playerSide) {
                     session.playerActiveCombatants()
                 } else {
@@ -457,13 +478,16 @@ class ShowdownReplayPlaybackParityTest {
                 }
                 val activeActor = activeCombatants.singleOrNull { it.slot == actorSlot }
                 assertTrue("$context has no active combatant for its actor", activeActor != null)
-                val expectedActor = checkNotNull(activeActor)
-                assertEquals(context, actorName.lowercase(), expectedActor.name.lowercase())
+                val observedActor = checkNotNull(activeActor)
+                assertEquals(context, protocolMove.actorName.lowercase(), observedActor.name.lowercase())
+                assertEquals(context, protocolMove.actorSpecies, observedActor.species)
+                assertEquals(context, protocolMove.actorName.lowercase(), messageActor(expectedMessage.text).lowercase())
 
                 expectedMoves[expectedMessage.id] = ExpectedMove(
-                    line,
-                    actorName,
+                    protocolMove.line,
+                    protocolMove.actorName,
                     actorSlot,
+                    protocolMove.actorSpecies,
                     playerSide,
                     expectedMessage.id
                 )
@@ -500,6 +524,7 @@ class ShowdownReplayPlaybackParityTest {
                         )
                         val activeActor = checkNotNull(visibleActor)
                         assertEquals(frameContext, expectedMove.actorName.lowercase(), activeActor.name.lowercase())
+                        assertEquals(frameContext, expectedMove.actorSpecies, activeActor.species)
                         val spriteRequests = BattleSpriteRequests.forScene(
                             playerCombatants = playerCombatants,
                             opponentCombatants = opponentCombatants,
@@ -518,7 +543,7 @@ class ShowdownReplayPlaybackParityTest {
                                 .singleOrNull { it.slot == expectedMove.actorSlot }
                                 ?.request
                         }
-                        assertEquals(frameContext, activeActor.species, checkNotNull(renderedSprite).species)
+                        assertEquals(frameContext, expectedMove.actorSpecies, checkNotNull(renderedSprite).species)
                         assertEquals(frameContext, activeActor.shiny, checkNotNull(renderedSprite).shiny)
                         assertEquals(
                             frameContext,
@@ -540,6 +565,57 @@ class ShowdownReplayPlaybackParityTest {
         }
 
         assertTrue("$replayId did not exercise enough move events", moveCount >= minimumMoveCount)
+    }
+
+    private fun protocolMovesInPacket(
+        packet: List<String>,
+        speciesBySlot: MutableMap<String, String>,
+        replayId: String
+    ): List<ProtocolMoveIdentity> = buildList {
+        packet.forEach { line ->
+            val fields = line.split('|')
+            val action = fields.getOrNull(1)
+            val actorSlot = fields.getOrNull(2)?.substringBefore(':')?.trim().orEmpty()
+            when (action) {
+                "switch", "drag", "replace" -> fields.getOrNull(3)
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { speciesBySlot[actorSlot] = it }
+                "detailschange", "-formechange" -> fields.getOrNull(3)
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { speciesBySlot[actorSlot] = it }
+                "-transform" -> {
+                    val targetSlot = fields.getOrNull(3)?.substringBefore(':')?.trim().orEmpty()
+                    speciesBySlot[targetSlot]?.let { speciesBySlot[actorSlot] = it }
+                }
+                "swap" -> {
+                    val target = fields.getOrNull(3).orEmpty()
+                    val targetSlot = target.toIntOrNull()?.let { position ->
+                        actorSlot.dropLast(1) + ('a'.code + position).toChar()
+                    } ?: target.substringBefore(':').trim()
+                    if (targetSlot.isNotBlank() && actorSlot.isNotBlank()) {
+                        val movingSpecies = speciesBySlot.remove(actorSlot)
+                        val displacedSpecies = speciesBySlot.remove(targetSlot)
+                        movingSpecies?.let { speciesBySlot[targetSlot] = it }
+                        displacedSpecies?.let { speciesBySlot[actorSlot] = it }
+                    }
+                }
+                "move" -> {
+                    val species = speciesBySlot[actorSlot]
+                    assertTrue("$replayId at $line has no prior protocol species for $actorSlot", species != null)
+                    val actorIdent = fields.getOrElse(2) { "" }
+                    add(
+                        ProtocolMoveIdentity(
+                            line = line,
+                            actorName = actorIdent.substringAfter(": ", actorIdent).substringBefore(',').trim(),
+                            actorSlot = actorSlot,
+                            actorSpecies = checkNotNull(species)
+                        )
+                    )
+                }
+            }
+        }
     }
 
     private fun messageActor(message: String): String = message
