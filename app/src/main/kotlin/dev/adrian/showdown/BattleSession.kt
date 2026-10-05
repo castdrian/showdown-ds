@@ -1333,6 +1333,17 @@ class BattleSession {
 
     fun protocolHistory() = protocolHistory.toList()
 
+    fun protocolHistoryBeforePacket(lines: List<String>): List<String> {
+        val packet = lines.filter(String::isNotBlank)
+        val packetStartIndex = protocolHistory.size - packet.size
+        if (packet.isEmpty() || packetStartIndex < 0) return protocolHistory()
+        return if (protocolHistory.subList(packetStartIndex, protocolHistory.size) == packet) {
+            protocolHistory.take(packetStartIndex)
+        } else {
+            protocolHistory()
+        }
+    }
+
     fun setLocalUsername(username: String) {
         localUsername = username
         sideNames.entries.firstOrNull { it.value.equals(username, true) }?.key?.let { playerSlot = it }

@@ -724,7 +724,7 @@ class MainActivity : Activity() {
         return frame
     }
 
-    private fun ensureShowdownMoveEffects(): ShowdownMoveEffectsView? {
+    private fun ensureShowdownMoveEffects(seedHistory: List<String> = session.protocolHistory()): ShowdownMoveEffectsView? {
         if (lightweightBattlePlayback) return null
         showdownMoveEffects?.let { return it }
         val frame = primaryFrame ?: return null
@@ -732,7 +732,6 @@ class MainActivity : Activity() {
             this,
             battleAudio::playBattleCue,
             battleAudio::resetBattleCues,
-            protocolHistoryProvider = { session.protocolHistory() },
             audioMoveResetter = battleAudio::beginBattleMove,
             announcerCueListener = battleAudio::playAnnouncerCue,
             announcerCueResetter = battleAudio::resetAnnouncerCues,
@@ -747,8 +746,10 @@ class MainActivity : Activity() {
             },
             battleEffectsIdleListener = { token ->
                 runOnUiThread {
-                    if (activeBattleEffectsBarrierToken == token) {
-                        battlePlaybackBarrier.effectsCompleted(token)
+                    if (activeBattleEffectsBarrierToken == token && battlePlaybackBarrier.effectsCompleted(token)) {
+                        battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
+                        battlePacketPlaybackScheduled = false
+                        advanceBattlePlayback()
                     }
                 }
             }
@@ -758,7 +759,7 @@ class MainActivity : Activity() {
         effects.setPerspective(session.battlePlayerSlot())
         effects.setPlaybackSpeed(replaySpeed)
         effects.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
-        effects.seed(session.protocolHistory())
+        effects.seed(seedHistory)
         return effects
     }
 
@@ -902,15 +903,16 @@ class MainActivity : Activity() {
     }
 
     private fun applyBattleProtocolToEffects(lines: List<String>, effectsBarrierToken: Long = 0L) {
+        val historyBeforePacket = session.protocolHistoryBeforePacket(lines)
         if (showdownMoveEffectsNeedsReload && activityResumed) {
             showdownMoveEffectsNeedsReload = false
-            ensureShowdownMoveEffects()
+            ensureShowdownMoveEffects(historyBeforePacket)
         }
         val battleInit = lines.any { it.startsWith("|init|battle") }
         if (battleInit) battleScene?.resetBattleFeed()
         if (battleInit) {
             if (activityResumed) {
-                ensureShowdownMoveEffects()
+                ensureShowdownMoveEffects(historyBeforePacket)
             } else {
                 showdownMoveEffectsNeedsReload = true
             }
@@ -1028,7 +1030,7 @@ class MainActivity : Activity() {
         val effectsBarrierToken = createBattleEffectsBarrierToken(packet)
         if (effectsBarrierToken != null) {
             activeBattleEffectsBarrierToken = effectsBarrierToken
-            battlePlaybackBarrier.begin(effectsBarrierToken, SystemClock.elapsedRealtime())
+            battlePlaybackBarrier.begin(effectsBarrierToken)
         }
         val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
         applyingBattleEffectsBarrierToken = effectsBarrierToken
@@ -1062,9 +1064,8 @@ class MainActivity : Activity() {
     private fun advanceBattlePlayback() {
         battlePacketPlaybackScheduled = false
         val token = activeBattleEffectsBarrierToken
-        if (token != null && !battlePlaybackBarrier.minimumDwellElapsed(SystemClock.elapsedRealtime())) {
+        if (token != null && !battlePlaybackBarrier.minimumDwellElapsed()) {
             battlePacketPlaybackScheduled = true
-            battleEventHandler.postDelayed(playbackAdvanceRunnable, EFFECTS_BARRIER_POLL_MILLIS)
             return
         }
         if (token != null) activeBattleEffectsBarrierToken = null
@@ -1090,7 +1091,6 @@ class MainActivity : Activity() {
         replayPaused = value
         showdownMoveEffects?.setPlaybackPaused(value)
         if (value) {
-            battlePlaybackBarrier.pause(SystemClock.elapsedRealtime())
             pauseBattleAudio()
             if (battlePacketPlaybackScheduled) {
                 val elapsedMillis = (SystemClock.elapsedRealtime() - playbackScheduledAtMillis).coerceAtLeast(0L)
@@ -1100,7 +1100,6 @@ class MainActivity : Activity() {
             battleEventHandler.removeCallbacks(playbackAdvanceRunnable)
             battlePacketPlaybackScheduled = false
         } else {
-            battlePlaybackBarrier.resume(SystemClock.elapsedRealtime())
             resumeBattleAudioIfActive()
             playbackPausedRemainingMillis?.let { remainingMillis ->
                 playbackPausedRemainingMillis = null
@@ -1202,7 +1201,6 @@ class MainActivity : Activity() {
     private fun pauseLivePlaybackForLifecycle() {
         if (!::session.isInitialized || session.isReplayMode() || livePlaybackPausedForLifecycle) return
         livePlaybackPausedForLifecycle = true
-        battlePlaybackBarrier.pause(SystemClock.elapsedRealtime())
         showdownMoveEffects?.setPlaybackPaused(true)
         pauseBattleAudio()
         if (battlePacketPlaybackScheduled) {
@@ -1215,7 +1213,6 @@ class MainActivity : Activity() {
     private fun resumeLivePlaybackForLifecycle() {
         if (!livePlaybackPausedForLifecycle) return
         livePlaybackPausedForLifecycle = false
-        battlePlaybackBarrier.resume(SystemClock.elapsedRealtime())
         if (::session.isInitialized && !session.isReplayMode()) {
             showdownMoveEffects?.setPlaybackPaused(false)
             livePlaybackPausedRemainingMillis?.let { remainingMillis ->
@@ -6575,7 +6572,6 @@ class MainActivity : Activity() {
         const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
         const val SESSION_RESTORE_TIMEOUT_MILLIS = 5_000L
         const val DEFAULT_BATTLE_SPEED = 0.75f
-        private const val EFFECTS_BARRIER_POLL_MILLIS = 200L
         private val TEAM_STAT_NAMES = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
     }
 }

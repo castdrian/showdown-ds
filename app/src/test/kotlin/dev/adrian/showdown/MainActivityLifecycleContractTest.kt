@@ -11,12 +11,14 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val advance = source.substringAfter("private fun advanceBattlePlayback()").substringBefore("private fun scheduleBattlePlayback")
 
-        assertTrue(source.contains("battlePlaybackBarrier.begin(effectsBarrierToken, SystemClock.elapsedRealtime())"))
+        assertTrue(source.contains("battlePlaybackBarrier.begin(effectsBarrierToken)"))
         assertTrue(source.contains("battlePlaybackBarrier.effectsCompleted(token)"))
-        assertTrue(advance.contains("battlePlaybackBarrier.minimumDwellElapsed(SystemClock.elapsedRealtime())"))
-        assertTrue(advance.contains("EFFECTS_BARRIER_POLL_MILLIS"))
-        assertTrue(source.contains("battlePlaybackBarrier.pause(SystemClock.elapsedRealtime())"))
-        assertTrue(source.contains("battlePlaybackBarrier.resume(SystemClock.elapsedRealtime())"))
+        assertTrue(advance.contains("battlePlaybackBarrier.minimumDwellElapsed()"))
+        assertTrue(source.contains("if (activeBattleEffectsBarrierToken == token && battlePlaybackBarrier.effectsCompleted(token))"))
+        assertTrue(source.contains("advanceBattlePlayback()"))
+        assertFalse(source.contains("EFFECTS_BARRIER_POLL_MILLIS"))
+        assertFalse(source.contains("battlePlaybackBarrier.pause("))
+        assertFalse(source.contains("battlePlaybackBarrier.resume("))
     }
 
     @Test
@@ -279,7 +281,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(resume.contains("showdownMoveEffectsNeedsReload = false"))
         assertTrue(resume.contains("ensureShowdownMoveEffects()"))
         assertTrue(source.contains("if (showdownMoveEffectsNeedsReload && activityResumed)"))
-        assertTrue(source.contains("if (activityResumed) {\n                ensureShowdownMoveEffects()\n            } else {\n                showdownMoveEffectsNeedsReload = true"))
+        assertTrue(source.contains("if (activityResumed) {\n                ensureShowdownMoveEffects(historyBeforePacket)\n            } else {\n                showdownMoveEffectsNeedsReload = true"))
     }
 
     @Test
@@ -318,10 +320,10 @@ class MainActivityLifecycleContractTest {
     @Test
     fun defersTheAnimationWebViewUntilBattlePlaybackStarts() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val screenFactory = source.substringAfter("private fun createPrimaryScreen()").substringBefore("private fun ensureShowdownMoveEffects()")
+        val screenFactory = source.substringAfter("private fun createPrimaryScreen()").substringBefore("private fun ensureShowdownMoveEffects(")
 
         assertTrue(screenFactory.contains("primaryFrame = it"))
-        assertTrue(source.contains("private fun ensureShowdownMoveEffects(): ShowdownMoveEffectsView?"))
+        assertTrue(source.contains("private fun ensureShowdownMoveEffects(seedHistory: List<String> = session.protocolHistory()): ShowdownMoveEffectsView?"))
         assertTrue(source.contains("val battleInit = lines.any { it.startsWith(\"|init|battle\") }"))
         assertTrue(source.contains("if (battleInit)"))
         assertTrue(source.contains("frame.addView(effects, FrameLayout.LayoutParams(-1, -1))"))

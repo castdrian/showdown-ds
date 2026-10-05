@@ -166,7 +166,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("scheduleNativeCue(this, resultCue);"))
         assertFalse(source.contains("__showdownNativeResultCue = null"))
         assertTrue(source.contains("this.scene.__showdownNativeAudioSilent = !!kwArgs.silent;"))
-        assertTrue(source.contains("seed(protocolHistoryProvider())"))
+        assertFalse(source.contains("protocolHistoryProvider"))
         assertTrue(source.contains("flushPendingPackets(allowSeedWhilePaused = true)"))
         assertTrue(source.contains("private val nativeIdlePauseRunnable = Runnable"))
         assertTrue(source.contains("NATIVE_IDLE_CHECK_DELAY_MILLIS"))
@@ -180,6 +180,21 @@ class ShowdownMoveEffectsContractTest {
         assertFalse(source.contains("BattlePlaybackTiming.pauseAfter(packet)"))
         assertFalse(source.contains("postDelayed(flushRunnable"))
         assertFalse(source.contains("var originalRunMoveAnim = BattleScene.prototype.runMoveAnim;"))
+    }
+
+    @Test
+    fun webViewLoadPreservesQueuedProtocolPacketsAndBarrierTokens() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val pageFinishedStart = source.indexOf("override fun onPageFinished")
+        val pageFinishedEnd = source.indexOf("loadDataWithBaseURL", pageFinishedStart)
+        val pageFinished = source.substring(pageFinishedStart, pageFinishedEnd)
+
+        assertTrue(pageFinishedStart >= 0)
+        assertTrue(pageFinishedEnd > pageFinishedStart)
+        assertFalse(pageFinished.contains("seed("))
+        assertTrue(pageFinished.contains("flushPendingPackets()"))
+        assertTrue(source.contains("effectsBarrierToken: Long = 0L"))
+        assertTrue(source.contains("pendingPackets.add("))
     }
 
     @Test

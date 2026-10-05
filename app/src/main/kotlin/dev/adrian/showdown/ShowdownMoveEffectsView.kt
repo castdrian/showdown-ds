@@ -18,7 +18,6 @@ class ShowdownMoveEffectsView(
     context: Context,
     private val audioCueListener: (BattleAudioCue) -> Unit,
     private val audioCueResetter: () -> Unit = {},
-    private val protocolHistoryProvider: () -> List<String>,
     private val audioMoveResetter: () -> Unit = {},
     private val announcerCueListener: (BattleAnnouncerCue) -> Unit = {},
     private val announcerCueResetter: () -> Unit = {},
@@ -74,7 +73,6 @@ class ShowdownMoveEffectsView(
                 pageLoaded = true
                 runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
                 runJavascript("window.ShowdownNativeEffects.setPerspective('$battlePerspective');")
-                seed(protocolHistoryProvider())
                 if (playbackPaused) runJavascript("window.ShowdownNativeEffects.pause();")
                 flushPendingPackets()
             }

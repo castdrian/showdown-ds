@@ -3072,6 +3072,36 @@ class BattleSessionTest {
     }
 
     @Test
+    fun protocolHistoryBeforePacketExcludesTheMostRecentlyAppliedPacket() {
+        val session = BattleSession()
+        session.applyProtocolPacket(listOf("|init|battle"))
+        session.applyProtocolPacket(listOf("|turn|1", "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee"))
+
+        assertEquals(
+            listOf("|init|battle"),
+            session.protocolHistoryBeforePacket(listOf("|turn|1", "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee"))
+        )
+    }
+
+    @Test
+    fun protocolHistoryBeforeRepeatedPacketExcludesOnlyItsLatestOccurrence() {
+        val session = BattleSession()
+        val repeatedPacket = listOf("|turn|1")
+        session.applyProtocolPacket(repeatedPacket)
+        session.applyProtocolPacket(repeatedPacket)
+
+        assertEquals(repeatedPacket, session.protocolHistoryBeforePacket(repeatedPacket))
+    }
+
+    @Test
+    fun protocolHistoryBeforeBattleInitializationIsEmpty() {
+        val session = BattleSession()
+        session.applyProtocolPacket(listOf("|init|battle"))
+
+        assertTrue(session.protocolHistoryBeforePacket(listOf("|init|battle")).isEmpty())
+    }
+
+    @Test
     fun activityUnifiesBattleEventsAndChatMessages() {
         val session = BattleSession()
 
