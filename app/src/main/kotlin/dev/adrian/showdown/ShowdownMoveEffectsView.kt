@@ -141,7 +141,7 @@ class ShowdownMoveEffectsView(
             return
         }
         if (released) return
-        val next = side.takeIf { it == "p1" || it == "p2" } ?: return
+        val next = ShowdownBattlePerspective.acceptedSide(side) ?: return
         battlePerspective = next
         runJavascript("window.ShowdownNativeEffects.setPerspective('$next');")
     }
@@ -790,7 +790,7 @@ class ShowdownMoveEffectsView(
                                 if (battle) battle.scene.acceleration = animationSpeed;
                             },
                             setPerspective: function (side) {
-                                if (side !== 'p1' && side !== 'p2') return;
+                                if (${ShowdownBattlePerspective.javascriptGuard}) return;
                                 nativeBattlePerspective = side;
                                 applyNativeBattlePerspective();
                             },
