@@ -620,7 +620,8 @@ class BattleSceneView(
                     fieldCombatants(opponentCombatants, false),
                     switchOutVisual,
                     sceneSnapshot?.opponentDetailsBySlot.orEmpty(),
-                    opponentPartyDetails
+                    opponentPartyDetails,
+                    sceneSnapshot?.opponentPartyDetailsBySlot ?: session.opponentPartyDetailsBySlot()
                 )
             }
             drawBattleFeed(canvas, width, height, scale, battleFeedFrame)
@@ -2748,7 +2749,8 @@ class BattleSceneView(
         combatants: List<BattleSession.ActiveCombatant>,
         switchOutVisual: BattleSession.SwitchOutVisual? = null,
         detailsBySlot: Map<String, BattleSession.PokemonDetails> = emptyMap(),
-        partyDetails: List<BattleSession.PokemonDetails>
+        partyDetails: List<BattleSession.PokemonDetails>,
+        partyDetailsBySlot: Map<String, List<BattleSession.PokemonDetails>> = emptyMap()
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
         val nowNanos = System.nanoTime()
@@ -2771,7 +2773,7 @@ class BattleSceneView(
                     scale,
                     alpha,
                     layout,
-                    partyDetails
+                    partyDetailsBySlot[combatant.slot] ?: partyDetails
                 )
             }
         }

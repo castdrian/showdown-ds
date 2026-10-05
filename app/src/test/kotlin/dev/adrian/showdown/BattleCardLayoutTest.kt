@@ -70,7 +70,7 @@ class BattleCardLayoutTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
 
         assertTrue(source.contains("partyDetails: List<BattleSession.PokemonDetails>"))
-        assertTrue(source.contains("layout,\n                    partyDetails\n                )"))
+        assertTrue(source.contains("partyDetailsBySlot[combatant.slot] ?: partyDetails"))
         assertTrue(!source.contains("partyIndicatorAnchorIndex"))
         assertTrue(source.contains("party: List<BattleSession.PokemonDetails>"))
         assertTrue(source.contains("drawPartyIndicators(canvas, party, ballStart, ballTop, ballSize, ballGap)"))

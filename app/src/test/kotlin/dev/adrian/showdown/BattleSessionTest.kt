@@ -1456,6 +1456,43 @@ class BattleSessionTest {
     }
 
     @Test
+    fun freeForAllKeepsOpenTeamsOwnedByTheirParticipants() {
+        val session = BattleSession()
+        val opponentTeam = ShowdownTeamCodec.pack(
+            listOf(ShowdownTeamSet(nickname = "Sparky", species = "Pikachu", item = "Light Ball"))
+        )
+        val secondOpponentTeam = ShowdownTeamCodec.pack(
+            listOf(ShowdownTeamSet(nickname = "Sparky", species = "Pikachu", item = "Magnet"))
+        )
+        session.applyProtocolPacket(
+            listOf(
+                "|gametype|freeforall",
+                "|player|p1|ALLY",
+                "|player|p2|FOE",
+                "|player|p3|FOE2",
+                "|player|p4|FOE3",
+                "|showteam|p2|$opponentTeam",
+                "|showteam|p3|$secondOpponentTeam",
+                "|switch|p2a: Sparky|Pikachu, L50|100/100",
+                "|switch|p3a: Sparky|Pikachu, L50|100/100",
+                "|-damage|p2a: Sparky|50/100",
+                "|-status|p2a: Sparky|brn",
+                "|-status|p3a: Sparky|par",
+                "|-cureteam|p2"
+            )
+        )
+
+        assertEquals(listOf("lightball", "magnet"), session.opponentPartyDetails().map { it.item })
+        assertEquals(listOf("50/100", "100/100"), session.opponentPartyDetails().map { it.hp })
+        assertEquals(listOf("READY", "PAR"), session.opponentPartyDetails().map { it.condition })
+        assertEquals("lightball", session.opponentDetails().item)
+        assertEquals("lightball", session.detailsForActiveCombatant(false, "p2a")?.item)
+        assertEquals("magnet", session.detailsForActiveCombatant(false, "p3a")?.item)
+        assertEquals(listOf("lightball"), session.opponentPartyDetailsBySlot()["p2a"]?.map { it.item })
+        assertEquals(listOf("magnet"), session.opponentPartyDetailsBySlot()["p3a"]?.map { it.item })
+    }
+
+    @Test
     fun freeForAllOffersEveryOpponentAsAnExplicitTarget() {
         val session = BattleSession()
         session.setLocalUsername("ALLY")
