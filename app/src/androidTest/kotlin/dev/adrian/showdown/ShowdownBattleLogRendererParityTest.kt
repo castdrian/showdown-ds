@@ -158,6 +158,24 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun officialIllusionReplayNarrationMatchesItsVisibleCombatants() {
+        assertOfficialReplayNarrationMatchesItsVisibleCombatants(
+            "gen9randombattle-2691982973.json",
+            requiredPlayerSlots = setOf("p1a"),
+            requiredOpponentSlots = setOf("p2a")
+        )
+    }
+
+    @Test
+    fun officialMegaReplayNarrationMatchesItsVisibleCombatants() {
+        assertOfficialReplayNarrationMatchesItsVisibleCombatants(
+            "smogtours-gen6ou-625213.json",
+            requiredPlayerSlots = setOf("p1a"),
+            requiredOpponentSlots = setOf("p2a")
+        )
+    }
+
+    @Test
     fun officialMultiReplayNarrationMatchesItsVisiblePartnersAndOpponents() {
         assertOfficialReplayNarrationMatchesItsVisibleCombatants(
             "gen9multirandombattle-2641276114.json",
