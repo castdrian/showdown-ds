@@ -363,7 +363,9 @@ class BattleSessionTest {
         )
 
         assertTrue(session.battleLog().contains("Poltchageist drank down all the matcha that Ogerpon made!"))
-        assertTrue(session.battleLog().contains("Poltchageist restored HP using its Dry Skin!"))
+        assertTrue(session.battleLog().contains("[Poltchageist's Dry Skin]"))
+        assertTrue(session.battleLog().contains("Poltchageist had its HP restored."))
+        assertFalse(session.battleLog().contains("Poltchageist restored HP using its Dry Skin!"))
     }
 
     @Test

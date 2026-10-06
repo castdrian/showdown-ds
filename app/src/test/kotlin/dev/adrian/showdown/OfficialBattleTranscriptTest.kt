@@ -627,13 +627,35 @@ class OfficialBattleTranscriptTest {
 
         assertEquals(
             listOf(
-                "The opposing Vampire restored HP using its Poison Heal!",
+                "[The opposing Vampire's Poison Heal]",
+                "The opposing Vampire had its HP restored.",
                 "[Tapu Koko's Electric Surge]",
                 "An electric current ran across the battlefield!"
             ),
-            session.battleLog().takeLast(3)
+            session.battleLog().takeLast(4)
         )
-        assertFalse(session.battleLog().contains("[The opposing Vampire's Poison Heal]"))
+        assertFalse(session.battleLog().contains("The opposing Vampire restored HP using its Poison Heal!"))
+    }
+
+    @Test
+    fun announcesTerrainAbilityWhenFieldStartOmitsAnAbilityEvent() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Tapu Fini|Tapu Fini, L50|100/100",
+                "|-fieldstart|move: Misty Terrain|[from] ability: Misty Surge|[of] p2a: Tapu Fini"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "[The opposing Tapu Fini's Misty Surge]",
+                "Mist swirled around the battlefield!"
+            ),
+            session.battleLog().takeLast(2)
+        )
     }
 
     @Test
@@ -725,12 +747,30 @@ class OfficialBattleTranscriptTest {
 
         assertEquals(
             listOf(
+                "[Garchomp's Rough Skin]",
                 "The opposing Vampire was hurt!",
-                "Garchomp was hurt by the opposing Vampire's Rocky Helmet!"
+                "Garchomp was hurt by the Rocky Helmet!"
             ),
-            session.battleLog().takeLast(2)
+            session.battleLog().takeLast(3)
         )
-        assertFalse(session.battleLog().contains("[Garchomp's Rough Skin]"))
+    }
+
+    @Test
+    fun formatsGenSixRockyHelmetDamageLikeShowdownWithoutNamingTheHolder() {
+        val session = BattleSession().apply { setLocalUsername("Santu") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|Santu||",
+                "|player|p2|Chaitanya||",
+                "|gametype|singles",
+                "|gen|6",
+                "|switch|p1a: Serperior|Serperior, M|202/353",
+                "|switch|p2a: Pinsir|Pinsir, F|271/271",
+                "|-damage|p2a: Pinsir|159/271|[from] item: Rocky Helmet|[of] p1a: Serperior"
+            )
+        )
+
+        assertEquals("The opposing Pinsir was hurt by the Rocky Helmet!", session.battleLog().last())
     }
 
     @Test
