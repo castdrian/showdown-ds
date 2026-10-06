@@ -331,6 +331,21 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun doublesReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen9doublesou-2691960998.json")
+    }
+
+    @Test
+    fun multiReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen9multirandombattle-2641276114.json")
+    }
+
+    @Test
+    fun freeForAllReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen9freeforallrandombattle-2547390602.json")
+    }
+
+    @Test
     fun rechargeNarrationMatchesTheUpstreamBattleLog() {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {
@@ -437,6 +452,7 @@ class ShowdownBattleLogRendererParityTest {
             lightweightTexts += session.battleFeedMessages()
                 .filter { it.id !in previousMessageIds }
                 .map { it.text }
+                .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
             val entryCount = activity.nativeEntries.size
             val syncCount = activity.synchronizedGenerations.size
             val generation = session.battleLogGeneration()

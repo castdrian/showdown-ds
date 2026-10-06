@@ -1142,17 +1142,19 @@ class ShowdownReplayPlaybackParityTest {
                     }
                 }
                 "move" -> {
-                    val species = speciesBySlot[actorSlot]
-                    assertTrue("$replayId at $line has no prior protocol species for $actorSlot", species != null)
-                    val actorIdent = fields.getOrElse(2) { "" }
-                    add(
-                        ProtocolMoveIdentity(
-                            line = line,
-                            actorName = actorIdent.substringAfter(": ", actorIdent).substringBefore(',').trim(),
-                            actorSlot = actorSlot,
-                            actorSpecies = checkNotNull(species)
+                    if (fields.none { it.trim().equals("[from] ability: Magic Bounce", true) }) {
+                        val species = speciesBySlot[actorSlot]
+                        assertTrue("$replayId at $line has no prior protocol species for $actorSlot", species != null)
+                        val actorIdent = fields.getOrElse(2) { "" }
+                        add(
+                            ProtocolMoveIdentity(
+                                line = line,
+                                actorName = actorIdent.substringAfter(": ", actorIdent).substringBefore(',').trim(),
+                                actorSlot = actorSlot,
+                                actorSpecies = checkNotNull(species)
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

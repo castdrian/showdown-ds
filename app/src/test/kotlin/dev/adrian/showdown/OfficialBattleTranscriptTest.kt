@@ -589,6 +589,20 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun namesPokemonThatStartsTrickRoomLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Slowking|Slowking, L50|100/100",
+                "|move|p2a: Slowking|Trick Room|p2a: Slowking",
+                "|-fieldstart|move: Trick Room|[of] p2a: Slowking"
+            )
+        )
+
+        assertEquals("The opposing Slowking twisted the dimensions!", session.battleLog().last())
+    }
+
+    @Test
     fun formatsHazardDamageAnnouncementsLikeShowdown() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         session.applyProtocolPacket(
@@ -1349,9 +1363,100 @@ class OfficialBattleTranscriptTest {
                 "The opposing Walking Wake used its Booster Energy to activate Protosynthesis!",
                 "[The opposing Walking Wake's Protosynthesis]",
                 "The harsh sunlight activated the opposing Walking Wake's Protosynthesis!",
+                "[The opposing Gardevoir's Telepathy]",
                 "The opposing Gardevoir can't be hit by attacks from its ally Pokémon!"
             ),
-            session.battleLog().takeLast(10)
+            session.battleLog().takeLast(11)
+        )
+    }
+
+    @Test
+    fun formatsInstructAsAOneShotNarrationWithoutAddingABattleEffect() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Oranguru|Oranguru, L50|100/100",
+                "|switch|p2a: Granbull|Granbull, L50|100/100",
+                "|-singleturn|p2a: Granbull|move: Instruct|[of] p1a: Oranguru"
+            )
+        )
+
+        assertEquals("The opposing Granbull followed Oranguru's instructions!", session.battleLog().last())
+        assertFalse(session.opponentActiveCombatants().single().turnEffects.contains("Instruct"))
+    }
+
+    @Test
+    fun announcesAnAbilityThatCausedAReflectedMoveLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Espeon|Espeon, L50|100/100",
+                "|move|p2a: Espeon|Sticky Web|p1a: Galvantula|[from] ability: Magic Bounce"
+            )
+        )
+
+        assertEquals(
+            listOf("[The opposing Espeon's Magic Bounce]"),
+            session.battleLog().takeLast(1)
+        )
+    }
+
+    @Test
+    fun formatsAlreadyPoisonedAndStickyWebActivationLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Passimian|Passimian, L50|100/100 psn",
+                "|-fail|p2a: Passimian|psn",
+                "|-fail|p2a: Passimian|tox",
+                "|-activate|p2a: Passimian|move: Sticky Web"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "The opposing Passimian is already poisoned!",
+                "But it failed!",
+                "The opposing Passimian was caught in a sticky web!"
+            ),
+            session.battleLog().takeLast(3)
+        )
+    }
+
+    @Test
+    fun formatsImprisonStartLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|-start|p2a: Arceus|Imprison|[of] p1a: Mew"
+            )
+        )
+
+        assertEquals("The opposing Arceus sealed any moves its target shares with it!", session.battleLog().last())
+    }
+
+    @Test
+    fun formatsVesselOfRuinActivationLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|-ability|p2a: Ting-Lu|Vessel of Ruin"
+            )
+        )
+
+        assertEquals(
+            "The opposing Ting-Lu's Vessel of Ruin weakened the Sp. Atk of all surrounding Pokémon!",
+            session.battleLog().last()
         )
     }
 

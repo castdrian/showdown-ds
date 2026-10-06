@@ -675,6 +675,7 @@ class BattleSession {
     private val teraTypesBySlot = mutableMapOf<String, String>()
     private var battleVisualSeed = Random.nextInt(1, Int.MAX_VALUE)
     private var pendingHit: PendingHit? = null
+    private var currentSpreadMoveTargets = emptySet<String>()
     private var requestId: Int? = null
     private val activeRequests = mutableListOf<JSONObject>()
     private val activeChoices = mutableListOf<String>()
@@ -2353,6 +2354,7 @@ class BattleSession {
         latestFaintedSlot = ""
         latestFaintAtNanos = 0L
         pendingHit = null
+        currentSpreadMoveTargets = emptySet()
         playerName = localUsername ?: "PLAYER"
         opponentName = "OPPONENT"
         turn = 1
@@ -3141,14 +3143,27 @@ class BattleSession {
     private fun applyMove(fields: List<String>) {
         if (fields.size <= 3) return
         clearMoveEffects(fields[2])
+        currentSpreadMoveTargets = fields.firstOrNull { it.trim().startsWith("[spread]", true) }
+            ?.substringAfter(']')
+            ?.split(',')
+            ?.map(String::trim)
+            ?.filter(String::isNotBlank)
+            ?.toSet()
+            .orEmpty()
         val actorId = fields[2]
         val actor = actorId.substringAfter(':').trim()
         val event = capitalizeBattleActorAtSentenceStart("${battleActor(actorId)} used ${fields[3]}!")
         latestMoveEvent = event
         latestMoveEventAtNanos = System.nanoTime()
-        appendLog(event, battleMoveMarkup(actorId, fields[3]))
+        appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+        if (!isMagicBounceReflection(fields)) {
+            appendLog(event, battleMoveMarkup(actorId, fields[3]))
+        }
         publishFeedback(BattleFeedback(FeedbackType.MOVE, actor = actor, target = fields.getOrNull(4)?.substringAfter(':')?.trim().orEmpty(), move = fields[3]))
     }
+
+    private fun isMagicBounceReflection(fields: List<String>): Boolean =
+        protocolSource(fields, 4)?.equals("ability: Magic Bounce", true) == true
 
     private fun applyHealth(fields: List<String>, targetIndex: Int = 2) {
         if (fields.size <= targetIndex + 1) return
@@ -3322,7 +3337,7 @@ class BattleSession {
         })
     }
 
-    private fun protocolSourceActor(fields: List<String>): String? = fields.drop(4)
+    private fun protocolSourceActor(fields: List<String>, startIndex: Int = 4): String? = fields.drop(startIndex)
         .firstOrNull { it.trim().startsWith("[of]", true) }
         ?.substringAfter(']')
         ?.trim()
@@ -3878,6 +3893,10 @@ class BattleSession {
             "comatose" -> "$pokemon is drowsing!"
             "moldbreaker" -> "$pokemon breaks the mold!"
             "pressure" -> "$pokemon is exerting its pressure!"
+            "beadsofruin" -> "$pokemon's Beads of Ruin weakened the Sp. Def of all surrounding Pokémon!"
+            "swordofruin" -> "$pokemon's Sword of Ruin weakened the Defense of all surrounding Pokémon!"
+            "tabletsofruin" -> "$pokemon's Tablets of Ruin weakened the Attack of all surrounding Pokémon!"
+            "vesselofruin" -> "$pokemon's Vessel of Ruin weakened the Sp. Atk of all surrounding Pokémon!"
             else -> null
         }
     }
@@ -3898,6 +3917,7 @@ class BattleSession {
                 move?.let { "$pokemon's $it was disabled!" }
                     ?: "(${battleEffectName(fields.getOrNull(3))} started on $pokemon!)"
             }
+            "imprison" -> "$pokemon sealed any moves its target shares with it!"
             "encore" -> "$pokemon must do an encore!"
             "focusenergy" -> "$pokemon is getting pumped!"
             "attract" -> "$pokemon fell in love!"
@@ -4445,7 +4465,8 @@ class BattleSession {
         hit.critical = hit.critical || critical
         if (!isSilent(fields)) {
             val effectiveness = fields.drop(3).firstOrNull { it == "2" }
-            val spread = fields.any { it.equals("[spread]", true) }
+            val spread = fields.any { it.equals("[spread]", true) } ||
+                targetSlot(fields.getOrNull(2).orEmpty()) in currentSpreadMoveTargets
             val targetName = battleActor(fields.getOrNull(2))
             when {
                 critical && spread -> appendLog("A critical hit on $targetName!")
@@ -4555,6 +4576,7 @@ class BattleSession {
             "frz" -> "${battleActor(actor)} is already frozen solid!"
             "par" -> "${battleActor(actor)} is already paralyzed!"
             "slp" -> "${battleActor(actor)} is already asleep!"
+            "psn" -> "${battleActor(actor)} is already poisoned!"
             "substitute", "shedtail" -> "${battleActor(actor)} already has a Substitute!"
             "dynamax" -> "${battleActor(actor)} shook its head. It seems like it can't use this move..."
             else -> "But it failed!"
@@ -4719,6 +4741,9 @@ class BattleSession {
             updateActorDetails(actor) { details -> details.copy(ability = revealedAbility) }
         }
         if (hasActor && normalizedEffect in SHOWDOWN_ACTIVATE_BLOCK_EFFECTS) {
+            ability?.let { revealedAbility ->
+                appendProtocolAnnouncement(fields, "[${battleActor(actor)}'s $revealedAbility]")
+            }
             applyBlock(fields)
             return
         }
@@ -4734,6 +4759,8 @@ class BattleSession {
                     ?.let { itemNameResolver?.invoke(it) ?: it }
                 listOfNotNull(item?.let { "${battleActor(actor)} is about to be attacked by its $it!" })
             }
+            hasActor && normalizedEffect == "stickyweb" ->
+                listOf("${battleActor(actor)} was caught in a sticky web!")
             hasActor && normalizedEffect == "trick" ->
                 listOf("${battleActor(actor)} switched items with its target!")
             ability != null -> {
@@ -4889,7 +4916,7 @@ class BattleSession {
             ) {
                 appendLog(abilityAnnouncement)
             }
-            appendLog(fieldEffectAnnouncement(effect, enabled))
+            appendLog(fieldEffectAnnouncement(effect, enabled, protocolSourceActor(fields, startIndex = 3)))
         }
     }
 
@@ -4914,8 +4941,13 @@ class BattleSession {
     private fun weatherUpkeepAnnouncement(value: String) =
         BATTLE_WEATHER_ANNOUNCEMENTS[normalizeBattleTextKey(value)]?.upkeep
 
-    private fun fieldEffectAnnouncement(effect: String, enabled: Boolean): String {
-        val announcement = BATTLE_FIELD_ANNOUNCEMENTS[normalizeBattleTextKey(effect)]
+    private fun fieldEffectAnnouncement(effect: String, enabled: Boolean, sourceActor: String?): String {
+        val effectKey = normalizeBattleTextKey(effect)
+        if (enabled && effectKey == "trickroom") {
+            return sourceActor?.let { "${battleActor(it)} twisted the dimensions!" }
+                ?: BATTLE_FIELD_ANNOUNCEMENTS.getValue(effectKey).start
+        }
+        val announcement = BATTLE_FIELD_ANNOUNCEMENTS[effectKey]
         return if (enabled) announcement?.start ?: "($effect started!)" else announcement?.end ?: "($effect ended!)"
     }
 
@@ -5140,8 +5172,11 @@ class BattleSession {
         val actor = value.orEmpty()
         val name = battleActorName(actor)
         if (!isProtocolActor(actor)) return name
-        return if (isPlayerSide(actor)) name else "the opposing $name"
+        return if (isBattleTextPlayerSide(actor)) name else "the opposing $name"
     }
+
+    private fun isBattleTextPlayerSide(actor: String) =
+        if (isMultiBattle()) targetSlot(actor).take(2).equals(playerSlot, true) else isPlayerSide(actor)
 
     private fun battleActorName(actor: String) = actor.substringAfter(':').trim().ifBlank { "Pokémon" }
 
@@ -5159,7 +5194,11 @@ class BattleSession {
     }
 
     private fun showdownBattleTextSpeciesName(species: String): String =
-        if (species.startsWith("Minior-", true)) "Minior-Red" else species
+        when {
+            species.equals("Hoopa", true) -> "Hoopa-Confined"
+            species.startsWith("Minior-", true) -> "Minior-Red"
+            else -> species
+        }
 
     private fun activeSpeciesName(actor: String): String {
         val slot = targetSlot(actor)
@@ -5423,6 +5462,14 @@ class BattleSession {
     private fun applySingleBattleEffect(fields: List<String>, turnScoped: Boolean) {
         val actor = fields.getOrNull(2).orEmpty()
         val effect = battleEffectName(fields.getOrNull(3)).lowercase().filter(Char::isLetterOrDigit)
+        if (effect == "instruct") {
+            if (!isSilent(fields)) {
+                protocolSourceActor(fields)?.let { source ->
+                    appendLog("${battleActor(actor)} followed ${battleActor(source)}'s instructions!")
+                }
+            }
+            return
+        }
         if (singleBattleEffectLabel(effect) == null) return
         val slot = actor.substringBefore(":").trim()
         if (effect == "roost" && "FLYING" !in currentTypesForSlot(slot)) return
@@ -5925,7 +5972,7 @@ class BattleSession {
         val name = battleActorName(actor)
         val formattedActor = when {
             !isProtocolActor(actor) -> "**$name**"
-            isPlayerSide(actor) -> "**$name**"
+            isBattleTextPlayerSide(actor) -> "**$name**"
             else -> "The opposing **$name**"
         }
         return "$formattedActor used **$move**!"
