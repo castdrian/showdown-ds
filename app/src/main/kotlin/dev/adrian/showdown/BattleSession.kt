@@ -574,6 +574,7 @@ class BattleSession {
     private val showdownBattleMarkupEntries = mutableMapOf<String, List<ShowdownBattleLogEntry>>()
     private val protocolBattleFeedMarkupEntries = mutableListOf<ShowdownBattleLogEntry>()
     private val battleLogMessageIds = mutableListOf(0L, 1L, 2L)
+    private val battleFeedExcludedMessageIds = mutableSetOf<Long>()
     private var nextBattleFeedMessageId = 3L
     private val switchOutVisualsByMessageId = mutableMapOf<Long, SwitchOutVisual>()
     private val battleSceneSnapshotsByMessageId = mutableMapOf<Long, BattleSceneSnapshot>()
@@ -1028,10 +1029,12 @@ class BattleSession {
     fun battleFeedEntries(limit: Int = SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT): List<String> {
         val normalizedLimit = limit.coerceAtLeast(0)
         battleFeedEntriesCache[normalizedLimit]?.let { return it }
-        val protocolEntries = battleLog.filter(::isBattleFeedEntry)
+        val protocolEntries = battleLog.mapIndexedNotNull { index, text ->
+            text.takeIf { isBattleFeedEntry(text, battleLogMessageIds[index]) }
+        }
         val nativeEntries = if (nativeBattleLogGeneration == battleLogGeneration) {
             showdownBattleLogEntries
-                .filter { isBattleFeedEntry(it.plainText) }
+                .filter { isBattleFeedEntry(it.plainText, it.id) }
                 .map { it.plainText }
         } else {
             emptyList()
@@ -1046,11 +1049,12 @@ class BattleSession {
         val normalizedLimit = limit.coerceAtLeast(0)
         battleFeedMessagesCache[normalizedLimit]?.let { return it }
         val protocolEntries = battleLog.mapIndexedNotNull { index, text ->
-            if (isBattleFeedEntry(text)) battleFeedMessage(battleLogMessageIds[index], text) else null
+            val id = battleLogMessageIds[index]
+            if (isBattleFeedEntry(text, id)) battleFeedMessage(id, text) else null
         }
         val nativeEntries = if (nativeBattleLogGeneration == battleLogGeneration) {
             showdownBattleLogEntries
-                .filter { isBattleFeedEntry(it.plainText) }
+                .filter { isBattleFeedEntry(it.plainText, it.id) }
                 .map { entry -> battleFeedMessage(entry.id, entry.plainText) }
         } else {
             emptyList()
@@ -1568,6 +1572,7 @@ class BattleSession {
         protocolHistory.clear()
         battleLog.clear()
         battleLogMessageIds.clear()
+        battleFeedExcludedMessageIds.clear()
         switchOutVisualsByMessageId.clear()
         battleSceneSnapshotsByMessageId.clear()
         showdownBattleLogEntries.clear()
@@ -1608,6 +1613,7 @@ class BattleSession {
         prepareForLobby()
         battleLog.clear()
         battleLogMessageIds.clear()
+        battleFeedExcludedMessageIds.clear()
         battleLog += "Loading replay…"
         battleLogMessageIds += newBattleFeedMessageId()
         clearBattleFeedEntriesCache()
@@ -1629,7 +1635,7 @@ class BattleSession {
     }
 
     fun sendOutMessage(pokemon: String, playerSide: Boolean, species: String = pokemon, actor: String? = null): String {
-        val fullName = fullBattlePokemonName(pokemon, species)
+        val fullName = fullBattlePokemonName(pokemon, showdownBattleTextSpeciesName(species))
         val trainer = actor?.let(::battleTrainer) ?: if (playerSide) playerName else opponentName
         val isViewerPokemon = actor?.let { targetSlot(it).take(2).equals(playerSlot, true) } ?: playerSide
         return if (isViewerPokemon) "Go! $fullName!" else "$trainer sent out $fullName!"
@@ -2054,9 +2060,10 @@ class BattleSession {
                     }
                     "tier" -> if (fields.size > 2) {
                         format = ShowdownFormatCompatibility.canonicalizeLegacyText(fields[2])
-                        appendLog("Format: $format")
+                        appendLog("Format:")
+                        appendLog(format)
                     }
-                    "rule" -> fields.getOrNull(2)?.let(::sanitizeMarkup)?.takeIf { it.isNotBlank() }?.let { appendLog("Rule: $it") }
+                    "rule" -> fields.getOrNull(2)?.let(::sanitizeMarkup)?.takeIf { it.isNotBlank() }?.let(::appendLog)
                     "teamsize" -> fields.getOrNull(2)?.let { side ->
                         fields.getOrNull(3)?.toIntOrNull()?.let { size ->
                             appendLog("${sideNames[side] ?: side} team size: $size")
@@ -2064,13 +2071,13 @@ class BattleSession {
                     }
                     "rated" -> {
                         val message = sanitizeMarkup(fields.drop(2).joinToString("|"))
-                        appendLog(message?.takeIf { it.isNotBlank() } ?: "Rated battle.")
+                        appendLog(message?.takeIf { it.isNotBlank() } ?: "Rated battle")
                     }
                     "teampreview" -> {
                         battlePhase = BattlePhase.TEAM_PREVIEW
                         fields.getOrNull(2)?.toIntOrNull()?.takeIf { it > 0 }?.let { protocolTeamPreviewSize = it }
                     }
-                    "start" -> battlePhase = BattlePhase.BATTLE
+                    "start" -> applyBattleStart()
                     "upkeep" -> battlePhase = BattlePhase.UPKEEP
                     "turn" -> {
                         battlePhase = BattlePhase.BATTLE
@@ -2304,6 +2311,7 @@ class BattleSession {
         hasBattleProtocolTranscript = true
         battleLog.clear()
         battleLogMessageIds.clear()
+        battleFeedExcludedMessageIds.clear()
         switchOutVisualsByMessageId.clear()
         battleSceneSnapshotsByMessageId.clear()
         showdownBattleLogEntries.clear()
@@ -2319,7 +2327,9 @@ class BattleSession {
         lastNativeProtocolMessageId = Long.MIN_VALUE
         protocolTimestampSeconds = null
         battleLog += "Battle started."
-        battleLogMessageIds += newBattleFeedMessageId()
+        val initialMessageId = newBattleFeedMessageId()
+        battleLogMessageIds += initialMessageId
+        battleFeedExcludedMessageIds += initialMessageId
         markupEntries.clear()
         chatMessages.clear()
         activityMessages.clear()
@@ -2449,6 +2459,13 @@ class BattleSession {
             playerSlot = side
         }
         updatePerspective()
+    }
+
+    private fun applyBattleStart() {
+        battlePhase = BattlePhase.BATTLE
+        val firstPlayer = sideNames["p1"] ?: "Player 1"
+        val secondPlayer = sideNames["p2"] ?: "Player 2"
+        appendLog("Battle started between $firstPlayer and $secondPlayer!")
     }
 
     private fun applyTurn(fields: List<String>) {
@@ -2676,10 +2693,10 @@ class BattleSession {
         ) {
             previousDetails?.let { details ->
                 appendLog(
-                    switchOutMessage(fields[2], previousCombatant),
+                    switchOutMessage(fields[2], previousCombatant, fields),
                     switchOutVisual = SwitchOutVisual(playerSide, previousCombatant, details)
                 )
-            } ?: appendLog(switchOutMessage(fields[2], previousCombatant))
+            } ?: appendLog(switchOutMessage(fields[2], previousCombatant, fields))
         }
         val message = when (eventKind) {
             SwitchEventKind.ILLUSION_REPLACEMENT -> null
@@ -2707,10 +2724,7 @@ class BattleSession {
     }
 
     private fun shouldAnnounceSwitchOut(fields: List<String>): Boolean {
-        val effect = fields.drop(5)
-            .firstOrNull { it.trim().startsWith("[from]", true) }
-            ?.substringAfter(']')
-            ?.trim()
+        val effect = switchOutSource(fields)
             ?.substringAfter(": ")
             ?.let(::normalizeBattleTextKey)
             .orEmpty()
@@ -2718,11 +2732,21 @@ class BattleSession {
         return effect.isNotBlank() || !format.contains("Relay Race", true)
     }
 
-    private fun switchOutMessage(actor: String, combatant: ActiveCombatant): String {
+    private fun switchOutSource(fields: List<String>): String? = fields.drop(5)
+        .firstOrNull { it.trim().startsWith("[from]", true) }
+        ?.substringAfter(']')
+        ?.trim()
+
+    private fun switchOutMessage(actor: String, combatant: ActiveCombatant, fields: List<String>): String {
         val nickname = combatant.name.trim().ifBlank { combatant.species }
-        val isViewerSide = targetSlot(actor).take(2).equals(playerSlot, true)
-        return if (isViewerSide) "$nickname, come back!"
-        else "${battleTrainer(actor)} withdrew $nickname!"
+        val trainer = battleTrainer(actor)
+        val outgoingPokemon = battleActor("${combatant.slot}: $nickname")
+        if (switchOutSource(fields) != null) return "$outgoingPokemon went back to $trainer!"
+        return if (targetSlot(actor).take(2).equals(playerSlot, true)) {
+            "$nickname, come back!"
+        } else {
+            "$trainer withdrew $nickname!"
+        }
     }
 
     private fun applySwap(fields: List<String>) {
@@ -3211,10 +3235,10 @@ class BattleSession {
             ?.replace("{POKEMON}", actor)
         return when {
             sideConditionDamage != null -> sideConditionDamage
-            effectId == "brn" -> "($actor was hurt by its burn!)"
-            effectId == "psn" || effectId == "tox" -> "($actor was hurt by poison!)"
-            effectId == "sandstorm" -> "($actor is buffeted by the sandstorm!)"
-            effectId == "hail" || effectId == "snowscape" -> "($actor is buffeted by the hail!)"
+            effectId == "brn" -> "$actor was hurt by its burn!"
+            effectId == "psn" || effectId == "tox" -> "$actor was hurt by poison!"
+            effectId == "sandstorm" -> "$actor is buffeted by the sandstorm!"
+            effectId == "hail" || effectId == "snowscape" -> "$actor is buffeted by the hail!"
             effectId == "confusion" -> "It hurt itself in its confusion!"
             source?.startsWith("item:", true) == true && effectId == "lifeorb" -> "$actor lost some of its HP!"
             source?.startsWith("item:", true) == true && effect.isNotBlank() -> "($actor was hurt by its $effect!)"
@@ -3235,6 +3259,7 @@ class BattleSession {
         val wisher = protocolWisher(fields)
         return when {
             effectId == "zpower" || effectId == "zmove" -> "$actor restored its HP using its Z-Power!"
+            effectId == "leftovers" -> "$actor restored a little HP using its Leftovers!"
             effectId == "aquaring" -> "A veil of water restored $actor's HP!"
             effectId == "grassyterrain" -> "$actor's HP was restored."
             effectId == "healingwish" -> "The healing wish came true for $actor!"
@@ -3440,7 +3465,7 @@ class BattleSession {
         }
         val targetBoosts = boostSlots(target)[targetSlot(target)].orEmpty().toMap()
         applyFormChange(
-            listOf("", "-transform", actor, "$species, L$level$gender"),
+            listOf("", "-transform", actor, "$species, L$level$gender") + fields.drop(4),
             targetDetails?.types
         )
         val actorBoosts = boostSlots(actor)
@@ -3573,12 +3598,28 @@ class BattleSession {
                 )
             }
         }
+        val source = protocolSource(fields)
+        val shieldsDownActivated = species.equals("Minior-Meteor", true) &&
+            source?.equals("ability: Shields Down", true) == true
+        if (shieldsDownActivated) {
+            appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+            appendProtocolAnnouncement(fields, "Shields Down deactivated!")
+            appendProtocolAnnouncement(fields, "(${battleActor(actor)} shielded itself.)")
+            return
+        }
+        val transformedByAbility = fields.getOrNull(1) == "-transform" &&
+            source?.startsWith("ability:", true) == true
+        if (transformedByAbility) {
+            appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+        }
         when (fields.getOrNull(1)) {
             "detailschange", "-formechange", "-transform" -> {
                 val announcement = if (
                     fields.getOrNull(1) != "-transform" && species.equals("Necrozma-Ultra", ignoreCase = true)
                 ) {
                     "Bright light is about to burst out of ${battleActor(actor)}!"
+                } else if (fields.getOrNull(1) == "-transform") {
+                    battleActor(actor) + " transformed into " + showdownBattleTextSpeciesName(species) + "!"
                 } else {
                     "${battleActor(actor)} transformed!"
                 }
@@ -4256,7 +4297,7 @@ class BattleSession {
 
     private fun applyWin(fields: List<String>) {
         fields.getOrNull(2)?.let {
-            finishBattle("$it won the battle.")
+            finishBattle("$it won the battle!")
         }
     }
 
@@ -4450,7 +4491,6 @@ class BattleSession {
             "brn" -> "${battleActor(actor)} is already burned!"
             "frz" -> "${battleActor(actor)} is already frozen solid!"
             "par" -> "${battleActor(actor)} is already paralyzed!"
-            "psn", "tox" -> "${battleActor(actor)} is already poisoned!"
             "slp" -> "${battleActor(actor)} is already asleep!"
             "substitute", "shedtail" -> "${battleActor(actor)} already has a Substitute!"
             "dynamax" -> "${battleActor(actor)} shook its head. It seems like it can't use this move..."
@@ -4724,6 +4764,7 @@ class BattleSession {
         if (!isSilent(fields)) {
             val pokemon = battleActor(actor)
             val announcement = when {
+                normalizeBattleTextKey(item) == "whiteherb" -> "$pokemon returned its stats to normal using its White Herb!"
                 consumed -> "($pokemon ate its $item!)"
                 source != null -> "$pokemon lost its $item!"
                 normalizeBattleTextKey(item) == "airballoon" -> "$pokemon's Air Balloon popped!"
@@ -5021,6 +5062,9 @@ class BattleSession {
         return if (fullNickname == fullSpecies) fullSpecies else "$fullNickname ($fullSpecies)"
     }
 
+    private fun showdownBattleTextSpeciesName(species: String): String =
+        if (species.startsWith("Minior-", true)) "Minior-Red" else species
+
     private fun activeSpeciesName(actor: String): String {
         val slot = targetSlot(actor)
         val species = if (isPlayerSide(actor)) playerActiveCombatants[slot]?.species else opponentActiveCombatants[slot]?.species
@@ -5071,8 +5115,13 @@ class BattleSession {
             2 -> " sharply"
             else -> " drastically"
         }
-        val verb = if (delta > 0) "rose$strength" else "fell${if (strength.isBlank()) "" else if (kotlin.math.abs(delta) == 2) " harshly" else " severely"}"
-        return "$pokemon's $statName $verb."
+        val verb = when {
+            delta > 0 -> "rose$strength"
+            stage == 1 -> "fell"
+            stage == 2 -> "harshly fell"
+            else -> "severely fell"
+        }
+        return "$pokemon's $statName $verb!"
     }
 
     private fun statLabel(stat: String) = when (stat.lowercase()) {
@@ -5271,7 +5320,14 @@ class BattleSession {
         if (effect == "roost" && "FLYING" !in currentTypesForSlot(slot)) return
         updateSingleBattleEffect(actor, effect, turnScoped)
         if (effect == "roost") removeFlyingType(actor)
-        if (!isSilent(fields)) appendLog("${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))}.")
+        if (!isSilent(fields)) {
+            val announcement = if (effect == "protect") {
+                "${battleActor(actor)} protected itself!"
+            } else {
+                "${battleActor(actor)}: ${battleEffectName(fields.getOrNull(3))}."
+            }
+            appendLog(announcement)
+        }
     }
 
     private fun updateSingleBattleEffect(actor: String, effect: String, turnScoped: Boolean) {
@@ -5669,7 +5725,7 @@ class BattleSession {
         }
         removeBattleRoomFallback(battleRoomRenameFallback)
         battleRoomRenameFallback = "${nextUser.formatted} renamed from $previousRaw."
-        battleRoomRenameFallback?.let(::appendLog)
+        battleRoomRenameFallback?.let { appendLog(it, includeInBattleFeed = false) }
     }
 
     private fun parseBattleRoomUser(raw: String): BattleRoomUser {
@@ -5704,7 +5760,7 @@ class BattleSession {
         if (nextEntry == presence.fallbackEntry) return
         removeBattleRoomFallback(presence.fallbackEntry)
         presence.fallbackEntry = nextEntry.takeIf(String::isNotBlank)
-        presence.fallbackEntry?.let(::appendLog)
+        presence.fallbackEntry?.let { appendLog(it, includeInBattleFeed = false) }
     }
 
     private fun buildBattleRoomPresenceEntry(presence: BattleRoomPresenceLog): String = buildList {
@@ -5728,6 +5784,7 @@ class BattleSession {
         if (logIndex >= 0) {
             battleLog.removeAt(logIndex)
             val messageId = battleLogMessageIds.removeAt(logIndex)
+            battleFeedExcludedMessageIds.remove(messageId)
             switchOutVisualsByMessageId.remove(messageId)
             battleSceneSnapshotsByMessageId.remove(messageId)
         }
@@ -5769,7 +5826,8 @@ class BattleSession {
     private fun appendLog(
         entry: String,
         feedMarkup: String = entry,
-        switchOutVisual: SwitchOutVisual? = null
+        switchOutVisual: SwitchOutVisual? = null,
+        includeInBattleFeed: Boolean = true
     ): Long? {
         if (protocolLogSuppressed) return null
         val message = capitalizeBattleActorAtSentenceStart(entry)
@@ -5777,12 +5835,14 @@ class BattleSession {
         val messageId = newBattleFeedMessageId()
         battleLog += message
         battleLogMessageIds += messageId
+        if (!includeInBattleFeed) battleFeedExcludedMessageIds += messageId
         switchOutVisual?.let { switchOutVisualsByMessageId[messageId] = it }
         battleSceneSnapshotsByMessageId[messageId] = createBattleSceneSnapshot()
         if (feedMarkup != message) protocolBattleFeedMarkupEntries += ShowdownBattleLogEntry(messageId, message, feedMarkup)
         if (battleLog.size > 32) {
             val removed = battleLog.removeAt(0)
             val removedMessageId = battleLogMessageIds.removeAt(0)
+            battleFeedExcludedMessageIds.remove(removedMessageId)
             switchOutVisualsByMessageId.remove(removedMessageId)
             battleSceneSnapshotsByMessageId.remove(removedMessageId)
             if (battleLog.none { it == removed }) {
@@ -5878,11 +5938,11 @@ class BattleSession {
     }
 
     private fun appendMarkup(value: String) {
-        sanitizeMarkup(value)?.let(::appendLog)
+        sanitizeMarkup(value)?.let { appendLog(it, includeInBattleFeed = false) }
     }
 
     private fun appendDirectMessage(value: String) {
-        value.trim().takeIf(String::isNotEmpty)?.let(::appendLog)
+        value.trim().takeIf(String::isNotEmpty)?.let { appendLog(it, includeInBattleFeed = false) }
     }
 
     private fun applyMarkup(key: String?, value: String) {
@@ -5894,12 +5954,13 @@ class BattleSession {
             if (logIndex >= 0) {
                 battleLog.removeAt(logIndex)
                 val oldMessageId = battleLogMessageIds.removeAt(logIndex)
+                battleFeedExcludedMessageIds.remove(oldMessageId)
                 switchOutVisualsByMessageId.remove(oldMessageId)
                 battleSceneSnapshotsByMessageId.remove(oldMessageId)
             }
             activityMessages.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(::removeActivityAt)
         }
-        appendLog(message)
+        appendLog(message, includeInBattleFeed = false)
     }
 
     private fun sanitizeMarkup(value: String): String? {
@@ -6843,9 +6904,10 @@ class BattleSession {
 
     private fun isBattleFeedTurnMarker(value: String) = BATTLE_FEED_TURN_MARKER.matches(value.trim())
 
-    private fun isBattleFeedEntry(value: String): Boolean {
+    private fun isBattleFeedEntry(value: String, messageId: Long? = null): Boolean {
         val normalized = value.trim()
         return normalized.isNotBlank() &&
+            messageId !in battleFeedExcludedMessageIds &&
             !isBattleFeedTurnMarker(normalized) &&
             !BATTLE_FEED_NON_ACTION_ENTRY.matches(normalized)
     }
@@ -6931,7 +6993,7 @@ class BattleSession {
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
         private val BATTLE_FEED_TURN_MARKER = Regex("^(?:Turn\\s+\\d+\\.?|==\\s*Turn\\s+\\d+\\s*==)$", RegexOption.IGNORE_CASE)
         private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
-            "(?i)^(?:.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|Format: .+|Rule: .+|.+ team size: \\d+|Rated battle\\.)$"
+            "(?i)^(?:Battle started\\.|.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|.+ team size: \\d+)$"
         )
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
         private val SHOWDOWN_ACTIVATE_BLOCK_EFFECTS = setOf(

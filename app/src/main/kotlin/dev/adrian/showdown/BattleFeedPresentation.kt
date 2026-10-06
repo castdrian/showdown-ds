@@ -389,7 +389,9 @@ class BattleFeedPresentation(
         current.forEach { entry ->
             if (previousIndex < previous.size && previous[previousIndex].id == entry.id) previousIndex += 1
         }
-        return previousIndex == previous.size
+        if (previousIndex == previous.size) return true
+        return current.first().id > previous.last().id &&
+            current.zipWithNext().all { (first, second) -> first.id < second.id }
     }
 
     private fun sameSequence(first: List<BattleFeedMessage>, second: List<BattleFeedMessage>): Boolean =

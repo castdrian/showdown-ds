@@ -147,7 +147,7 @@ class BattleSessionTest {
     }
 
     @Test
-    fun upperBattleFeedOmitsBattleMetadataWhileActivityKeepsIt() {
+    fun upperBattleFeedIncludesShowdownVisibleMatchMetadata() {
         val session = BattleSession()
 
         session.applyProtocolPacket(
@@ -162,13 +162,53 @@ class BattleSessionTest {
             )
         )
 
-        assertEquals(listOf("Battle started."), session.battleFeedEntries())
+        assertEquals(
+            listOf(
+                "Format:",
+                "[Gen 9] Random Battle",
+                "Species Clause: Limit one of each Pokémon",
+                "Rated battle"
+            ),
+            session.battleFeedEntries()
+        )
         assertTrue(session.battleLog().contains("Battle type: Singles."))
         assertTrue(session.battleLog().contains("Generation 9 battle."))
-        assertTrue(session.battleLog().contains("Format: [Gen 9] Random Battle"))
+        assertTrue(session.battleLog().contains("Format:"))
+        assertTrue(session.battleLog().contains("[Gen 9] Random Battle"))
         assertTrue(session.battleLog().contains("p1 team size: 6"))
-        assertTrue(session.battleLog().contains("Rule: Species Clause: Limit one of each Pokémon"))
-        assertTrue(session.battleLog().contains("Rated battle."))
+        assertTrue(session.battleLog().contains("Species Clause: Limit one of each Pokémon"))
+        assertTrue(session.battleLog().contains("Rated battle"))
+    }
+
+    @Test
+    fun battleFeedUsesShowdownsBattleStartMessageInsteadOfTheInitializationPlaceholder() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|Alice||",
+                "|player|p2|Bob||",
+                "|start"
+            )
+        )
+
+        assertEquals(listOf("Battle started between Alice and Bob!"), session.battleFeedEntries())
+    }
+
+    @Test
+    fun battleRoomMarkupAndPresenceDoNotEnterTheBattleFeed() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|j|☆Alice",
+                "|uhtml|announcement|<div>Season announcement</div>"
+            )
+        )
+
+        assertTrue(session.battleFeedEntries().isEmpty())
+        assertTrue(session.activityMessages().any { it.contains("Alice joined") })
+        assertTrue(session.activityMessages().contains("Season announcement"))
     }
 
     @Test
@@ -178,7 +218,7 @@ class BattleSessionTest {
         session.applyProtocolPacket(listOf("|init|battle", "|tier|HD matchup"))
 
         assertEquals("[Gen 9] Random Battle", session.format)
-        assertTrue(session.battleLog().contains("Format: [Gen 9] Random Battle"))
+        assertTrue(session.battleLog().contains("[Gen 9] Random Battle"))
         assertFalse(session.battleLog().any { it.contains("HD matchup", true) })
     }
 
@@ -279,9 +319,18 @@ class BattleSessionTest {
             )
         )
 
-        assertTrue(session.battleLog().contains("(The opposing Eevee was hurt by its burn!)"))
-        assertTrue(session.battleLog().contains("The opposing Eevee restored HP using its Leftovers!"))
+        assertTrue(session.battleLog().contains("The opposing Eevee was hurt by its burn!"))
+        assertTrue(session.battleLog().contains("The opposing Eevee restored a little HP using its Leftovers!"))
         assertFalse(session.battleLog().contains("The opposing Eevee lost 20% of its health!"))
+    }
+
+    @Test
+    fun singleTurnProtectUsesShowdownBattleLogWording() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|-singleturn|p2a: Salazzle|Protect")
+
+        assertEquals("The opposing Salazzle protected itself!", session.battleLog().last())
     }
 
     @Test
@@ -604,7 +653,7 @@ class BattleSessionTest {
 
         assertFalse(session.battleFeedEntries().contains("Old battle move"))
         assertFalse(session.showdownBattleLog().contains("Old battle status"))
-        assertEquals(listOf("Battle started."), session.battleFeedEntries())
+        assertEquals(emptyList<String>(), session.battleFeedEntries())
     }
 
     @Test
@@ -651,13 +700,13 @@ class BattleSessionTest {
     }
 
     @Test
-    fun nativeBattleStartMessageRemainsVisibleWhenItMatchesTheProtocolPlaceholder() {
+    fun initializationPlaceholderIsNotShownAsNativeBattleStart() {
         val session = BattleSession()
         session.applyProtocolLine("|init|battle")
         session.appendShowdownBattleLog("Battle started.<br />Go! Pikachu!")
         session.markNativeBattleLogSynchronized(session.battleLogGeneration())
 
-        assertEquals(listOf("Battle started.", "Go! Pikachu!"), session.battleFeedEntries())
+        assertEquals(listOf("Go! Pikachu!"), session.battleFeedEntries())
     }
 
     @Test
@@ -2937,8 +2986,8 @@ class BattleSessionTest {
 
         assertEquals("0 fnt", session.opponentHp)
         assertEquals(0f, session.opponentHealthFraction())
-        assertEquals("ADRIAN won the battle.", session.status)
-        assertEquals("ADRIAN won the battle.", session.battleResult())
+        assertEquals("ADRIAN won the battle!", session.status)
+        assertEquals("ADRIAN won the battle!", session.battleResult())
         assertTrue(session.isBattleFinished())
         assertTrue(feedback.any { it.type == BattleSession.FeedbackType.POKEMON_CRY && it.actor == "Incineroar" })
         assertTrue(feedback.any { it.type == BattleSession.FeedbackType.MOVE && it.move == "Flare Blitz" })
@@ -2957,7 +3006,7 @@ class BattleSessionTest {
         session.applyProtocolLine("|win|ADRIAN")
         session.setConnectionStatus("Replay: [Gen 9] Random Battle ADRIAN vs. GLADION")
 
-        assertEquals("ADRIAN won the battle.", session.battleResult())
+        assertEquals("ADRIAN won the battle!", session.battleResult())
         assertEquals("Replay: [Gen 9] Random Battle ADRIAN vs. GLADION", session.status)
     }
 

@@ -76,7 +76,7 @@ class OfficialBattleTranscriptTest {
             )
         )
 
-        val expected = "(Buddy is buffeted by the sandstorm!)"
+        val expected = "Buddy is buffeted by the sandstorm!"
         val feedMessages = session.battleFeedMessages().filter { it.text == expected }
 
         assertEquals(2, session.battleFeedEntries().count { it == expected })
@@ -116,12 +116,13 @@ class OfficialBattleTranscriptTest {
         assertEquals("Mewtwo", session.playerPokemon)
         assertEquals("Magikarp", session.opponentPokemon)
         assertEquals("0 fnt", session.opponentHp)
-        assertEquals("ADRIAN won the battle.", session.status)
+        assertEquals("ADRIAN won the battle!", session.status)
         assertEquals("Pressure", session.playerDetails().ability)
         assertEquals("singles", session.gameType)
         assertTrue(session.battleLog().contains("Battle type: Singles."))
-        assertTrue(session.battleLog().contains("Format: [Gen 7] Custom Game"))
-        assertTrue(session.battleLog().contains("Rule: Species Clause: Limit one of each Pokémon"))
+        assertTrue(session.battleLog().contains("Format:"))
+        assertTrue(session.battleLog().contains("[Gen 7] Custom Game"))
+        assertTrue(session.battleLog().contains("Species Clause: Limit one of each Pokémon"))
         assertFalse(session.decisionAvailable)
         assertTrue(session.battleLog().any { it.contains("Psystrike") })
     }
@@ -724,6 +725,33 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsMiniorShieldsDownAnnouncementsLikeShowdown() {
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|PLAYER||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Minior|Minior-Yellow, L79|224/224",
+                "|-formechange|p1a: Minior|Minior-Meteor||[from] ability: Shields Down"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "Go! Minior (Minior-Red)!",
+                "[Minior's Shields Down]",
+                "Shields Down deactivated!",
+                "(Minior shielded itself.)"
+            ),
+            session.battleLog().takeLast(4)
+        )
+    }
+
+    @Test
     fun formatsOfficialEffectVariantsAndMultiplierAnnouncements() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         val initialLogSize = session.battleLog().size
@@ -796,7 +824,7 @@ class OfficialBattleTranscriptTest {
         assertTrue(session.battleLog().contains("It's extremely effective on the opposing Magikarp!"))
         assertTrue(session.battleLog().contains("It's not very effective on the opposing Magikarp."))
         assertTrue(session.battleLog().contains("A critical hit on the opposing Magikarp!"))
-        assertTrue(session.battleLog().contains("Mewtwo transformed!"))
+        assertTrue(session.battleLog().contains("Mewtwo transformed into Magikarp!"))
         assertFalse(session.battleLog().contains("It's a one-hit KO!"))
     }
 
@@ -1280,8 +1308,8 @@ class OfficialBattleTranscriptTest {
             )
         )
 
-        assertTrue(session.battleLog().contains("Mewtwo's Sp. Atk rose sharply."))
-        assertTrue(session.battleLog().contains("Mewtwo's Attack fell harshly."))
+        assertTrue(session.battleLog().contains("Mewtwo's Sp. Atk rose sharply!"))
+        assertTrue(session.battleLog().contains("Mewtwo's Attack harshly fell!"))
         assertFalse(session.battleLog().any { it.contains("Speed") })
     }
 
@@ -1907,7 +1935,7 @@ class OfficialBattleTranscriptTest {
 
         assertEquals(listOf("Ditto", "Eevee"), session.opponentPartyDetails().map { it.species })
         assertEquals("Eevee", spriteRequest.species)
-        assertTrue(session.battleLog().contains("The opposing Ditto transformed!"))
+        assertTrue(session.battleLog().contains("The opposing Ditto transformed into Dragapult!"))
     }
 
     @Test

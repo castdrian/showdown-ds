@@ -218,7 +218,7 @@ class ShowdownBattleLogRendererParityTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {
             sceneView = BattleSceneView(activity, session, spriteCache)
-            sceneView.setPlaybackSpeed(2f)
+            sceneView.setPlaybackSpeed(1f)
             sceneView.layout(0, 0, bitmap.width, bitmap.height)
             val requests = BattleSpriteRequests.forScene(
                 session.playerActiveCombatants(),
@@ -317,6 +317,52 @@ class ShowdownBattleLogRendererParityTest {
             instrumentation.runOnMainSync { sceneView.releaseRetainedResources() }
             spriteCache.close()
         }
+    }
+
+    @Test
+    fun lightweightReplayNarrationMatchesTheUpstreamBattleLog() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p1")
+        }
+        val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
+            .open("gen9randombattle-2691989691.json")
+            .bufferedReader()
+            .use { it.readText() }
+        val replay = ShowdownReplayImporter.payload(replayJson)
+        val session = BattleSession().apply {
+            setLocalUsername(replay.players.first())
+            setReplayMode(true)
+        }
+        val packets = BattlePlaybackTiming.chunks(listOf("|init|battle") + replay.log.lines())
+        val lightweightTexts = mutableListOf<String>()
+
+        packets.forEach { packet ->
+            val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
+            session.applyProtocolPacket(packet)
+            lightweightTexts += session.battleFeedMessages()
+                .filter { it.id !in previousMessageIds }
+                .map { it.text }
+        }
+        val entryCount = activity.nativeEntries.size
+        val syncCount = activity.synchronizedGenerations.size
+        val generation = session.battleLogGeneration()
+        activity.renderer.applyProtocol(packets.flatten(), generation)
+        awaitSynchronization(activity, syncCount, generation)
+        val nativeTexts = activity.nativeEntries.drop(entryCount)
+            .filter { it.first == generation }
+            .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
+            .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
+        val firstMismatch = (0 until maxOf(lightweightTexts.size, nativeTexts.size))
+            .firstOrNull { index -> lightweightTexts.getOrNull(index) != nativeTexts.getOrNull(index) }
+
+        assertTrue(
+            "The lightweight replay log diverged from upstream Showdown at $firstMismatch: " +
+                "lightweight=${lightweightTexts.drop(firstMismatch ?: lightweightTexts.size).take(12)} " +
+                "upstream=${nativeTexts.drop(firstMismatch ?: nativeTexts.size).take(12)}",
+            firstMismatch == null
+        )
     }
 
     @Test
@@ -550,6 +596,10 @@ class ShowdownBattleLogRendererParityTest {
             activity.synchronizedGenerations.drop(previousCount).any { it == generation }
         )
     }
+
+    private fun isTurnMarker(value: String): Boolean =
+        Regex("^(?:Turn\\s+\\d+\\.?|==\\s*Turn\\s+\\d+\\s*==)$", RegexOption.IGNORE_CASE)
+            .matches(value.trim())
 
     private fun assertOfficialReplayNarrationMatchesItsVisibleCombatants(
         replayFileName: String,

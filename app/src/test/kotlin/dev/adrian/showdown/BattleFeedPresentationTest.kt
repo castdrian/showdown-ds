@@ -261,6 +261,19 @@ class BattleFeedPresentationTest {
     }
 
     @Test
+    fun queuesMessagesAcrossAWindowAdvanceWithoutOverlap() {
+        val presentation = fastPresentation()
+        val previous = (38L..40L).map { BattleFeedMessage(it, "Old $it") }
+        val current = (70L..72L).map { BattleFeedMessage(it, "New $it") }
+
+        presentation.updateMessages(previous, true, 1_000L)
+        presentation.updateMessages(current, true, 1_100L)
+
+        assertEquals(40L, presentation.frame(1_100L)?.messageId)
+        assertEquals(70L, presentation.frame(2_800L)?.messageId)
+    }
+
+    @Test
     fun shorterFeedWithoutAnOverlapReplacesThePreviousSnapshot() {
         val presentation = fastPresentation()
         val previous = listOf(
@@ -381,15 +394,15 @@ class BattleFeedPresentationTest {
         val presentation = fastPresentation()
 
         presentation.update(
-            listOf("Pikachu used Thunderbolt!", "ADRIAN won the battle."),
+            listOf("Pikachu used Thunderbolt!", "ADRIAN won the battle!"),
             true,
             1_000L,
-            "ADRIAN won the battle."
+            "ADRIAN won the battle!"
         )
 
         assertEquals("Pikachu used Thunderbolt!", presentation.frame(1_100L)?.text)
-        assertEquals("ADRIAN won the battle.", presentation.frame(2_800L)?.text)
-        assertEquals("ADRIAN won the battle.", presentation.frame(30_000L)?.text)
+        assertEquals("ADRIAN won the battle!", presentation.frame(2_800L)?.text)
+        assertEquals("ADRIAN won the battle!", presentation.frame(30_000L)?.text)
         assertEquals(1f, presentation.frame(30_000L)?.alpha)
         assertFalse(presentation.needsAnimation(30_000L))
 
