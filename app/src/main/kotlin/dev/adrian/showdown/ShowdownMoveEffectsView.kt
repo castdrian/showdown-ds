@@ -32,6 +32,7 @@ class ShowdownMoveEffectsView(
     private var playbackPaused = false
     private var playbackSpeed = 1f
     private var battlePerspective = "p1"
+    private var animationsDisabledForTesting = false
     private var released = false
     private var cleanupCompleted = false
     private val releaseFallbackRunnable = Runnable { cleanupOnMainThread() }
@@ -73,6 +74,9 @@ class ShowdownMoveEffectsView(
                 pageLoaded = true
                 runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
                 runJavascript("window.ShowdownNativeEffects.setPerspective('$battlePerspective');")
+                if (animationsDisabledForTesting) {
+                    runJavascript("window.ShowdownNativeEffects.setAnimationsDisabledForTesting(true);")
+                }
                 if (playbackPaused) runJavascript("window.ShowdownNativeEffects.pause();")
                 flushPendingPackets()
             }
@@ -161,6 +165,16 @@ class ShowdownMoveEffectsView(
         val next = ShowdownBattlePerspective.acceptedSide(side) ?: return
         battlePerspective = next
         runJavascript("window.ShowdownNativeEffects.setPerspective('$next');")
+    }
+
+    fun setAnimationsDisabledForTesting(disabled: Boolean) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { setAnimationsDisabledForTesting(disabled) }
+            return
+        }
+        if (released) return
+        animationsDisabledForTesting = disabled
+        if (disabled) runJavascript("window.ShowdownNativeEffects.setAnimationsDisabledForTesting(true);")
     }
 
     fun release() {
@@ -260,6 +274,7 @@ class ShowdownMoveEffectsView(
                         var battle = null;
                         var nativeBattlePerspective = 'p1';
                         var animationSpeed = 1;
+                        var animationsDisabledForTesting = false;
                         var captureNativeBattleLog = true;
                         var nativeSeedAnimationOff = false;
                         var chromeObserver = null;
@@ -795,6 +810,7 @@ class ShowdownMoveEffectsView(
                             applyNativeBattlePerspective();
                             battle.setMute(true);
                             var scene = battle.scene;
+                            if (animationsDisabledForTesting) disableTestAnimations(scene);
                             var updateAcceleration = scene.updateAcceleration;
                             scene.updateAcceleration = function () {
                                 updateAcceleration.call(scene);
@@ -803,6 +819,10 @@ class ShowdownMoveEffectsView(
                             scene.acceleration = animationSpeed;
                             observeChrome();
                             layout();
+                        }
+                        function disableTestAnimations(scene) {
+                            scene.animationOff();
+                            scene.finishAnimations = function () {};
                         }
                         function add(lines, generation, synchronizeBattleLog, effectsBarrierToken) {
                             var queuedLines = lines.filter(function (line) { return line.indexOf('|request|') !== 0; });
@@ -847,6 +867,10 @@ class ShowdownMoveEffectsView(
                             setSpeed: function (speed) {
                                 animationSpeed = Math.max(${BattlePlaybackSpeed.MINIMUM}, Math.min(${BattlePlaybackSpeed.MAXIMUM}, Number(speed) || 1));
                                 if (battle) battle.scene.acceleration = animationSpeed;
+                            },
+                            setAnimationsDisabledForTesting: function (disabled) {
+                                animationsDisabledForTesting = !!disabled;
+                                if (battle && animationsDisabledForTesting) disableTestAnimations(battle.scene);
                             },
                             setPerspective: function (side) {
                                 if (${ShowdownBattlePerspective.javascriptGuard}) return;

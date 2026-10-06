@@ -21,6 +21,8 @@ class ShowdownBattleLogRendererParityTest {
         val name: String
     )
 
+    private val maximumNativeReplayDurationMillis = TimeUnit.SECONDS.toMillis(30)
+
     @get:Rule
     val activityRule = ActivityScenarioRule(ShowdownLogParityHarnessActivity::class.java)
 
@@ -428,7 +430,8 @@ class ShowdownBattleLogRendererParityTest {
         val packets = BattlePlaybackTiming.chunks(listOf("|init|battle") + replay.log.lines())
         val lightweightTexts = mutableListOf<String>()
         val nativeTexts = mutableListOf<String>()
-        packets.forEach { packet ->
+        var nativeReplayStartedAtNanos: Long? = null
+        packets.forEachIndexed { packetIndex, packet ->
             val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
             session.applyProtocolPacket(packet)
             lightweightTexts += session.battleFeedMessages()
@@ -439,11 +442,15 @@ class ShowdownBattleLogRendererParityTest {
             val generation = session.battleLogGeneration()
             activity.renderer.applyProtocol(packet, generation)
             awaitSynchronization(activity, syncCount, generation)
+            if (packetIndex == 0) nativeReplayStartedAtNanos = System.nanoTime()
             nativeTexts += activity.nativeEntries.drop(entryCount)
                 .filter { it.first == generation }
                 .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
                 .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
         }
+        val nativeReplayDurationMillis = TimeUnit.NANOSECONDS.toMillis(
+            System.nanoTime() - checkNotNull(nativeReplayStartedAtNanos)
+        )
         val firstMismatch = (0 until maxOf(lightweightTexts.size, nativeTexts.size))
             .firstOrNull { index -> lightweightTexts.getOrNull(index) != nativeTexts.getOrNull(index) }
 
@@ -452,6 +459,10 @@ class ShowdownBattleLogRendererParityTest {
                 "lightweight=${lightweightTexts.drop(firstMismatch ?: lightweightTexts.size).take(12)} " +
                 "upstream=${nativeTexts.drop(firstMismatch ?: nativeTexts.size).take(12)}",
             firstMismatch == null
+        )
+        assertTrue(
+            "$replayFileName native battle-log parity replay took ${nativeReplayDurationMillis}ms",
+            nativeReplayDurationMillis <= maximumNativeReplayDurationMillis
         )
         if (replayFileName == "gen2ou-2692782179.json") {
             assertEquals(
@@ -685,16 +696,9 @@ class ShowdownBattleLogRendererParityTest {
         previousCount: Int,
         generation: Long
     ) {
-        val deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(2)
-        while (
-            activity.synchronizedGenerations.drop(previousCount).none { it == generation } &&
-            System.currentTimeMillis() < deadline
-        ) {
-            Thread.sleep(25L)
-        }
         assertTrue(
             "The upstream renderer did not finish protocol generation $generation; synchronized ${activity.synchronizedGenerations.drop(previousCount)}",
-            activity.synchronizedGenerations.drop(previousCount).any { it == generation }
+            activity.awaitBattleLogSynchronization(previousCount, generation, TimeUnit.MINUTES.toMillis(2))
         )
     }
 
