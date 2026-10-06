@@ -77,7 +77,7 @@ func validateReadme(readme string) error {
 			source: assets[0],
 		},
 		{
-			upper:  "media/showdown-battle-upper-screen-hd.png",
+			upper:  "media/showdown-battle-party-upper-screen-hd.png",
 			lower:  "media/showdown-battle-party-screen-hd.png",
 			source: assets[1],
 		},
@@ -92,6 +92,9 @@ func validateReadme(readme string) error {
 		}
 	}
 	if err := validateLiveMoveChoiceScreen(repositoryFile(pairs[0].lower)); err != nil {
+		return err
+	}
+	if err := validatePartyRosterScreen(repositoryFile(pairs[1].lower)); err != nil {
 		return err
 	}
 	return validateReadmeImageCacheKeys(readme)
@@ -109,6 +112,22 @@ func validateLiveMoveChoiceScreen(path string) error {
 	pokemonTabGreen := averageGreen(screenshot, image.Rect(684, 116, 698, 156))
 	if fightTabGreen-pokemonTabGreen < 30 {
 		return fmt.Errorf("%s must show the live Fight move-choice screen, not replay controls or another battle tab", path)
+	}
+	return nil
+}
+
+func validatePartyRosterScreen(path string) error {
+	screenshot, err := decodeScreenshot(path)
+	if err != nil {
+		return err
+	}
+	if screenshot.Bounds().Dx() != 1920 || screenshot.Bounds().Dy() != 1080 {
+		return fmt.Errorf("%s must be a 1920x1080 lower-display capture", path)
+	}
+	fightTabGreen := averageGreen(screenshot, image.Rect(388, 116, 402, 156))
+	pokemonTabGreen := averageGreen(screenshot, image.Rect(684, 116, 698, 156))
+	if pokemonTabGreen-fightTabGreen < 30 {
+		return fmt.Errorf("%s must show the party screen with the Pokémon tab selected", path)
 	}
 	return nil
 }
@@ -264,7 +283,7 @@ func validateScreenshot(path string) error {
 
 func spriteTemplates(path string) []spriteTemplate {
 	switch {
-	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"), strings.HasSuffix(path, "showdown-battle-party-both-sides.png"):
+	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"), strings.HasSuffix(path, "showdown-battle-party-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-party-both-sides.png"):
 		return []spriteTemplate{
 			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(480, 520)},
 			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1138, 335)},

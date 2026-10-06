@@ -21,20 +21,23 @@ func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
 		}
 	}
 	for _, pair := range []struct {
+		upperPath  string
 		lowerPath  string
 		sourcePath string
 	}{
 		{
+			upperPath:  "../media/showdown-battle-upper-screen-hd.png",
 			lowerPath:  "../media/showdown-battle-lower-screen-hd.png",
 			sourcePath: "../media/showdown-battle-hd-both-sides.png",
 		},
 		{
+			upperPath:  "../media/showdown-battle-party-upper-screen-hd.png",
 			lowerPath:  "../media/showdown-battle-party-screen-hd.png",
 			sourcePath: "../media/showdown-battle-party-both-sides.png",
 		},
 	} {
 		if err := validateReadmeScreenPair(
-			"../media/showdown-battle-upper-screen-hd.png",
+			pair.upperPath,
 			pair.lowerPath,
 			pair.sourcePath,
 		); err != nil {
@@ -49,6 +52,15 @@ func TestREADMEPrimaryScreenshotShowsLiveMoveChoice(t *testing.T) {
 	}
 	if err := validateLiveMoveChoiceScreen("../media/showdown-battle-party-screen-hd.png"); err == nil {
 		t.Fatal("validateLiveMoveChoiceScreen accepted the party screen as the primary move-choice screenshot")
+	}
+}
+
+func TestREADMEPartyScreenshotShowsPartyTab(t *testing.T) {
+	if err := validatePartyRosterScreen("../media/showdown-battle-party-screen-hd.png"); err != nil {
+		t.Fatalf("validatePartyRosterScreen rejected the party screen: %v", err)
+	}
+	if err := validatePartyRosterScreen("../media/showdown-battle-lower-screen-hd.png"); err == nil {
+		t.Fatal("validatePartyRosterScreen accepted the live Fight screen")
 	}
 }
 

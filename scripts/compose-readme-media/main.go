@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"image/draw"
 	"image/png"
 	"os"
@@ -11,32 +10,28 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 4 {
-		fail(fmt.Errorf("usage: go run scripts/compose-readme-media/main.go upper.png fight.png party.png"))
+	if len(os.Args) != 3 {
+		fail(fmt.Errorf("usage: go run scripts/compose-readme-media/main.go live-battle.png party-view.png"))
 	}
 
-	upper := readImage(os.Args[1])
-	fight := readImage(os.Args[2])
-	party := readImage(os.Args[3])
-	if upper.Bounds().Dx() != 1920 || upper.Bounds().Dy() != 1080 {
-		fail(fmt.Errorf("upper display capture must be 1920x1080"))
+	liveBattle := readImage(os.Args[1])
+	partyView := readImage(os.Args[2])
+	liveUpper, liveLower, err := splitDualScreenCapture(liveBattle)
+	if err != nil {
+		fail(fmt.Errorf("live battle capture: %w", err))
 	}
-	if fight.Bounds().Dx() != 1240 || fight.Bounds().Dy() != 1080 {
-		fail(fmt.Errorf("fight display capture must be 1240x1080"))
+	partyUpper, partyLower, err := splitDualScreenCapture(partyView)
+	if err != nil {
+		fail(fmt.Errorf("party view capture: %w", err))
 	}
-	if party.Bounds().Dx() != 1240 || party.Bounds().Dy() != 1080 {
-		fail(fmt.Errorf("party display capture must be 1240x1080"))
-	}
-
-	fightScreen := centerLowerDisplay(fight)
-	partyScreen := centerLowerDisplay(party)
-	writeImage("media/showdown-battle-upper-screen-hd.png", upper)
-	writeImage("media/showdown-battle-lower-screen-hd.png", fightScreen)
-	writeImage("media/showdown-battle-party-screen-hd.png", partyScreen)
-	writeImage("media/showdown-battle-hd-both-sides.png", combineDisplays(upper, fightScreen))
-	writeImage("media/showdown-battle-party-both-sides.png", combineDisplays(upper, partyScreen))
-	writeImage("media/validation/showdown-battle-player.png", crop(upper, image.Rect(480, 520, 800, 955)))
-	writeImage("media/validation/showdown-battle-opponent.png", crop(upper, image.Rect(1138, 335, 1394, 480)))
+	writeImage("media/showdown-battle-upper-screen-hd.png", liveUpper)
+	writeImage("media/showdown-battle-lower-screen-hd.png", liveLower)
+	writeImage("media/showdown-battle-hd-both-sides.png", liveBattle)
+	writeImage("media/showdown-battle-party-upper-screen-hd.png", partyUpper)
+	writeImage("media/showdown-battle-party-screen-hd.png", partyLower)
+	writeImage("media/showdown-battle-party-both-sides.png", partyView)
+	writeImage("media/validation/showdown-battle-player.png", crop(liveUpper, image.Rect(480, 520, 800, 955)))
+	writeImage("media/validation/showdown-battle-opponent.png", crop(liveUpper, image.Rect(1138, 335, 1394, 480)))
 }
 
 func readImage(path string) image.Image {
@@ -52,18 +47,14 @@ func readImage(path string) image.Image {
 	return decoded
 }
 
-func centerLowerDisplay(source image.Image) image.Image {
-	canvas := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
-	draw.Draw(canvas, canvas.Bounds(), &image.Uniform{C: color.Black}, image.Point{}, draw.Src)
-	draw.Draw(canvas, image.Rect(340, 0, 1580, 1080), source, source.Bounds().Min, draw.Src)
-	return canvas
-}
-
-func combineDisplays(upper image.Image, lower image.Image) image.Image {
-	canvas := image.NewRGBA(image.Rect(0, 0, 1920, 2160))
-	draw.Draw(canvas, image.Rect(0, 0, 1920, 1080), upper, upper.Bounds().Min, draw.Src)
-	draw.Draw(canvas, image.Rect(0, 1080, 1920, 2160), lower, lower.Bounds().Min, draw.Src)
-	return canvas
+func splitDualScreenCapture(source image.Image) (image.Image, image.Image, error) {
+	bounds := source.Bounds()
+	if bounds.Dx() != 1920 || bounds.Dy() != 2160 {
+		return nil, nil, fmt.Errorf("must be a 1920x2160 dual-screen capture, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+	upperBounds := image.Rect(bounds.Min.X, bounds.Min.Y, bounds.Min.X+1920, bounds.Min.Y+1080)
+	lowerBounds := image.Rect(bounds.Min.X, bounds.Min.Y+1080, bounds.Min.X+1920, bounds.Min.Y+2160)
+	return crop(source, upperBounds), crop(source, lowerBounds), nil
 }
 
 func crop(source image.Image, bounds image.Rectangle) image.Image {
