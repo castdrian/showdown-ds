@@ -11,6 +11,46 @@ import (
 	"testing"
 )
 
+func TestFreshBackgroundTemplatesRejectMissingBattlePokemon(t *testing.T) {
+	upperPath := "../media/showdown-battle-upper-screen-hd.png"
+	upper, err := decodeScreenshot(upperPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name           string
+		area           image.Rectangle
+		backgroundFrom image.Point
+	}{
+		{name: "player side", area: image.Rect(500, 470, 780, 980), backgroundFrom: image.Pt(480, 450)},
+		{name: "opponent side", area: image.Rect(1120, 230, 1470, 570), backgroundFrom: image.Pt(900, 180)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			missing := image.NewNRGBA(upper.Bounds())
+			draw.Draw(missing, missing.Bounds(), upper, upper.Bounds().Min, draw.Src)
+			draw.Draw(missing, test.area, image.NewUniform(upper.At(test.backgroundFrom.X, test.backgroundFrom.Y)), image.Point{}, draw.Src)
+			templatePath := filepath.Join(t.TempDir(), "background-only.png")
+			templateImage := image.NewNRGBA(image.Rect(0, 0, test.area.Dx(), test.area.Dy()))
+			draw.Draw(templateImage, templateImage.Bounds(), missing, test.area.Min, draw.Src)
+			templateFile, err := os.Create(templatePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := png.Encode(templateFile, templateImage); err != nil {
+				templateFile.Close()
+				t.Fatal(err)
+			}
+			if err := templateFile.Close(); err != nil {
+				t.Fatal(err)
+			}
+			err = compareSpriteTemplate(missing, spriteTemplate{name: test.name, path: templatePath, origin: test.area.Min})
+			if err == nil || !strings.Contains(err.Error(), "contains no visible sprite evidence") {
+				t.Fatalf("compareSpriteTemplate accepted a background-only %s template: %v", test.name, err)
+			}
+		})
+	}
+}
+
 func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
 	for _, sourcePath := range []string{
 		"../media/showdown-battle-live-both-sides.png",
@@ -209,7 +249,7 @@ func TestREADMEAssetsRejectMissingBattleSprites(t *testing.T) {
 			}
 			modified := image.NewNRGBA(source.Bounds())
 			draw.Draw(modified, modified.Bounds(), source, source.Bounds().Min, draw.Src)
-			spriteArea := image.Rectangle{Min: test.origin, Max: test.origin.Add(image.Pt(480, 550))}
+			spriteArea := image.Rectangle{Min: test.origin, Max: test.origin.Add(image.Pt(480, 700))}
 			if test.copyBackground {
 				backgroundColor := source.At(test.backgroundOrigin.X, test.backgroundOrigin.Y)
 				draw.Draw(modified, spriteArea, image.NewUniform(backgroundColor), image.Point{}, draw.Src)

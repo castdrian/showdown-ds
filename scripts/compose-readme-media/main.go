@@ -50,8 +50,8 @@ func writeReadmeMedia(liveBattle image.Image, partyView image.Image) {
 	writeImage("media/showdown-battle-party-upper-screen-hd.png", partyUpper)
 	writeImage("media/showdown-battle-party-screen-hd.png", partyLower)
 	writeImage("media/showdown-battle-party-live-both-sides.png", partyView)
-	writeImage("media/validation/showdown-battle-player.png", crop(liveUpper, image.Rect(480, 520, 800, 955)))
-	writeImage("media/validation/showdown-battle-opponent.png", crop(liveUpper, image.Rect(1138, 335, 1394, 480)))
+	writeImage("media/validation/showdown-battle-player.png", crop(liveUpper, image.Rect(500, 470, 780, 980)))
+	writeImage("media/validation/showdown-battle-opponent.png", crop(liveUpper, image.Rect(1120, 230, 1470, 570)))
 }
 
 func composeDualScreenPanels(upper image.Image, lower image.Image) (image.Image, error) {

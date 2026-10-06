@@ -340,8 +340,8 @@ func spriteTemplates(path string) []spriteTemplate {
 	switch {
 	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-live-both-sides.png"), strings.HasSuffix(path, "showdown-battle-party-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-party-live-both-sides.png"):
 		return []spriteTemplate{
-			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(480, 520)},
-			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1138, 335)},
+			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(500, 470)},
+			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1120, 230)},
 		}
 	default:
 		return nil
@@ -391,10 +391,7 @@ func compareSpriteTemplate(source image.Image, template spriteTemplate) error {
 	}
 	normalizedDifference := float64(difference) / float64(inspected*3*255)
 	if normalizedDifference > 0.03 {
-		sourceArea := image.Rectangle{Min: template.origin, Max: template.origin.Add(decoded.Bounds().Size())}
-		if focusedVisualScore(source, sourceArea, 120) < 0.1 {
-			return fmt.Errorf("no sprite evidence in refreshed screenshot")
-		}
+		return fmt.Errorf("no sprite evidence on %s", template.name)
 	}
 	return nil
 }
