@@ -422,9 +422,10 @@ class BattleSceneView(
             session.battleResult()
         )
         val battleFeedFrame = battleFeedPresentation.frame(battleFeedTime)
-        val sceneSnapshot = session.battleSceneSnapshotForFeedMessage(battleFeedFrame?.messageId)
+        val sceneContext = battleFeedFrame?.sceneContext
+        val sceneSnapshot = sceneContext?.snapshot
         displayedBattleSceneSnapshot = sceneSnapshot
-        val switchOutVisual = session.switchOutVisualForBattleFeed(battleFeedFrame?.messageId)
+        val switchOutVisual = sceneContext?.switchOutVisual
         displayedSwitchOutVisual = switchOutVisual
         if (requestedSwitchOutVisual != switchOutVisual) {
             requestedSwitchOutVisual = switchOutVisual

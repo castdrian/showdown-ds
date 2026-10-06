@@ -7,12 +7,19 @@ data class BattleFeedFrame(
     val text: String,
     val alpha: Float,
     val visibleText: String,
-    val messageId: Long? = null
+    val messageId: Long? = null,
+    val sceneContext: BattleFeedSceneContext? = null
 )
 
 data class BattleFeedMessage(
     val id: Long,
-    val text: String
+    val text: String,
+    val sceneContext: BattleFeedSceneContext? = null
+)
+
+data class BattleFeedSceneContext(
+    val snapshot: BattleSession.BattleSceneSnapshot?,
+    val switchOutVisual: BattleSession.SwitchOutVisual?
 )
 
 object BattleFeedSceneState {
@@ -211,19 +218,13 @@ class BattleFeedPresentation(
 
     private fun reconcileMessageWording(entries: List<BattleFeedMessage>) {
         currentMessage = currentMessage?.let { current ->
-            entries.firstOrNull { it.id == current.id }
-                ?: entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(current.text, entry.text) }
-                ?: current
+            entries.firstOrNull { it.id == current.id } ?: current
         }
         if (pendingMessages.isEmpty()) return
         val queued = pendingMessages.toList()
         pendingMessages.clear()
         queued.forEach { message ->
-            pendingMessages.addLast(
-                entries.firstOrNull { it.id == message.id }
-                    ?: entries.firstOrNull { entry -> BattleFeedMessageIdentity.matches(message.text, entry.text) }
-                    ?: message
-            )
+            pendingMessages.addLast(entries.firstOrNull { it.id == message.id } ?: message)
         }
     }
 
@@ -253,7 +254,8 @@ class BattleFeedPresentation(
             text = message.text,
             alpha = alpha.coerceIn(0f, 1f),
             visibleText = message.text,
-            messageId = message.id
+            messageId = message.id,
+            sceneContext = message.sceneContext
         )
     }
 

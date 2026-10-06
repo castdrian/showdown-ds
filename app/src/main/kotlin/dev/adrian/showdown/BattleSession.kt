@@ -1038,12 +1038,12 @@ class BattleSession {
         val normalizedLimit = limit.coerceAtLeast(0)
         battleFeedMessagesCache[normalizedLimit]?.let { return it }
         val protocolEntries = battleLog.mapIndexedNotNull { index, text ->
-            if (isBattleFeedEntry(text)) BattleFeedMessage(battleLogMessageIds[index], text) else null
+            if (isBattleFeedEntry(text)) battleFeedMessage(battleLogMessageIds[index], text) else null
         }
         val nativeEntries = if (nativeBattleLogGeneration == battleLogGeneration) {
             showdownBattleLogEntries
                 .filter { isBattleFeedEntry(it.plainText) }
-                .map { BattleFeedMessage(it.id, it.plainText) }
+                .map { entry -> battleFeedMessage(entry.id, entry.plainText) }
         } else {
             emptyList()
         }
@@ -1052,6 +1052,15 @@ class BattleSession {
         battleFeedMessagesCache[normalizedLimit] = entries
         return entries
     }
+
+    private fun battleFeedMessage(messageId: Long, text: String) = BattleFeedMessage(
+        messageId,
+        text,
+        BattleFeedSceneContext(
+            battleSceneSnapshotsByMessageId[messageId],
+            switchOutVisualsByMessageId[messageId]
+        )
+    )
 
     fun latestBattleFeedEntry() = battleFeedEntries(1).lastOrNull()
 

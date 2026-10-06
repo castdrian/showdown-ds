@@ -1,5 +1,7 @@
 package dev.adrian.showdown
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -189,6 +191,82 @@ class ShowdownBattleLogRendererParityTest {
         assertEquals(partyMember.species, scene.opponentPartyDetails.single().species)
         assertEquals(partyMember.species, sprite?.species)
         assertEquals(BattleSpriteSide.OPPONENT, sprite?.side)
+    }
+
+    @Test
+    fun battleSceneViewUsesQueuedSceneAfterItsProtocolSnapshotLeavesTheLogWindow() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity { activity = it }
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+            setLiveBattleActive(true)
+            applyProtocolPacket(
+                listOf(
+                    "|init|battle",
+                    "|player|p1|RED||",
+                    "|player|p2|BLUE||",
+                    "|switch|p1a: Rotom|Rotom, L50|100/100",
+                    "|switch|p2a: Goodra|Goodra, L50|100/100"
+                )
+            )
+        }
+        val spriteCache = ShowdownSpriteCache(activity)
+        val bitmap = Bitmap.createBitmap(960, 540, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        lateinit var sceneView: BattleSceneView
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            sceneView = BattleSceneView(activity, session, spriteCache)
+            sceneView.setPlaybackSpeed(2f)
+            sceneView.layout(0, 0, bitmap.width, bitmap.height)
+            val requests = BattleSpriteRequests.forScene(
+                session.playerActiveCombatants(),
+                session.opponentActiveCombatants(),
+                true,
+                session.spriteStyle,
+                session.playerPokemon,
+                session.opponentPokemon
+            )
+            val tracker = checkNotNull(privateField(sceneView, "spriteRequestTracker"))
+            setPrivateField(tracker, "previousRequests", requests)
+            setPrivateField(sceneView, "resourcesRequested", true)
+            setPrivateField(sceneView, "requestedPlayerSprite", requests.playerLead)
+            setPrivateField(sceneView, "requestedOpponentSprite", requests.opponentLead)
+        }
+        fun drawScene() = instrumentation.runOnMainSync { sceneView.draw(canvas) }
+
+        try {
+            drawScene()
+            session.applyProtocolLine("|move|p1a: Rotom|Thunderbolt|p2a: Goodra")
+            val queuedMove = session.battleFeedMessages().last { it.text == "Rotom used Thunderbolt!" }
+            drawScene()
+
+            repeat(40) { index ->
+                session.applyProtocolLine("|-message|Battle event $index.")
+                drawScene()
+            }
+
+            assertEquals(null, session.battleSceneSnapshotForFeedMessage(queuedMove.id))
+            session.applyProtocolLine("|switch|p2a: Dragapult|Dragapult, L50|100/100")
+            drawScene()
+            Thread.sleep(1_300L)
+            drawScene()
+
+            assertEquals("Dragapult", session.opponentActiveCombatants().single().name)
+            instrumentation.runOnMainSync {
+                val displayedScene = privateField(sceneView, "displayedBattleSceneSnapshot") as BattleSession.BattleSceneSnapshot
+                val opponentSpriteRequest = privateField(sceneView, "requestedOpponentSprite") as BattleSpriteRequest
+                assertEquals(queuedMove.text, privateField(sceneView, "cachedBattleFeedVisibleText"))
+                assertEquals("Rotom", displayedScene.playerCombatants.single().name)
+                assertEquals("Goodra", displayedScene.opponentCombatants.single().name)
+                assertEquals("Goodra", opponentSpriteRequest.species)
+            }
+        } finally {
+            instrumentation.runOnMainSync { sceneView.releaseRetainedResources() }
+            spriteCache.close()
+            bitmap.recycle()
+        }
     }
 
     @Test
@@ -668,4 +746,14 @@ class ShowdownBattleLogRendererParityTest {
     private fun mentionsPokemon(text: String, name: String): Boolean =
         Regex("(?<![\\p{L}\\p{N}])${Regex.escape(name)}(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
             .containsMatchIn(text)
+
+    private fun privateField(target: Any, name: String): Any? = target.javaClass.getDeclaredField(name)
+        .apply { isAccessible = true }
+        .get(target)
+
+    private fun setPrivateField(target: Any, name: String, value: Any?) {
+        target.javaClass.getDeclaredField(name)
+            .apply { isAccessible = true }
+            .set(target, value)
+    }
 }

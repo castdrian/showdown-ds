@@ -31,6 +31,70 @@ class ShowdownReplayPlaybackParityTest {
     )
 
     @Test
+    fun queuedBattleFeedMessagesRetainTheirSceneSnapshotsAfterLogHistoryRollsOver() {
+        val session = rotomVsGoodraReplay()
+        val presentation = replayPresentation(session)
+
+        session.applyProtocolLine("|move|p1a: Rotom|Thunderbolt|p2a: Goodra")
+        val queuedMove = session.battleFeedMessages().last { it.text == "Rotom used Thunderbolt!" }
+        presentation.updateMessages(session.battleFeedMessages(), true, 100L)
+
+        repeat(40) { index ->
+            session.applyProtocolLine("|-message|Battle event $index.")
+            presentation.updateMessages(session.battleFeedMessages(), true, 200L + index * 20L)
+        }
+
+        assertTrue(session.battleFeedMessages().none { it.id == queuedMove.id })
+        assertTrue(session.battleSceneSnapshotForFeedMessage(queuedMove.id) == null)
+        val queuedFrame = checkNotNull(presentation.frame(2_500L))
+        assertEquals(queuedMove.id, queuedFrame.messageId)
+        assertEquals("Rotom used Thunderbolt!", queuedFrame.visibleText)
+        val queuedScene = checkNotNull(queuedFrame.sceneContext?.snapshot)
+        assertEquals("Rotom", queuedScene.playerCombatants.single().name)
+        assertEquals("Rotom", queuedScene.playerCombatants.single().species)
+        assertEquals("Goodra", queuedScene.opponentCombatants.single().name)
+        assertEquals("Goodra", queuedScene.opponentCombatants.single().species)
+        val spriteRequests = BattleSpriteRequests.forScene(
+            queuedScene.playerCombatants,
+            queuedScene.opponentCombatants,
+            true,
+            session.spriteStyle,
+            session.playerPokemon,
+            session.opponentPokemon
+        )
+        assertEquals("Rotom", spriteRequests.playerLead?.species)
+        assertEquals("Goodra", spriteRequests.opponentLead?.species)
+    }
+
+    @Test
+    fun repeatedMoveLinesDoNotReplaceQueuedScenesWithNewerMatchingText() {
+        val session = rotomVsGoodraReplay()
+        val presentation = replayPresentation(session)
+        val moveLine = "Rotom used Thunderbolt!"
+
+        session.applyProtocolLine("|move|p1a: Rotom|Thunderbolt|p2a: Goodra")
+        val firstMove = session.battleFeedMessages().last { it.text == moveLine }
+        presentation.updateMessages(session.battleFeedMessages(), true, 100L)
+        assertEquals(firstMove.id, presentation.frame(2_500L)?.messageId)
+
+        repeat(40) { index ->
+            session.applyProtocolLine("|-message|Battle event $index.")
+            presentation.updateMessages(session.battleFeedMessages(), true, 2_600L + index * 20L)
+        }
+
+        session.applyProtocolLine("|switch|p2a: Dragapult|Dragapult, L50|100/100")
+        presentation.updateMessages(session.battleFeedMessages(), true, 3_400L)
+        session.applyProtocolLine("|move|p1a: Rotom|Thunderbolt|p2a: Dragapult")
+        val secondMove = session.battleFeedMessages().last { it.text == moveLine }
+        presentation.updateMessages(session.battleFeedMessages(), true, 3_500L)
+
+        val visibleFrame = checkNotNull(presentation.frame(3_600L))
+        assertEquals(firstMove.id, visibleFrame.messageId)
+        assertEquals("Goodra", visibleFrame.sceneContext?.snapshot?.opponentCombatants?.single()?.name)
+        assertTrue(firstMove.id != secondMove.id)
+    }
+
+    @Test
     fun everyPokemonNamedByOfficialReplayFeedMatchesAVisibleSprite() {
         listOf(
             "gen1ou-2692779867.json",
@@ -110,8 +174,9 @@ class ShowdownReplayPlaybackParityTest {
 
                         while (frameTimeMillis <= deadlineMillis) {
                             presentation.frame(frameTimeMillis)?.let { frame ->
-                                val sceneSnapshot = session.battleSceneSnapshotForFeedMessage(frame.messageId)
-                                val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
+                                val sceneContext = sceneContextForFrame(frame)
+                                val sceneSnapshot = sceneContext.snapshot
+                                val switchOutVisual = sceneContext.switchOutVisual
                                 val playerCombatants = BattleFeedSceneState.combatantsForMessage(
                                     sceneSnapshot?.playerCombatants ?: session.playerActiveCombatants(),
                                     true,
@@ -400,16 +465,16 @@ class ShowdownReplayPlaybackParityTest {
                         frame.visibleText.contains(it, ignoreCase = true)
                     }
                     if (mentionedOpponent != null) {
-                        val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
+                        val sceneContext = sceneContextForFrame(frame)
                         val visiblePlayerCombatants = BattleFeedSceneState.combatantsForMessage(
-                            session.playerActiveCombatants(),
+                            sceneContext.snapshot?.playerCombatants ?: session.playerActiveCombatants(),
                             true,
-                            switchOutVisual
+                            sceneContext.switchOutVisual
                         )
                         val visibleOpponents = BattleFeedSceneState.combatantsForMessage(
-                            session.opponentActiveCombatants(),
+                            sceneContext.snapshot?.opponentCombatants ?: session.opponentActiveCombatants(),
                             false,
-                            switchOutVisual
+                            sceneContext.switchOutVisual
                         )
                         val visibleOpponent = visibleOpponents.firstOrNull {
                             it.name.equals(mentionedOpponent, true)
@@ -487,8 +552,9 @@ class ShowdownReplayPlaybackParityTest {
             listOf(firstDamageMessage.id, damageMessage.id),
             session.battleFeedMessages().map { it.id }
         )
-        val switchOutVisual = session.switchOutVisualForBattleFeed(frame.messageId)
-        val sceneSnapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(frame.messageId))
+        val sceneContext = sceneContextForFrame(frame)
+        val switchOutVisual = sceneContext.switchOutVisual
+        val sceneSnapshot = checkNotNull(sceneContext.snapshot)
         val visiblePlayerCombatants = BattleFeedSceneState.combatantsForMessage(
             sceneSnapshot.playerCombatants,
             true,
@@ -551,18 +617,19 @@ class ShowdownReplayPlaybackParityTest {
         val frame = checkNotNull(presentation.frame(0L))
         assertEquals("The opposing Salazzle restored a little HP using its Leftovers!", frame.visibleText)
 
-        val sceneSnapshot = session.battleSceneSnapshotForFeedMessage(frame.messageId)
+        val sceneContext = sceneContextForFrame(frame)
+        val sceneSnapshot = sceneContext.snapshot
         assertTrue("native Leftovers narration must retain its protocol scene snapshot", sceneSnapshot != null)
         val scene = checkNotNull(sceneSnapshot)
         val visiblePlayerCombatants = BattleFeedSceneState.combatantsForMessage(
             scene.playerCombatants,
             true,
-            session.switchOutVisualForBattleFeed(frame.messageId)
+            sceneContext.switchOutVisual
         )
         val visibleOpponents = BattleFeedSceneState.combatantsForMessage(
             scene.opponentCombatants,
             false,
-            session.switchOutVisualForBattleFeed(frame.messageId)
+            sceneContext.switchOutVisual
         )
         val sprites = BattleSpriteRequests.forScene(
             playerCombatants = visiblePlayerCombatants,
@@ -611,11 +678,12 @@ class ShowdownReplayPlaybackParityTest {
         val frame = checkNotNull(presentation.frame(0L))
         assertEquals("The opposing Salazzle must do an encore!", frame.visibleText)
 
-        val scene = checkNotNull(session.battleSceneSnapshotForFeedMessage(frame.messageId))
+        val sceneContext = sceneContextForFrame(frame)
+        val scene = checkNotNull(sceneContext.snapshot)
         val visibleOpponents = BattleFeedSceneState.combatantsForMessage(
             scene.opponentCombatants,
             false,
-            session.switchOutVisualForBattleFeed(frame.messageId)
+            sceneContext.switchOutVisual
         )
         val sprites = BattleSpriteRequests.forScene(
             playerCombatants = scene.playerCombatants,
@@ -971,18 +1039,19 @@ class ShowdownReplayPlaybackParityTest {
                 if (frame != null) {
                     val expectedMove = frame.messageId?.let(expectedMoves::get)
                     if (expectedMove != null) {
+                        val sceneContext = sceneContextForFrame(frame)
                         val context = "$replayId at ${expectedMove.identity.line}"
                         observedPacketMoveMessages += expectedMove.messageId
                         assertEquals(context, expectedMove.identity.actorName.lowercase(), messageActor(frame.visibleText).lowercase())
                         val playerCombatants = BattleFeedSceneState.combatantsForMessage(
-                            session.playerActiveCombatants(),
+                            sceneContext.snapshot?.playerCombatants ?: session.playerActiveCombatants(),
                             true,
-                            session.switchOutVisualForBattleFeed(frame.messageId)
+                            sceneContext.switchOutVisual
                         )
                         val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
-                            session.opponentActiveCombatants(),
+                            sceneContext.snapshot?.opponentCombatants ?: session.opponentActiveCombatants(),
                             false,
-                            session.switchOutVisualForBattleFeed(frame.messageId)
+                            sceneContext.switchOutVisual
                         )
                         val visibleCombatants = if (expectedMove.playerSide) playerCombatants else opponentCombatants
                         val visibleActor = visibleCombatants.singleOrNull { it.slot == expectedMove.identity.actorSlot }
@@ -1205,8 +1274,28 @@ class ShowdownReplayPlaybackParityTest {
         }
         .toSet()
 
+    private fun sceneContextForFrame(frame: BattleFeedFrame) = checkNotNull(frame.sceneContext)
+
     private fun mentionsPokemon(message: String, name: String): Boolean =
         Regex("(?<![\\p{L}\\p{N}])${Regex.escape(name)}(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
             .containsMatchIn(message)
+
+    private fun rotomVsGoodraReplay() = BattleSession().apply {
+        setLocalUsername("RED")
+        setReplayMode(true)
+        applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|switch|p1a: Rotom|Rotom, L50|100/100",
+                "|switch|p2a: Goodra|Goodra, L50|100/100"
+            )
+        )
+    }
+
+    private fun replayPresentation(session: BattleSession) = BattleFeedPresentation().apply {
+        updateMessages(session.battleFeedMessages(), true, 0L)
+    }
 
 }
