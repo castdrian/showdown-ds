@@ -4,8 +4,8 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
 <table>
   <tr>
-    <td width="50%"><img src="media/showdown-battle-hd-both-sides.png?v=fdc0808eeec33d19" alt="Live Gen 9 Cinderace versus Dragapult battle above the matching move-choice screen"></td>
-    <td width="50%"><img src="media/showdown-battle-party-both-sides.png?v=542974851028b3b6" alt="The same Cinderace versus Dragapult battle above its matching party screen"></td>
+    <td width="50%"><img src="media/showdown-battle-live-both-sides.png?v=57b520723109bbda" alt="Gen 9 Cinderace versus Dragapult battle above the matching move-choice screen"></td>
+    <td width="50%"><img src="media/showdown-battle-party-live-both-sides.png?v=283c39d4404b100a" alt="The same Cinderace versus Dragapult battle above its matching party screen"></td>
   </tr>
 </table>
 

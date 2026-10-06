@@ -55,8 +55,8 @@ func main() {
 
 func validateReadme(readme string) error {
 	assets := []string{
-		"media/showdown-battle-hd-both-sides.png",
-		"media/showdown-battle-party-both-sides.png",
+		"media/showdown-battle-live-both-sides.png",
+		"media/showdown-battle-party-live-both-sides.png",
 	}
 	for _, asset := range assets {
 		if !strings.Contains(readme, asset) {
@@ -111,10 +111,22 @@ func validateLiveMoveChoiceScreen(path string) error {
 	if screenshot.Bounds().Dx() != 1920 || screenshot.Bounds().Dy() != 1080 {
 		return fmt.Errorf("%s must be a 1920x1080 lower-display capture", path)
 	}
-	fightTabGreen := averageGreen(screenshot, image.Rect(388, 116, 402, 156))
-	pokemonTabGreen := averageGreen(screenshot, image.Rect(684, 116, 698, 156))
-	if fightTabGreen-pokemonTabGreen < 30 {
-		return fmt.Errorf("%s must show the live Fight move-choice screen, not replay controls or another battle tab", path)
+	fightTabGreen := averageGreen(screenshot, image.Rect(388, 108, 658, 166))
+	pokemonTabGreen := averageGreen(screenshot, image.Rect(670, 108, 956, 166))
+	if fightTabGreen-pokemonTabGreen < 24 {
+		return fmt.Errorf("%s must show the Fight tab selected", path)
+	}
+	moveCards := []image.Rectangle{
+		image.Rect(820, 188, 1544, 330),
+		image.Rect(820, 356, 1544, 500),
+		image.Rect(820, 526, 1544, 670),
+		image.Rect(820, 696, 1544, 840),
+	}
+	for index, area := range moveCards {
+		ratio := moveCardPixelRatio(screenshot, area)
+		if ratio < 0.52 {
+			return fmt.Errorf("%s must show all four live move-choice cards; move card %d shows only %.0f%% of its expected area", path, index+1, ratio*100)
+		}
 	}
 	return nil
 }
@@ -147,6 +159,24 @@ func averageGreen(source image.Image, area image.Rectangle) float64 {
 		}
 	}
 	return float64(total) / float64(area.Dx()*area.Dy())
+}
+
+func moveCardPixelRatio(source image.Image, area image.Rectangle) float64 {
+	area = area.Intersect(source.Bounds())
+	if area.Empty() {
+		return 0
+	}
+	visible := 0
+	background := rgba(color.NRGBA{R: 4, G: 15, B: 24, A: 255})
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			pixel := rgba(source.At(x, y))
+			if colorDistance(pixel, background) >= 45 {
+				visible++
+			}
+		}
+	}
+	return float64(visible) / float64(area.Dx()*area.Dy())
 }
 
 func validateReadmeScreenPair(upperPath string, lowerPath string, sourcePath string) error {
@@ -286,7 +316,7 @@ func validateScreenshot(path string) error {
 	}
 
 	expectedHeight := 1080
-	if strings.HasSuffix(path, "showdown-battle-hd-both-sides.png") || strings.HasSuffix(path, "showdown-battle-party-both-sides.png") {
+	if strings.HasSuffix(path, "showdown-battle-live-both-sides.png") || strings.HasSuffix(path, "showdown-battle-party-live-both-sides.png") {
 		expectedHeight = 2160
 	}
 	if decoded.Bounds().Dx() != 1920 || decoded.Bounds().Dy() != expectedHeight {
@@ -308,7 +338,7 @@ func validateScreenshot(path string) error {
 
 func spriteTemplates(path string) []spriteTemplate {
 	switch {
-	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-hd-both-sides.png"), strings.HasSuffix(path, "showdown-battle-party-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-party-both-sides.png"):
+	case strings.HasSuffix(path, "showdown-battle-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-live-both-sides.png"), strings.HasSuffix(path, "showdown-battle-party-upper-screen-hd.png"), strings.HasSuffix(path, "showdown-battle-party-live-both-sides.png"):
 		return []spriteTemplate{
 			{name: "player side", path: repositoryFile("media/validation/showdown-battle-player.png"), origin: image.Pt(480, 520)},
 			{name: "opponent side", path: repositoryFile("media/validation/showdown-battle-opponent.png"), origin: image.Pt(1138, 335)},

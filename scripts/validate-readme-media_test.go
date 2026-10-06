@@ -13,8 +13,8 @@ import (
 
 func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
 	for _, sourcePath := range []string{
-		"../media/showdown-battle-hd-both-sides.png",
-		"../media/showdown-battle-party-both-sides.png",
+		"../media/showdown-battle-live-both-sides.png",
+		"../media/showdown-battle-party-live-both-sides.png",
 	} {
 		if err := validateScreenshot(sourcePath); err != nil {
 			t.Fatalf("validateScreenshot(%q): %v", sourcePath, err)
@@ -28,12 +28,12 @@ func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
 		{
 			upperPath:  "../media/showdown-battle-upper-screen-hd.png",
 			lowerPath:  "../media/showdown-battle-lower-screen-hd.png",
-			sourcePath: "../media/showdown-battle-hd-both-sides.png",
+			sourcePath: "../media/showdown-battle-live-both-sides.png",
 		},
 		{
 			upperPath:  "../media/showdown-battle-party-upper-screen-hd.png",
 			lowerPath:  "../media/showdown-battle-party-screen-hd.png",
-			sourcePath: "../media/showdown-battle-party-both-sides.png",
+			sourcePath: "../media/showdown-battle-party-live-both-sides.png",
 		},
 	} {
 		if err := validateReadmeScreenPair(
@@ -45,15 +45,15 @@ func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
 		}
 	}
 	if err := validateSharedUpperBattle(
-		"../media/showdown-battle-hd-both-sides.png",
-		"../media/showdown-battle-party-both-sides.png",
+		"../media/showdown-battle-live-both-sides.png",
+		"../media/showdown-battle-party-live-both-sides.png",
 	); err != nil {
 		t.Fatalf("validateSharedUpperBattle rejected the matching upper battle: %v", err)
 	}
 }
 
 func TestREADMEAssetsRejectDifferentUpperBattles(t *testing.T) {
-	sourcePath := "../media/showdown-battle-hd-both-sides.png"
+	sourcePath := "../media/showdown-battle-live-both-sides.png"
 	file, err := os.Open(sourcePath)
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +92,37 @@ func TestREADMEPrimaryScreenshotShowsLiveMoveChoice(t *testing.T) {
 	}
 }
 
+func TestREADMEPrimaryScreenshotRejectsMissingMoveCards(t *testing.T) {
+	sourcePath := "../media/showdown-battle-lower-screen-hd.png"
+	file, err := os.Open(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, _, err := image.Decode(file)
+	file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	modified := image.NewNRGBA(source.Bounds())
+	draw.Draw(modified, modified.Bounds(), source, source.Bounds().Min, draw.Src)
+	draw.Draw(modified, image.Rect(820, 188, 1544, 840), image.NewUniform(color.NRGBA{R: 4, G: 15, B: 24, A: 255}), image.Point{}, draw.Src)
+	path := filepath.Join(t.TempDir(), "missing-move-cards.png")
+	output, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(output, modified); err != nil {
+		output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateLiveMoveChoiceScreen(path); err == nil || !strings.Contains(err.Error(), "move card") {
+		t.Fatalf("validateLiveMoveChoiceScreen accepted a battle screen without move cards: %v", err)
+	}
+}
+
 func TestREADMEPartyScreenshotShowsPartyTab(t *testing.T) {
 	if err := validatePartyRosterScreen("../media/showdown-battle-party-screen-hd.png"); err != nil {
 		t.Fatalf("validatePartyRosterScreen rejected the party screen: %v", err)
@@ -104,7 +135,7 @@ func TestREADMEPartyScreenshotShowsPartyTab(t *testing.T) {
 func TestREADMEAssetsRejectMismatchedBattleScreens(t *testing.T) {
 	upperPath := "../media/showdown-battle-upper-screen-hd.png"
 	lowerPath := "../media/showdown-battle-lower-screen-hd.png"
-	sourcePath := "../media/showdown-battle-hd-both-sides.png"
+	sourcePath := "../media/showdown-battle-live-both-sides.png"
 	lowerFile, err := os.Open(lowerPath)
 	if err != nil {
 		t.Fatal(err)
