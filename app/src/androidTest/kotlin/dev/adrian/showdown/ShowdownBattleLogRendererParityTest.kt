@@ -87,6 +87,69 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun upstreamMoveWithRepeatedNicknamesKeepsItsProtocolSlotSpriteIdentity() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p1")
+        }
+        val transcript = listOf(
+            "|init|battle",
+            "|player|p1|RED||",
+            "|player|p2|BLUE||",
+            "|gametype|doubles",
+            "|switch|p1a: Snorlax|Snorlax, L50|100/100",
+            "|switch|p1b: Togekiss|Togekiss, L50|100/100",
+            "|switch|p2a: Sparky|Pikachu, L50|100/100",
+            "|switch|p2b: Sparky|Raichu, L50|100/100",
+            "|move|p2b: Sparky|Thunderbolt|p1a: Snorlax",
+            "|-damage|p1a: Snorlax|80/100"
+        )
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        val failures = mutableListOf<String>()
+
+        BattlePlaybackTiming.chunks(transcript).forEach { packet ->
+            val entryCount = activity.nativeEntries.size
+            val syncCount = activity.synchronizedGenerations.size
+            val combatantsBefore = battleCombatants(session)
+            session.applyProtocolPacket(packet)
+            val generation = session.battleLogGeneration()
+            activity.renderer.applyProtocol(packet, generation)
+            awaitSynchronization(activity, syncCount, generation)
+            val nativeEntries = activity.nativeEntries.drop(entryCount)
+                .filter { it.first == generation }
+                .map { it.second }
+            if (nativeEntries.isNotEmpty()) {
+                session.appendShowdownBattleLog(nativeEntries.joinToString("<br />"), generation)
+            }
+            session.markNativeBattleLogSynchronized(generation)
+            val nativeTexts = nativeEntries.flatMap(ShowdownBattleLogFilter::visibleEntries)
+            assertNativeMoveNarrationMatchesProtocolActors(session, packet, nativeTexts, failures)
+            val eventCombatants = (combatantsBefore + battleCombatants(session))
+                .distinctBy { Triple(it.slot, it.name, it.species) }
+            assertNativePokemonNarrationUsesMatchingScene(session, nativeTexts, eventCombatants, failures)
+        }
+
+        val moveMessage = session.battleFeedMessages().last { it.text.contains("Thunderbolt!") }
+        val snapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(moveMessage.id))
+        val actor = snapshot.opponentCombatants.single { it.slot == "p2b" }
+        val actorSprite = BattleSpriteRequests.active(
+            snapshot.opponentCombatants,
+            BattleSpriteSide.OPPONENT,
+            session.spriteStyle
+        ).single { it.slot == "p2b" }.request
+
+        assertEquals("Sparky", actor.name)
+        assertEquals("Raichu", actor.species)
+        assertEquals("Raichu", actorSprite.species)
+        assertEquals(BattleSpriteSide.OPPONENT, actorSprite.side)
+        assertTrue("Repeated-nickname upstream narration mismatched the scene: $failures", failures.isEmpty())
+    }
+
+    @Test
     fun upstreamNarrationKeepsP3PartnerOnPlayerOneSideInMultiBattle() {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {
