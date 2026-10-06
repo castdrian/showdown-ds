@@ -21,7 +21,9 @@ permissions:
 jobs:
   automerge:
     if: >-
-      (github.event_name == 'pull_request_target' && github.event.pull_request.user.login == 'dependabot[bot]') ||
+      (github.event_name == 'pull_request_target' &&
+      (github.event.pull_request.user.login == 'dependabot[bot]' ||
+      github.event.pull_request.user.login == 'app/dependabot')) ||
       (github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request')
@@ -34,13 +36,15 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo
+            const dependabotLogins = new Set(['dependabot[bot]', 'app/dependabot'])
+            const isDependabot = (candidate) => dependabotLogins.has(candidate?.user?.login)
             let pullRequest = context.payload.pull_request
             const workflowRun = context.payload.workflow_run
 
             if (!pullRequest && workflowRun?.pull_requests?.length) {
               pullRequest = workflowRun.pull_requests.find((candidate) => (
                 candidate.base?.ref === 'main' &&
-                candidate.user?.login === 'dependabot[bot]'
+                isDependabot(candidate)
               ))
             }
 
@@ -52,7 +56,7 @@ jobs:
               })
               pullRequest = pullRequests.find((candidate) => (
                 candidate.base.ref === 'main' &&
-                candidate.user?.login === 'dependabot[bot]'
+                isDependabot(candidate)
               ))
             }
 
@@ -68,7 +72,7 @@ jobs:
               currentPullRequest.state !== 'open' ||
               currentPullRequest.draft ||
               currentPullRequest.base.ref !== 'main' ||
-              currentPullRequest.user?.login !== 'dependabot[bot]'
+              !isDependabot(currentPullRequest)
             ) return
 
             const { data: workflow } = await github.rest.actions.getWorkflow({
