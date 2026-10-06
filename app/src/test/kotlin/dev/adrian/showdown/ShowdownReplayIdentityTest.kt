@@ -218,6 +218,47 @@ class ShowdownReplayIdentityTest {
     }
 
     @Test
+    fun opponentUpdatePokeKeepsNicknameAndRequestsTheRevealedFormSprite() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+            setPokemonTypeResolver { species ->
+                when (species) {
+                    "Zoroark" -> listOf("DARK")
+                    "Zoroark-Hisui" -> listOf("NORMAL", "GHOST")
+                    else -> null
+                }
+            }
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|poke|p2|Zoroark|",
+                "|switch|p2a: Zoro|Zoroark, L50|100/100"
+            )
+        )
+
+        session.applyProtocolLine("|updatepoke|p2a: Zoro|Zoroark-Hisui, L50")
+
+        val opponent = session.opponentActiveCombatants().single()
+        val spriteRequest = BattleSpriteRequests.active(
+            session.opponentActiveCombatants(),
+            BattleSpriteSide.OPPONENT,
+            BattleSession.SpriteStyle.MODERN_3D
+        ).single().request
+        session.applyProtocolLine("|move|p2a: Zoro|Hyper Voice|p1a: Snorlax")
+
+        assertEquals("Zoro", opponent.name)
+        assertEquals("Zoroark-Hisui", opponent.species)
+        assertEquals(listOf("NORMAL", "GHOST"), opponent.types)
+        assertEquals("Zoroark-Hisui", spriteRequest.species)
+        assertEquals(BattleSpriteSide.OPPONENT, spriteRequest.side)
+        assertEquals("Zoroark-Hisui", session.opponentPartyDetails().single().species)
+        assertTrue(session.battleLog().contains("The opposing Zoro used Hyper Voice!"))
+    }
+
+    @Test
     fun updatesPlayerReplayRosterNameWhenSwitchRevealsNickname() {
         val session = BattleSession().apply {
             setLocalUsername("DoerreKong")
