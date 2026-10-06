@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/png"
 	"os"
@@ -10,12 +11,31 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 {
-		fail(fmt.Errorf("usage: go run scripts/compose-readme-media/main.go live-battle.png party-view.png"))
+	var liveBattle image.Image
+	var partyView image.Image
+	if len(os.Args) == 4 {
+		upper := readImage(os.Args[1])
+		moveChoiceLower := readImage(os.Args[2])
+		partyLower := readImage(os.Args[3])
+		var err error
+		liveBattle, err = composeDualScreenPanels(upper, moveChoiceLower)
+		if err != nil {
+			fail(fmt.Errorf("live battle panels: %w", err))
+		}
+		partyView, err = composeDualScreenPanels(upper, partyLower)
+		if err != nil {
+			fail(fmt.Errorf("party view panels: %w", err))
+		}
+	} else if len(os.Args) == 3 {
+		liveBattle = readImage(os.Args[1])
+		partyView = readImage(os.Args[2])
+	} else {
+		fail(fmt.Errorf("usage: go run scripts/compose-readme-media/main.go upper.png move-choice-lower.png party-lower.png"))
 	}
+	writeReadmeMedia(liveBattle, partyView)
+}
 
-	liveBattle := readImage(os.Args[1])
-	partyView := readImage(os.Args[2])
+func writeReadmeMedia(liveBattle image.Image, partyView image.Image) {
 	liveUpper, liveLower, err := splitDualScreenCapture(liveBattle)
 	if err != nil {
 		fail(fmt.Errorf("live battle capture: %w", err))
@@ -32,6 +52,27 @@ func main() {
 	writeImage("media/showdown-battle-party-both-sides.png", partyView)
 	writeImage("media/validation/showdown-battle-player.png", crop(liveUpper, image.Rect(480, 520, 800, 955)))
 	writeImage("media/validation/showdown-battle-opponent.png", crop(liveUpper, image.Rect(1138, 335, 1394, 480)))
+}
+
+func composeDualScreenPanels(upper image.Image, lower image.Image) (image.Image, error) {
+	if upper.Bounds().Dx() != 1920 || upper.Bounds().Dy() != 1080 {
+		return nil, fmt.Errorf("upper display must be 1920x1080, got %dx%d", upper.Bounds().Dx(), upper.Bounds().Dy())
+	}
+	if lower.Bounds().Dx() != 1240 || lower.Bounds().Dy() != 1080 {
+		return nil, fmt.Errorf("lower display must be a 1240x1080 lower display, got %dx%d", lower.Bounds().Dx(), lower.Bounds().Dy())
+	}
+	composite := image.NewRGBA(image.Rect(0, 0, 1920, 2160))
+	draw.Draw(composite, composite.Bounds(), image.NewUniform(color.RGBA{A: 255}), image.Point{}, draw.Src)
+	draw.Draw(composite, image.Rect(0, 0, 1920, 1080), upper, upper.Bounds().Min, draw.Src)
+	lowerOrigin := image.Pt((1920-lower.Bounds().Dx())/2, 1080)
+	draw.Draw(
+		composite,
+		image.Rectangle{Min: lowerOrigin, Max: lowerOrigin.Add(lower.Bounds().Size())},
+		lower,
+		lower.Bounds().Min,
+		draw.Src,
+	)
+	return composite, nil
 }
 
 func readImage(path string) image.Image {

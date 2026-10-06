@@ -97,6 +97,9 @@ func validateReadme(readme string) error {
 	if err := validatePartyRosterScreen(repositoryFile(pairs[1].lower)); err != nil {
 		return err
 	}
+	if err := validateSharedUpperBattle(repositoryFile(assets[0]), repositoryFile(assets[1])); err != nil {
+		return err
+	}
 	return validateReadmeImageCacheKeys(readme)
 }
 
@@ -167,6 +170,28 @@ func validateReadmeScreenPair(upperPath string, lowerPath string, sourcePath str
 	}
 	if !matchesImageRegion(source, lower, image.Rect(0, 1080, 1920, 2160)) {
 		return fmt.Errorf("%s is not the corresponding lower screen from %s", lowerPath, sourcePath)
+	}
+	return nil
+}
+
+func validateSharedUpperBattle(firstPath string, secondPath string) error {
+	first, err := decodeScreenshot(firstPath)
+	if err != nil {
+		return err
+	}
+	second, err := decodeScreenshot(secondPath)
+	if err != nil {
+		return err
+	}
+	if first.Bounds().Dx() != 1920 || first.Bounds().Dy() != 2160 || second.Bounds().Dx() != 1920 || second.Bounds().Dy() != 2160 {
+		return fmt.Errorf("README battle screenshots must be 1920x2160 dual-screen captures")
+	}
+	for y := 0; y < 1080; y++ {
+		for x := 0; x < 1920; x++ {
+			if rgba(first.At(x, y)) != rgba(second.At(x, y)) {
+				return fmt.Errorf("README screenshot pairs must share the same upper battle screen")
+			}
+		}
 	}
 	return nil
 }

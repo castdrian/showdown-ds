@@ -37,3 +37,37 @@ func TestSplitDualScreenCaptureRejectsSeparateDisplayImages(t *testing.T) {
 		t.Fatalf("splitDualScreenCapture accepted a single-display image: %v", err)
 	}
 }
+
+func TestComposeDualScreenPanelsPlacesSmallPanelBelowLargePanel(t *testing.T) {
+	upper := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	lower := image.NewRGBA(image.Rect(0, 0, 1240, 1080))
+	draw.Draw(upper, upper.Bounds(), image.NewUniform(color.RGBA{R: 255, A: 255}), image.Point{}, draw.Src)
+	draw.Draw(lower, lower.Bounds(), image.NewUniform(color.RGBA{B: 255, A: 255}), image.Point{}, draw.Src)
+
+	composite, err := composeDualScreenPanels(upper, lower)
+	if err != nil {
+		t.Fatalf("composeDualScreenPanels returned error: %v", err)
+	}
+	if composite.Bounds().Dx() != 1920 || composite.Bounds().Dy() != 2160 {
+		t.Fatalf("composite has bounds %v", composite.Bounds())
+	}
+	if composite.At(960, 540) != (color.RGBA{R: 255, A: 255}) {
+		t.Fatalf("large display is not on top: %v", composite.At(960, 540))
+	}
+	if composite.At(20, 1080+540) != (color.RGBA{A: 255}) {
+		t.Fatalf("small display is not centered with black side margins: %v", composite.At(20, 1080+540))
+	}
+	if composite.At(960, 1080+540) != (color.RGBA{B: 255, A: 255}) {
+		t.Fatalf("small display is not below the large display: %v", composite.At(960, 1080+540))
+	}
+}
+
+func TestComposeDualScreenPanelsRejectsInvalidPhysicalPanelSizes(t *testing.T) {
+	_, err := composeDualScreenPanels(
+		image.NewRGBA(image.Rect(0, 0, 1920, 1080)),
+		image.NewRGBA(image.Rect(0, 0, 1920, 1080)),
+	)
+	if err == nil || !strings.Contains(err.Error(), "1240x1080 lower display") {
+		t.Fatalf("composeDualScreenPanels accepted an invalid lower panel: %v", err)
+	}
+}
