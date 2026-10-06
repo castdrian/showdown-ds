@@ -1321,12 +1321,17 @@ class OfficialBattleTranscriptTest {
             listOf(
                 "|gen|1",
                 "|-unboost|p2a: Chansey|spa|1",
+                "|-unboost|p2a: Chansey|spd|1",
+                "|-unboost|p2a: Chansey|spa|1",
                 "|-unboost|p2a: Chansey|spd|1"
             )
         )
 
         assertEquals(
-            listOf("The opposing Chansey's Special fell!"),
+            listOf(
+                "The opposing Chansey's Special fell!",
+                "The opposing Chansey's Special fell!"
+            ),
             session.battleLog().filter { it.contains("Special", true) }
         )
     }

@@ -5140,21 +5140,14 @@ class BattleSession {
 
     private fun hasEarlierGenOneSpecialChange(fields: List<String>): Boolean {
         if (battleGeneration != 1) return false
-        val stat = fields.getOrNull(3) ?: return false
-        val matchingStat = when (stat) {
-            "spa" -> "spd"
-            "spd" -> "spa"
-            else -> return false
-        }
-        val actor = fields.getOrNull(2)
-        val amount = fields.getOrNull(4)
-        return activeProtocolPacket.take(activeProtocolLineIndex).any { line ->
-            val previousFields = line.split('|')
-            previousFields.getOrNull(1) == fields.getOrNull(1) &&
-                previousFields.getOrNull(2) == actor &&
-                previousFields.getOrNull(3) == matchingStat &&
-                previousFields.getOrNull(4) == amount
-        }
+        if (fields.getOrNull(3) != "spd") return false
+        val previousFields = activeProtocolPacket.getOrNull(activeProtocolLineIndex - 1)
+            ?.split('|')
+            ?: return false
+        return previousFields.getOrNull(1) == fields.getOrNull(1) &&
+            previousFields.getOrNull(2) == fields.getOrNull(2) &&
+            previousFields.getOrNull(3) == "spa" &&
+            previousFields.getOrNull(4) == fields.getOrNull(4)
     }
 
     private fun statLabel(stat: String) = when (stat.lowercase()) {
