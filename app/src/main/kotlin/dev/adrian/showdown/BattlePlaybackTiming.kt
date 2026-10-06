@@ -33,7 +33,7 @@ object BattlePlaybackTiming {
             } -> END_OF_BATTLE_PAUSE_MILLIS
             lines.any { it.startsWith("|faint|") } -> FAINT_PAUSE_MILLIS
             lines.any { it.startsWith("|move|") } -> MOVE_PAUSE_MILLIS
-            lines.any { it.startsWith("|-anim|") } -> MOVE_PAUSE_MILLIS
+            lines.any { it.startsWith("|-anim|") } -> ANIMATION_CONTINUATION_PAUSE_MILLIS
             lines.any { it.startsWith("|switch|") || it.startsWith("|drag|") || it.startsWith("|replace|") } -> SWITCH_PAUSE_MILLIS
             lines.any { it.startsWith("|turn|") } -> TURN_PAUSE_MILLIS
             else -> 0L
@@ -52,8 +52,9 @@ object BattlePlaybackTiming {
     private fun readableMessageCount(lines: List<String>): Long = lines.count { line ->
         val action = line.split('|').getOrNull(1).orEmpty()
         val directMessage = !line.startsWith('|') || line.startsWith("||")
+        val readableAction = (action.startsWith("-") && action != "-anim") || action in READABLE_ACTIONS
         line.isNotBlank() &&
-            (directMessage || !line.contains("|[silent]") && (action.startsWith("-") || action in READABLE_ACTIONS))
+            (directMessage || !line.contains("|[silent]") && readableAction)
     }.toLong()
 
     private fun isActionBoundary(line: String) =
@@ -74,6 +75,7 @@ object BattlePlaybackTiming {
             line.startsWith("|-formechange|") ||
             line.startsWith("|-transform|") ||
             line.startsWith("|-burst|") ||
+            line.startsWith("|-anim|") ||
             line.startsWith("|-mega|") ||
             line.startsWith("|-candynamax|") ||
             line.startsWith("|-primal|") ||
@@ -94,6 +96,7 @@ object BattlePlaybackTiming {
     }
 
     private const val MOVE_PAUSE_MILLIS = EVENT_PAUSE_MILLIS
+    private const val ANIMATION_CONTINUATION_PAUSE_MILLIS = BattleSceneTiming.lightweightMoveDurationNanos / 1_000_000L
     private const val FAINT_PAUSE_MILLIS = 3_200L
     private const val SWITCH_PAUSE_MILLIS = 2_800L
     private const val TURN_PAUSE_MILLIS = 2_000L

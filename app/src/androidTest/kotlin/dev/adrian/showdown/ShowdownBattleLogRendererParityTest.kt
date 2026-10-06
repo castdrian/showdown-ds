@@ -270,6 +270,56 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun explicitAnimationEventsRestartTheSameMoveForEachHit() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity { activity = it }
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            applyProtocolPacket(
+                listOf(
+                    "|player|p1|RED||",
+                    "|player|p2|BLUE||",
+                    "|switch|p1a: Cinderace|Cinderace, L80|100/100",
+                    "|switch|p2a: Dragapult|Dragapult, L80|100/100"
+                )
+            )
+        }
+        val spriteCache = ShowdownSpriteCache(activity)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        lateinit var sceneView: BattleSceneView
+        instrumentation.runOnMainSync {
+            sceneView = BattleSceneView(activity, session, spriteCache)
+            sceneView.applyLightweightBattleProtocol(
+                listOf("|move|p1a: Cinderace|Triple Axel|p2a: Dragapult")
+            )
+        }
+
+        try {
+            val firstHitStartedAt = privateField(sceneView, "lightweightMoveStartedAtNanos") as Long
+            Thread.sleep(20L)
+            instrumentation.runOnMainSync {
+                sceneView.applyLightweightBattleProtocol(
+                    listOf("|-anim|p1a: Cinderace|Triple Axel|p2a: Dragapult")
+                )
+            }
+            val secondHitStartedAt = privateField(sceneView, "lightweightMoveStartedAtNanos") as Long
+            Thread.sleep(20L)
+            instrumentation.runOnMainSync {
+                sceneView.applyLightweightBattleProtocol(
+                    listOf("|-anim|p1a: Cinderace|Triple Axel|p2a: Dragapult")
+                )
+            }
+            val thirdHitStartedAt = privateField(sceneView, "lightweightMoveStartedAtNanos") as Long
+
+            assertTrue(secondHitStartedAt > firstHitStartedAt)
+            assertTrue(thirdHitStartedAt > secondHitStartedAt)
+        } finally {
+            instrumentation.runOnMainSync { sceneView.releaseRetainedResources() }
+            spriteCache.close()
+        }
+    }
+
+    @Test
     fun upstreamNarrationKeepsP3PartnerOnPlayerOneSideInMultiBattle() {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {

@@ -280,26 +280,16 @@ class BattleSceneView(
                     val animation = ShowdownBattleMovePresentation.protocolAnimation(fields) ?: return@forEachIndexed
                     val localActor = session.isLocalBattleSide(animation.actor)
                     val actorSlot = protocolSlot(animation.actor)
-                    val continuesCurrentMove =
-                        lightweightMoveStartedAtNanos > 0L &&
-                            lightweightMoveName.equals(animation.moveName, true) &&
-                            lightweightMoveActorPlayer == localActor &&
-                            lightweightMoveActorSlot == actorSlot
-                    if (!continuesCurrentMove) {
-                        lightweightMoveStartedAtNanos = if (animation.shouldAnimate) nowNanos else 0L
-                        lightweightMoveActorPlayer = localActor
-                        lightweightMoveActorSlot = actorSlot
-                        lightweightMoveTargetPlayer = animation.target?.let(session::isLocalBattleSide)
-                        lightweightMoveTargetSlot = protocolSlot(animation.target)
-                        lightweightImpactAtNanos = 0L
-                        lightweightImpactTargets = emptyList()
-                        lightweightImpactSoundPending = false
-                        lightweightImpactSoundCue = null
-                        lightweightLateImpactSoundCue = null
-                    } else if (animation.target != null) {
-                        lightweightMoveTargetPlayer = session.isLocalBattleSide(animation.target)
-                        lightweightMoveTargetSlot = protocolSlot(animation.target)
-                    }
+                    lightweightMoveStartedAtNanos = if (animation.shouldAnimate) nowNanos else 0L
+                    lightweightMoveActorPlayer = localActor
+                    lightweightMoveActorSlot = actorSlot
+                    lightweightMoveTargetPlayer = animation.target?.let(session::isLocalBattleSide)
+                    lightweightMoveTargetSlot = protocolSlot(animation.target)
+                    lightweightImpactAtNanos = 0L
+                    lightweightImpactTargets = emptyList()
+                    lightweightImpactSoundPending = false
+                    lightweightImpactSoundCue = null
+                    lightweightLateImpactSoundCue = null
                     lightweightMoveAnimationEnabled = animation.shouldAnimate
                     lightweightMoveName = animation.moveName
                     lightweightMoveType = session.moveTypeFor(animation.moveName)?.uppercase() ?: inferMoveType(animation.moveName)

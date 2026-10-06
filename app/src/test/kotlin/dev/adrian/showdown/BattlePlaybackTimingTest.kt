@@ -196,6 +196,33 @@ class BattlePlaybackTimingTest {
     }
 
     @Test
+    fun isolatesEachExplicitAnimationAndKeepsItsHitWithThatAnimation() {
+        val lines = listOf(
+            "|move|p1a: Cinderace|Triple Axel|p2a: Dragapult",
+            "|-damage|p2a: Dragapult|80/100",
+            "|-anim|p1a: Cinderace|Triple Axel|p2a: Dragapult",
+            "|-damage|p2a: Dragapult|60/100",
+            "|-anim|p1a: Cinderace|Triple Axel|p2a: Dragapult",
+            "|-damage|p2a: Dragapult|40/100",
+            "|-hitcount|p2a: Dragapult|3"
+        )
+        val chunks = BattlePlaybackTiming.chunks(lines)
+
+        assertEquals(
+            listOf(
+                lines.take(2),
+                lines.slice(2..3),
+                lines.slice(4..6)
+            ),
+            chunks
+        )
+        assertEquals(
+            BattleFeedPresentation.DEFAULT_MESSAGE_CYCLE_MILLIS,
+            BattlePlaybackTiming.pauseAfter(chunks[1])
+        )
+    }
+
+    @Test
     fun givesFaintsLongerReadingTimeThanOrdinaryMoves() {
         assertEquals(2_600L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee")))
         assertEquals(4_800L, BattlePlaybackTiming.pauseAfter(listOf("|move|p1a: Pikachu|Tackle|p2a: Eevee", "|faint|p2a: Eevee")))
@@ -227,7 +254,7 @@ class BattlePlaybackTimingTest {
     @Test
     fun givesStandaloneAnimationPacketsHumanReadableTiming() {
         assertEquals(
-            2_600L,
+            BattleSceneTiming.lightweightMoveDurationNanos / 1_000_000L,
             BattlePlaybackTiming.pauseAfter(listOf("|-anim|p1a: Pikachu|Thunderbolt|p2a: Eevee"))
         )
     }
