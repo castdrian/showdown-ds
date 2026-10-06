@@ -3206,7 +3206,6 @@ class BattleSession {
         if (isSilent(fields)) return
         transitions.forEach { transition ->
             val message = healthChangeMessage(fields, transition, kind) ?: return@forEach
-            protocolAbilityAnnouncement(fields)?.let(::appendLog)
             appendLog(message)
         }
     }
@@ -3253,11 +3252,21 @@ class BattleSession {
             effectId == "hail" || effectId == "snowscape" -> "$actor is buffeted by the hail!"
             effectId == "confusion" -> "It hurt itself in its confusion!"
             effectId == "leechseed" -> "$actor's health is sapped by Leech Seed!"
-            source?.startsWith("ability:", true) == true -> "$actor was hurt!"
+            source?.startsWith("ability:", true) == true -> when (effectId) {
+                "aftermath", "ironbarbs", "roughskin" -> "$actor was hurt!"
+                "liquidooze" -> "$actor sucked up the liquid ooze!"
+                else -> "($actor was hurt!)"
+            }
             effectId == "recoil" -> "$actor was damaged by the recoil!"
             source?.startsWith("item:", true) == true && effectId == "lifeorb" -> "$actor lost some of its HP!"
-            source?.startsWith("item:", true) == true && effectId == "rockyhelmet" -> "$actor was hurt by the Rocky Helmet!"
-            source?.startsWith("item:", true) == true && effect.isNotBlank() -> "($actor was hurt by its $effect!)"
+            source?.startsWith("item:", true) == true && effect.isNotBlank() -> {
+                val sourceActor = protocolSourceActor(fields)?.let(::battleActor)
+                if (sourceActor != null) {
+                    "$actor was hurt by $sourceActor's $effect!"
+                } else {
+                    "$actor was hurt by its $effect!"
+                }
+            }
             fields.any { it.equals("[partiallytrapped]", true) } && effect.isNotBlank() -> "$actor is hurt by $effect!"
             percent != null -> "($actor lost $percent% of its health!)"
             else -> "($actor was hurt!)"
@@ -3268,9 +3277,15 @@ class BattleSession {
         val effect = battleEffectName(source).trim()
         val effectId = effect.lowercase().filter(Char::isLetterOrDigit)
         if (source?.startsWith("ability:", true) == true) {
-            if (effectId != "hospitality") return "$actor had its HP restored."
-            val abilityHolder = protocolSourceActor(fields) ?: return "$actor had its HP restored."
-            return "$actor drank down all the matcha that ${battleActor(abilityHolder)} made!"
+            if (effectId == "hospitality") {
+                val abilityHolder = protocolSourceActor(fields) ?: return "$actor had its HP restored."
+                return "$actor drank down all the matcha that ${battleActor(abilityHolder)} made!"
+            }
+            return if (effect.isNotBlank()) {
+                "$actor restored HP using its $effect!"
+            } else {
+                "$actor had its HP restored."
+            }
         }
         val wisher = protocolWisher(fields)
         return when {
@@ -4848,10 +4863,7 @@ class BattleSession {
         } else {
             fieldEffects.removeAll { it.equals(effect, true) }
         }
-        if (!isSilent(fields)) {
-            protocolAbilityAnnouncement(fields, sourceIndex = 3)?.let(::appendLog)
-            appendLog(fieldEffectAnnouncement(effect, enabled))
-        }
+        if (!isSilent(fields)) appendLog(fieldEffectAnnouncement(effect, enabled))
     }
 
     private fun weatherStartAnnouncement(value: String) =

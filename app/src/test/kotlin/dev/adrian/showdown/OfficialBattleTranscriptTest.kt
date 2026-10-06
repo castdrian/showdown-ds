@@ -620,19 +620,20 @@ class OfficialBattleTranscriptTest {
                 "|switch|p1a: Tapu Koko|Tapu Koko, L50|100/100",
                 "|switch|p2a: Vampire|Gliscor, L50|80/100 tox",
                 "|-heal|p2a: Vampire|100/100 tox|[from] ability: Poison Heal",
+                "|-ability|p1a: Tapu Koko|Electric Surge",
                 "|-fieldstart|move: Electric Terrain|[from] ability: Electric Surge|[of] p1a: Tapu Koko"
             )
         )
 
         assertEquals(
             listOf(
-                "[The opposing Vampire's Poison Heal]",
-                "The opposing Vampire had its HP restored.",
+                "The opposing Vampire restored HP using its Poison Heal!",
                 "[Tapu Koko's Electric Surge]",
                 "An electric current ran across the battlefield!"
             ),
-            session.battleLog().takeLast(4)
+            session.battleLog().takeLast(3)
         )
+        assertFalse(session.battleLog().contains("[The opposing Vampire's Poison Heal]"))
     }
 
     @Test
@@ -724,12 +725,12 @@ class OfficialBattleTranscriptTest {
 
         assertEquals(
             listOf(
-                "[Garchomp's Rough Skin]",
                 "The opposing Vampire was hurt!",
-                "Garchomp was hurt by the Rocky Helmet!"
+                "Garchomp was hurt by the opposing Vampire's Rocky Helmet!"
             ),
-            session.battleLog().takeLast(3)
+            session.battleLog().takeLast(2)
         )
+        assertFalse(session.battleLog().contains("[Garchomp's Rough Skin]"))
     }
 
     @Test

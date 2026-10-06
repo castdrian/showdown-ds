@@ -535,7 +535,7 @@ class ShowdownReplayPlaybackParityTest {
             listOf("|-damage|p2a: Perrserker|88/269|[from] ability: Gulp Missile|[of] p1a: Cramorant")
         )
         presentation.updateMessages(session.battleFeedMessages(), true, 200L)
-        val damageMessage = session.battleFeedMessages().last { it.text == "The opposing Perrserker was hurt!" }
+        val damageMessage = session.battleFeedMessages().last { it.text == "(The opposing Perrserker was hurt!)" }
         session.applyProtocolPacket(listOf("|switch|p2a: Lugia|Lugia, L73|275/275"))
         presentation.updateMessages(session.battleFeedMessages(), true, 300L)
         session.appendShowdownBattleLog(
