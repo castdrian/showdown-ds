@@ -1314,6 +1314,51 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun combinesFirstGenerationSpecialStatChangesLikeTheShowdownBattleLog() {
+        val session = BattleSession()
+
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|1",
+                "|-unboost|p2a: Chansey|spa|1",
+                "|-unboost|p2a: Chansey|spd|1"
+            )
+        )
+
+        assertEquals(
+            listOf("The opposing Chansey's Special fell!"),
+            session.battleLog().filter { it.contains("Special", true) }
+        )
+    }
+
+    @Test
+    fun formatsFirstGenerationReflectLikeTheShowdownBattleLog() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|1",
+                "|-start|p2a: Chansey|Reflect"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("The opposing Chansey gained armor!"))
+    }
+
+    @Test
+    fun formatsFirstGenerationRecoilLikeTheShowdownBattleLog() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|1",
+                "|switch|p1a: Porygon Pete|Porygon|100/100",
+                "|-damage|p1a: Porygon Pete|58/100|[from] Recoil"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("Porygon Pete was damaged by the recoil!"))
+    }
+
+    @Test
     fun formatsStatusAnnouncementsLikeTheShowdownBattleLog() {
         val session = BattleSession()
 

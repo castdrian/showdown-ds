@@ -321,13 +321,22 @@ class ShowdownBattleLogRendererParityTest {
 
     @Test
     fun lightweightReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen9randombattle-2691989691.json")
+    }
+
+    @Test
+    fun legacyReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen1ou-2692779867.json")
+    }
+
+    private fun assertReplayNarrationMatchesUpstream(replayFileName: String) {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {
             activity = it
             it.renderer.setPerspective("p1")
         }
         val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
-            .open("gen9randombattle-2691989691.json")
+            .open(replayFileName)
             .bufferedReader()
             .use { it.readText() }
         val replay = ShowdownReplayImporter.payload(replayJson)
@@ -337,23 +346,23 @@ class ShowdownBattleLogRendererParityTest {
         }
         val packets = BattlePlaybackTiming.chunks(listOf("|init|battle") + replay.log.lines())
         val lightweightTexts = mutableListOf<String>()
-
+        val nativeTexts = mutableListOf<String>()
         packets.forEach { packet ->
             val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
             session.applyProtocolPacket(packet)
             lightweightTexts += session.battleFeedMessages()
                 .filter { it.id !in previousMessageIds }
                 .map { it.text }
+            val entryCount = activity.nativeEntries.size
+            val syncCount = activity.synchronizedGenerations.size
+            val generation = session.battleLogGeneration()
+            activity.renderer.applyProtocol(packet, generation)
+            awaitSynchronization(activity, syncCount, generation)
+            nativeTexts += activity.nativeEntries.drop(entryCount)
+                .filter { it.first == generation }
+                .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
+                .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
         }
-        val entryCount = activity.nativeEntries.size
-        val syncCount = activity.synchronizedGenerations.size
-        val generation = session.battleLogGeneration()
-        activity.renderer.applyProtocol(packets.flatten(), generation)
-        awaitSynchronization(activity, syncCount, generation)
-        val nativeTexts = activity.nativeEntries.drop(entryCount)
-            .filter { it.first == generation }
-            .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
-            .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
         val firstMismatch = (0 until maxOf(lightweightTexts.size, nativeTexts.size))
             .firstOrNull { index -> lightweightTexts.getOrNull(index) != nativeTexts.getOrNull(index) }
 

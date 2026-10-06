@@ -568,6 +568,8 @@ class BattleSession {
     private val protocolListeners = mutableListOf<ProtocolListener>()
     private val battleEventListeners = mutableListOf<BattleEventListener>()
     private var protocolEventCollector: MutableList<String>? = null
+    private var activeProtocolPacket = emptyList<String>()
+    private var activeProtocolLineIndex = -1
     private var protocolLogSuppressed = false
     private val protocolHistory = mutableListOf<String>()
     private val showdownBattleLogEntries = mutableListOf<ShowdownBattleLogEntry>()
@@ -1970,20 +1972,22 @@ class BattleSession {
         protocolHistory += packet
         val events = mutableListOf<String>()
         protocolEventCollector = events
+        activeProtocolPacket = packet
         try {
-            packet.forEach { line ->
+            packet.forEachIndexed { lineIndex, line ->
+                activeProtocolLineIndex = lineIndex
                 protocolLogSuppressed = false
                 if (!line.startsWith('|')) {
                     battleRoomPresenceLog = null
                     battleRoomRenameFallback = null
                     appendDirectMessage(line)
-                    return@forEach
+                    return@forEachIndexed
                 }
                 val fields = line.split('|')
-                if (fields.size < 2) return@forEach
+                if (fields.size < 2) return@forEachIndexed
                 if (line == "|") {
                     battleFeedVisible = false
-                    return@forEach
+                    return@forEachIndexed
                 }
                 protocolLogSuppressed = fields[1].isNotEmpty() && isSilent(fields)
                 when (fields[1]) {
@@ -2256,6 +2260,8 @@ class BattleSession {
             }
         } finally {
             protocolEventCollector = null
+            activeProtocolPacket = emptyList()
+            activeProtocolLineIndex = -1
             protocolLogSuppressed = false
         }
         protocolListeners.toList().forEach { it.onProtocol(packet) }
@@ -3240,6 +3246,7 @@ class BattleSession {
             effectId == "sandstorm" -> "$actor is buffeted by the sandstorm!"
             effectId == "hail" || effectId == "snowscape" -> "$actor is buffeted by the hail!"
             effectId == "confusion" -> "It hurt itself in its confusion!"
+            effectId == "recoil" && battleGeneration == 1 -> "$actor was damaged by the recoil!"
             source?.startsWith("item:", true) == true && effectId == "lifeorb" -> "$actor lost some of its HP!"
             source?.startsWith("item:", true) == true && effect.isNotBlank() -> "($actor was hurt by its $effect!)"
             fields.any { it.equals("[partiallytrapped]", true) } && effect.isNotBlank() -> "$actor is hurt by $effect!"
@@ -3827,6 +3834,11 @@ class BattleSession {
     private fun startEffectAnnouncement(actor: String, effect: String, fields: List<String>): String {
         val pokemon = battleActor(actor)
         return when (effect) {
+            "reflect" -> if (battleGeneration == 1) {
+                "$pokemon gained armor!"
+            } else {
+                "(Reflect started on $pokemon!)"
+            }
             "disable" -> {
                 val move = fields.getOrNull(4)
                     ?.takeUnless { it.trim().startsWith("[") }
@@ -4871,7 +4883,9 @@ class BattleSession {
         removeEmptyBoostSlot(side)
         refreshVisibleBoosts()
         appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields, sourceIndex = 5))
-        appendProtocolAnnouncement(fields, formatStatChange(side, stat, delta, direction, fields))
+        if (!hasEarlierGenOneSpecialChange(fields)) {
+            appendProtocolAnnouncement(fields, formatStatChange(side, stat, delta, direction, fields))
+        }
     }
 
     private fun applySetBoost(fields: List<String>) {
@@ -5124,11 +5138,30 @@ class BattleSession {
         return "$pokemon's $statName $verb!"
     }
 
+    private fun hasEarlierGenOneSpecialChange(fields: List<String>): Boolean {
+        if (battleGeneration != 1) return false
+        val stat = fields.getOrNull(3) ?: return false
+        val matchingStat = when (stat) {
+            "spa" -> "spd"
+            "spd" -> "spa"
+            else -> return false
+        }
+        val actor = fields.getOrNull(2)
+        val amount = fields.getOrNull(4)
+        return activeProtocolPacket.take(activeProtocolLineIndex).any { line ->
+            val previousFields = line.split('|')
+            previousFields.getOrNull(1) == fields.getOrNull(1) &&
+                previousFields.getOrNull(2) == actor &&
+                previousFields.getOrNull(3) == matchingStat &&
+                previousFields.getOrNull(4) == amount
+        }
+    }
+
     private fun statLabel(stat: String) = when (stat.lowercase()) {
         "atk" -> "Attack"
         "def" -> "Defense"
-        "spa" -> "Sp. Atk"
-        "spd" -> "Sp. Def"
+        "spa" -> if (battleGeneration == 1) "Special" else "Sp. Atk"
+        "spd" -> if (battleGeneration == 1) "Special" else "Sp. Def"
         "spe" -> "Speed"
         "accuracy" -> "accuracy"
         "evasion" -> "evasiveness"
