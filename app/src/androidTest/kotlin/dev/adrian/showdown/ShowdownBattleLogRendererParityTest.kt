@@ -150,6 +150,48 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun liveOpponentPartySceneAndSpriteKeepTheSameIdentity() {
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|gametype|singles",
+                "|clearpoke",
+                "|poke|p2|Umbreon, L84, F|item",
+                "|switch|p1a: Arbok|Arbok, L87|246/246",
+                "|switch|p2a: Nocturne|Umbreon, L84, F|100/100",
+                "|move|p2a: Nocturne|Foul Play|p1a: Arbok"
+            )
+        )
+
+        val partyMember = session.opponentPartyDetails().single()
+        val moveMessage = session.battleFeedMessages().last { it.text.contains("used Foul Play!") }
+        val scene = checkNotNull(session.battleSceneSnapshotForFeedMessage(moveMessage.id))
+        val activeCombatant = scene.opponentCombatants.single()
+        val sprite = BattleSpriteRequests.forScene(
+            playerCombatants = scene.playerCombatants,
+            opponentCombatants = scene.opponentCombatants,
+            singlesBattle = true,
+            style = session.spriteStyle,
+            playerFallbackSpecies = session.playerPokemon,
+            opponentFallbackSpecies = session.opponentPokemon
+        ).opponentLead
+
+        assertEquals("Nocturne", partyMember.name)
+        assertEquals("Umbreon", partyMember.species)
+        assertEquals("In battle", session.opponentTeamCardStatus(0))
+        assertEquals(partyMember.name, activeCombatant.name)
+        assertEquals(partyMember.species, activeCombatant.species)
+        assertEquals(partyMember.species, scene.opponentPartyDetails.single().species)
+        assertEquals(partyMember.species, sprite?.species)
+        assertEquals(BattleSpriteSide.OPPONENT, sprite?.side)
+    }
+
+    @Test
     fun upstreamNarrationKeepsP3PartnerOnPlayerOneSideInMultiBattle() {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {
