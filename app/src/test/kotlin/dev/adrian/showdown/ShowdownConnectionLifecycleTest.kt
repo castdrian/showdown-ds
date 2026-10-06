@@ -381,6 +381,73 @@ class ShowdownConnectionLifecycleTest {
     }
 
     @Test
+    fun dispatchesSockJsBattlePacketsIntoBattleSessionAndSendsRoomChoices() {
+        val server = LoopbackWebSocketServer()
+        val battleRoom = "battle-gen9ou-1"
+        val battleStateReady = CountDownLatch(1)
+        val moveRequestReady = CountDownLatch(1)
+        val connected = CountDownLatch(1)
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        lateinit var connection: ShowdownConnection
+        val listener = object : ShowdownConnection.Listener {
+            override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
+                if (state == ShowdownConnection.State.CONNECTED) connected.countDown()
+            }
+
+            override fun onProtocol(roomId: String?, lines: List<String>) {
+                if (roomId != battleRoom) return
+                session.applyProtocolPacket(lines)
+                if (lines.any { it.startsWith("|move|") }) battleStateReady.countDown()
+                if (lines.any { it.startsWith("|request|") }) moveRequestReady.countDown()
+            }
+        }
+        connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            testHttpClient()
+        )
+        session.addDecisionListener { command -> assertTrue(connection.send(battleRoom, command)) }
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+            server.sendText(socket, "o")
+            assertTrue(connected.await(2, TimeUnit.SECONDS))
+
+            val setupPacket = listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|gametype|singles",
+                "|switch|p1a: Phantom|Dragapult, L50|100/100",
+                "|switch|p2a: Specter|Rotom, L50|100/100"
+            )
+            val setupMessage = ">${battleRoom}\n${setupPacket.joinToString("\n")}"
+            server.sendText(socket, "a${org.json.JSONArray().put(setupMessage)}")
+
+            val moveMessage = ">${battleRoom}\n|move|p1a: Phantom|Shadow Ball|p2a: Specter"
+            server.sendText(socket, "a${org.json.JSONArray().put(moveMessage)}")
+            assertTrue(battleStateReady.await(2, TimeUnit.SECONDS))
+
+            assertEquals("Phantom", session.playerActiveCombatants().single().name)
+            assertEquals("Dragapult", session.playerActiveCombatants().single().species)
+            assertEquals("Specter", session.opponentActiveCombatants().single().name)
+            assertEquals("Rotom", session.opponentActiveCombatants().single().species)
+            assertEquals("Phantom used Shadow Ball!", session.battleFeedEntries().last())
+
+            val moveRequest = """{"rqid":42,"active":[{"moves":[{"move":"Shadow Ball","pp":15},{"move":"Tackle","pp":35}]}]}"""
+            val requestMessage = ">$battleRoom\n|request|$moveRequest"
+            server.sendText(socket, "a${org.json.JSONArray().put(requestMessage)}")
+            assertTrue(moveRequestReady.await(2, TimeUnit.SECONDS))
+            session.selectMoveWithTouch(0)
+
+            assertEquals("[\"${battleRoom}|/choose move 1|42\"]", server.readClientText(socket))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
+    @Test
     fun ignoresFramesFromAReplacedSocket() {
         val server = LoopbackWebSocketServer()
         val listener = RecordingListener()

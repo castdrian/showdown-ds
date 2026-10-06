@@ -206,8 +206,8 @@ class ShowdownBattleLogRendererParityTest {
                     "|init|battle",
                     "|player|p1|RED||",
                     "|player|p2|BLUE||",
-                    "|switch|p1a: Rotom|Rotom, L50|100/100",
-                    "|switch|p2a: Goodra|Goodra, L50|100/100"
+                    "|switch|p1a: Phantom|Dragapult, L50|100/100",
+                    "|switch|p2a: Specter|Rotom, L50|100/100"
                 )
             )
         }
@@ -238,8 +238,8 @@ class ShowdownBattleLogRendererParityTest {
 
         try {
             drawScene()
-            session.applyProtocolLine("|move|p1a: Rotom|Thunderbolt|p2a: Goodra")
-            val queuedMove = session.battleFeedMessages().last { it.text == "Rotom used Thunderbolt!" }
+            session.applyProtocolLine("|move|p1a: Phantom|Shadow Ball|p2a: Specter")
+            val queuedMove = session.battleFeedMessages().last { it.text == "Phantom used Shadow Ball!" }
             drawScene()
 
             repeat(40) { index ->
@@ -248,19 +248,23 @@ class ShowdownBattleLogRendererParityTest {
             }
 
             assertEquals(null, session.battleSceneSnapshotForFeedMessage(queuedMove.id))
-            session.applyProtocolLine("|switch|p2a: Dragapult|Dragapult, L50|100/100")
+            session.applyProtocolLine("|switch|p2a: Replacement|Goodra, L50|100/100")
             drawScene()
             Thread.sleep(1_300L)
             drawScene()
 
-            assertEquals("Dragapult", session.opponentActiveCombatants().single().name)
+            assertEquals("Replacement", session.opponentActiveCombatants().single().name)
             instrumentation.runOnMainSync {
                 val displayedScene = privateField(sceneView, "displayedBattleSceneSnapshot") as BattleSession.BattleSceneSnapshot
+                val playerSpriteRequest = privateField(sceneView, "requestedPlayerSprite") as BattleSpriteRequest
                 val opponentSpriteRequest = privateField(sceneView, "requestedOpponentSprite") as BattleSpriteRequest
                 assertEquals(queuedMove.text, privateField(sceneView, "cachedBattleFeedVisibleText"))
-                assertEquals("Rotom", displayedScene.playerCombatants.single().name)
-                assertEquals("Goodra", displayedScene.opponentCombatants.single().name)
-                assertEquals("Goodra", opponentSpriteRequest.species)
+                assertEquals("Phantom", displayedScene.playerCombatants.single().name)
+                assertEquals("Dragapult", displayedScene.playerCombatants.single().species)
+                assertEquals("Specter", displayedScene.opponentCombatants.single().name)
+                assertEquals("Rotom", displayedScene.opponentCombatants.single().species)
+                assertEquals("Dragapult", playerSpriteRequest.species)
+                assertEquals("Rotom", opponentSpriteRequest.species)
             }
         } finally {
             instrumentation.runOnMainSync { sceneView.releaseRetainedResources() }
@@ -322,6 +326,48 @@ class ShowdownBattleLogRendererParityTest {
     @Test
     fun lightweightReplayNarrationMatchesTheUpstreamBattleLog() {
         assertReplayNarrationMatchesUpstream("gen9randombattle-2691989691.json")
+    }
+
+    @Test
+    fun rechargeNarrationMatchesTheUpstreamBattleLog() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p1")
+        }
+        val session = BattleSession().apply {
+            setLocalUsername("RED")
+            setReplayMode(true)
+        }
+        val setupPacket = listOf(
+            "|init|battle",
+            "|player|p1|RED||",
+            "|player|p2|BLUE||",
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100"
+        )
+        session.applyProtocolPacket(setupPacket)
+        var syncCount = activity.synchronizedGenerations.size
+        activity.renderer.applyProtocol(setupPacket, session.battleLogGeneration())
+        awaitSynchronization(activity, syncCount, session.battleLogGeneration())
+
+        val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
+        val entryCount = activity.nativeEntries.size
+        syncCount = activity.synchronizedGenerations.size
+        val rechargePacket = listOf("|-mustrecharge|p1a: Pikachu")
+        session.applyProtocolPacket(rechargePacket)
+        val generation = session.battleLogGeneration()
+        activity.renderer.applyProtocol(rechargePacket, generation)
+        awaitSynchronization(activity, syncCount, generation)
+
+        val lightweightTexts = session.battleFeedMessages()
+            .filter { it.id !in previousMessageIds }
+            .map { it.text }
+        val nativeTexts = activity.nativeEntries.drop(entryCount)
+            .filter { it.first == generation }
+            .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
+
+        assertEquals("Recharge narration diverged from upstream Showdown", nativeTexts, lightweightTexts)
     }
 
     @Test
