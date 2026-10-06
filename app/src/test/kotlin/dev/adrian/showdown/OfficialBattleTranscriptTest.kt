@@ -57,7 +57,7 @@ class OfficialBattleTranscriptTest {
         )
 
         assertTrue(session.battleLog().contains("== Turn 1 =="))
-        assertEquals("(The opposing Magikarp lost 45% of its health!)", session.battleLog().last())
+        assertEquals("(The opposing Magikarp lost 45.5% of its health!)", session.battleLog().last())
         assertFalse(session.battleFeedEntries().contains("== Turn 1 =="))
     }
 

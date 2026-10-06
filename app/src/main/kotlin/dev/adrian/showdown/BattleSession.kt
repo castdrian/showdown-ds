@@ -1,8 +1,9 @@
 package dev.adrian.showdown
 
+import java.math.BigDecimal
+import java.math.RoundingMode
 import org.json.JSONObject
 import kotlin.random.Random
-import kotlin.math.roundToInt
 
 private fun inferredRandomTeamFormat(id: String): Boolean {
     val normalized = id.trim().lowercase()
@@ -538,7 +539,14 @@ class BattleSession {
     private data class HealthTransition(
         val actor: String,
         val previousFraction: Float?,
-        val nextFraction: Float?
+        val nextFraction: Float?,
+        val previousHealth: String?,
+        val nextHealth: String
+    )
+
+    private data class HealthValue(
+        val current: BigDecimal,
+        val maximum: BigDecimal
     )
 
     private data class TransformPartySnapshot(
@@ -3146,8 +3154,16 @@ class BattleSession {
 
     private fun healthTransition(fields: List<String>, targetIndex: Int = 2): HealthTransition? {
         val actor = fields.getOrNull(targetIndex)?.takeIf(::isProtocolActor) ?: return null
-        val nextFraction = fields.getOrNull(targetIndex + 1)?.let(::healthFractionOrNull) ?: return null
-        return HealthTransition(actor, healthForActor(actor)?.let(::healthFractionOrNull), nextFraction)
+        val nextHealth = fields.getOrNull(targetIndex + 1) ?: return null
+        val nextFraction = healthFractionOrNull(nextHealth) ?: return null
+        val previousHealth = healthForActor(actor)
+        return HealthTransition(
+            actor,
+            previousHealth?.let(::healthFractionOrNull),
+            nextFraction,
+            previousHealth,
+            nextHealth
+        )
     }
 
     private fun appendHealthChangeLog(
@@ -3248,11 +3264,44 @@ class BattleSession {
         return battleActor(actor)
     }
 
-    private fun healthLossPercent(transition: HealthTransition): Int? {
+    private fun healthLossPercent(transition: HealthTransition): String? {
         val previous = transition.previousFraction ?: return null
         val next = transition.nextFraction ?: return null
         if (next >= previous) return null
-        return (((previous - next) * 100f).roundToInt()).coerceAtLeast(1)
+        val previousHealth = transition.previousHealth?.let(::healthValueOrNull)
+        val nextHealth = healthValueOrNull(transition.nextHealth)
+        if (previousHealth != null && nextHealth != null) {
+            val numerator = previousHealth.current.multiply(nextHealth.maximum)
+                .subtract(nextHealth.current.multiply(previousHealth.maximum))
+                .multiply(BigDecimal.valueOf(100))
+            val denominator = previousHealth.maximum.multiply(nextHealth.maximum)
+            val (wholePercent, remainder) = numerator.divideAndRemainder(denominator)
+            return if (remainder.compareTo(BigDecimal.ZERO) == 0) {
+                wholePercent.toPlainString()
+            } else {
+                numerator.divide(denominator, 1, RoundingMode.HALF_UP).toPlainString()
+            }
+        }
+        return BigDecimal.valueOf(((previous - next) * 100f).toDouble())
+            .setScale(1, RoundingMode.HALF_UP)
+            .toPlainString()
+    }
+
+    private fun healthValueOrNull(hp: String): HealthValue? {
+        val token = hp.trim().substringBefore(' ')
+        if (token.equals("fnt", true)) return HealthValue(BigDecimal.ZERO, BigDecimal.ONE)
+        if (token.endsWith('%')) {
+            val percentage = token.dropLast(1).toBigDecimalOrNull() ?: return null
+            return HealthValue(percentage, BigDecimal.valueOf(100))
+        }
+        val parts = token.split('/', limit = 2)
+        if (parts.size == 2) {
+            val current = parts[0].toBigDecimalOrNull() ?: return null
+            val maximum = parts[1].toBigDecimalOrNull()?.takeIf { it > BigDecimal.ZERO } ?: return null
+            return HealthValue(current, maximum)
+        }
+        val current = token.toBigDecimalOrNull()?.takeIf { it.compareTo(BigDecimal.ZERO) == 0 } ?: return null
+        return HealthValue(current, BigDecimal.ONE)
     }
 
     private fun applyFaint(fields: List<String>) {

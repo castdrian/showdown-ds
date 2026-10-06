@@ -249,6 +249,25 @@ class BattleSessionTest {
     }
 
     @Test
+    fun damageHealthMessagesMatchShowdownsOneDecimalPrecision() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p2a: Eevee|Eevee, L50|322/322",
+                "|-damage|p2a: Eevee|318/322",
+                "|-damage|p2a: Eevee|310/322",
+                "|-damage|p2a: Eevee|297/322",
+                "|-damage|p2a: Eevee|296/322"
+            )
+        )
+
+        assertTrue(session.battleLog().contains("(The opposing Eevee lost 1.2% of its health!)"))
+        assertTrue(session.battleLog().contains("(The opposing Eevee lost 2.5% of its health!)"))
+        assertTrue(session.battleLog().contains("(The opposing Eevee lost 4.0% of its health!)"))
+        assertTrue(session.battleLog().contains("(The opposing Eevee lost 0.3% of its health!)"))
+    }
+
+    @Test
     fun healthMessagesRespectSilentPacketsAndSourceSpecificWording() {
         val session = BattleSession()
         session.applyProtocolPacket(
