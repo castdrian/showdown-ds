@@ -589,6 +589,231 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun formatsHazardDamageAnnouncementsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Tyranitar|Tyranitar, L50|100/100",
+                "|-damage|p2a: Tyranitar|88/100|[from] Spikes",
+                "|-damage|p2a: Tyranitar|76/100|[from] Stealth Rock"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "The opposing Tyranitar was hurt by the spikes!",
+                "Pointed stones dug into the opposing Tyranitar!"
+            ),
+            session.battleLog().takeLast(2)
+        )
+    }
+
+    @Test
+    fun includesAbilityAnnouncementsForAbilityCausedHealingAndTerrain() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Tapu Koko|Tapu Koko, L50|100/100",
+                "|switch|p2a: Vampire|Gliscor, L50|80/100 tox",
+                "|-heal|p2a: Vampire|100/100 tox|[from] ability: Poison Heal",
+                "|-fieldstart|move: Electric Terrain|[from] ability: Electric Surge|[of] p1a: Tapu Koko"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "[The opposing Vampire's Poison Heal]",
+                "The opposing Vampire had its HP restored.",
+                "[Tapu Koko's Electric Surge]",
+                "An electric current ran across the battlefield!"
+            ),
+            session.battleLog().takeLast(4)
+        )
+    }
+
+    @Test
+    fun formatsIonDelugeActivationLikeShowdown() {
+        val session = BattleSession()
+        session.applyProtocolLine("|-fieldactivate|move: Ion Deluge")
+
+        assertEquals("A deluge of ions showers the battlefield!", session.battleLog().last())
+    }
+
+    @Test
+    fun formatsMoldBreakerActivationLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|switch|p1a: Excadrill|Excadrill, L50|100/100",
+                "|-ability|p1a: Excadrill|Mold Breaker"
+            )
+        )
+
+        assertEquals(
+            listOf("[Excadrill's Mold Breaker]", "Excadrill breaks the mold!"),
+            session.battleLog().takeLast(2)
+        )
+    }
+
+    @Test
+    fun formatsDrainRecoveryFromTheDrainedPokemonPerspective() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Zapdos|Zapdos, L50|100/100",
+                "|switch|p2a: Gengar|Gengar, L50|70/100",
+                "|-heal|p2a: Gengar|80/100|[from] drain|[of] p1a: Zapdos"
+            )
+        )
+
+        assertEquals("Zapdos had its energy drained!", session.battleLog().last())
+    }
+
+    @Test
+    fun creditsKnockOffToTheUsingPokemonAndNamesTheLostItem() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Kartana|Kartana, L50|100/100",
+                "|switch|p2a: Celesteela|Celesteela, L50|100/100",
+                "|-enditem|p2a: Celesteela|Assault Vest|[from] move: Knock Off|[of] p1a: Kartana"
+            )
+        )
+
+        assertEquals(
+            "Kartana knocked off the opposing Celesteela's Assault Vest!",
+            session.battleLog().last()
+        )
+    }
+
+    @Test
+    fun capitalizesSideConditionExpirationAnnouncementsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|-sideend|p1: ADRIAN|Light Screen"
+            )
+        )
+
+        assertEquals("Your team's Light Screen wore off!", session.battleLog().last())
+    }
+
+    @Test
+    fun formatsContactAbilityAndRockyHelmetDamageLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Garchomp|Garchomp, L50|100/100",
+                "|switch|p2a: Vampire|Gliscor, L50|100/100",
+                "|-damage|p2a: Vampire|88/100|[from] ability: Rough Skin|[of] p1a: Garchomp",
+                "|-damage|p1a: Garchomp|88/100|[from] item: Rocky Helmet|[of] p2a: Vampire"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "[Garchomp's Rough Skin]",
+                "The opposing Vampire was hurt!",
+                "Garchomp was hurt by the Rocky Helmet!"
+            ),
+            session.battleLog().takeLast(3)
+        )
+    }
+
+    @Test
+    fun hidesIntermediateMegaDetailsChangesFromTheBattleLog() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Pinsir|Pinsir, L50|100/100",
+                "|detailschange|p2a: Pinsir|Pinsir-Mega, F",
+                "|-mega|p2a: Pinsir|Pinsir|Pinsirite"
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "The opposing Pinsir's Pinsirite is reacting to the Key Stone!",
+                "The opposing Pinsir has Mega Evolved into Mega Pinsir!"
+            ),
+            session.battleLog().takeLast(2)
+        )
+        assertFalse(session.battleLog().any { it.contains("transformed!") })
+    }
+
+    @Test
+    fun formatsTrickActivationLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolLine("|-activate|p2a: Tapu Fini|move: Trick|[of] p1a: Aegislash")
+
+        assertEquals("The opposing Tapu Fini switched items with its target!", session.battleLog().last())
+    }
+
+    @Test
+    fun formatsStanceChangeFormAnnouncementsLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|player|p1|ADRIAN||",
+                "|switch|p1a: Aegislash|Aegislash, L50|100/100",
+                "|-formechange|p1a: Aegislash|Aegislash-Blade||[from] ability: Stance Change"
+            )
+        )
+
+        assertEquals(
+            listOf("[Aegislash's Stance Change]", "Changed to Blade Forme!"),
+            session.battleLog().takeLast(2)
+        )
+    }
+
+    @Test
+    fun formatsLeechSeedDamageLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|5",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p1a: Ferrothorn|Ferrothorn, L50|100/100",
+                "|switch|p2a: Robespierre|Raikou, L50|76/100",
+                "|-damage|p2a: Robespierre|63/100|[from] Leech Seed|[of] p1a: Ferrothorn"
+            )
+        )
+
+        assertEquals("The opposing Robespierre's health is sapped by Leech Seed!", session.battleLog().last())
+    }
+
+    @Test
+    fun formatsModernRecoilDamageLikeShowdown() {
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        session.applyProtocolPacket(
+            listOf(
+                "|gen|8",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|switch|p2a: Darmanitan|Darmanitan, L50|13/100",
+                "|-damage|p2a: Darmanitan|0 fnt|[from] Recoil"
+            )
+        )
+
+        assertEquals("The opposing Darmanitan was damaged by the recoil!", session.battleLog().last())
+    }
+
+    @Test
     fun formatsOfficialSideConditionAnnouncements() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
 
@@ -1241,7 +1466,7 @@ class OfficialBattleTranscriptTest {
         assertTrue(session.battleLog().contains("Persian's Air Balloon popped!"))
         assertTrue(session.battleLog().contains("Persian hung on using its Focus Sash!"))
         assertTrue(session.battleLog().contains("(The opposing Pikachu ate its Sitrus Berry!)"))
-        assertTrue(session.battleLog().contains("The opposing Pikachu lost its Leftovers!"))
+        assertTrue(session.battleLog().contains("Persian knocked off the opposing Pikachu's Leftovers!"))
         assertTrue(session.battleLog().contains("(The opposing Pikachu used its Eviolite!)"))
         assertTrue(session.battleLog().contains("Persian stole the opposing Pikachu's Sitrus Berry!"))
         assertTrue(session.battleLog().contains("Persian gave the opposing Pikachu its Choice Scarf!"))

@@ -186,11 +186,13 @@ private val BATTLE_SIDE_CONDITION_ANNOUNCEMENTS = mapOf(
     ),
     "spikes" to BattleSideConditionAnnouncement(
         start = "Spikes were scattered on the ground all around {TEAM}!",
-        end = "The spikes disappeared from the ground around {TEAM}!"
+        end = "The spikes disappeared from the ground around {TEAM}!",
+        damage = "{POKEMON} was hurt by the spikes!"
     ),
     "stealthrock" to BattleSideConditionAnnouncement(
         start = "Pointed stones float in the air around {TEAM}!",
-        end = "The pointed stones disappeared from around {TEAM}!"
+        end = "The pointed stones disappeared from around {TEAM}!",
+        damage = "Pointed stones dug into {POKEMON}!"
     ),
     "stickyweb" to BattleSideConditionAnnouncement(
         start = "A sticky web has been laid out on the ground around {TEAM}!",
@@ -3202,7 +3204,11 @@ class BattleSession {
         kind: HealthChangeKind
     ) {
         if (isSilent(fields)) return
-        transitions.mapNotNull { healthChangeMessage(fields, it, kind) }.forEach(::appendLog)
+        transitions.forEach { transition ->
+            val message = healthChangeMessage(fields, transition, kind) ?: return@forEach
+            protocolAbilityAnnouncement(fields)?.let(::appendLog)
+            appendLog(message)
+        }
     }
 
     private fun healthChangeMessage(
@@ -3246,8 +3252,11 @@ class BattleSession {
             effectId == "sandstorm" -> "$actor is buffeted by the sandstorm!"
             effectId == "hail" || effectId == "snowscape" -> "$actor is buffeted by the hail!"
             effectId == "confusion" -> "It hurt itself in its confusion!"
-            effectId == "recoil" && battleGeneration == 1 -> "$actor was damaged by the recoil!"
+            effectId == "leechseed" -> "$actor's health is sapped by Leech Seed!"
+            source?.startsWith("ability:", true) == true -> "$actor was hurt!"
+            effectId == "recoil" -> "$actor was damaged by the recoil!"
             source?.startsWith("item:", true) == true && effectId == "lifeorb" -> "$actor lost some of its HP!"
+            source?.startsWith("item:", true) == true && effectId == "rockyhelmet" -> "$actor was hurt by the Rocky Helmet!"
             source?.startsWith("item:", true) == true && effect.isNotBlank() -> "($actor was hurt by its $effect!)"
             fields.any { it.equals("[partiallytrapped]", true) } && effect.isNotBlank() -> "$actor is hurt by $effect!"
             percent != null -> "($actor lost $percent% of its health!)"
@@ -3265,6 +3274,9 @@ class BattleSession {
         }
         val wisher = protocolWisher(fields)
         return when {
+            effectId == "drain" -> protocolSourceActor(fields)
+                ?.let { "${battleActor(it)} had its energy drained!" }
+                ?: "$actor had its HP restored."
             effectId == "zpower" || effectId == "zmove" -> "$actor restored its HP using its Z-Power!"
             effectId == "leftovers" -> "$actor restored a little HP using its Leftovers!"
             effectId == "aquaring" -> "A veil of water restored $actor's HP!"
@@ -3606,6 +3618,12 @@ class BattleSession {
             }
         }
         val source = protocolSource(fields)
+        if (fields.getOrNull(1) == "-formechange" && source.equals("ability: Stance Change", true)) {
+            val form = species.substringAfterLast('-', "").takeIf(String::isNotBlank)
+            appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
+            form?.let { appendProtocolAnnouncement(fields, "Changed to $it Forme!") }
+            return
+        }
         val shieldsDownActivated = species.equals("Minior-Meteor", true) &&
             source?.equals("ability: Shields Down", true) == true
         if (shieldsDownActivated) {
@@ -3619,6 +3637,8 @@ class BattleSession {
         if (transformedByAbility) {
             appendProtocolAnnouncement(fields, protocolAbilityAnnouncement(fields))
         }
+        val intermediateGimmickFormChange = fields.getOrNull(1) == "detailschange" &&
+            (species.contains("-Mega", true) || species.contains("-Primal", true))
         when (fields.getOrNull(1)) {
             "detailschange", "-formechange", "-transform" -> {
                 val announcement = if (
@@ -3630,7 +3650,7 @@ class BattleSession {
                 } else {
                     "${battleActor(actor)} transformed!"
                 }
-                appendProtocolAnnouncement(fields, announcement)
+                if (!intermediateGimmickFormChange) appendProtocolAnnouncement(fields, announcement)
             }
             else -> appendLog("$species changed form.")
         }
@@ -3826,6 +3846,7 @@ class BattleSession {
         val pokemon = battleActor(actor)
         return when (normalizeBattleTextKey(ability)) {
             "comatose" -> "$pokemon is drowsing!"
+            "moldbreaker" -> "$pokemon breaks the mold!"
             "pressure" -> "$pokemon is exerting its pressure!"
             else -> null
         }
@@ -4683,6 +4704,8 @@ class BattleSession {
                     ?.let { itemNameResolver?.invoke(it) ?: it }
                 listOfNotNull(item?.let { "${battleActor(actor)} is about to be attacked by its $it!" })
             }
+            hasActor && normalizedEffect == "trick" ->
+                listOf("${battleActor(actor)} switched items with its target!")
             ability != null -> {
                 val actorName = battleActor(actor)
                 val abilityNotice = "[$actorName's $ability]"
@@ -4772,12 +4795,15 @@ class BattleSession {
             ?: "its item"
         val consumed = fields.drop(4).any { it.equals("[eat]", true) }
         val source = protocolSource(fields)
+        val sourceActor = protocolSourceActor(fields)?.let(::battleActor)
         updateActorDetails(actor) { it.copy(item = "No item") }
         if (!isSilent(fields)) {
             val pokemon = battleActor(actor)
             val announcement = when {
                 normalizeBattleTextKey(item) == "whiteherb" -> "$pokemon returned its stats to normal using its White Herb!"
                 consumed -> "($pokemon ate its $item!)"
+                normalizeBattleTextKey(source.orEmpty()) == "moveknockoff" && sourceActor != null ->
+                    "$sourceActor knocked off $pokemon's $item!"
                 source != null -> "$pokemon lost its $item!"
                 normalizeBattleTextKey(item) == "airballoon" -> "$pokemon's Air Balloon popped!"
                 normalizeBattleTextKey(item) == "focussash" -> "$pokemon hung on using its Focus Sash!"
@@ -4822,7 +4848,10 @@ class BattleSession {
         } else {
             fieldEffects.removeAll { it.equals(effect, true) }
         }
-        if (!isSilent(fields)) appendLog(fieldEffectAnnouncement(effect, enabled))
+        if (!isSilent(fields)) {
+            protocolAbilityAnnouncement(fields, sourceIndex = 3)?.let(::appendLog)
+            appendLog(fieldEffectAnnouncement(effect, enabled))
+        }
     }
 
     private fun weatherStartAnnouncement(value: String) =
@@ -4843,7 +4872,10 @@ class BattleSession {
 
     private fun fieldEffectActivationAnnouncement(fields: List<String>): String? {
         val effect = battleEffectName(fields.getOrNull(2)).takeIf { it.isNotBlank() } ?: return null
-        return "($effect started!)"
+        return when (normalizeBattleTextKey(effect)) {
+            "iondeluge" -> "A deluge of ions showers the battlefield!"
+            else -> "($effect started!)"
+        }
     }
 
     private fun appendProtocolAnnouncement(fields: List<String>, announcement: String?) {
@@ -4869,8 +4901,9 @@ class BattleSession {
         val party = if (isPlayerSide(side)) "your ally Pokémon" else "the opposing Pokémon"
         val announcement = BATTLE_SIDE_CONDITION_ANNOUNCEMENTS[normalizeBattleTextKey(effect)]
         val template = if (enabled) announcement?.start else announcement?.end
-        return template?.replace("{TEAM}", team)?.replace("{PARTY}", party)
+        val message = template?.replace("{TEAM}", team)?.replace("{PARTY}", party)
             ?: if (enabled) " ($effect started on $team!)" else " ($effect ended on $team!)"
+        return if (template?.startsWith("{TEAM}") == true) message.replaceFirstChar(Char::uppercase) else message
     }
 
     private fun applyBoost(fields: List<String>, direction: Int) {
@@ -7019,7 +7052,7 @@ class BattleSession {
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
         private val BATTLE_FEED_TURN_MARKER = Regex("^(?:Turn\\s+\\d+\\.?|==\\s*Turn\\s+\\d+\\s*==)$", RegexOption.IGNORE_CASE)
         private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
-            "(?i)^(?:Battle started\\.|.+ has \\d+ seconds? left\\.?|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|.+ team size: \\d+)$"
+            "(?i)^(?:Battle started\\.|.+ has \\d+ seconds? left(?: this turn)?\\.?|.+ also wants the timer to be on\\.|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|.+ team size: \\d+)$"
         )
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
         private val SHOWDOWN_ACTIVATE_BLOCK_EFFECTS = setOf(

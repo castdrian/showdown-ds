@@ -132,17 +132,19 @@ class BattleSessionTest {
     fun upperBattleFeedOmitsBattleTimerAnnouncementsWhileActivityKeepsThem() {
         val session = BattleSession()
         session.appendShowdownBattleLog(
-            "Battle timer is ON: inactive players will automatically lose when time's up. (requested by Guest)<br />Pikachu used Thunderbolt!<br />The battle timer is off."
+            "Battle timer is ON: inactive players will automatically lose when time's up. (requested by Guest)<br />Guest also wants the timer to be on.<br />Guest has 30 seconds left this turn.<br />Pikachu used Thunderbolt!<br />The battle timer is off."
         )
 
         assertEquals(listOf("Pikachu used Thunderbolt!"), session.battleFeedEntries())
         assertEquals(
             listOf(
                 "Battle timer is ON: inactive players will automatically lose when time's up. (requested by Guest)",
+                "Guest also wants the timer to be on.",
+                "Guest has 30 seconds left this turn.",
                 "Pikachu used Thunderbolt!",
                 "The battle timer is off."
             ),
-            session.activityMessages().takeLast(3)
+            session.activityMessages().takeLast(5)
         )
     }
 

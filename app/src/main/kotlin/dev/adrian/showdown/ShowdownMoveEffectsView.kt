@@ -342,8 +342,9 @@ class ShowdownMoveEffectsView(
                             }
                             pauseWhenReady();
                         }
-                        function nativeBattleLog(value) {
+                        function nativeBattleLog(value, className) {
                             if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
+                            if (String(className || '').split(/\s+/).indexOf('chat') >= 0) return;
                             window.ShowdownNativeBattleLog.entry(String(value), nativeBattleLogGeneration);
                         }
                         function nativeBattleMarkup(id, value) {
@@ -512,7 +513,7 @@ class ShowdownMoveEffectsView(
                             };
                             var originalAddDiv = BattleLog.prototype.addDiv;
                             BattleLog.prototype.addDiv = function (className, html) {
-                                if (!nativeBattleLogMarkupActive) nativeBattleLog(html);
+                                if (!nativeBattleLogMarkupActive) nativeBattleLog(html, className);
                                 return originalAddDiv.apply(this, arguments);
                             };
                             var originalAddBattleMessage = BattleLog.prototype.addBattleMessage;

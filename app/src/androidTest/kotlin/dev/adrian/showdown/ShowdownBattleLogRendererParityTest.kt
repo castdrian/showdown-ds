@@ -329,6 +329,41 @@ class ShowdownBattleLogRendererParityTest {
         assertReplayNarrationMatchesUpstream("gen1ou-2692779867.json")
     }
 
+    @Test
+    fun secondGenerationReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen2ou-2692782179.json")
+    }
+
+    @Test
+    fun thirdGenerationReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen3ou-2692783639.json")
+    }
+
+    @Test
+    fun fourthGenerationReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("smogtours-gen4ou-451112.json")
+    }
+
+    @Test
+    fun fifthGenerationReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen5ou-2587294183.json")
+    }
+
+    @Test
+    fun sixthGenerationReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("smogtours-gen6ou-625213.json")
+    }
+
+    @Test
+    fun seventhGenerationReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen7ou-2220548756.json")
+    }
+
+    @Test
+    fun eighthGenerationReplayNarrationMatchesTheUpstreamBattleLog() {
+        assertReplayNarrationMatchesUpstream("gen8ou-2692756742.json")
+    }
+
     private fun assertReplayNarrationMatchesUpstream(replayFileName: String) {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {
@@ -367,11 +402,22 @@ class ShowdownBattleLogRendererParityTest {
             .firstOrNull { index -> lightweightTexts.getOrNull(index) != nativeTexts.getOrNull(index) }
 
         assertTrue(
-            "The lightweight replay log diverged from upstream Showdown at $firstMismatch: " +
+            "$replayFileName lightweight replay log diverged from upstream Showdown at $firstMismatch: " +
                 "lightweight=${lightweightTexts.drop(firstMismatch ?: lightweightTexts.size).take(12)} " +
                 "upstream=${nativeTexts.drop(firstMismatch ?: nativeTexts.size).take(12)}",
             firstMismatch == null
         )
+        if (replayFileName == "gen2ou-2692782179.json") {
+            assertEquals(
+                listOf(
+                    "[☆Cee o-o] what",
+                    "[☆Cee o-o] it does that",
+                    "[+Fentropy] just crit it",
+                    "[☆Cee o-o] gg"
+                ),
+                session.chatMessages()
+            )
+        }
     }
 
     @Test

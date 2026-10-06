@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -494,7 +495,7 @@ class ShowdownReplayIdentityTest {
         assertEquals("Blaze", active.name)
         assertEquals("Charizard-Mega-X", active.species)
         assertEquals("Charizard-Mega-X", spriteRequest.species)
-        assertTrue(session.battleLog().contains("Blaze transformed!"))
+        assertFalse(session.battleLog().contains("Blaze transformed!"))
         assertTrue(session.battleLog().contains("Blaze used Flamethrower!"))
     }
 
