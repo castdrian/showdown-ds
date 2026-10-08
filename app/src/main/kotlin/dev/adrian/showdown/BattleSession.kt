@@ -469,7 +469,8 @@ class BattleSession {
         val opponentSideConditions: List<String>,
         val playerBoosts: Map<String, Int>,
         val opponentBoosts: Map<String, Int>,
-        val fieldEffects: List<String> = emptyList()
+        val fieldEffects: List<String> = emptyList(),
+        val ladderBadgesBySide: Map<String, List<ShowdownLadderBadge>> = emptyMap()
     )
 
     data class BattleClock(
@@ -688,6 +689,7 @@ class BattleSession {
     private var selectedTargetIndex = -1
     private var restoredPlayerSlot: String? = null
     private val sideNames = mutableMapOf<String, String>()
+    private val ladderBadgesBySide = mutableMapOf<String, MutableList<ShowdownLadderBadge>>()
     private var playerSlot = "p1"
     private var localUsername: String? = null
     private var liveBattleActive = false
@@ -825,7 +827,8 @@ class BattleSession {
         opponentSideConditions.toList(),
         playerBoosts.toMap(),
         opponentBoosts.toMap(),
-        fieldEffects.toList()
+        fieldEffects.toList(),
+        ladderBadgesBySide.mapValues { (_, badges) -> badges.toList() }
     )
 
     fun battleClock() = battleClock
@@ -2006,6 +2009,7 @@ class BattleSession {
                     "" -> appendDirectMessage(fields.drop(2).joinToString("|"))
                     "init" -> applyInit(fields)
                     "player" -> applyPlayer(fields)
+                    "badge" -> applyBadge(fields)
                     "gametype" -> applyGameType(fields)
                     "clearpoke" -> {
                         opponentTeamDetails.clear()
@@ -2388,6 +2392,7 @@ class BattleSession {
         playerCondition = playerDetails.condition
         resetPublicOpponentDetails()
         sideNames.clear()
+        ladderBadgesBySide.clear()
         activeTeamNames.clear()
         activeSlotNames.clear()
         baseTypesBySlot.clear()
@@ -2469,6 +2474,13 @@ class BattleSession {
             playerSlot = side
         }
         updatePerspective()
+    }
+
+    private fun applyBadge(fields: List<String>) {
+        val side = fields.getOrNull(2)?.takeIf { it.matches(Regex("p[1-4]")) } ?: return
+        val badge = ShowdownLadderBadge.fromProtocolValue(fields.drop(3).joinToString("|")) ?: return
+        val sideBadges = ladderBadgesBySide.getOrPut(side, ::mutableListOf)
+        if (badge !in sideBadges) sideBadges += badge
     }
 
     private fun applyBattleStart() {

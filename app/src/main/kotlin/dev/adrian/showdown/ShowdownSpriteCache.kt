@@ -564,6 +564,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestSpriteCandidates(paths, receiver)
     }
 
+    fun requestLadderBadge(badge: ShowdownLadderBadge, receiver: (SpriteAsset?) -> Unit) {
+        requestSprite(badge.assetPath, receiver)
+    }
+
     fun requestBackdrop(name: String = "bg-aquacordetown.jpg", receiver: (Bitmap?) -> Unit) {
         fallbackBackdrop?.let { fallback ->
             mainHandler.post { receiver(fallback) }

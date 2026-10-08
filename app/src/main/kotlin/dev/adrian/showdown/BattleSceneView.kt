@@ -48,6 +48,8 @@ class BattleSceneView(
     private var requestedOpponentSprite: BattleSpriteRequest? = null
     private val itemSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
     private val requestedItemSprites = mutableSetOf<String>()
+    private val ladderBadgeSprites = mutableMapOf<String, ShowdownSpriteCache.SpriteAsset?>()
+    private val requestedLadderBadgeSprites = mutableSetOf<String>()
     private var requestedBackdrop = ""
     private var requestedSwitchOutVisual: BattleSession.SwitchOutVisual? = null
     private var resourcesRequested = false
@@ -164,6 +166,7 @@ class BattleSceneView(
         playerActiveSprites.values.forEach { it?.stopAnimation() }
         opponentActiveSprites.values.forEach { it?.stopAnimation() }
         itemSprites.values.forEach { it?.stopAnimation() }
+        ladderBadgeSprites.values.forEach { it?.stopAnimation() }
     }
 
     fun refreshResourceRequests() {
@@ -190,6 +193,8 @@ class BattleSceneView(
         requestedPreviewSprites.clear()
         itemSprites.clear()
         requestedItemSprites.clear()
+        ladderBadgeSprites.clear()
+        requestedLadderBadgeSprites.clear()
         effectAssets.clear()
         requestedEffects.clear()
         partyBallBitmaps.clear()
@@ -447,7 +452,12 @@ class BattleSceneView(
         )
         val playerPartyDetails = sceneSnapshot?.playerPartyDetails ?: session.playerPartyDetails()
         val opponentPartyDetails = sceneSnapshot?.opponentPartyDetails ?: session.opponentPartyDetails()
-        val fieldVisuals = BattleFieldVisualComposer.compose(sceneSnapshot?.battleInfo ?: session.battleInfo())
+        val currentBattleInfo = session.battleInfo()
+        val battleInfo = sceneSnapshot?.battleInfo?.copy(
+            ladderBadgesBySide = currentBattleInfo.ladderBadgesBySide
+        ) ?: currentBattleInfo
+        requestLadderBadgeSprites(battleInfo.ladderBadgesBySide)
+        val fieldVisuals = BattleFieldVisualComposer.compose(battleInfo)
         val playerStatusAlpha = statusCardAlpha(
             playerCombatant?.name ?: session.playerPokemon,
             playerCombatant?.condition ?: session.playerCondition,
@@ -580,7 +590,8 @@ class BattleSceneView(
                         playerCombatant?.hp ?: session.playerHp,
                         scale,
                         playerStatusAlpha,
-                        playerPartyDetails
+                        playerPartyDetails,
+                        battleInfo.ladderBadgesBySide[statusCardSide(true, playerCombatant)].orEmpty()
                     )
                 }
             } else {
@@ -593,7 +604,8 @@ class BattleSceneView(
                     fieldCombatants(playerCombatants, true),
                     switchOutVisual,
                     sceneSnapshot?.playerDetailsBySlot.orEmpty(),
-                    playerPartyDetails
+                    playerPartyDetails,
+                    ladderBadges = battleInfo.ladderBadgesBySide[statusCardSide(true, playerCombatants.firstOrNull())].orEmpty()
                 )
             }
             if (singles) {
@@ -610,7 +622,8 @@ class BattleSceneView(
                         opponentCombatant?.hp ?: session.opponentHp,
                         scale,
                         opponentStatusAlpha,
-                        opponentPartyDetails
+                        opponentPartyDetails,
+                        battleInfo.ladderBadgesBySide[statusCardSide(false, opponentCombatant)].orEmpty()
                     )
                 }
             } else {
@@ -624,7 +637,8 @@ class BattleSceneView(
                     switchOutVisual,
                     sceneSnapshot?.opponentDetailsBySlot.orEmpty(),
                     opponentPartyDetails,
-                    sceneSnapshot?.opponentPartyDetailsBySlot ?: session.opponentPartyDetailsBySlot()
+                    sceneSnapshot?.opponentPartyDetailsBySlot ?: session.opponentPartyDetailsBySlot(),
+                    battleInfo.ladderBadgesBySide[statusCardSide(false, opponentCombatants.firstOrNull())].orEmpty()
                 )
             }
             drawBattleFeed(canvas, width, height, scale, battleFeedFrame)
@@ -754,7 +768,10 @@ class BattleSceneView(
                 addAccessibilityNode(
                     nodes,
                     ACCESSIBLE_PLAYER_ID,
-                    "Your active Pokémon, ${pokemonAccessibilitySummary(player)}",
+                    withLadderBadgeAccessibility(
+                        "Your active Pokémon, ${pokemonAccessibilitySummary(player)}",
+                        statusCardSide(true, playerCombatant)
+                    ),
                     RectF(
                         width * ShowdownBattleLayout.SINGLE_CARD_LEFT_FRACTION,
                         height * 0.80f,
@@ -770,7 +787,10 @@ class BattleSceneView(
                 addAccessibilityNode(
                     nodes,
                     ACCESSIBLE_OPPONENT_ID,
-                    "Opponent's active Pokémon, ${pokemonAccessibilitySummary(opponent)}",
+                    withLadderBadgeAccessibility(
+                        "Opponent's active Pokémon, ${pokemonAccessibilitySummary(opponent)}",
+                        statusCardSide(false, opponentCombatant)
+                    ),
                     RectF(
                         ShowdownBattleLayout.singleOpponentCardLeft(width, scale),
                         height * 0.02f,
@@ -905,7 +925,10 @@ class BattleSceneView(
             addAccessibilityNode(
                 nodes,
                 idBase + index,
-                "${if (player) "Your" else "Opponent's"} active Pokémon, ${pokemonAccessibilitySummary(details)}",
+                withLadderBadgeAccessibility(
+                    "${if (player) "Your" else "Opponent's"} active Pokémon, ${pokemonAccessibilitySummary(details)}",
+                    combatant.slot.take(2).takeIf { index == 0 }
+                ),
                 bounds,
                 selected = inspectedPlayer == player && inspectedSlot == combatant.slot
             ) {
@@ -924,6 +947,15 @@ class BattleSceneView(
     private fun pokemonAccessibilitySummary(details: BattleSession.PokemonDetails): String {
         val name = BattleSession.displayPokemonName(details.name, details.species)
         return BattleAccessibilityText.pokemon(name, details.level, details.gender, details.hp, details.condition)
+    }
+
+    private fun withLadderBadgeAccessibility(label: String, side: String?): String {
+        val badges = side?.let { sideKey ->
+            val battleInfo = session.battleInfo()
+            ShowdownLadderBadgePresentation.visible(battleInfo.ladderBadgesBySide[sideKey].orEmpty())
+        }.orEmpty()
+        if (badges.isEmpty()) return label
+        return "$label. Ladder badges: ${badges.joinToString(". ") { it.accessibilityLabel }}"
     }
 
     private fun inspectSheetBounds(width: Float, height: Float, player: Boolean) = if (player) {
@@ -1916,6 +1948,25 @@ class BattleSceneView(
         }
     }
 
+    private fun requestLadderBadgeSprites(badgesBySide: Map<String, List<ShowdownLadderBadge>>) {
+        badgesBySide.values
+            .flatMap(ShowdownLadderBadgePresentation::visible)
+            .distinctBy(ShowdownLadderBadge::assetPath)
+            .forEach { badge ->
+                val path = badge.assetPath
+                if (!requestedLadderBadgeSprites.add(path)) return@forEach
+                spriteCache.requestLadderBadge(badge) { asset ->
+                    if (path !in requestedLadderBadgeSprites) {
+                        asset?.stopAnimation()
+                        return@requestLadderBadge
+                    }
+                    ladderBadgeSprites[path]?.stopAnimation()
+                    ladderBadgeSprites[path] = asset
+                    invalidate()
+                }
+            }
+    }
+
     private fun requestActiveSprites(
         plannedRequests: List<BattleSpriteSlotRequest>,
         assets: MutableMap<String, ShowdownSpriteCache.SpriteAsset?>,
@@ -2427,6 +2478,9 @@ class BattleSceneView(
         return "${side}a"
     }
 
+    private fun statusCardSide(player: Boolean, combatant: BattleSession.ActiveCombatant?) =
+        combatant?.slot?.take(2) ?: primaryBattleSlot(player).take(2)
+
     private fun drawCombatant(
         canvas: Canvas,
         centerX: Float,
@@ -2737,7 +2791,8 @@ class BattleSceneView(
         hp: String,
         scale: Float,
         alpha: Float,
-        party: List<BattleSession.PokemonDetails>
+        party: List<BattleSession.PokemonDetails>,
+        ladderBadges: List<ShowdownLadderBadge> = emptyList()
     ) {
         drawBattleStatusCard(
             canvas,
@@ -2746,7 +2801,8 @@ class BattleSceneView(
             scale,
             alpha,
             BattleCardLayout.compactFor(1),
-            party
+            party,
+            ladderBadges
         )
     }
 
@@ -2760,7 +2816,8 @@ class BattleSceneView(
         switchOutVisual: BattleSession.SwitchOutVisual? = null,
         detailsBySlot: Map<String, BattleSession.PokemonDetails> = emptyMap(),
         partyDetails: List<BattleSession.PokemonDetails>,
-        partyDetailsBySlot: Map<String, List<BattleSession.PokemonDetails>> = emptyMap()
+        partyDetailsBySlot: Map<String, List<BattleSession.PokemonDetails>> = emptyMap(),
+        ladderBadges: List<ShowdownLadderBadge> = emptyList()
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
         val nowNanos = System.nanoTime()
@@ -2783,7 +2840,8 @@ class BattleSceneView(
                     scale,
                     alpha,
                     layout,
-                    partyDetailsBySlot[combatant.slot] ?: partyDetails
+                    partyDetailsBySlot[combatant.slot] ?: partyDetails,
+                    ladderBadges.takeIf { index == 0 }.orEmpty()
                 )
             }
         }
@@ -2796,7 +2854,8 @@ class BattleSceneView(
         scale: Float,
         alpha: Float,
         layout: CompactBattleCardLayout,
-        party: List<BattleSession.PokemonDetails>
+        party: List<BattleSession.PokemonDetails>,
+        ladderBadges: List<ShowdownLadderBadge>
     ) {
         drawBattleStatusCard(
             canvas,
@@ -2805,7 +2864,8 @@ class BattleSceneView(
             scale,
             alpha,
             layout,
-            party
+            party,
+            ladderBadges
         )
     }
 
@@ -2816,13 +2876,14 @@ class BattleSceneView(
         scale: Float,
         alpha: Float,
         layout: CompactBattleCardLayout,
-        party: List<BattleSession.PokemonDetails>
+        party: List<BattleSession.PokemonDetails>,
+        ladderBadges: List<ShowdownLadderBadge>
     ) {
         val layer = canvas.saveLayerAlpha(bounds, (alpha * 255f).toInt())
         val left = bounds.left + 20f * scale
         val right = bounds.right - 20f * scale
         drawBattleStatusCardSurface(canvas, bounds, scale)
-        drawBattleStatusCardContent(canvas, bounds, content, left, right, scale, layout, party)
+        drawBattleStatusCardContent(canvas, bounds, content, left, right, scale, layout, party, ladderBadges)
         canvas.restoreToCount(layer)
     }
 
@@ -2834,7 +2895,8 @@ class BattleSceneView(
         textRight: Float,
         scale: Float,
         layout: CompactBattleCardLayout,
-        party: List<BattleSession.PokemonDetails>
+        party: List<BattleSession.PokemonDetails>,
+        ladderBadges: List<ShowdownLadderBadge>
     ) {
         val height = bounds.height()
         val contentLayout = layout.content
@@ -2892,6 +2954,21 @@ class BattleSceneView(
         val ballGap = maxOf(ballSize * 0.12f, 2f * scale)
         val ballStart = textRight - ballSize * 6f - ballGap * 5f
         val ballTop = BattleCardLayout.partyIndicatorTop(bounds.bottom, ballSize, scale)
+        val badgeSize = ballSize * 1.15f
+        ShowdownLadderBadgePresentation.visible(ladderBadges).forEachIndexed { index, badge ->
+            val path = badge.assetPath
+            ladderBadgeSprites[path]?.draw(
+                canvas,
+                RectF(
+                    textLeft + index * (badgeSize + ballGap),
+                    ballTop - badgeSize * 0.08f,
+                    textLeft + index * (badgeSize + ballGap) + badgeSize,
+                    ballTop - badgeSize * 0.08f + badgeSize
+                ),
+                SystemClock.elapsedRealtime(),
+                animate = !animationsPaused
+            )
+        }
         drawPartyIndicators(canvas, party, ballStart, ballTop, ballSize, ballGap)
     }
 

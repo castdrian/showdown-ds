@@ -13,7 +13,7 @@ class BattleSceneEffectsContractTest {
         val fieldIndex = onDraw.indexOf("drawFieldVisuals(canvas, width, height, scale, nowNanos, fieldVisuals)")
         val combatantIndex = onDraw.indexOf("drawCombatant(")
 
-        assertTrue(source.contains("BattleFieldVisualComposer.compose(sceneSnapshot?.battleInfo ?: session.battleInfo())"))
+        assertTrue(source.contains("BattleFieldVisualComposer.compose(battleInfo)"))
         assertTrue(backdropIndex >= 0)
         assertTrue(fieldIndex > backdropIndex)
         assertTrue(combatantIndex > fieldIndex)
