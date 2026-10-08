@@ -32,6 +32,32 @@ class ShowdownDecisionDeliveryTest {
     }
 
     @Test
+    fun ignoresAStaleSentChoiceAcknowledgementForTheSameChoice() {
+        assertFalse(
+            ShowdownDecisionDelivery.shouldClearPendingCommand(
+                "/choose move 1|18",
+                listOf(
+                    "|request|{\"rqid\":18,\"active\":[]}",
+                    "|sentchoice|move 1|17"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun matchesShowdownReconnectAcknowledgementToItsRequest() {
+        assertTrue(
+            ShowdownDecisionDelivery.shouldClearPendingCommand(
+                "/choose move 1|18",
+                listOf(
+                    "|request|{\"rqid\":18,\"active\":[]}",
+                    "|sentchoice|move 1"
+                )
+            )
+        )
+    }
+
+    @Test
     fun clearsWhenTheServerMovesToAnotherRequest() {
         assertFalse(
             ShowdownDecisionDelivery.shouldClearPendingCommand(
@@ -78,7 +104,27 @@ class ShowdownDecisionDeliveryTest {
         assertTrue(
             ShowdownDecisionDelivery.shouldClearPendingCommand(
                 "/choose move 1|17",
-                listOf("|error|Can't move")
+                listOf("|error|[Invalid choice] Can't move")
+            )
+        )
+    }
+
+    @Test
+    fun clearsWhenTheServerReportsAnUnavailableChoice() {
+        assertTrue(
+            ShowdownDecisionDelivery.shouldClearPendingCommand(
+                "/choose move 1|17",
+                listOf("|error|[Unavailable choice] That move is no longer available.")
+            )
+        )
+    }
+
+    @Test
+    fun keepsPendingChoiceWhenAnUnrelatedBattleCommandFails() {
+        assertFalse(
+            ShowdownDecisionDelivery.shouldClearPendingCommand(
+                "/choose move 1|17",
+                listOf("|error|The battle timer is already enabled.")
             )
         )
     }
