@@ -583,6 +583,7 @@ class BattleSession {
     private var nextBattleFeedMessageId = 3L
     private val switchOutVisualsByMessageId = mutableMapOf<Long, SwitchOutVisual>()
     private val battleSceneSnapshotsByMessageId = mutableMapOf<Long, BattleSceneSnapshot>()
+    private val protocolPacketGenerationByMessageId = mutableMapOf<Long, Long>()
     private var battleRoomPresenceLog: BattleRoomPresenceLog? = null
     private var battleRoomRenameFallback: String? = null
     private var battleLogGeneration = 0L
@@ -1121,7 +1122,7 @@ class BattleSession {
 
     fun appendShowdownBattleLog(value: String, generation: Long = battleLogGeneration) {
         if (!acceptsNativeBattleLogGeneration(generation)) return
-        val entries = normalizedShowdownEntries(value)
+        val entries = normalizedShowdownEntries(value, generation = generation)
         if (entries.isEmpty()) return
         appendNormalizedShowdownEntries(entries)
         if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
@@ -1141,7 +1142,7 @@ class BattleSession {
             return
         }
         val previous = showdownBattleMarkupEntries[normalizedKey]
-        val entries = normalizedShowdownEntries(value, previous.orEmpty())
+        val entries = normalizedShowdownEntries(value, previous.orEmpty(), generation)
         if (previous == entries) return
         showdownBattleMarkupEntries.remove(normalizedKey)
         clearBattleFeedEntriesCache()
@@ -1583,6 +1584,7 @@ class BattleSession {
         battleFeedExcludedMessageIds.clear()
         switchOutVisualsByMessageId.clear()
         battleSceneSnapshotsByMessageId.clear()
+        protocolPacketGenerationByMessageId.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
         protocolBattleFeedMarkupEntries.clear()
@@ -1971,6 +1973,7 @@ class BattleSession {
     }
 
     fun applyProtocolPacket(lines: List<String>) {
+        val firstMessageIdInPacket = nextBattleFeedMessageId
         val rawPacket = lines.filter(String::isNotBlank)
         synchronizePlayerSlot(rawPacket)
         val packet = visibleProtocolLines(rawPacket)
@@ -2271,6 +2274,11 @@ class BattleSession {
             activeProtocolLineIndex = -1
             protocolLogSuppressed = false
         }
+        val packetGeneration = battleLogGeneration
+        battleLogMessageIds
+            .asSequence()
+            .filter { it >= firstMessageIdInPacket }
+            .forEach { protocolPacketGenerationByMessageId[it] = packetGeneration }
         protocolListeners.toList().forEach { it.onProtocol(packet) }
         if (events.isNotEmpty()) {
             if (battleEventListeners.isEmpty()) {
@@ -2327,6 +2335,7 @@ class BattleSession {
         battleFeedExcludedMessageIds.clear()
         switchOutVisualsByMessageId.clear()
         battleSceneSnapshotsByMessageId.clear()
+        protocolPacketGenerationByMessageId.clear()
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
         protocolBattleFeedMarkupEntries.clear()
@@ -5191,8 +5200,7 @@ class BattleSession {
         return if (isBattleTextPlayerSide(actor)) name else "the opposing $name"
     }
 
-    private fun isBattleTextPlayerSide(actor: String) =
-        if (isMultiBattle()) targetSlot(actor).take(2).equals(playerSlot, true) else isPlayerSide(actor)
+    private fun isBattleTextPlayerSide(actor: String) = isPlayerSide(actor)
 
     private fun battleActorName(actor: String) = actor.substringAfter(':').trim().ifBlank { "Pokémon" }
 
@@ -5965,6 +5973,7 @@ class BattleSession {
             battleFeedExcludedMessageIds.remove(messageId)
             switchOutVisualsByMessageId.remove(messageId)
             battleSceneSnapshotsByMessageId.remove(messageId)
+            protocolPacketGenerationByMessageId.remove(messageId)
         }
         activityMessages.indices.reversed().firstOrNull { index ->
             activityOrigins[index] == ActivityOrigin.PROTOCOL &&
@@ -6023,6 +6032,7 @@ class BattleSession {
             battleFeedExcludedMessageIds.remove(removedMessageId)
             switchOutVisualsByMessageId.remove(removedMessageId)
             battleSceneSnapshotsByMessageId.remove(removedMessageId)
+            protocolPacketGenerationByMessageId.remove(removedMessageId)
             if (battleLog.none { it == removed }) {
                 protocolBattleFeedMarkupEntries.removeAll { it.plainText == removed }
             }
@@ -6135,6 +6145,7 @@ class BattleSession {
                 battleFeedExcludedMessageIds.remove(oldMessageId)
                 switchOutVisualsByMessageId.remove(oldMessageId)
                 battleSceneSnapshotsByMessageId.remove(oldMessageId)
+                protocolPacketGenerationByMessageId.remove(oldMessageId)
             }
             activityMessages.indexOfLast { it == oldMessage }.takeIf { it >= 0 }?.let(::removeActivityAt)
         }
@@ -6190,13 +6201,15 @@ class BattleSession {
             if (!isProtocolMessage && !isStillInNativeLog) {
                 switchOutVisualsByMessageId.remove(removed.id)
                 battleSceneSnapshotsByMessageId.remove(removed.id)
+                protocolPacketGenerationByMessageId.remove(removed.id)
             }
         }
     }
 
     private fun normalizedShowdownEntries(
         value: String,
-        previous: List<ShowdownBattleLogEntry> = emptyList()
+        previous: List<ShowdownBattleLogEntry> = emptyList(),
+        generation: Long = battleLogGeneration
     ): List<ShowdownBattleLogEntry> {
         val plainEntries = ShowdownBattleLogFilter
             .visibleEntries(value.replace("**", ""))
@@ -6205,6 +6218,11 @@ class BattleSession {
             .visibleMarkupEntries(value)
             .mapNotNull(::sanitizeShowdownMarkup)
         var protocolSearchAfterMessageId = lastNativeProtocolMessageId
+        val previousIds = previous.mapTo(mutableSetOf(), ShowdownBattleLogEntry::id)
+        val claimedProtocolIds = showdownBattleLogEntries
+            .asSequence()
+            .mapTo(mutableSetOf(), ShowdownBattleLogEntry::id)
+            .apply { removeAll(previousIds) }
         val entries = plainEntries.mapIndexed { index, plainText ->
             val previousId = previous.getOrNull(index)
                 ?.takeIf {
@@ -6212,19 +6230,30 @@ class BattleSession {
                 }
                 ?.id
             val protocolIndex = if (previousId == null) {
-                battleLog.indices.firstOrNull { candidateIndex ->
-                    battleLogMessageIds[candidateIndex] > protocolSearchAfterMessageId &&
+                val matchesUnclaimedProtocolEntry: (Int) -> Boolean = { candidateIndex ->
+                    val candidateId = battleLogMessageIds[candidateIndex]
+                    candidateId !in claimedProtocolIds &&
                         BattleFeedMessageIdentity.matchesProtocolFallback(
-                            battleLog[candidateIndex],
-                            plainText,
-                            sideNames.values
+                            battleLog[candidateIndex], plainText, sideNames.values
                         )
+                }
+                battleLog.indices.firstOrNull { candidateIndex ->
+                    val candidateId = battleLogMessageIds[candidateIndex]
+                    protocolPacketGenerationByMessageId[candidateId] == generation &&
+                        matchesUnclaimedProtocolEntry(candidateIndex)
+                } ?: battleLog.indices.firstOrNull { candidateIndex ->
+                    battleLogMessageIds[candidateIndex] > protocolSearchAfterMessageId &&
+                        matchesUnclaimedProtocolEntry(candidateIndex)
                 }
             } else {
                 null
             }
+            if (previousId != null) claimedProtocolIds += previousId
             val protocolId = protocolIndex?.let { battleLogMessageIds[it] }
-            if (protocolId != null) protocolSearchAfterMessageId = protocolId
+            if (protocolId != null) {
+                protocolSearchAfterMessageId = maxOf(protocolSearchAfterMessageId, protocolId)
+                claimedProtocolIds += protocolId
+            }
             val id = previousId ?: protocolId ?: newBattleFeedMessageId()
             if (previousId == null && protocolId == null) {
                 battleSceneSnapshotsByMessageId[id] = createBattleSceneSnapshot()

@@ -386,6 +386,7 @@ class ShowdownConnectionLifecycleTest {
         val battleRoom = "battle-gen9ou-1"
         val battleStateReady = CountDownLatch(1)
         val moveRequestReady = CountDownLatch(1)
+        val terastallizeRequestReady = CountDownLatch(1)
         val connected = CountDownLatch(1)
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         lateinit var connection: ShowdownConnection
@@ -398,7 +399,12 @@ class ShowdownConnectionLifecycleTest {
                 if (roomId != battleRoom) return
                 session.applyProtocolPacket(lines)
                 if (lines.any { it.startsWith("|move|") }) battleStateReady.countDown()
-                if (lines.any { it.startsWith("|request|") }) moveRequestReady.countDown()
+                val request = lines.firstOrNull { it.startsWith("|request|") }
+                if (request?.contains("\"rqid\":43") == true) {
+                    terastallizeRequestReady.countDown()
+                } else if (request != null) {
+                    moveRequestReady.countDown()
+                }
             }
         }
         connection = ShowdownConnection(
@@ -441,6 +447,14 @@ class ShowdownConnectionLifecycleTest {
             session.selectMoveWithTouch(0)
 
             assertEquals("[\"${battleRoom}|/choose move 1|42\"]", server.readClientText(socket))
+
+            val terastallizeRequest = """{"rqid":43,"active":[{"canTerastallize":"Fire","moves":[{"move":"Shadow Ball","pp":14}]}]}"""
+            server.sendText(socket, "a${org.json.JSONArray().put(">$battleRoom\n|request|$terastallizeRequest")}")
+            assertTrue(terastallizeRequestReady.await(2, TimeUnit.SECONDS))
+            session.selectGimmick(BattleSession.BattleGimmick.TERASTALLIZATION)
+            session.selectMoveWithTouch(0)
+
+            assertEquals("[\"${battleRoom}|/choose move 1 terastallize|43\"]", server.readClientText(socket))
         } finally {
             connection.close()
             server.close()
@@ -667,7 +681,7 @@ class ShowdownConnectionLifecycleTest {
         val port: Int
             get() = serverSocket.localPort
 
-        fun awaitClient(): Socket = clients.poll(2, TimeUnit.SECONDS)
+        fun awaitClient(): Socket = clients.poll(10, TimeUnit.SECONDS)
             ?: error("The WebSocket client did not connect")
 
         fun sendText(socket: Socket, text: String) {

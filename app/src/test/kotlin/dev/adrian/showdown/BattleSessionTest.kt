@@ -692,6 +692,39 @@ class BattleSessionTest {
     }
 
     @Test
+    fun lateNativeMoveFromAnEarlierGenerationRetainsItsOriginalPokemonScene() {
+        val session = BattleSession()
+        session.applyProtocolLine("|init|battle")
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p2a: Eevee|Eevee, L50|100/100",
+                "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee"
+            )
+        )
+        val earlierGeneration = session.battleLogGeneration()
+        val earlierMessage = session.battleFeedMessages().single { it.text == "Pikachu used Thunderbolt!" }
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Gengar|Gengar, L50|100/100",
+                "|move|p1a: Gengar|Shadow Ball|p2a: Eevee"
+            )
+        )
+        val latestGeneration = session.battleLogGeneration()
+
+        session.appendShowdownBattleLog("Gengar used Shadow Ball!", latestGeneration)
+        session.markNativeBattleLogSynchronized(latestGeneration)
+        session.appendShowdownBattleLog("Pikachu used Thunderbolt!", earlierGeneration)
+
+        val delayedMessage = session.battleFeedMessages().single { it.text == "Pikachu used Thunderbolt!" }
+        assertEquals(earlierMessage.id, delayedMessage.id)
+        assertEquals(
+            "Pikachu",
+            delayedMessage.sceneContext?.snapshot?.playerCombatants?.single()?.name
+        )
+    }
+
+    @Test
     fun protocolListenersObserveTheGenerationAfterThePacketIsApplied() {
         val session = BattleSession()
         var observedGeneration = -1L
@@ -1540,6 +1573,85 @@ class BattleSessionTest {
         assertEquals("FOE", session.opponentName)
         assertEquals(listOf("Incineroar", "Mimikyu"), session.playerActiveCombatants().map { it.name })
         assertEquals(listOf("Tapu Koko", "Landorus"), session.opponentActiveCombatants().map { it.name })
+    }
+
+    @Test
+    fun multiPartnerMoveNarrationMatchesUpstreamTrainerPerspective() {
+        val trainers = listOf(
+            Triple("PLAYER1", "p3b: Granbull", "p2a: Iron Hands"),
+            Triple("PLAYER2", "p4b: Hoopa", "p1a: Quagsire"),
+            Triple("PLAYER3", "p1a: Quagsire", "p2a: Iron Hands"),
+            Triple("PLAYER4", "p2a: Iron Hands", "p1a: Quagsire")
+        )
+        val players = listOf(
+            "|init|battle",
+            "|gametype|multi",
+            "|player|p1|PLAYER1",
+            "|player|p2|PLAYER2",
+            "|player|p3|PLAYER3",
+            "|player|p4|PLAYER4"
+        )
+
+        trainers.forEach { (username, partner, opponent) ->
+            val session = BattleSession().apply { setLocalUsername(username) }
+            session.applyProtocolPacket(players + "|move|$partner|Play Rough|$opponent")
+            session.applyProtocolLine("|move|$opponent|Tackle|$partner")
+
+            assertTrue(session.isLocalBattleSide(partner))
+            assertEquals(
+                listOf(
+                    "${partner.substringAfter(": ")} used Play Rough!",
+                    "The opposing ${opponent.substringAfter(": ")} used Tackle!"
+                ),
+                session.battleLog().takeLast(2)
+            )
+        }
+    }
+
+    @Test
+    fun chunkedMultiReplayKeepsPartnerMoveOnThePlayerTeam() {
+        val transcript = listOf(
+            "|init|battle",
+            "|gametype|multi",
+            "|player|p1|PLAYER1||",
+            "|player|p2|PLAYER2||",
+            "|player|p3|PLAYER3||",
+            "|player|p4|PLAYER4||",
+            "|move|p3b: Granbull|Play Rough|p2a: Iron Hands"
+        )
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER1")
+            setReplayMode(true)
+        }
+
+        BattlePlaybackTiming.chunks(transcript).forEach(session::applyProtocolPacket)
+
+        assertEquals("p1", session.battlePlayerSlot())
+        assertTrue(session.isLocalBattleSide("p3b"))
+        assertEquals("Granbull used Play Rough!", session.battleLog().last())
+    }
+
+    @Test
+    fun replayNarrationUsesTheSelectedP3TrainerPerspectiveInMulti() {
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER3")
+            setReplayMode(true)
+        }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|gametype|multi",
+                "|player|p1|PLAYER1||",
+                "|player|p2|PLAYER2||",
+                "|player|p3|PLAYER3||",
+                "|player|p4|PLAYER4||"
+            )
+        )
+        session.applyProtocolLine("|move|p1a: Quagsire|Recover|p1a: Quagsire")
+
+        assertEquals("p3", session.battlePlayerSlot())
+        assertTrue(session.isLocalBattleSide("p1a"))
+        assertEquals("Quagsire used Recover!", session.battleLog().last())
     }
 
     @Test

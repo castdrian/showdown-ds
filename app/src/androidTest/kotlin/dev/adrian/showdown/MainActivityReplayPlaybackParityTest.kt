@@ -1,10 +1,13 @@
 package dev.adrian.showdown
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,7 +22,18 @@ class MainActivityReplayPlaybackParityTest {
         val displayedSwitchOutVisual: BattleSession.SwitchOutVisual?,
         val spriteStyle: BattleSession.SpriteStyle,
         val playerSprite: BattleSpriteRequest?,
-        val opponentSprite: BattleSpriteRequest?
+        val opponentSprite: BattleSpriteRequest?,
+        val singlesBattle: Boolean = true,
+        val playerActiveSprites: Map<String, BattleSpriteRequest> = emptyMap(),
+        val opponentActiveSprites: Map<String, BattleSpriteRequest> = emptyMap()
+    )
+
+    private data class MultiReplayMoveExpectation(
+        val slot: String,
+        val actorName: String,
+        val moveName: String,
+        val side: BattleSpriteSide,
+        val expectedOpposingPrefix: Boolean
     )
 
     @Test
@@ -124,6 +138,190 @@ class MainActivityReplayPlaybackParityTest {
     }
 
     @Test
+    fun productionFullReplayKeepsPokemonNarrationPairedWithItsDisplayedScene() {
+        val replayFixtures = InstrumentationRegistry.getInstrumentation().context.assets
+            .list("")
+            .orEmpty()
+            .filter { it.endsWith(".json") }
+            .sorted()
+        assertTrue("The production replay parity suite must contain official replay fixtures", replayFixtures.isNotEmpty())
+        replayFixtures.forEach(::assertProductionReplayPokemonNarrationAlignment)
+    }
+
+    private fun assertProductionReplayPokemonNarrationAlignment(replayFileName: String) {
+        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
+            .open(replayFileName)
+            .bufferedReader()
+            .use { it.readText() }
+        val replay = ShowdownReplayImporter.payload(replayJson)
+        val replayLines = replay.log.lines()
+        val pokemonNames = protocolPokemonNames(replayLines)
+        val expectedPokemonMessageIds = linkedSetOf<Long>()
+        val knownMessageIds = mutableSetOf<Long>()
+        val packetByMessageId = mutableMapOf<Long, List<String>>()
+        val messageById = mutableMapOf<Long, BattleFeedMessage>()
+        val observedFrames = linkedMapOf<Long, ReplayFrameObservation>()
+        val preferences = targetContext.getSharedPreferences("showdown_live", 0)
+        val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
+        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        lateinit var replaySession: BattleSession
+        val protocolListener = BattleSession.ProtocolListener { packet ->
+            replaySession.battleFeedMessages(Int.MAX_VALUE).forEach { message ->
+                if (knownMessageIds.add(message.id)) {
+                    packetByMessageId[message.id] = packet
+                    messageById[message.id] = message
+                    if (replaySession.battleFeedVisible && pokemonNames.any { name ->
+                            mentionsPokemon(message.text, name)
+                        }
+                    ) {
+                        expectedPokemonMessageIds += message.id
+                    }
+                }
+            }
+        }
+        var scenario: ActivityScenario<MainActivity>? = null
+        var replayFinished = false
+        var latestPlaybackState = "unobserved"
+        val maximumSteps = BattlePlaybackTiming.chunks(replayLines).size + 4
+
+        try {
+            preferences.edit().putBoolean("maintain_connection", false).commit()
+            scenario = ActivityScenario.launch(MainActivity::class.java)
+            val activeScenario = checkNotNull(scenario)
+            activeScenario.onActivity { activity ->
+                setPrivateField(activity, "restoredReplaySpeed", BattlePlaybackSpeed.MAXIMUM)
+                setPrivateField(activity, "lightweightBattlePlayback", true)
+                MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
+                    .apply { isAccessible = true }
+                    .invoke(activity, replay)
+                replaySession = privateField(activity, "session") as BattleSession
+                replaySession.battleFeedMessages(Int.MAX_VALUE).forEach { knownMessageIds += it.id }
+                replaySession.addProtocolListener(protocolListener)
+                drainDisplayedReplayMessages(activity, pokemonNames, packetByMessageId, observedFrames, canvas)
+                val advanceMethod = MainActivity::class.java.getDeclaredMethod("advanceBattlePlayback")
+                    .apply { isAccessible = true }
+                var step = 0
+                while (step++ < maximumSteps && !replayFinished) {
+                    val session = privateField(activity, "session") as BattleSession
+                    val pendingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
+                    val scheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
+                    if (scheduled || !pendingPackets.isNullOrEmpty()) {
+                        val handler = privateField(activity, "battleEventHandler") as android.os.Handler
+                        val advanceRunnable = privateField(activity, "playbackAdvanceRunnable") as Runnable
+                        handler.removeCallbacks(advanceRunnable)
+                        advanceMethod.invoke(activity)
+                    }
+                    drainDisplayedReplayMessages(
+                        activity,
+                        pokemonNames,
+                        packetByMessageId,
+                        observedFrames,
+                        canvas
+                    )
+                    val remainingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
+                    val playbackScheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
+                    replayFinished = session.isBattleFinished() && remainingPackets.isNullOrEmpty() && !playbackScheduled
+                    latestPlaybackState = "finished=${session.isBattleFinished()}; scheduled=$playbackScheduled; " +
+                        "pending=${remainingPackets?.size}; visible=${privateField(privateField(activity, "battleScene")!!, "cachedBattleFeedVisibleText")}; " +
+                        "observed=${observedFrames.size}; expected=${expectedPokemonMessageIds.size}"
+                }
+            }
+
+            assertTrue(
+                "$replayFileName did not consume the complete official battle. $latestPlaybackState",
+                replayFinished
+            )
+            assertTrue(
+                "$replayFileName exposed too few Pokémon-bearing messages: ${expectedPokemonMessageIds.size}",
+                expectedPokemonMessageIds.size >= 20
+            )
+            val missingMessageDetails = (expectedPokemonMessageIds - observedFrames.keys).mapNotNull { id ->
+                messageById[id]?.let { message ->
+                    "$id: ${message.text}; packet=${packetByMessageId[id]}; " +
+                        "scene=${message.sceneContext?.snapshot?.playerCombatants?.map(BattleSession.ActiveCombatant::name)} / " +
+                        "${message.sceneContext?.snapshot?.opponentCombatants?.map(BattleSession.ActiveCombatant::name)}"
+                }
+            }
+            assertTrue(
+                "$replayFileName failed to display Pokémon-bearing entries: " +
+                    "missing=$missingMessageDetails; state=$latestPlaybackState",
+                observedFrames.keys.containsAll(expectedPokemonMessageIds)
+            )
+            observedFrames.values.forEach { frame ->
+                assertEquals(frame.text, frame.message.text)
+                assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
+                assertEquals(frame.message.sceneContext?.switchOutVisual, frame.displayedSwitchOutVisual)
+                if (frame.message.id in expectedPokemonMessageIds) {
+                    assertNotNull(
+                        "$replayFileName has no displayed scene for Pokémon-bearing entry '${frame.text}'",
+                        frame.displayedScene
+                    )
+                }
+                assertVisiblePokemonNamesBelongToDisplayedScene(
+                    frame,
+                    pokemonNames,
+                    protocolOffScreenPokemonNames(packetByMessageId[frame.message.id].orEmpty())
+                )
+                val snapshot = frame.displayedScene ?: return@forEach
+                val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+                    snapshot.playerCombatants,
+                    true,
+                    frame.displayedSwitchOutVisual
+                )
+                val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+                    snapshot.opponentCombatants,
+                    false,
+                    frame.displayedSwitchOutVisual
+                )
+                if (frame.singlesBattle) {
+                    val expectedPlayer = BattleSpriteRequests.active(
+                        playerCombatants,
+                        BattleSpriteSide.PLAYER,
+                        frame.spriteStyle
+                    ).firstOrNull()?.request
+                    val expectedOpponent = BattleSpriteRequests.active(
+                        opponentCombatants,
+                        BattleSpriteSide.OPPONENT,
+                        frame.spriteStyle
+                    ).firstOrNull()?.request
+                    if (expectedPlayer != null) {
+                        assertEquals(frame.text, expectedPlayer.species, frame.playerSprite?.species)
+                    }
+                    if (expectedOpponent != null) {
+                        assertEquals(frame.text, expectedOpponent.species, frame.opponentSprite?.species)
+                    }
+                } else {
+                    val expectedPlayer = BattleSpriteRequests.active(
+                        playerCombatants,
+                        BattleSpriteSide.PLAYER,
+                        frame.spriteStyle
+                    ).associate { it.slot to it.request }
+                    val expectedOpponent = BattleSpriteRequests.active(
+                        opponentCombatants,
+                        BattleSpriteSide.OPPONENT,
+                        frame.spriteStyle
+                    ).associate { it.slot to it.request }
+                    if (expectedPlayer.isNotEmpty()) {
+                        assertEquals(frame.text, expectedPlayer, frame.playerActiveSprites)
+                    }
+                    if (expectedOpponent.isNotEmpty()) {
+                        assertEquals(frame.text, expectedOpponent, frame.opponentActiveSprites)
+                    }
+                }
+            }
+        } finally {
+            scenario?.onActivity { activity ->
+                (privateField(activity, "session") as BattleSession).removeProtocolListener(protocolListener)
+            }
+            scenario?.close()
+            bitmap.recycle()
+            preferences.edit().putBoolean("maintain_connection", previousConnectionPreference).commit()
+        }
+    }
+
+    @Test
     fun productionReplayPairsIllusionRevealWithTheRevealedPokemonSprite() {
         val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
         val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
@@ -212,7 +410,161 @@ class MainActivityReplayPlaybackParityTest {
         }
     }
 
-    private fun assertVisiblePokemonNamesBelongToDisplayedScene(frame: ReplayFrameObservation) {
+    @Test
+    fun productionMultiReplayKeepsEachMoveActorPairedWithItsVisibleSprite() {
+        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
+            .open("gen9multirandombattle-2641276114.json")
+            .bufferedReader()
+            .use { it.readText() }
+        val completeReplay = ShowdownReplayImporter.payload(replayJson)
+        val replayLines = completeReplay.log.lines()
+        val finalReplayLine = replayLines.indexOfFirst {
+            it.startsWith("|move|p3b: Granbull|Play Rough|p2a: Iron Hands")
+        }
+        assertTrue("The official multiplayer replay is missing its fourth opening move", finalReplayLine >= 0)
+        val replay = completeReplay.copy(log = replayLines.take(finalReplayLine + 1).joinToString("\n"))
+        val expectedMoves = listOf(
+            MultiReplayMoveExpectation("p2a", "Iron Hands", "Fake Out", BattleSpriteSide.OPPONENT, true),
+            MultiReplayMoveExpectation("p1a", "Quagsire", "Yawn", BattleSpriteSide.PLAYER, false),
+            MultiReplayMoveExpectation("p4b", "Vaporeon", "Yawn", BattleSpriteSide.OPPONENT, true),
+            MultiReplayMoveExpectation("p3b", "Granbull", "Play Rough", BattleSpriteSide.PLAYER, false)
+        )
+        val preferences = targetContext.getSharedPreferences("showdown_live", 0)
+        val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
+        val observedFrames = linkedMapOf<String, ReplayFrameObservation>()
+        val displayedFrames = linkedMapOf<Long, ReplayFrameObservation>()
+        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        var latestNativeLog = emptyList<String>()
+        var latestProtocolLog = emptyList<String>()
+        var latestPlaybackState = "unobserved"
+        var replayPlaybackDrained = false
+        var scenario: ActivityScenario<MainActivity>? = null
+
+        try {
+            preferences.edit().putBoolean("maintain_connection", false).commit()
+            scenario = ActivityScenario.launch(MainActivity::class.java)
+            val activeScenario = checkNotNull(scenario)
+            activeScenario.onActivity { activity ->
+                setPrivateField(activity, "restoredReplaySpeed", BattlePlaybackSpeed.MAXIMUM)
+                setPrivateField(activity, "lightweightBattlePlayback", true)
+                MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
+                    .apply { isAccessible = true }
+                    .invoke(activity, replay)
+                val session = privateField(activity, "session") as BattleSession
+                val scene = privateField(activity, "battleScene") as BattleSceneView
+                val maximumSteps = BattlePlaybackTiming.chunks(replayLines).size + 4
+                val advanceMethod = MainActivity::class.java.getDeclaredMethod("advanceBattlePlayback")
+                    .apply { isAccessible = true }
+                var step = 0
+                while (step++ < maximumSteps && !replayPlaybackDrained) {
+                    val pendingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
+                    val scheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
+                    if (scheduled || !pendingPackets.isNullOrEmpty()) {
+                        val handler = privateField(activity, "battleEventHandler") as android.os.Handler
+                        val advanceRunnable = privateField(activity, "playbackAdvanceRunnable") as Runnable
+                        handler.removeCallbacks(advanceRunnable)
+                        advanceMethod.invoke(activity)
+                    }
+                    drainDisplayedReplayMessages(
+                        activity,
+                        expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::actorName),
+                        emptyMap(),
+                        displayedFrames,
+                        canvas
+                    )
+                    val remainingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
+                    val playbackScheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
+                    replayPlaybackDrained = remainingPackets.isNullOrEmpty() && !playbackScheduled
+                    latestPlaybackState = "paused=${privateField(activity, "replayPaused")}; " +
+                        "scheduled=$playbackScheduled; pending=${remainingPackets?.size}; " +
+                        "rendererStalled=${privateField(activity, "rendererRecoveryStalled")}; " +
+                        "lightweight=${privateField(activity, "lightweightBattlePlayback")}; " +
+                        "visible=${privateField(scene, "cachedBattleFeedVisibleText")}; " +
+                        "observed=${displayedFrames.size}"
+                }
+                latestNativeLog = session.showdownBattleLog()
+                latestProtocolLog = session.battleLog()
+            }
+
+            displayedFrames.values.forEach { frame ->
+                val expectedMove = expectedMoves.firstOrNull { candidate ->
+                    frame.text.contains(candidate.actorName, true) &&
+                        frame.text.contains("used ${candidate.moveName}", true)
+                } ?: return@forEach
+                observedFrames.putIfAbsent(expectedMove.slot, frame)
+            }
+            val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
+            assertTrue(
+                "The production multiplayer replay did not drain its scheduled packets. " +
+                    "native=$latestNativeLog; protocol=$latestProtocolLog; playback=$latestPlaybackState",
+                replayPlaybackDrained
+            )
+            assertEquals(
+                "The production multiplayer replay skipped one or more opening move actors. " +
+                    "visible=$observedTexts; native=$latestNativeLog; protocol=$latestProtocolLog; " +
+                    "playback=$latestPlaybackState",
+                expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::slot),
+                observedFrames.keys
+            )
+            observedFrames.forEach { (slot, frame) ->
+                val expectedMove = expectedMoves.single { it.slot == slot }
+                assertEquals(frame.text, frame.message.text)
+                assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
+                assertEquals(frame.message.sceneContext?.switchOutVisual, frame.displayedSwitchOutVisual)
+                assertVisiblePokemonNamesBelongToDisplayedScene(frame)
+                val snapshot = checkNotNull(frame.displayedScene)
+                val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+                    snapshot.playerCombatants,
+                    true,
+                    frame.displayedSwitchOutVisual
+                )
+                val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+                    snapshot.opponentCombatants,
+                    false,
+                    frame.displayedSwitchOutVisual
+                )
+                val activeCombatants = playerCombatants + opponentCombatants
+                val combatant = activeCombatants.singleOrNull { it.slot.equals(slot, true) }
+                assertEquals(frame.text, expectedMove.actorName, combatant?.name)
+                assertEquals(frame.text, expectedMove.actorName, combatant?.species)
+                val playerSide = playerCombatants.any { it.slot.equals(slot, true) }
+                assertEquals(frame.text, expectedMove.side == BattleSpriteSide.PLAYER, playerSide)
+                assertEquals(
+                    frame.text,
+                    expectedMove.expectedOpposingPrefix,
+                    frame.text.startsWith("The opposing ", ignoreCase = true)
+                )
+                val spriteRequests = if (playerSide) frame.playerActiveSprites else frame.opponentActiveSprites
+                val spriteRequest = spriteRequests[slot]
+                assertEquals(frame.text, expectedMove.actorName, spriteRequest?.species)
+                assertEquals(frame.text, expectedMove.side, spriteRequest?.side)
+                val expectedPlayerSprites = BattleSpriteRequests.active(
+                    playerCombatants,
+                    BattleSpriteSide.PLAYER,
+                    frame.spriteStyle
+                ).associate { it.slot to it.request }
+                val expectedOpponentSprites = BattleSpriteRequests.active(
+                    opponentCombatants,
+                    BattleSpriteSide.OPPONENT,
+                    frame.spriteStyle
+                ).associate { it.slot to it.request }
+                assertEquals(frame.text, expectedPlayerSprites, frame.playerActiveSprites)
+                assertEquals(frame.text, expectedOpponentSprites, frame.opponentActiveSprites)
+            }
+        } finally {
+            scenario?.close()
+            bitmap.recycle()
+            preferences.edit().putBoolean("maintain_connection", previousConnectionPreference).commit()
+        }
+    }
+
+    private fun assertVisiblePokemonNamesBelongToDisplayedScene(
+        frame: ReplayFrameObservation,
+        knownPokemonNames: Collection<String> = listOf("Gliscor", "Swanna", "Weavile", "Dewgong"),
+        offScreenSources: Set<String> = emptySet()
+    ) {
         val snapshot = frame.displayedScene ?: return
         val combatants = snapshot.playerCombatants + snapshot.opponentCombatants +
             listOfNotNull(frame.displayedSwitchOutVisual?.combatant)
@@ -223,6 +575,8 @@ class MainActivityReplayPlaybackParityTest {
         val moveActor = frame.text
             .takeIf { moveSeparator >= 0 }
             ?.substring(0, moveSeparator)
+            ?.trim()
+            ?.trimStart('(', '[')
             ?.replaceFirst(Regex("^the opposing\\s+", RegexOption.IGNORE_CASE), "")
             ?.substringAfterLast("'s ")
             ?.trim()
@@ -232,15 +586,134 @@ class MainActivityReplayPlaybackParityTest {
                 identities.any { it.equals(moveActor, ignoreCase = true) }
             )
         }
-        listOf("Gliscor", "Swanna", "Weavile", "Dewgong")
+        knownPokemonNames
             .filter { identity -> frame.text.contains(identity, ignoreCase = true) }
             .forEach { identity ->
+                if (identity in offScreenSources) return@forEach
                 assertTrue(
                     "Visible replay entry '${frame.text}' names $identity outside the displayed scene $identities",
                     identities.any { it.equals(identity, ignoreCase = true) }
                 )
             }
     }
+
+    private fun drainDisplayedReplayMessages(
+        activity: MainActivity,
+        knownPokemonNames: Set<String>,
+        packetByMessageId: Map<Long, List<String>>,
+        observedFrames: MutableMap<Long, ReplayFrameObservation>,
+        canvas: Canvas
+    ) {
+        val session = privateField(activity, "session") as BattleSession
+        val scene = privateField(activity, "battleScene") as BattleSceneView
+        val presentation = privateField(scene, "battleFeedPresentation") as BattleFeedPresentation
+        var steps = 0
+        val maximumSteps = session.battleFeedMessages(Int.MAX_VALUE).size + 2
+
+        while (steps++ < maximumSteps) {
+            scene.draw(canvas)
+            val text = privateField(scene, "cachedBattleFeedVisibleText") as? String
+            val message = privateField(presentation, "currentMessage") as? BattleFeedMessage
+            if (text != null && message != null && message.text == text) {
+                val frame = ReplayFrameObservation(
+                    text = text,
+                    message = message,
+                    displayedScene = privateField(scene, "displayedBattleSceneSnapshot") as? BattleSession.BattleSceneSnapshot,
+                    displayedSwitchOutVisual = privateField(scene, "displayedSwitchOutVisual") as? BattleSession.SwitchOutVisual,
+                    spriteStyle = session.spriteStyle,
+                    singlesBattle = session.isSinglesBattle(),
+                    playerSprite = privateField(scene, "requestedPlayerSprite") as? BattleSpriteRequest,
+                    opponentSprite = privateField(scene, "requestedOpponentSprite") as? BattleSpriteRequest,
+                    playerActiveSprites = privateSpriteRequests(scene, "requestedPlayerActiveSprites"),
+                    opponentActiveSprites = privateSpriteRequests(scene, "requestedOpponentActiveSprites")
+                )
+                assertEquals(frame.text, frame.message.text)
+                assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
+                assertEquals(frame.message.sceneContext?.switchOutVisual, frame.displayedSwitchOutVisual)
+                assertVisiblePokemonNamesBelongToDisplayedScene(
+                    frame,
+                    knownPokemonNames,
+                    protocolOffScreenPokemonNames(packetByMessageId[message.id].orEmpty())
+                )
+                frame.displayedScene?.let { snapshot ->
+                    val switchOutVisual = frame.displayedSwitchOutVisual
+                    val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+                        snapshot.playerCombatants,
+                        true,
+                        switchOutVisual
+                    )
+                    val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+                        snapshot.opponentCombatants,
+                        false,
+                        switchOutVisual
+                    )
+                    val spriteRequests = BattleSpriteRequests.forScene(
+                        playerCombatants = playerCombatants,
+                        opponentCombatants = opponentCombatants,
+                        singlesBattle = session.isSinglesBattle(),
+                        style = frame.spriteStyle,
+                        playerFallbackSpecies = session.playerPokemon,
+                        opponentFallbackSpecies = session.opponentPokemon
+                    )
+                    if (spriteRequests.playerLead != null) {
+                        assertEquals(frame.text, spriteRequests.playerLead.species, frame.playerSprite?.species)
+                    }
+                    if (spriteRequests.opponentLead != null) {
+                        assertEquals(frame.text, spriteRequests.opponentLead.species, frame.opponentSprite?.species)
+                    }
+                }
+                observedFrames.putIfAbsent(message.id, frame)
+            }
+
+            val pendingMessages = privateField(presentation, "pendingMessages") as? Collection<*>
+            if (pendingMessages.isNullOrEmpty() || !session.battleFeedVisible) return
+            val nowMillis = SystemClock.elapsedRealtime()
+            presentation.advanceOnTap(nowMillis)
+            presentation.advanceOnTap(nowMillis)
+        }
+    }
+
+    private fun protocolPokemonNames(lines: List<String>): Set<String> = buildSet {
+        val actorPattern = Regex("^p[1-4][a-z]:\\s*(.+)$", RegexOption.IGNORE_CASE)
+        val speciesActions = setOf("switch", "drag", "replace", "detailschange", "-formechange")
+        lines.forEach { line ->
+            val fields = line.split('|')
+            fields.drop(2).forEach { field ->
+                actorPattern.matchEntire(field)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf { it.length >= 3 }
+                    ?.let(::add)
+            }
+            if (fields.getOrNull(1) in speciesActions) {
+                fields.getOrNull(3)
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::add)
+            }
+        }
+    }
+
+    private fun protocolOffScreenPokemonNames(lines: List<String>): Set<String> {
+        val sourcePattern = Regex("^\\[(?:wisher|of)]\\s+(.+)$", RegexOption.IGNORE_CASE)
+        val actorPattern = Regex("^p[1-4][a-z]:\\s*(.+)$", RegexOption.IGNORE_CASE)
+        return lines.flatMap { line ->
+            line.split('|').drop(2).mapNotNull { field ->
+                sourcePattern.matchEntire(field)?.groupValues?.get(1)
+                    ?.let { source -> actorPattern.matchEntire(source)?.groupValues?.get(1) ?: source }
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf { it.length >= 3 }
+            }
+        }.toSet()
+    }
+
+    private fun mentionsPokemon(message: String, name: String): Boolean =
+        Regex("(?<![\\p{L}\\p{N}])${Regex.escape(name)}(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
+            .containsMatchIn(message)
 
     private fun privateField(target: Any, name: String): Any? = target.javaClass
         .getDeclaredField(name)
@@ -252,4 +725,11 @@ class MainActivityReplayPlaybackParityTest {
             .apply { isAccessible = true }
             .set(target, value)
     }
+
+    private fun privateSpriteRequests(target: Any, name: String): Map<String, BattleSpriteRequest> =
+        ((privateField(target, name) as? Map<*, *>) ?: emptyMap<Any, Any>())
+            .mapNotNull { (slot, request) ->
+                if (slot is String && request is BattleSpriteRequest) slot to request else null
+            }
+            .toMap()
 }

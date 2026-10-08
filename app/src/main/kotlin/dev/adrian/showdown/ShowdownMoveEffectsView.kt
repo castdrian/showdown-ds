@@ -273,6 +273,7 @@ class ShowdownMoveEffectsView(
                     (function () {
                         var battle = null;
                         var nativeBattlePerspective = 'p1';
+                        var nativeBattlePerspectivePending = false;
                         var animationSpeed = 1;
                         var animationsDisabledForTesting = false;
                         var captureNativeBattleLog = true;
@@ -385,11 +386,58 @@ class ShowdownMoveEffectsView(
                             }
                         }
                         function applyNativeBattlePerspective() {
-                            if (!battle) return;
+                            if (!battle || !battle[nativeBattlePerspective]) return false;
                             battle.setViewpoint(nativeBattlePerspective);
                             if (battle.scene && battle.scene.log && battle.scene.log.battleParser) {
-                                battle.scene.log.battleParser.perspective = battle.mySide.sideid;
+                                var parser = battle.scene.log.battleParser;
+                                parser.perspective = battle.mySide.sideid;
+                                if (!parser.__showdownNativeMultiPerspectivePatched && typeof parser.pokemon === 'function') {
+                                    var originalPokemon = parser.pokemon;
+                                    var originalTeam = parser.team;
+                                    var originalParty = parser.party;
+                                    function isPerspectiveOrAlly(side, perspective) {
+                                        var sideId = String(side || '').slice(0, 2);
+                                        if (!['p1', 'p2', 'p3', 'p4'].includes(sideId)) return null;
+                                        var ally = {p1: 'p3', p2: 'p4', p3: 'p1', p4: 'p2'}[perspective];
+                                        return sideId === perspective || sideId === ally;
+                                    }
+                                    parser.pokemon = function (pokemon) {
+                                        if (!battle || battle.gameType !== 'multi' || !pokemon) {
+                                            return originalPokemon.apply(this, arguments);
+                                        }
+                                        var isNear = isPerspectiveOrAlly(pokemon, this.perspective);
+                                        if (isNear === null) {
+                                            return originalPokemon.apply(this, arguments);
+                                        }
+                                        var name = this.pokemonName(pokemon);
+                                        var template = this.defaultText(isNear ? 'pokemon' : 'opposingPokemon');
+                                        return this.render(template, {NICKNAME: name});
+                                    };
+                                    if (typeof originalTeam === 'function') {
+                                        parser.team = function (side, isFar) {
+                                            if (!battle || battle.gameType !== 'multi' || !side) {
+                                                return originalTeam.apply(this, arguments);
+                                            }
+                                            var isNear = isPerspectiveOrAlly(side, this.perspective);
+                                            if (isNear === null) return originalTeam.apply(this, arguments);
+                                            var template = isNear !== !!isFar ? 'team' : 'opposingTeam';
+                                            return this.defaultText(template);
+                                        };
+                                    }
+                                    if (typeof originalParty === 'function') {
+                                        parser.party = function (side) {
+                                            if (!battle || battle.gameType !== 'multi' || !side) {
+                                                return originalParty.apply(this, arguments);
+                                            }
+                                            var isNear = isPerspectiveOrAlly(side, this.perspective);
+                                            if (isNear === null) return originalParty.apply(this, arguments);
+                                            return this.defaultText(isNear ? 'party' : 'opposingParty');
+                                        };
+                                    }
+                                    parser.__showdownNativeMultiPerspectivePatched = true;
+                                }
                             }
+                            return true;
                         }
                         function installBattleLogHooks() {
                             if (typeof BattleLog === 'undefined' || BattleLog.prototype.__showdownNativeBattleLogHooked) return;
@@ -407,6 +455,9 @@ class ShowdownMoveEffectsView(
                                         }
                                     }
                                     var result = originalRun.apply(this, arguments);
+                                    if (!preempt && typeof line === 'string' && line.indexOf('|player|' + nativeBattlePerspective + '|') === 0) {
+                                        nativeBattlePerspectivePending = true;
+                                    }
                                     if (!preempt && this.currentStep === stepIndex) {
                                         var synchronizedGeneration = nativeBattleLogSyncGenerationByStep[stepIndex];
                                         if (synchronizedGeneration !== undefined) {
@@ -804,10 +855,13 @@ class ShowdownMoveEffectsView(
                                         nativeSeedAnimationOff = false;
                                         battle.scene.animationOn();
                                     }
+                                    if (nativeBattlePerspectivePending) {
+                                        nativeBattlePerspectivePending = !applyNativeBattlePerspective();
+                                    }
                                     nativeBattleEffectsReachedQueueEnd();
                                 }
                             };
-                            applyNativeBattlePerspective();
+                            nativeBattlePerspectivePending = !applyNativeBattlePerspective();
                             battle.setMute(true);
                             var scene = battle.scene;
                             if (animationsDisabledForTesting) disableTestAnimations(scene);
@@ -875,7 +929,7 @@ class ShowdownMoveEffectsView(
                             setPerspective: function (side) {
                                 if (${ShowdownBattlePerspective.javascriptGuard}) return;
                                 nativeBattlePerspective = side;
-                                applyNativeBattlePerspective();
+                                nativeBattlePerspectivePending = !applyNativeBattlePerspective();
                             },
                             pause: function () {
                                 clearNativeIdlePauseTimer();

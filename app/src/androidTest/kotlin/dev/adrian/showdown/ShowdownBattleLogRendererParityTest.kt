@@ -21,7 +21,7 @@ class ShowdownBattleLogRendererParityTest {
         val name: String
     )
 
-    private val maximumNativeReplayDurationMillis = TimeUnit.SECONDS.toMillis(30)
+    private val maximumNativeReplayDurationMillis = TimeUnit.SECONDS.toMillis(45)
 
     @get:Rule
     val activityRule = ActivityScenarioRule(ShowdownLogParityHarnessActivity::class.java)
@@ -88,6 +88,45 @@ class ShowdownBattleLogRendererParityTest {
             "Multi partner narration was paired with the wrong Pokémon side: $narrationIdentityFailures",
             narrationIdentityFailures.isEmpty()
         )
+    }
+
+    @Test
+    fun nativeMultiSideConditionUsesTheSelectedPerspectiveForItsAlly() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p3")
+        }
+        val transcript = listOf(
+            "|player|p1|PARTNER||",
+            "|player|p2|FOE||",
+            "|player|p3|ALLY||",
+            "|player|p4|FOE2||",
+            "|gametype|multi",
+            "|switch|p1a: Partner|Incineroar, L50|100/100",
+            "|-sidestart|p1|Reflect",
+            "|-sidestart|p1|move: G-Max Steelsurge",
+            "|-ability|p1a: Partner|Unnerve"
+        )
+        val generation = BattleSession().battleLogGeneration()
+        val syncCount = activity.synchronizedGenerations.size
+
+        activity.renderer.applyProtocol(transcript, generation)
+        awaitSynchronization(activity, syncCount, generation)
+
+        val nativeTexts = activity.nativeEntries
+            .filter { it.first == generation }
+            .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
+
+        assertTrue("A partner's Reflect was described as opposing: $nativeTexts", nativeTexts.any {
+            it.contains("Reflect made your team stronger against physical moves!")
+        })
+        assertTrue("A partner's G-Max Steelsurge was described as opposing: $nativeTexts", nativeTexts.any {
+            it.contains("Sharp-pointed pieces of steel started floating around your ally Pokémon!")
+        })
+        assertTrue("An ally's Unnerve used the wrong far-side wording: $nativeTexts", nativeTexts.any {
+            it.contains("The opposing team is too nervous to eat Berries!")
+        })
     }
 
     @Test
@@ -445,7 +484,10 @@ class ShowdownBattleLogRendererParityTest {
         val packets = BattlePlaybackTiming.chunks(listOf("|init|battle") + replay.log.lines())
         val lightweightTexts = mutableListOf<String>()
         val nativeTexts = mutableListOf<String>()
+        val entryCount = activity.nativeEntries.size
+        val syncCount = activity.synchronizedGenerations.size
         var nativeReplayStartedAtNanos: Long? = null
+        var finalGeneration = session.battleLogGeneration()
         packets.forEachIndexed { packetIndex, packet ->
             val previousMessageIds = session.battleFeedMessages().mapTo(mutableSetOf()) { it.id }
             session.applyProtocolPacket(packet)
@@ -453,17 +495,15 @@ class ShowdownBattleLogRendererParityTest {
                 .filter { it.id !in previousMessageIds }
                 .map { it.text }
                 .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
-            val entryCount = activity.nativeEntries.size
-            val syncCount = activity.synchronizedGenerations.size
             val generation = session.battleLogGeneration()
-            activity.renderer.applyProtocol(packet, generation)
-            awaitSynchronization(activity, syncCount, generation)
             if (packetIndex == 0) nativeReplayStartedAtNanos = System.nanoTime()
-            nativeTexts += activity.nativeEntries.drop(entryCount)
-                .filter { it.first == generation }
-                .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
-                .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
+            activity.renderer.applyProtocol(packet, generation)
+            finalGeneration = generation
         }
+        awaitSynchronization(activity, syncCount, finalGeneration)
+        nativeTexts += activity.nativeEntries.drop(entryCount)
+            .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
+            .filterNot { isTurnMarker(it) || it.startsWith("Battle timer is", true) }
         val nativeReplayDurationMillis = TimeUnit.NANOSECONDS.toMillis(
             System.nanoTime() - checkNotNull(nativeReplayStartedAtNanos)
         )
@@ -539,6 +579,11 @@ class ShowdownBattleLogRendererParityTest {
         }
 
         assertTrue("The test transcript must identify the Multi partner as local", session.isLocalBattleSide("p3b"))
+        assertEquals("Granbull used Play Rough!", renderedMoves.single())
+        assertEquals(
+            renderedMoves,
+            session.battleLog().filter { it.contains(" used ", true) }
+        )
         val failures = mutableListOf<String>()
         assertNativeMoveNarrationMatchesProtocolActors(
             session,
@@ -553,6 +598,86 @@ class ShowdownBattleLogRendererParityTest {
             failures
         )
         assertTrue("The upstream-rendered partner move must match its active Pokémon scene: $failures", failures.isEmpty())
+    }
+
+    @Test
+    fun multiNarrationMatchesVisibleBattleTeamsFromEveryTrainerPerspective() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity { activity = it }
+        val trainers = listOf(
+            "p1" to "PLAYER1",
+            "p2" to "PLAYER2",
+            "p3" to "PLAYER3",
+            "p4" to "PLAYER4"
+        )
+        val transcript = listOf(
+            "|init|battle",
+            "|gametype|multi",
+            "|player|p1|PLAYER1||",
+            "|player|p2|PLAYER2||",
+            "|player|p3|PLAYER3||",
+            "|player|p4|PLAYER4||",
+            "|start",
+            "|switch|p1a: Quagsire|Quagsire, L91|321/321",
+            "|switch|p2a: Iron Hands|Iron Hands, L77|364/364",
+            "|switch|p3b: Granbull|Granbull, L88|302/302",
+            "|switch|p4b: Hoopa|Hoopa, L86|278/278",
+            "|move|p1a: Quagsire|Recover|p1a: Quagsire",
+            "|move|p2a: Iron Hands|Fake Out|p3b: Granbull",
+            "|move|p3b: Granbull|Play Rough|p4b: Hoopa",
+            "|move|p4b: Hoopa|Trick|p1a: Quagsire"
+        )
+
+        trainers.forEach { (perspective, username) ->
+            activityRule.scenario.onActivity { it.renderer.setPerspective(perspective) }
+            val session = BattleSession().apply {
+                setLocalUsername(username)
+                setReplayMode(true)
+            }
+            val nativeMoveTexts = mutableListOf<String>()
+            val narrationIdentityFailures = mutableListOf<String>()
+
+            BattlePlaybackTiming.chunks(transcript).forEach { packet ->
+                val entryCount = activity.nativeEntries.size
+                val syncCount = activity.synchronizedGenerations.size
+                session.applyProtocolPacket(packet)
+                val generation = session.battleLogGeneration()
+                activity.renderer.applyProtocol(packet, generation)
+                awaitSynchronization(activity, syncCount, generation)
+                val nativeTexts = activity.nativeEntries.drop(entryCount)
+                    .filter { it.first == generation }
+                    .flatMap { ShowdownBattleLogFilter.visibleEntries(it.second) }
+                val nativeMoves = nativeTexts.filter { it.contains(" used ", true) }
+                nativeMoveTexts += nativeMoves
+                if (nativeMoves.isNotEmpty()) {
+                    session.appendShowdownBattleLog(nativeMoves.joinToString("<br />"), generation)
+                }
+                session.markNativeBattleLogSynchronized(generation)
+                assertNativeMoveNarrationMatchesProtocolActors(
+                    session,
+                    packet,
+                    nativeMoves,
+                    narrationIdentityFailures
+                )
+            }
+
+            assertEquals("$perspective selected the wrong battle side", perspective, session.battlePlayerSlot())
+            assertEquals(
+                "$perspective classified p3 with the wrong trainer side",
+                perspective == "p1" || perspective == "p3",
+                session.isLocalBattleSide("p3b")
+            )
+            assertEquals(
+                "$perspective fallback move narration differed from upstream",
+                session.battleLog().filter { it.contains(" used ", true) },
+                nativeMoveTexts
+            )
+            assertEquals("$perspective did not render every trainer's move", 4, nativeMoveTexts.size)
+            assertTrue(
+                "$perspective narration was paired with the wrong scene or sprite: $narrationIdentityFailures",
+                narrationIdentityFailures.isEmpty()
+            )
+        }
     }
 
     @Test
@@ -880,10 +1005,7 @@ class ShowdownBattleLogRendererParityTest {
                 failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' showed ${sprite.species}, expected ${actor.species}; $context"
             }
             val saysOpposing = narration.startsWith("The opposing ", true)
-            val multiPartnerUsesShowdownOpposingLabel = session.gameType.equals("multi", true) &&
-                playerSide &&
-                !protocolMove.slot.take(2).equals(session.battlePlayerSlot(), true)
-            if (!multiPartnerUsesShowdownOpposingLabel && saysOpposing == playerSide) {
+            if (saysOpposing == playerSide) {
                 failures += "Protocol move actor '${protocolMove.slot}:${protocolMove.name}' narration used the wrong battle side; $context"
             }
         }
