@@ -313,6 +313,12 @@ class MainActivityReplayPlaybackParityTest {
                     }
                 }
             }
+            if (replayFileName == "gen9freeforallrandombattle-2695179251.json") {
+                assertFreeForAllDuplicateSpeciesTargetKeepsItsSlotSprite(
+                    observedFrames.values,
+                    packetByMessageId
+                )
+            }
         } finally {
             scenario?.onActivity { activity ->
                 (privateField(activity, "session") as BattleSession).removeProtocolListener(protocolListener)
@@ -321,6 +327,30 @@ class MainActivityReplayPlaybackParityTest {
             bitmap.recycle()
             preferences.edit().putBoolean("maintain_connection", previousConnectionPreference).commit()
         }
+    }
+
+    private fun assertFreeForAllDuplicateSpeciesTargetKeepsItsSlotSprite(
+        frames: Collection<ReplayFrameObservation>,
+        packetByMessageId: Map<Long, List<String>>
+    ) {
+        val protocolTarget = "|-unboost|p4b: Klawf|atk|1"
+        val frame = frames.singleOrNull { candidate ->
+            candidate.text == "The opposing Klawf's Attack fell!" &&
+                protocolTarget in packetByMessageId[candidate.message.id].orEmpty()
+        }
+        assertNotNull("The production FFA replay did not present p4b Klawf's Attack drop", frame)
+        val targetFrame = checkNotNull(frame)
+        assertEquals("The opposing Klawf's Attack fell!", targetFrame.text)
+        assertTrue("The FFA replay was rendered as singles", !targetFrame.singlesBattle)
+        val scene = checkNotNull(targetFrame.displayedScene)
+        val previousDuplicate = scene.opponentCombatants.singleOrNull { it.slot == "p3b" }
+        val target = scene.opponentCombatants.singleOrNull { it.slot == "p4b" }
+        assertEquals("Tauros", previousDuplicate?.species)
+        assertEquals("Klawf", target?.name)
+        assertEquals("Klawf", target?.species)
+        assertEquals("Tauros", targetFrame.opponentActiveSprites["p3b"]?.species)
+        assertEquals("Klawf", targetFrame.opponentActiveSprites["p4b"]?.species)
+        assertEquals(BattleSpriteSide.OPPONENT, targetFrame.opponentActiveSprites["p4b"]?.side)
     }
 
     @Test
