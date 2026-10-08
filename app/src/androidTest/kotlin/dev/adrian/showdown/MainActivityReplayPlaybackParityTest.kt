@@ -123,6 +123,95 @@ class MainActivityReplayPlaybackParityTest {
         }
     }
 
+    @Test
+    fun productionReplayPairsIllusionRevealWithTheRevealedPokemonSprite() {
+        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
+            .open("gen9randombattle-2691982973.json")
+            .bufferedReader()
+            .use { it.readText() }
+        val completeReplay = ShowdownReplayImporter.payload(replayJson)
+        val replayLines = completeReplay.log.lines()
+        val startLine = replayLines.indexOf("|start")
+        val replaceLine = replayLines.indexOfFirst { it.startsWith("|replace|p2a: Zoroark|") }
+        val illusionEndLine = replayLines.indexOfFirst { it.startsWith("|-end|p2a: Zoroark|Illusion") }
+        val disguisedSwitchLine = replayLines.indices.lastOrNull { index ->
+            index < replaceLine && replayLines[index].startsWith("|switch|p2a: Sceptile|")
+        } ?: -1
+        val playerSwitchLine = replayLines.firstOrNull { it.startsWith("|switch|p1a: Snorlax|") }
+        assertTrue("The official replay fixture is missing its battle start", startLine >= 0)
+        assertTrue("The official replay fixture is missing its Zoroark Illusion reveal", replaceLine > startLine)
+        assertTrue("The official replay fixture is missing the end of Zoroark's Illusion", illusionEndLine > replaceLine)
+        assertTrue("The official replay fixture is missing Sceptile's disguised switch-in", disguisedSwitchLine > startLine)
+        assertTrue("The official replay fixture is missing Snorlax's switch-in", playerSwitchLine != null)
+        val playbackLines = replayLines.take(startLine + 1) +
+            listOf(checkNotNull(playerSwitchLine), "|-status|p1a: Snorlax|slp") +
+            replayLines.subList(disguisedSwitchLine, illusionEndLine + 1)
+        val replay = completeReplay.copy(log = playbackLines.joinToString("\n"))
+        val preferences = targetContext.getSharedPreferences("showdown_live", 0)
+        val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
+        var observedReveal: ReplayFrameObservation? = null
+        var latestNativeLog = emptyList<String>()
+        var latestProtocolLog = emptyList<String>()
+        val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(90)
+        var scenario: ActivityScenario<MainActivity>? = null
+
+        try {
+            preferences.edit().putBoolean("maintain_connection", false).commit()
+            scenario = ActivityScenario.launch(MainActivity::class.java)
+            val activeScenario = checkNotNull(scenario)
+            activeScenario.onActivity { activity ->
+                setPrivateField(activity, "restoredReplaySpeed", BattlePlaybackSpeed.MAXIMUM)
+                MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
+                    .apply { isAccessible = true }
+                    .invoke(activity, replay)
+            }
+
+            while (SystemClock.elapsedRealtime() < deadline && observedReveal == null) {
+                activeScenario.onActivity { activity ->
+                    val session = privateField(activity, "session") as BattleSession
+                    val scene = privateField(activity, "battleScene") as BattleSceneView
+                    val feedPresentation = checkNotNull(privateField(scene, "battleFeedPresentation"))
+                    latestNativeLog = session.showdownBattleLog()
+                    latestProtocolLog = session.battleLog()
+                    scene.invalidate()
+                    val text = privateField(scene, "cachedBattleFeedVisibleText") as? String ?: return@onActivity
+                    val message = privateField(feedPresentation, "currentMessage") as? BattleFeedMessage ?: return@onActivity
+                    if (message.text != text || !text.contains("Zoroark", true) || !text.contains("Illusion", true)) {
+                        return@onActivity
+                    }
+                    observedReveal = ReplayFrameObservation(
+                        text = text,
+                        message = message,
+                        displayedScene = privateField(scene, "displayedBattleSceneSnapshot") as? BattleSession.BattleSceneSnapshot,
+                        displayedSwitchOutVisual = privateField(scene, "displayedSwitchOutVisual") as? BattleSession.SwitchOutVisual,
+                        spriteStyle = session.spriteStyle,
+                        playerSprite = privateField(scene, "requestedPlayerSprite") as? BattleSpriteRequest,
+                        opponentSprite = privateField(scene, "requestedOpponentSprite") as? BattleSpriteRequest
+                    )
+                }
+                if (observedReveal == null) Thread.sleep(20L)
+            }
+
+            assertTrue(
+                "The production replay never displayed the Zoroark Illusion reveal. " +
+                    "native=$latestNativeLog; protocol=$latestProtocolLog",
+                observedReveal != null
+            )
+            val frame = checkNotNull(observedReveal)
+            assertEquals(frame.text, frame.message.text)
+            assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
+            assertEquals(frame.message.sceneContext?.switchOutVisual, frame.displayedSwitchOutVisual)
+            val revealedPokemon = frame.displayedScene?.opponentCombatants?.singleOrNull { it.slot == "p2a" }
+            assertEquals(frame.text, "Zoroark", revealedPokemon?.name)
+            assertEquals(frame.text, "Zoroark", revealedPokemon?.species)
+            assertEquals(frame.text, "Zoroark", frame.opponentSprite?.species)
+        } finally {
+            scenario?.close()
+            preferences.edit().putBoolean("maintain_connection", previousConnectionPreference).commit()
+        }
+    }
+
     private fun assertVisiblePokemonNamesBelongToDisplayedScene(frame: ReplayFrameObservation) {
         val snapshot = frame.displayedScene ?: return
         val combatants = snapshot.playerCombatants + snapshot.opponentCombatants +
