@@ -29,4 +29,19 @@ class ShowdownProtocolPacketsTest {
             packets
         )
     }
+
+    @Test
+    fun removesCarriageReturnsFromCrLfProtocolFrames() {
+        val packets = ShowdownProtocolPackets.decode(
+            "|challstr|1|token\r\n\r\n>lobby\r\n|updateuser|Guest\r\n"
+        )
+
+        assertEquals(
+            listOf(
+                ShowdownRoomPacket(null, listOf("|challstr|1|token")),
+                ShowdownRoomPacket("lobby", listOf("|updateuser|Guest"))
+            ),
+            packets
+        )
+    }
 }
