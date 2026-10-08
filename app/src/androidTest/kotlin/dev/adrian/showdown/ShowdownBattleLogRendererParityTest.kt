@@ -88,6 +88,83 @@ class ShowdownBattleLogRendererParityTest {
     }
 
     @Test
+    fun nativeStanceChangeEntriesRetainTheirSourceIdentityAfterTheActivePokemonChanges() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p1")
+        }
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER")
+            setReplayMode(true)
+        }
+        var identitiesByLine = emptyList<BattleSession.ProtocolLineIdentity>()
+        session.addProtocolListener { _, identities -> identitiesByLine = identities }
+        val transcript = listOf(
+            "|init|battle",
+            "|player|p1|PLAYER||",
+            "|player|p2|OPPONENT||",
+            "|gametype|singles",
+            "|switch|p1a: Aegislash|Aegislash, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|-formechange|p1a: Aegislash|Aegislash-Blade||[from] ability: Stance Change"
+        )
+        session.applyProtocolPacket(transcript)
+        val sourceGeneration = session.battleLogGeneration()
+        val formLineIndex = transcript.indexOfFirst { it.startsWith("|-formechange|") }
+        val sourceIdentity = identitiesByLine[formLineIndex]
+        assertEquals(2, sourceIdentity.messageIds.size)
+        val entryCount = activity.nativeEntries.size
+        val syncCount = activity.synchronizedGenerations.size
+
+        activity.renderer.applyProtocol(
+            transcript,
+            sourceGeneration,
+            identitiesByLine = identitiesByLine
+        )
+        awaitSynchronization(activity, syncCount, sourceGeneration)
+
+        val nativeRows = activity.nativeEntries.drop(entryCount)
+        val nativeEventIds = activity.nativeProtocolEventIds.drop(entryCount)
+        val nativeMessageIds = activity.nativeProtocolMessageIds.drop(entryCount)
+        val sourceRowIndexes = nativeRows.indices.filter { index ->
+            nativeRows[index].second.contains("Stance Change") || nativeRows[index].second.contains("Blade Forme")
+        }
+        assertTrue("Showdown did not render the complete Stance Change narration", sourceRowIndexes.isNotEmpty())
+        assertTrue(nativeRows.any { it.second.contains("Stance Change") })
+        assertTrue(nativeRows.any { it.second.contains("Blade Forme") })
+        assertTrue(
+            sourceRowIndexes.sumOf { index ->
+                ShowdownBattleLogFilter.visibleEntries(nativeRows[index].second).size
+            } >= sourceIdentity.messageIds.size
+        )
+        sourceRowIndexes.forEach { index ->
+            assertEquals(sourceIdentity.eventId, nativeEventIds[index])
+            assertEquals(sourceIdentity.messageIds, nativeMessageIds[index])
+        }
+
+        session.applyProtocolPacket(listOf("|switch|p1a: Gengar|Gengar, L50|100/100"))
+        sourceRowIndexes.forEach { index ->
+            session.appendShowdownBattleLog(
+                nativeRows[index].second,
+                sourceGeneration,
+                nativeEventIds[index],
+                nativeMessageIds[index]
+            )
+        }
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        val nativeMessages = session.battleFeedMessages().takeLast(
+            sourceRowIndexes.sumOf { index ->
+                ShowdownBattleLogFilter.visibleEntries(nativeRows[index].second).size
+            }
+        )
+        assertTrue(nativeMessages.all { message ->
+            message.sceneContext?.snapshot?.playerCombatants?.singleOrNull()?.name == "Aegislash"
+        })
+    }
+
+    @Test
     fun nativeNarrationKeepsMultiBattlePartnerOnTheLocalSide() {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {
