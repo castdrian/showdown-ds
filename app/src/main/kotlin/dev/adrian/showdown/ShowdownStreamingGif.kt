@@ -21,6 +21,7 @@ internal class ShowdownStreamingGif private constructor(
     private val outputHeight: Int,
     private val frames: List<Frame>,
     private val canvasPixels: IntArray,
+    private val decodedColorIndexes: ByteArray,
     private val outputBitmap: Bitmap,
     private val memoryBytes: Int,
     private val frameExecutor: Executor,
@@ -140,31 +141,35 @@ internal class ShowdownStreamingGif private constructor(
     }
 
     private fun decodeFrame(frame: Frame) {
+        val decodedPixelCount = lzwDecoder.decode(
+            frame.minimumCodeSize,
+            frame.imageData,
+            decodedColorIndexes
+        ).coerceAtMost(frame.width * frame.height)
         val rows = if (frame.interlaced) interlacedRows(frame.height) else null
         val palette = frame.palette
         val transparentIndex = frame.transparentIndex
-        val framePixelCount = frame.width * frame.height
         val frameRight = frame.left + frame.width
-        var pixelIndex = 0
         var x = frame.left
         var rowIndex = 0
         var y = frame.top + (rows?.get(0) ?: 0)
-        lzwDecoder.decode(frame.minimumCodeSize, frame.imageData, GifPixelConsumer { colorIndex ->
-            if (pixelIndex < framePixelCount) {
-                if (colorIndex != transparentIndex) {
-                    val outputIndex = outputY[y] * outputWidth + outputX[x]
-                    val color = if (colorIndex < palette.size) palette[colorIndex] else 0
-                    canvasPixels[outputIndex] = color
-                }
-                pixelIndex += 1
-                x += 1
-                if (x == frameRight) {
-                    x = frame.left
-                    rowIndex += 1
-                    if (rowIndex < frame.height) y = frame.top + (rows?.get(rowIndex) ?: rowIndex)
+        var outputRowOffset = outputY[y] * outputWidth
+        for (pixelIndex in 0 until decodedPixelCount) {
+            val colorIndex = decodedColorIndexes[pixelIndex].toInt() and 0xff
+            if (colorIndex != transparentIndex) {
+                val color = if (colorIndex < palette.size) palette[colorIndex] else 0
+                canvasPixels[outputRowOffset + outputX[x]] = color
+            }
+            x += 1
+            if (x == frameRight) {
+                x = frame.left
+                rowIndex += 1
+                if (rowIndex < frame.height) {
+                    y = frame.top + (rows?.get(rowIndex) ?: rowIndex)
+                    outputRowOffset = outputY[y] * outputWidth
                 }
             }
-        })
+        }
     }
 
     private fun publishFrame(frameIndex: Int) {
@@ -353,6 +358,9 @@ internal class ShowdownStreamingGif private constructor(
             if (sampledFrames.size < 2 || !hasDistinctFrames(sampledFrames)) return null
             val (outputWidth, outputHeight) = boundedAnimatedFrameSize(width, height, maxFrameDimension)
             val canvasPixels = IntArray(outputWidth * outputHeight)
+            val decodedColorIndexes = runCatching {
+                ByteArray(sampledFrames.maxOf { it.width * it.height })
+            }.getOrNull() ?: return null
             val outputBitmap = runCatching {
                 Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
             }.getOrElse {
@@ -361,6 +369,7 @@ internal class ShowdownStreamingGif private constructor(
             val memoryBytes = sampledFrames.sumOf { it.imageData.size }
                 .toLong()
                 .plus(canvasPixels.size.toLong() * 4L)
+                .plus(decodedColorIndexes.size.toLong())
                 .plus(outputBitmap.allocationByteCount.toLong())
                 .plus(MAX_LZW_CODES.toLong() * 6L)
                 .plus((width.toLong() + height.toLong()) * Int.SIZE_BYTES.toLong())
@@ -374,6 +383,7 @@ internal class ShowdownStreamingGif private constructor(
                     outputHeight,
                     sampledFrames,
                     canvasPixels,
+                    decodedColorIndexes,
                     outputBitmap,
                     memoryBytes,
                     frameExecutor,
@@ -468,8 +478,8 @@ internal class GifLzwDecoder {
     private val stack = ByteArray(MAX_LZW_CODES)
     private val bitReader = GifBitReader()
 
-    fun decode(minimumCodeSize: Int, imageData: ByteArray, emit: GifPixelConsumer) {
-        if (minimumCodeSize !in 2..8) return
+    fun decode(minimumCodeSize: Int, imageData: ByteArray, output: ByteArray): Int {
+        if (minimumCodeSize !in 2..8) return 0
         val clearCode = 1 shl minimumCodeSize
         val endCode = clearCode + 1
         val prefixCodes = prefix
@@ -482,40 +492,45 @@ internal class GifLzwDecoder {
         var previousCode = -1
         var firstColor = 0
         var stackSize = 0
+        var outputIndex = 0
         while (true) {
+            if (outputIndex >= output.size) return outputIndex
             val code = reader.read(codeSize)
-            if (code < 0) return
+            if (code < 0) return outputIndex
             when {
                 code == clearCode -> {
                     codeSize = minimumCodeSize + 1
                     availableCode = clearCode + 2
                     previousCode = -1
                 }
-                code == endCode -> return
+                code == endCode -> return outputIndex
                 previousCode < 0 -> {
-                    if (code >= clearCode) return
+                    if (code >= clearCode) return outputIndex
                     firstColor = code
-                    emit.accept(code)
+                    output[outputIndex++] = code.toByte()
                     previousCode = code
                 }
                 else -> {
                     val inputCode = code
                     var resolvedCode = code
                     if (resolvedCode == availableCode) {
-                        if (stackSize == outputStack.size) return
+                        if (stackSize == outputStack.size) return outputIndex
                         outputStack[stackSize++] = firstColor.toByte()
                         resolvedCode = previousCode
                     }
-                    if (resolvedCode >= availableCode || resolvedCode >= MAX_LZW_CODES) return
+                    if (resolvedCode >= availableCode || resolvedCode >= MAX_LZW_CODES) return outputIndex
                     while (resolvedCode >= clearCode) {
-                        if (resolvedCode >= MAX_LZW_CODES || stackSize == outputStack.size) return
+                        if (resolvedCode >= MAX_LZW_CODES || stackSize == outputStack.size) return outputIndex
                         outputStack[stackSize++] = suffixCodes[resolvedCode]
                         resolvedCode = prefixCodes[resolvedCode]
                     }
-                    if (resolvedCode < 0 || resolvedCode >= clearCode || stackSize == outputStack.size) return
+                    if (resolvedCode < 0 || resolvedCode >= clearCode || stackSize == outputStack.size) return outputIndex
                     firstColor = resolvedCode
                     outputStack[stackSize++] = firstColor.toByte()
-                    while (stackSize > 0) emit.accept(outputStack[--stackSize].toInt() and 0xff)
+                    while (stackSize > 0) {
+                        if (outputIndex >= output.size) return outputIndex
+                        output[outputIndex++] = outputStack[--stackSize]
+                    }
                     if (availableCode < MAX_LZW_CODES) {
                         prefixCodes[availableCode] = previousCode
                         suffixCodes[availableCode] = firstColor.toByte()
@@ -527,8 +542,4 @@ internal class GifLzwDecoder {
             }
         }
     }
-}
-
-internal fun interface GifPixelConsumer {
-    fun accept(colorIndex: Int)
 }

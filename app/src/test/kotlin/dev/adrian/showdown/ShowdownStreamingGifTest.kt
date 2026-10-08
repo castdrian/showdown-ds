@@ -41,29 +41,43 @@ class ShowdownStreamingGifTest {
 
     @Test
     fun decodesGifLzwCodesWhenTheCodeWidthGrows() {
-        val output = mutableListOf<Int>()
+        val output = ByteArray(5)
         val decoder = GifLzwDecoder()
         val codes = listOf(4 to 3, 0 to 3, 1 to 3, 0 to 3, 1 to 4, 0 to 4, 5 to 4)
 
-        decoder.decode(2, packCodes(codes), GifPixelConsumer { output.add(it) })
+        val decodedCount = decoder.decode(2, packCodes(codes), output)
 
-        assertEquals(listOf(0, 1, 0, 1, 0), output)
+        assertEquals(5, decodedCount)
+        assertArrayEquals(byteArrayOf(0, 1, 0, 1, 0), output)
     }
 
     @Test
     fun decodesGifLzwKwKwKSequence() {
-        val output = mutableListOf<Int>()
+        val output = ByteArray(3)
         val decoder = GifLzwDecoder()
         val imageData = packCodes(listOf(4 to 3, 0 to 3, 6 to 3, 5 to 3))
 
-        decoder.decode(2, imageData, GifPixelConsumer { output.add(it) })
+        val decodedCount = decoder.decode(2, imageData, output)
 
-        assertEquals(listOf(0, 0, 0), output)
-        output.clear()
+        assertEquals(3, decodedCount)
+        assertArrayEquals(byteArrayOf(0, 0, 0), output)
 
-        decoder.decode(2, imageData, GifPixelConsumer { output.add(it) })
+        val repeatedCount = decoder.decode(2, imageData, output)
 
-        assertEquals(listOf(0, 0, 0), output)
+        assertEquals(3, repeatedCount)
+        assertArrayEquals(byteArrayOf(0, 0, 0), output)
+    }
+
+    @Test
+    fun stopsDecodingAfterTheFramePixelBufferIsFull() {
+        val output = ByteArray(2)
+        val decoder = GifLzwDecoder()
+        val imageData = packCodes(listOf(4 to 3, 0 to 3, 6 to 3, 5 to 3))
+
+        val decodedCount = decoder.decode(2, imageData, output)
+
+        assertEquals(2, decodedCount)
+        assertArrayEquals(byteArrayOf(0, 0), output)
     }
 
     private fun packCodes(codes: List<Pair<Int, Int>>): ByteArray {
