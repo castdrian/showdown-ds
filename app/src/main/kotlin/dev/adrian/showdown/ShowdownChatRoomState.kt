@@ -157,7 +157,7 @@ class ShowdownChatRoomState {
         .substringBefore('@')
 
     private fun addMessage(speaker: String, text: String) {
-        val message = Message(displayName(speaker), text.trim())
+        val message = Message(displayName(speaker), ShowdownChatText.displayProtocolText(text.trim()))
         if (message.text.isNotBlank()) appendMessage(message)
     }
 
@@ -210,4 +210,8 @@ class ShowdownChatRoomState {
         .replace("&mdash;", "—")
         .replace(Regex("\\s+"), " ")
         .trim()
+}
+
+internal object ShowdownChatText {
+    fun displayProtocolText(text: String) = if (text.startsWith("//")) text.drop(1) else text
 }

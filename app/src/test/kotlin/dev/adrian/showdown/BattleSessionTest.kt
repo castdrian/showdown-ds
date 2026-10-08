@@ -1109,6 +1109,16 @@ class BattleSessionTest {
     }
 
     @Test
+    fun battleChatRemovesTheProtocolEscapeFromSlashPrefixedMessages() {
+        val session = BattleSession()
+
+        session.applyProtocolLine("|chat|ERIKA|//Nice move!")
+
+        assertTrue(session.chatMessages().contains("[ERIKA] /Nice move!"))
+        assertTrue(session.activityMessages().contains("[ERIKA] /Nice move!"))
+    }
+
+    @Test
     fun userFacingBattleNoticesStayInActivityWithoutCrowdingTheBattleFeed() {
         val session = BattleSession()
 

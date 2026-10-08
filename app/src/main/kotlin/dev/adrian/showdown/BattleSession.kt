@@ -4508,7 +4508,7 @@ class BattleSession {
                 fields.drop(3).joinToString("|").takeIf(String::isNotEmpty)?.let { speaker to it }
             }
         } ?: return
-        val message = "[${parsed.first}] ${parsed.second}"
+        val message = "[${parsed.first}] ${ShowdownChatText.displayProtocolText(parsed.second)}"
         chatMessages += message
         if (chatMessages.size > 32) chatMessages.removeAt(0)
         appendActivity(message, ActivityOrigin.CHAT)

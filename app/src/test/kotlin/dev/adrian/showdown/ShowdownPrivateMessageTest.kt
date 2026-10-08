@@ -26,6 +26,7 @@ class ShowdownPrivateMessageTest {
         )!!
 
         assertEquals(ShowdownChallengeNotice("gen7randombattle"), ShowdownPrivateMessages.challenge(message))
+        assertNull(ShowdownPrivateMessages.challenge(message.copy(text = "//challenge gen7randombattle")))
         assertNull(ShowdownPrivateMessages.challenge(message.copy(text = "/challenge")))
         assertNull(ShowdownPrivateMessages.challenge(message.copy(text = "/challenger gen7randombattle")))
         assertNull(ShowdownPrivateMessages.challenge(message.copy(text = "Want to battle?")))

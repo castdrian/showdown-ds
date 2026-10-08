@@ -52,6 +52,23 @@ class ShowdownChatRoomStateTest {
     }
 
     @Test
+    fun removesOnlyTheProtocolEscapeFromSlashPrefixedChatMessages() {
+        val state = ShowdownChatRoomState()
+
+        state.applyProtocol(
+            "lobby",
+            listOf(
+                "|init|chat",
+                "|c|Alice|/command",
+                "|c|Bob|//hello",
+                "|c|Carol|///hello"
+            )
+        )
+
+        assertEquals(listOf("/command", "/hello", "//hello"), state.messages.map { it.text })
+    }
+
+    @Test
     fun handlesFullRoomProtocolMessagesAndPreservesChatPipes() {
         val state = ShowdownChatRoomState()
 
