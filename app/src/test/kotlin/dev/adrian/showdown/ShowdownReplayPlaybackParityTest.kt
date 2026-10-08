@@ -1088,6 +1088,31 @@ class ShowdownReplayPlaybackParityTest {
                             if (expectedMove.playerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT,
                             checkNotNull(renderedSprite).side
                         )
+                        val statusCardContent = if (spriteRequests.singlesBattle) {
+                            val details = if (expectedMove.playerSide) {
+                                sceneContext.snapshot?.playerDetails ?: session.playerDetails()
+                            } else {
+                                sceneContext.snapshot?.opponentDetails ?: session.opponentDetails()
+                            }
+                            BattleCardContent.from(
+                                BattleFeedSceneState.detailsForMessage(
+                                    details,
+                                    expectedMove.playerSide,
+                                    sceneContext.switchOutVisual
+                                ),
+                                activeActor.hp
+                            )
+                        } else {
+                            BattleCardContent.from(activeActor)
+                        }
+                        assertEquals(
+                            frameContext,
+                            BattleSession.displayPokemonName(
+                                expectedMove.identity.actorName,
+                                expectedMove.identity.actorSpecies
+                            ),
+                            statusCardContent.title
+                        )
                     }
                 }
                 frameTimeMillis += 100L
