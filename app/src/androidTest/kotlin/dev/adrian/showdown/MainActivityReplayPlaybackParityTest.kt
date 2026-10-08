@@ -139,11 +139,13 @@ class MainActivityReplayPlaybackParityTest {
 
     @Test
     fun productionFullReplayKeepsPokemonNarrationPairedWithItsDisplayedScene() {
-        val replayFixtures = InstrumentationRegistry.getInstrumentation().context.assets
+        val availableFixtures = InstrumentationRegistry.getInstrumentation().context.assets
             .list("")
             .orEmpty()
             .filter { it.endsWith(".json") }
             .sorted()
+        val requestedFixture = InstrumentationRegistry.getArguments().getString("replayFixture")
+        val replayFixtures = availableFixtures.filter { requestedFixture == null || it == requestedFixture }
         assertTrue("The production replay parity suite must contain official replay fixtures", replayFixtures.isNotEmpty())
         replayFixtures.forEach(::assertProductionReplayPokemonNarrationAlignment)
     }
@@ -699,16 +701,30 @@ class MainActivityReplayPlaybackParityTest {
 
     private fun protocolOffScreenPokemonNames(lines: List<String>): Set<String> {
         val sourcePattern = Regex("^\\[(?:wisher|of)]\\s+(.+)$", RegexOption.IGNORE_CASE)
-        val actorPattern = Regex("^p[1-4][a-z]:\\s*(.+)$", RegexOption.IGNORE_CASE)
-        return lines.flatMap { line ->
-            line.split('|').drop(2).mapNotNull { field ->
-                sourcePattern.matchEntire(field)?.groupValues?.get(1)
-                    ?.let { source -> actorPattern.matchEntire(source)?.groupValues?.get(1) ?: source }
-                    ?.substringBefore(',')
-                    ?.trim()
-                    ?.takeIf { it.length >= 3 }
+        val actorPattern = Regex("^p[1-4][a-z]?:\\s*(.+)$", RegexOption.IGNORE_CASE)
+        return buildSet {
+            lines.forEach { line ->
+                val fields = line.split('|')
+                if (fields.getOrNull(1) == "-heal" &&
+                    fields.getOrNull(4)?.equals("[from] move: Revival Blessing", true) == true
+                ) {
+                    fields.getOrNull(2)
+                        ?.let { actorPattern.matchEntire(it)?.groupValues?.get(1) }
+                        ?.substringBefore(',')
+                        ?.trim()
+                        ?.takeIf { it.length >= 3 }
+                        ?.let(::add)
+                }
+                fields.drop(2).forEach { field ->
+                    sourcePattern.matchEntire(field)?.groupValues?.get(1)
+                        ?.let { source -> actorPattern.matchEntire(source)?.groupValues?.get(1) ?: source }
+                        ?.substringBefore(',')
+                        ?.trim()
+                        ?.takeIf { it.length >= 3 }
+                        ?.let(::add)
+                }
             }
-        }.toSet()
+        }
     }
 
     private fun mentionsPokemon(message: String, name: String): Boolean =
