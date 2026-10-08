@@ -52,9 +52,9 @@ object ShowdownLadderBadgePresentation {
 
     fun forStatusCard(
         side: String,
-        previouslyShownSides: Set<String>,
+        shownSides: MutableSet<String>,
         badgesBySide: Map<String, List<ShowdownLadderBadge>>
-    ) = if (side in previouslyShownSides) {
+    ) = if (!shownSides.add(side)) {
         emptyList()
     } else {
         visible(badgesBySide[side].orEmpty())
