@@ -111,7 +111,8 @@ class ShowdownReplayPlaybackParityTest {
             "gen9randombattle-2691985124.json",
             "gen9randombattle-2691982973.json",
             "gen9multirandombattle-2641276114.json",
-            "gen9freeforallrandombattle-2547390602.json"
+            "gen9freeforallrandombattle-2547390602.json",
+            "gen9freeforallrandombattle-2695179251.json"
         ).forEach { fileName ->
             val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/$fileName"))
                 .bufferedReader()
@@ -147,8 +148,22 @@ class ShowdownReplayPlaybackParityTest {
                             messageOriginPackets.putIfAbsent(message.id, packet)
                         }
                         generatedProtocolMessages.forEach { message ->
+                            val sceneContext = message.sceneContext
+                            val sceneSnapshot = sceneContext?.snapshot
+                            val sceneIdentities = sceneSnapshot?.let { snapshot ->
+                                (snapshot.playerCombatants + snapshot.opponentCombatants +
+                                    listOfNotNull(sceneContext.switchOutVisual?.combatant)
+                                    ).map { combatant ->
+                                    ProtocolPokemonIdentity(combatant.slot, combatant.name, combatant.species)
+                                }
+                            }.orEmpty()
                             val referencedActors = packetIdentities.filter { identity ->
-                                mentionsPokemon(message.text, identity.name)
+                                mentionsPokemon(message.text, identity.name) &&
+                                    sceneIdentities.any { sceneIdentity ->
+                                        sceneIdentity.slot.equals(identity.slot, true) &&
+                                            sceneIdentity.name.equals(identity.name, true) &&
+                                            sceneIdentity.species.equals(identity.species, true)
+                                    }
                             }.distinctBy { it.slot to it.name }
                             if (referencedActors.isNotEmpty()) {
                                 protocolActorsByMessage[message.id] = referencedActors
@@ -208,7 +223,10 @@ class ShowdownReplayPlaybackParityTest {
                                         combatant.slot.equals(identity.slot, ignoreCase = true) &&
                                             (side == BattleSpriteSide.PLAYER) == expectedPlayerSide
                                     }
-                                    val context = "$fileName ($localUsername, replay=$replayMode): ${frame.visibleText} at $frameTimeMillis ms for ${identity.slot}:${identity.name}"
+                                    val visibleIdentitySummary = visibleCombatants.map { (side, combatant) ->
+                                        "$side:${combatant.slot}:${combatant.name}/${combatant.species}"
+                                    }
+                                    val context = "$fileName ($localUsername, replay=$replayMode): ${frame.visibleText} at $frameTimeMillis ms for ${identity.slot}:${identity.name}; visible=$visibleIdentitySummary"
                                     assertTrue(
                                         "$context; visible combatants are ${visibleCombatants.map { it.first to it.second.name }}",
                                         matchingCombatant != null
@@ -315,7 +333,8 @@ class ShowdownReplayPlaybackParityTest {
             ReplayCase("gen9randombattle-2691985124.json", setOf("-formechange")),
             ReplayCase("gen9randombattle-2691982973.json", setOf("replace")),
             ReplayCase("gen9multirandombattle-2641276114.json", emptySet(), 4),
-            ReplayCase("gen9freeforallrandombattle-2547390602.json", emptySet(), 4)
+            ReplayCase("gen9freeforallrandombattle-2547390602.json", emptySet(), 4),
+            ReplayCase("gen9freeforallrandombattle-2695179251.json", emptySet(), 4)
         ).forEach { replayCase ->
             val replayJson = checkNotNull(javaClass.getResourceAsStream("/showdown-replays/${replayCase.fileName}"))
                 .bufferedReader()
@@ -1281,25 +1300,31 @@ class ShowdownReplayPlaybackParityTest {
         return name.takeIf(String::isNotBlank)?.let { ProtocolPokemonIdentity(slot, it, it) }
     }
 
-    private fun protocolOffScreenSourceNames(line: String): Set<String> = line.split('|')
-        .drop(2)
-        .mapNotNull { field ->
-            Regex("^\\[(?:wisher|of)]\\s+(.+)$", RegexOption.IGNORE_CASE)
-                .matchEntire(field)
-                ?.groupValues
-                ?.get(1)
-                ?.let { source ->
-                    Regex("^p[1-4][a-z]:\\s*(.+)$", RegexOption.IGNORE_CASE)
-                        .matchEntire(source)
-                        ?.groupValues
-                        ?.get(1)
-                        ?: source
-                }
-                ?.substringBefore(',')
-                ?.trim()
-                ?.takeIf { it.length >= 3 }
+    private fun protocolOffScreenSourceNames(line: String): Set<String> {
+        val fields = line.split('|')
+        val sourcePattern = Regex("^\\[(?:wisher|of)]\\s+(.+)$", RegexOption.IGNORE_CASE)
+        val actorPattern = Regex("^p[1-4][a-z]?:\\s*(.+)$", RegexOption.IGNORE_CASE)
+        return buildSet {
+            if (fields.getOrNull(1) == "-heal" &&
+                fields.getOrNull(4)?.equals("[from] move: Revival Blessing", true) == true
+            ) {
+                fields.getOrNull(2)
+                    ?.let { actorPattern.matchEntire(it)?.groupValues?.get(1) }
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf { it.length >= 3 }
+                    ?.let(::add)
+            }
+            fields.drop(2).forEach { field ->
+                sourcePattern.matchEntire(field)?.groupValues?.get(1)
+                    ?.let { source -> actorPattern.matchEntire(source)?.groupValues?.get(1) ?: source }
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf { it.length >= 3 }
+                    ?.let(::add)
+            }
         }
-        .toSet()
+    }
 
     private fun sceneContextForFrame(frame: BattleFeedFrame) = checkNotNull(frame.sceneContext)
 
