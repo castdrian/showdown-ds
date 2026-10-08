@@ -266,7 +266,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(effectsSource.contains("identitiesByLine: List<BattleSession.ProtocolLineIdentity>"))
         assertTrue(sessionSource.contains("activeProtocolMessageIdsByLine.getOrNull(activeProtocolLineIndex)?.add(messageId)"))
         assertTrue(sessionSource.contains("protocolMessageIds: List<Long> = emptyList()"))
-        assertTrue(sessionSource.contains("protocolEventId?.let(protocolLineSceneContextsByEventId::remove)"))
+        assertTrue(sessionSource.contains("protocolEventId?.let(protocolLineSceneContextsByEventId::get)"))
     }
 
     @Test

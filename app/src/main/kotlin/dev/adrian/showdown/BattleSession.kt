@@ -1121,6 +1121,7 @@ class BattleSession {
         showdownBattleLogEntries.clear()
         showdownBattleMarkupEntries.clear()
         protocolBattleFeedMarkupEntries.clear()
+        protocolLineSceneContextsByEventId.clear()
         nativeBattleLogGeneration = -1L
         nativeBattleLogPending = false
         lastNativeProtocolMessageId = Long.MIN_VALUE
@@ -1991,8 +1992,7 @@ class BattleSession {
         notifyListeners()
     }
 
-    private fun captureProtocolLineSceneContextIfNeeded(eventId: Long, shouldCapture: Boolean) {
-        if (!shouldCapture) return
+    private fun captureProtocolLineSceneContext(eventId: Long) {
         protocolLineSceneContextsByEventId[eventId] = BattleFeedSceneContext(
             createBattleSceneSnapshot(),
             null
@@ -2023,26 +2023,17 @@ class BattleSession {
                     battleRoomPresenceLog = null
                     battleRoomRenameFallback = null
                     appendDirectMessage(line)
-                    captureProtocolLineSceneContextIfNeeded(
-                        protocolEventIdsByLine[lineIndex],
-                        protocolMessageIdsByLine[lineIndex].isEmpty()
-                    )
+                    captureProtocolLineSceneContext(protocolEventIdsByLine[lineIndex])
                     return@forEachIndexed
                 }
                 val fields = line.split('|')
                 if (fields.size < 2) {
-                    captureProtocolLineSceneContextIfNeeded(
-                        protocolEventIdsByLine[lineIndex],
-                        protocolMessageIdsByLine[lineIndex].isEmpty()
-                    )
+                    captureProtocolLineSceneContext(protocolEventIdsByLine[lineIndex])
                     return@forEachIndexed
                 }
                 if (line == "|") {
                     battleFeedVisible = false
-                    captureProtocolLineSceneContextIfNeeded(
-                        protocolEventIdsByLine[lineIndex],
-                        protocolMessageIdsByLine[lineIndex].isEmpty()
-                    )
+                    captureProtocolLineSceneContext(protocolEventIdsByLine[lineIndex])
                     return@forEachIndexed
                 }
                 protocolLogSuppressed = fields[1].isNotEmpty() && isSilent(fields)
@@ -2301,10 +2292,7 @@ class BattleSession {
                     "raw", "html" -> appendMarkup(fields.drop(2).joinToString("|"))
                     "uhtml", "uhtmlchange" -> applyMarkup(fields.getOrNull(2), fields.drop(3).joinToString("|"))
                 }
-                captureProtocolLineSceneContextIfNeeded(
-                    protocolEventIdsByLine[lineIndex],
-                    protocolMessageIdsByLine[lineIndex].isEmpty()
-                )
+                captureProtocolLineSceneContext(protocolEventIdsByLine[lineIndex])
             }
             publishPendingHit()
             if (replayMode || spectatorMode) {
@@ -6275,7 +6263,7 @@ class BattleSession {
         val feedMarkupEntries = ShowdownBattleLogFilter
             .visibleMarkupEntries(value)
             .mapNotNull(::sanitizeShowdownMarkup)
-        val protocolSceneContext = protocolEventId?.let(protocolLineSceneContextsByEventId::remove)
+        val protocolSceneContext = protocolEventId?.let(protocolLineSceneContextsByEventId::get)
         var protocolSearchAfterMessageId = lastNativeProtocolMessageId
         val previousIds = previous.mapTo(mutableSetOf(), ShowdownBattleLogEntry::id)
         val claimedProtocolIds = showdownBattleLogEntries

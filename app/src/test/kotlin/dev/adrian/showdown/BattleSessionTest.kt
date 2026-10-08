@@ -769,6 +769,7 @@ class BattleSessionTest {
         val sourceGeneration = session.battleLogGeneration()
         val sourceIdentity = lineIdentities.last()
         assertEquals(2, sourceIdentity.messageIds.size)
+        session.applyProtocolPacket(listOf("|switch|p1a: Gengar|Gengar, L50|100/100"))
 
         session.appendShowdownBattleLog(
             "Official Stance Change entry",
@@ -782,13 +783,29 @@ class BattleSessionTest {
             sourceIdentity.eventId,
             sourceIdentity.messageIds
         )
-        session.markNativeBattleLogSynchronized(sourceGeneration)
+        session.appendShowdownBattleLog(
+            "Official Stance Change follow-up",
+            sourceGeneration,
+            sourceIdentity.eventId,
+            sourceIdentity.messageIds
+        )
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
 
-        val nativeMessages = session.battleFeedMessages().takeLast(2)
-        assertEquals(sourceIdentity.messageIds, nativeMessages.map(BattleFeedMessage::id))
+        val nativeMessages = session.battleFeedMessages().takeLast(3)
+        assertEquals(sourceIdentity.messageIds, nativeMessages.take(2).map(BattleFeedMessage::id))
+        assertFalse(nativeMessages.last().id in sourceIdentity.messageIds)
         assertEquals(
-            listOf("Official Stance Change entry", "Official Blade Forme entry"),
+            listOf(
+                "Official Stance Change entry",
+                "Official Blade Forme entry",
+                "Official Stance Change follow-up"
+            ),
             nativeMessages.map(BattleFeedMessage::text)
+        )
+        assertTrue(
+            nativeMessages.all {
+                it.sceneContext?.snapshot?.playerCombatants?.singleOrNull()?.name == "Aegislash"
+            }
         )
     }
 
@@ -816,12 +833,25 @@ class BattleSessionTest {
             sourceIdentity.eventId,
             sourceIdentity.messageIds
         )
+        session.appendShowdownBattleLog(
+            "The opposing Eevee triggered another upstream-only event!",
+            sourceGeneration,
+            sourceIdentity.eventId,
+            sourceIdentity.messageIds
+        )
 
-        val nativeMessage = session.battleFeedMessages().last()
-        assertEquals("The opposing Eevee used an upstream-only event!", nativeMessage.text)
+        val nativeMessages = session.battleFeedMessages().takeLast(2)
         assertEquals(
-            "Eevee",
-            nativeMessage.sceneContext?.snapshot?.opponentCombatants?.single()?.name
+            listOf(
+                "The opposing Eevee used an upstream-only event!",
+                "The opposing Eevee triggered another upstream-only event!"
+            ),
+            nativeMessages.map(BattleFeedMessage::text)
+        )
+        assertTrue(
+            nativeMessages.all {
+                it.sceneContext?.snapshot?.opponentCombatants?.singleOrNull()?.name == "Eevee"
+            }
         )
     }
 
