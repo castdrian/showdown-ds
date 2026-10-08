@@ -1,7 +1,5 @@
 package dev.adrian.showdown
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -38,9 +36,7 @@ class MainActivityReplayPlaybackParityTest {
         val replay = completeReplay.copy(log = replayLines.take(finalReplayLine + 1).joinToString("\n"))
         val preferences = targetContext.getSharedPreferences("showdown_live", 0)
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
-        val bitmap = Bitmap.createBitmap(960, 540, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val observedFrames = linkedMapOf<String, ReplayFrameObservation>()
+        val observedFrames = linkedMapOf<Long, ReplayFrameObservation>()
         var latestNativeLog = emptyList<String>()
         var latestProtocolLog = emptyList<String>()
         val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(90)
@@ -57,23 +53,20 @@ class MainActivityReplayPlaybackParityTest {
                     .invoke(activity, replay)
             }
 
-            while (SystemClock.elapsedRealtime() < deadline && observedFrames.keys.none {
-                    it.contains("Triple Axel", true) && it.contains("Weavile", true)
+            while (SystemClock.elapsedRealtime() < deadline && observedFrames.values.none {
+                    it.text.contains("Triple Axel", true) && it.text.contains("Weavile", true)
                 }) {
                 activeScenario.onActivity { activity ->
                     val session = privateField(activity, "session") as BattleSession
                     val scene = privateField(activity, "battleScene") as BattleSceneView
+                    val feedPresentation = checkNotNull(privateField(scene, "battleFeedPresentation"))
                     latestNativeLog = session.showdownBattleLog()
                     latestProtocolLog = session.battleLog()
-                    if (scene.width != bitmap.width || scene.height != bitmap.height) {
-                        scene.layout(0, 0, bitmap.width, bitmap.height)
-                    }
-                    scene.draw(canvas)
+                    scene.invalidate()
                     val text = privateField(scene, "cachedBattleFeedVisibleText") as? String ?: return@onActivity
-                    val presentation = checkNotNull(privateField(scene, "battleFeedPresentation"))
-                    val message = privateField(presentation, "currentMessage") as? BattleFeedMessage ?: return@onActivity
+                    val message = privateField(feedPresentation, "currentMessage") as? BattleFeedMessage ?: return@onActivity
                     if (message.text != text) return@onActivity
-                    observedFrames[text] = ReplayFrameObservation(
+                    observedFrames[message.id] = ReplayFrameObservation(
                         text = text,
                         message = message,
                         displayedScene = privateField(scene, "displayedBattleSceneSnapshot") as? BattleSession.BattleSceneSnapshot,
@@ -86,13 +79,14 @@ class MainActivityReplayPlaybackParityTest {
                 Thread.sleep(40L)
             }
 
+            val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
             assertTrue(
                 "The production replay never displayed its expected multi-hit Pokémon action. " +
-                    "visible=${observedFrames.keys}; native=$latestNativeLog; protocol=$latestProtocolLog",
-                observedFrames.keys.any { it.contains("Triple Axel", true) && it.contains("Weavile", true) }
+                    "visible=$observedTexts; native=$latestNativeLog; protocol=$latestProtocolLog",
+                observedTexts.any { it.contains("Triple Axel", true) && it.contains("Weavile", true) }
             )
-            assertTrue("The production replay skipped several visible Showdown entries: ${observedFrames.keys}", observedFrames.size >= 6)
-            assertTrue("The production replay did not display the status action before the hit: ${observedFrames.keys}", observedFrames.keys.any { it.contains("Protect", true) })
+            assertTrue("The production replay skipped several visible Showdown entries: $observedTexts", observedFrames.size >= 6)
+            assertTrue("The production replay did not display the status action before the hit: $observedTexts", observedTexts.any { it.contains("Protect", true) })
             observedFrames.values.forEach { frame ->
                 assertEquals(frame.text, frame.message.text)
                 assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
@@ -125,7 +119,6 @@ class MainActivityReplayPlaybackParityTest {
             }
         } finally {
             scenario?.close()
-            bitmap.recycle()
             preferences.edit().putBoolean("maintain_connection", previousConnectionPreference).commit()
         }
     }
@@ -137,6 +130,19 @@ class MainActivityReplayPlaybackParityTest {
         val identities = combatants.flatMap { listOf(it.name, it.species) }
             .filter(String::isNotBlank)
             .toSet()
+        val moveSeparator = frame.text.indexOf(" used ", ignoreCase = true)
+        val moveActor = frame.text
+            .takeIf { moveSeparator >= 0 }
+            ?.substring(0, moveSeparator)
+            ?.replaceFirst(Regex("^the opposing\\s+", RegexOption.IGNORE_CASE), "")
+            ?.substringAfterLast("'s ")
+            ?.trim()
+        if (!moveActor.isNullOrBlank()) {
+            assertTrue(
+                "Visible replay entry '${frame.text}' names move actor $moveActor outside the displayed scene $identities",
+                identities.any { it.equals(moveActor, ignoreCase = true) }
+            )
+        }
         listOf("Gliscor", "Swanna", "Weavile", "Dewgong")
             .filter { identity -> frame.text.contains(identity, ignoreCase = true) }
             .forEach { identity ->
