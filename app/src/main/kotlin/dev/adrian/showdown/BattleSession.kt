@@ -2168,7 +2168,7 @@ class BattleSession {
                     }
                     "-immune" -> applyImmune(fields)
                     "-prepare" -> applyPrepare(fields)
-                    "-mustrecharge" -> Unit
+                    "-mustrecharge" -> applyMustRecharge(fields)
                     "-end" -> applyEnd(fields)
                     "-endability" -> applyEndAbility(fields)
                     "-hint" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let { appendLog("($it)") }
@@ -4524,6 +4524,10 @@ class BattleSession {
         appendActivity(message, ActivityOrigin.SYSTEM)
     }
 
+    private fun applyMustRecharge(fields: List<String>) {
+        fields.getOrNull(2)?.let { actor -> updateMoveEffect(actor, "Must recharge") }
+    }
+
     private fun applyCant(fields: List<String>) {
         val actorId = fields.getOrNull(2) ?: return
         clearMoveEffects(actorId)
@@ -5487,13 +5491,20 @@ class BattleSession {
 
     private fun updateSingleBattleEffect(actor: String, effect: String, turnScoped: Boolean) {
         val label = singleBattleEffectLabel(effect) ?: return
+        if (!turnScoped) {
+            updateMoveEffect(actor, label)
+            return
+        }
+        val slot = actor.substringBefore(":").trim()
+        val update = { combatant: ActiveCombatant -> combatant.copy(turnEffects = (combatant.turnEffects + label).distinct()) }
+        if (isPlayerSide(actor)) playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = update(it) }
+        else opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = update(it) }
+    }
+
+    private fun updateMoveEffect(actor: String, label: String) {
         val slot = actor.substringBefore(":").trim()
         val update = { combatant: ActiveCombatant ->
-            if (turnScoped) {
-                combatant.copy(turnEffects = (combatant.turnEffects + label).distinct())
-            } else {
-                combatant.copy(moveEffects = (combatant.moveEffects + label).distinct())
-            }
+            combatant.copy(moveEffects = (combatant.moveEffects + label).distinct())
         }
         if (isPlayerSide(actor)) playerActiveCombatants[slot]?.let { playerActiveCombatants[slot] = update(it) }
         else opponentActiveCombatants[slot]?.let { opponentActiveCombatants[slot] = update(it) }

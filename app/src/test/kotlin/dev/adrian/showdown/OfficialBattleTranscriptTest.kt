@@ -1204,6 +1204,25 @@ class OfficialBattleTranscriptTest {
     }
 
     @Test
+    fun retainsTheRechargeMoveStatusUntilShowdownReportsTheCantEvent() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|switch|p1a: Mew|Mew, L50|100/100",
+                "|switch|p2a: Mewtwo|Mewtwo, L50|100/100"
+            )
+        )
+
+        session.applyProtocolLine("|-mustrecharge|p1a: Mew")
+
+        assertEquals(listOf("Must recharge"), session.playerActiveCombatants().single().moveEffects)
+
+        session.applyProtocolLine("|cant|p1a: Mew|recharge")
+
+        assertTrue(session.playerActiveCombatants().single().moveEffects.isEmpty())
+    }
+
+    @Test
     fun preservesOptionalRatedAndTimerMessages() {
         val session = BattleSession()
 
