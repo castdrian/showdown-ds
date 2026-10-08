@@ -6298,7 +6298,7 @@ class BattleSession {
                         BattleFeedMessageIdentity.matchesProtocolFallback(
                             battleLog[candidateIndex], plainText, sideNames.values
                         )
-                } ?: sourceIndexes.singleOrNull()?.takeIf { candidateIndex ->
+                } ?: sourceIndexes.firstOrNull { candidateIndex ->
                     battleLogMessageIds[candidateIndex] !in claimedProtocolIds
                 }
             } else if (previousId == null) {

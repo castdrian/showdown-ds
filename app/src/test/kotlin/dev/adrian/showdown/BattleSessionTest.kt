@@ -756,6 +756,43 @@ class BattleSessionTest {
     }
 
     @Test
+    fun multipleNativeEntriesUseTheirUnclaimedIdsFromOneProtocolLine() {
+        val session = BattleSession().apply { setLocalUsername("PLAYER") }
+        var lineIdentities = emptyList<BattleSession.ProtocolLineIdentity>()
+        session.addProtocolListener { _, identities -> lineIdentities = identities }
+        val packet = listOf(
+            "|player|p1|PLAYER||",
+            "|switch|p1a: Aegislash|Aegislash, L50|100/100",
+            "|-formechange|p1a: Aegislash|Aegislash-Blade||[from] ability: Stance Change"
+        )
+        session.applyProtocolPacket(packet)
+        val sourceGeneration = session.battleLogGeneration()
+        val sourceIdentity = lineIdentities.last()
+        assertEquals(2, sourceIdentity.messageIds.size)
+
+        session.appendShowdownBattleLog(
+            "Official Stance Change entry",
+            sourceGeneration,
+            sourceIdentity.eventId,
+            sourceIdentity.messageIds
+        )
+        session.appendShowdownBattleLog(
+            "Official Blade Forme entry",
+            sourceGeneration,
+            sourceIdentity.eventId,
+            sourceIdentity.messageIds
+        )
+        session.markNativeBattleLogSynchronized(sourceGeneration)
+
+        val nativeMessages = session.battleFeedMessages().takeLast(2)
+        assertEquals(sourceIdentity.messageIds, nativeMessages.map(BattleFeedMessage::id))
+        assertEquals(
+            listOf("Official Stance Change entry", "Official Blade Forme entry"),
+            nativeMessages.map(BattleFeedMessage::text)
+        )
+    }
+
+    @Test
     fun nativeLogWithoutAProtocolFallbackUsesItsSourceLineScene() {
         val session = BattleSession()
         var lineIdentities = emptyList<BattleSession.ProtocolLineIdentity>()
