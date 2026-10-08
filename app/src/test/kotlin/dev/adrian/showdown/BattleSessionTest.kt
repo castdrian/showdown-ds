@@ -725,10 +725,41 @@ class BattleSessionTest {
     }
 
     @Test
+    fun officialNativeLogUsesItsProtocolLineIdentityWhenWordingDoesNotMatchFallback() {
+        val session = BattleSession()
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+                "|switch|p2a: Eevee|Eevee, L50|100/100",
+                "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee"
+            )
+        )
+        val protocolMessage = session.battleFeedMessages().last()
+        val sourceGeneration = session.battleLogGeneration()
+
+        session.applyProtocolPacket(listOf("|switch|p1a: Gengar|Gengar, L50|100/100"))
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+        session.appendShowdownBattleLog(
+            "Official Showdown wording for Thunderbolt",
+            sourceGeneration,
+            listOf(protocolMessage.id)
+        )
+
+        val nativeMessage = session.battleFeedMessages().last()
+        assertEquals(protocolMessage.id, nativeMessage.id)
+        assertEquals("Official Showdown wording for Thunderbolt", nativeMessage.text)
+        assertEquals(
+            "Pikachu",
+            nativeMessage.sceneContext?.snapshot?.playerCombatants?.single()?.name
+        )
+    }
+
+    @Test
     fun protocolListenersObserveTheGenerationAfterThePacketIsApplied() {
         val session = BattleSession()
         var observedGeneration = -1L
-        session.addProtocolListener { observedGeneration = session.battleLogGeneration() }
+        session.addProtocolListener { _, _ -> observedGeneration = session.battleLogGeneration() }
 
         session.applyProtocolLine("|init|battle")
         session.applyProtocolLine("|move|p1a: Pikachu|Thunderbolt|p2a: Eevee")
@@ -3395,16 +3426,20 @@ class BattleSessionTest {
     @Test
     fun protocolStreamForwardsRenderablePacketsAndResetsItsBattleHistory() {
         val session = BattleSession()
-        val received = mutableListOf<List<String>>()
+        val received = mutableListOf<Pair<List<String>, List<List<Long>>>>()
         session.applyProtocolLine("|turn|1")
-        session.addProtocolListener { received += it }
+        session.addProtocolListener { lines, messageIdsByLine ->
+            received += lines to messageIdsByLine
+        }
 
         session.applyProtocolPacket(listOf("A moderator paused the battle.", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"))
 
         assertEquals(
             listOf("A moderator paused the battle.", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"),
-            received.single()
+            received.single().first
         )
+        assertEquals(received.single().first.size, received.single().second.size)
+        assertTrue(received.single().second.last().isNotEmpty())
         assertEquals(
             listOf("|turn|1", "A moderator paused the battle.", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"),
             session.protocolHistory()

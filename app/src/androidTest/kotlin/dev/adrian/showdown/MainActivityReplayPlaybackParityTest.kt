@@ -169,7 +169,7 @@ class MainActivityReplayPlaybackParityTest {
         val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         lateinit var replaySession: BattleSession
-        val protocolListener = BattleSession.ProtocolListener { packet ->
+        val protocolListener = BattleSession.ProtocolListener { packet, _ ->
             replaySession.battleFeedMessages(Int.MAX_VALUE).forEach { message ->
                 if (knownMessageIds.add(message.id)) {
                     packetByMessageId[message.id] = packet

@@ -23,7 +23,7 @@ class ShowdownMoveEffectsContractTest {
 
         assertTrue(source.contains("private val mainHandler = Handler(Looper.getMainLooper())"))
         assertTrue(source.contains("if (Looper.myLooper() != Looper.getMainLooper())"))
-        assertTrue(source.contains("mainHandler.post { applyProtocol(lines, battleLogGeneration, effectsBarrierToken) }"))
+        assertTrue(source.contains("applyProtocol(lines, battleLogGeneration, effectsBarrierToken, protocolMessageIdsByLine)"))
         assertTrue(source.contains("mainHandler.post { release() }"))
         assertTrue(source.contains("private fun cleanupOnMainThread()"))
         assertTrue(source.contains("mainHandler.post(cleanup)"))
@@ -101,12 +101,13 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("window.ShowdownNativeBattleLog.markup(String(id || ''), String(value), nativeBattleLogGeneration);"))
         assertTrue(source.contains("nativeBattleMarkup(id, htmlSrc);"))
         assertFalse(source.contains("this.battleParser.parseArgs(args, kwArgs || {}).trim()"))
-        assertTrue(source.contains("window.ShowdownNativeBattleLog.entry(String(value), nativeBattleLogGeneration);"))
+        assertTrue(source.contains("window.ShowdownNativeBattleLog.entry("))
+        assertTrue(source.contains("JSON.stringify(nativeBattleLogMessageIds)"))
         assertTrue(source.contains("window.ShowdownNativeBattleLog.synced(Number(generation) || 0);"))
         assertTrue(source.contains("nativeBattleLogSynchronized(generation);"))
-        assertTrue(source.contains("receive: function (lines, generation, synchronizeBattleLog, effectsBarrierToken)"))
-        assertTrue(source.contains("function add(lines, generation, synchronizeBattleLog, effectsBarrierToken)"))
-        assertTrue(source.contains("add(lines, generation, synchronizeBattleLog, effectsBarrierToken);"))
+        assertTrue(source.contains("receive: function (lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken)"))
+        assertTrue(source.contains("function add(lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken)"))
+        assertTrue(source.contains("add(lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken);"))
         assertTrue(source.contains("ShowdownBattleLogFilter.visibleEntries(value)"))
         assertTrue(source.contains("const val NATIVE_BATTLE_LOG_BRIDGE = \"ShowdownNativeBattleLog\""))
         assertTrue(source.contains("new MutationObserver(function ()"))
@@ -209,7 +210,7 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("fun recoverFromProtocolHistory(lines: List<String>, effectsBarrierToken: Long)"))
         assertTrue(source.contains("pendingPackets.resetWith(packet, effectsBarrierToken)"))
         assertTrue(source.contains("seed: function (lines, effectsBarrierToken)"))
-        assertTrue(source.contains("add(lines, 0, false, barrierToken);"))
+        assertTrue(source.contains("add(lines, 0, false, [], barrierToken);"))
         assertTrue(source.contains("nativeSeedAnimationOff"))
         assertTrue(source.contains("nativeBattleRecovered()"))
         assertTrue(source.contains("nativeBattleEffectsReachedQueueEnd();"))
@@ -229,8 +230,8 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("nativeBattleLogGenerationByStep = [];"))
         assertTrue(source.contains("nativeBattleLogGenerationByStep[stepIndex] = generation === undefined ? null : Number(generation) || 0;"))
         assertTrue(source.contains("var stepIndex = battle.stepQueue.length;"))
-        assertTrue(source.contains("function add(lines, generation, synchronizeBattleLog, effectsBarrierToken)"))
-        assertTrue(source.contains("add(lines, generation, synchronizeBattleLog, effectsBarrierToken);"))
+        assertTrue(source.contains("function add(lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken)"))
+        assertTrue(source.contains("add(lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken);"))
         assertFalse(source.contains("nativeBattleLogGeneration = Number(generation) || 0;"))
     }
 
@@ -238,7 +239,7 @@ class ShowdownMoveEffectsContractTest {
     fun nativeBattleLogSyncWaitsUntilItsLastQueuedStepIsParsed() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
         val runHookStart = source.indexOf("Battle.prototype.run = function")
-        val receiveStart = source.indexOf("receive: function (lines, generation, synchronizeBattleLog, effectsBarrierToken)")
+        val receiveStart = source.indexOf("receive: function (lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken)")
         val receiveEnd = source.indexOf("setSpeed: function (speed)", receiveStart)
         val runHook = source.substring(runHookStart, source.indexOf("};", runHookStart))
         val receive = source.substring(receiveStart, receiveEnd)
@@ -249,6 +250,22 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(runHook.contains("nativeBattleLogSynchronized(synchronizedGeneration);"))
         assertTrue(source.contains("nativeBattleLogSyncGenerationByStep[finalStepIndex] = Number(generation) || 0;"))
         assertFalse(receive.contains("nativeBattleLogSynchronized(generation);"))
+    }
+
+    @Test
+    fun nativeBattleLogCarriesTheProtocolMessageIdentityThatProducedIt() {
+        val effectsSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val sessionSource = File("src/main/kotlin/dev/adrian/showdown/BattleSession.kt").readText()
+        val runHookStart = effectsSource.indexOf("Battle.prototype.run = function")
+        val runHook = effectsSource.substring(runHookStart, effectsSource.indexOf("};", runHookStart))
+
+        assertTrue(runHook.contains("nativeBattleLogMessageIdsByStep[stepIndex]"))
+        assertTrue(runHook.contains("nativeBattleLogMessageIds = previousMessageIds;"))
+        assertTrue(effectsSource.contains("JSON.stringify(nativeBattleLogMessageIds)"))
+        assertTrue(effectsSource.contains("protocolMessageIdsByLine[index] || []"))
+        assertTrue(effectsSource.contains("protocolMessageIdsByLine: List<List<Long>>"))
+        assertTrue(sessionSource.contains("activeProtocolMessageIdsByLine.getOrNull(activeProtocolLineIndex)?.add(messageId)"))
+        assertTrue(sessionSource.contains("protocolMessageIds: List<Long> = emptyList()"))
     }
 
     @Test

@@ -446,7 +446,8 @@ class MainActivityLifecycleContractTest {
         val listener = source.substringAfter("private val protocolListener").substringBefore("private val decisionListener")
 
         assertTrue(listener.contains("runOnUiThread {"))
-        assertTrue(listener.contains("applyBattleProtocolToEffects(lines, applyingBattleEffectsBarrierToken ?: 0L)"))
+        assertTrue(listener.contains("applyBattleProtocolToEffects("))
+        assertTrue(listener.contains("messageIdsByLine,"))
         assertTrue(source.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
         assertTrue(source.contains("if (!effectsAlreadyCreated && battleInit) return"))
     }

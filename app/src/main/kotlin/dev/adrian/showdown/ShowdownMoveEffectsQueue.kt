@@ -9,7 +9,8 @@ class ShowdownMoveEffectsQueue {
             val lines: List<String>,
             val battleLogGeneration: Long = 0L,
             val synchronizeBattleLog: Boolean = true,
-            val effectsBarrierToken: Long = 0L
+            val effectsBarrierToken: Long = 0L,
+            val protocolMessageIdsByLine: List<List<Long>> = emptyList()
         ) : Packet
     }
 
@@ -19,10 +20,17 @@ class ShowdownMoveEffectsQueue {
         lines: List<String>,
         battleLogGeneration: Long = 0L,
         synchronizeBattleLog: Boolean = true,
-        effectsBarrierToken: Long = 0L
+        effectsBarrierToken: Long = 0L,
+        protocolMessageIdsByLine: List<List<Long>> = emptyList()
     ) {
         if (lines.isNotEmpty()) packets.addLast(
-            Packet.Receive(lines, battleLogGeneration, synchronizeBattleLog, effectsBarrierToken)
+            Packet.Receive(
+                lines,
+                battleLogGeneration,
+                synchronizeBattleLog,
+                effectsBarrierToken,
+                protocolMessageIdsByLine
+            )
         )
     }
 

@@ -277,7 +277,7 @@ class MainActivity : Activity() {
     private var controllerHorizontal = 0
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
-    private val protocolListener = BattleSession.ProtocolListener { lines ->
+    private val protocolListener = BattleSession.ProtocolListener { lines, messageIdsByLine ->
         runOnUiThread {
             if (lines.any { it.startsWith("|init|battle") || it.startsWith("|request|") }) {
                 ensureBattleMoveInfoLoaded()
@@ -285,7 +285,11 @@ class MainActivity : Activity() {
             if (lightweightBattlePlayback) {
                 applyLightweightBattleProtocol(lines)
             } else {
-                applyBattleProtocolToEffects(lines, applyingBattleEffectsBarrierToken ?: 0L)
+                applyBattleProtocolToEffects(
+                    lines,
+                    messageIdsByLine,
+                    applyingBattleEffectsBarrierToken ?: 0L
+                )
             }
         }
     }
@@ -742,8 +746,10 @@ class MainActivity : Activity() {
             audioMoveResetter = battleAudio::beginBattleMove,
             announcerCueListener = battleAudio::playAnnouncerCue,
             announcerCueResetter = battleAudio::resetAnnouncerCues,
-            battleLogListener = { value, generation ->
-                runOnUiThread { session.appendShowdownBattleLog(value, generation) }
+            battleLogListener = { value, generation, protocolMessageIds ->
+                runOnUiThread {
+                    session.appendShowdownBattleLog(value, generation, protocolMessageIds)
+                }
             },
             battleMarkupListener = { key, value, generation ->
                 runOnUiThread { session.replaceShowdownBattleMarkup(key, value, generation) }
@@ -910,7 +916,11 @@ class MainActivity : Activity() {
         moveDex.loadBattleDetails(::bindMoveDexResolvers)
     }
 
-    private fun applyBattleProtocolToEffects(lines: List<String>, effectsBarrierToken: Long = 0L) {
+    private fun applyBattleProtocolToEffects(
+        lines: List<String>,
+        messageIdsByLine: List<List<Long>>,
+        effectsBarrierToken: Long = 0L
+    ) {
         val historyBeforePacket = session.protocolHistoryBeforePacket(lines)
         if (showdownMoveEffectsNeedsReload && activityResumed) {
             showdownMoveEffectsNeedsReload = false
@@ -928,7 +938,12 @@ class MainActivity : Activity() {
         val effectsAlreadyCreated = showdownMoveEffects != null
         if (!effectsAlreadyCreated && battleInit) return
         showdownMoveEffects?.setPerspective(session.battlePlayerSlot())
-        showdownMoveEffects?.applyProtocol(lines, session.battleLogGeneration(), effectsBarrierToken)
+        showdownMoveEffects?.applyProtocol(
+            lines,
+            session.battleLogGeneration(),
+            effectsBarrierToken,
+            messageIdsByLine
+        )
     }
 
     private fun applyLightweightBattleProtocol(lines: List<String>) {

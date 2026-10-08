@@ -21,7 +21,7 @@ class ShowdownMoveEffectsView(
     private val audioMoveResetter: () -> Unit = {},
     private val announcerCueListener: (BattleAnnouncerCue) -> Unit = {},
     private val announcerCueResetter: () -> Unit = {},
-    private val battleLogListener: (String, Long) -> Unit = { _, _ -> },
+    private val battleLogListener: (String, Long, List<Long>) -> Unit = { _, _, _ -> },
     private val battleMarkupListener: (String, String, Long) -> Unit = { _, _, _ -> },
     private val battleLogSyncListener: (Long) -> Unit = {},
     private val battleEffectsIdleListener: (Long) -> Unit = {}
@@ -102,25 +102,38 @@ class ShowdownMoveEffectsView(
     fun applyProtocol(
         lines: List<String>,
         battleLogGeneration: Long = 0L,
-        effectsBarrierToken: Long = 0L
+        effectsBarrierToken: Long = 0L,
+        protocolMessageIdsByLine: List<List<Long>> = emptyList()
     ) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post { applyProtocol(lines, battleLogGeneration, effectsBarrierToken) }
+            mainHandler.post {
+                applyProtocol(lines, battleLogGeneration, effectsBarrierToken, protocolMessageIdsByLine)
+            }
             return
         }
         if (released) return
-        val packet = lines.filter { it.startsWith('|') }
+        val protocolLines = lines.mapIndexedNotNull { index, line ->
+            line.takeIf { it.startsWith('|') }?.let { it to protocolMessageIdsByLine.getOrNull(index).orEmpty() }
+        }
+        val packet = protocolLines.map { it.first }
         if (packet.isEmpty()) return
         if (packet.any { it.startsWith("|init|battle") }) {
             pendingPackets.clear()
         }
         val chunks = BattlePlaybackTiming.chunks(packet)
+        var chunkOffset = 0
         chunks.forEachIndexed { index, chunk ->
+            val chunkMessageIds = protocolLines
+                .drop(chunkOffset)
+                .take(chunk.size)
+                .map { it.second }
+            chunkOffset += chunk.size
             pendingPackets.add(
                 chunk,
                 battleLogGeneration,
                 index == chunks.lastIndex,
-                if (index == chunks.lastIndex) effectsBarrierToken else 0L
+                if (index == chunks.lastIndex) effectsBarrierToken else 0L,
+                chunkMessageIds
             )
         }
         flushPendingPackets()
@@ -208,7 +221,7 @@ class ShowdownMoveEffectsView(
                     null
                 ).also { dispatched = true }
                 is ShowdownMoveEffectsQueue.Packet.Receive -> evaluateJavascript(
-                    "window.ShowdownNativeEffects.receive(${JSONArray(packet.lines)}, ${packet.battleLogGeneration}, ${packet.synchronizeBattleLog}, ${packet.effectsBarrierToken});",
+                    "window.ShowdownNativeEffects.receive(${JSONArray(packet.lines)}, ${packet.battleLogGeneration}, ${packet.synchronizeBattleLog}, ${protocolMessageIdsJson(packet.protocolMessageIdsByLine)}, ${packet.effectsBarrierToken});",
                     null
                 ).also { dispatched = true }
             }
@@ -225,6 +238,12 @@ class ShowdownMoveEffectsView(
 
     private fun runJavascript(script: String) {
         if (pageLoaded) evaluateJavascript(script, null)
+    }
+
+    private fun protocolMessageIdsJson(messageIdsByLine: List<List<Long>>) = JSONArray().apply {
+        messageIdsByLine.forEach { messageIds ->
+            put(JSONArray().apply { messageIds.forEach(::put) })
+        }
     }
 
     private fun cleanupOnMainThread() {
@@ -335,6 +354,8 @@ class ShowdownMoveEffectsView(
                         }
                         var nativeBattleLogGeneration = 0;
                         var nativeBattleLogGenerationByStep = [];
+                        var nativeBattleLogMessageIdsByStep = [];
+                        var nativeBattleLogMessageIds = [];
                         var nativeBattleLogSyncGenerationByStep = [];
                         var nativeEffectsBarrierTokenByStep = [];
                         var nativeBattleGeneration = 0;
@@ -361,7 +382,11 @@ class ShowdownMoveEffectsView(
                         function nativeBattleLog(value, className) {
                             if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
                             if (String(className || '').split(/\s+/).indexOf('chat') >= 0) return;
-                            window.ShowdownNativeBattleLog.entry(String(value), nativeBattleLogGeneration);
+                            window.ShowdownNativeBattleLog.entry(
+                                String(value),
+                                nativeBattleLogGeneration,
+                                JSON.stringify(nativeBattleLogMessageIds)
+                            );
                         }
                         function nativeBattleMarkup(id, value) {
                             if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
@@ -454,7 +479,14 @@ class ShowdownMoveEffectsView(
                                             captureNativeBattleLog = true;
                                         }
                                     }
-                                    var result = originalRun.apply(this, arguments);
+                                    var previousMessageIds = nativeBattleLogMessageIds;
+                                    nativeBattleLogMessageIds = nativeBattleLogMessageIdsByStep[stepIndex] || [];
+                                    var result;
+                                    try {
+                                        result = originalRun.apply(this, arguments);
+                                    } finally {
+                                        nativeBattleLogMessageIds = previousMessageIds;
+                                    }
                                     if (!preempt && typeof line === 'string' && line.indexOf('|player|' + nativeBattlePerspective + '|') === 0) {
                                         nativeBattlePerspectivePending = true;
                                     }
@@ -843,6 +875,7 @@ class ShowdownMoveEffectsView(
                             }
                             destroyBattle();
                             nativeBattleLogGenerationByStep = [];
+                            nativeBattleLogMessageIdsByStep = [];
                             nativeBattleLogSyncGenerationByStep = [];
                             nativeEffectsBarrierTokenByStep = [];
                             document.getElementById('battle').innerHTML = '';
@@ -878,8 +911,14 @@ class ShowdownMoveEffectsView(
                             scene.animationOff();
                             scene.finishAnimations = function () {};
                         }
-                        function add(lines, generation, synchronizeBattleLog, effectsBarrierToken) {
-                            var queuedLines = lines.filter(function (line) { return line.indexOf('|request|') !== 0; });
+                        function add(lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken) {
+                            var queuedLines = [];
+                            var queuedMessageIds = [];
+                            lines.forEach(function (line, index) {
+                                if (line.indexOf('|request|') === 0) return;
+                                queuedLines.push(line);
+                                queuedMessageIds.push(protocolMessageIdsByLine[index] || []);
+                            });
                             var finalStepIndex = queuedLines.length ? battle.stepQueue.length + queuedLines.length - 1 : battle.stepQueue.length - 1;
                             var synchronizationQueued = synchronizeBattleLog && finalStepIndex >= battle.currentStep;
                             if (synchronizationQueued) {
@@ -891,9 +930,10 @@ class ShowdownMoveEffectsView(
                             if (queuedLines.length && Number(effectsBarrierToken) > 0) {
                                 nativeEffectsBarrierTokenByStep[finalStepIndex] = Number(effectsBarrierToken);
                             }
-                            queuedLines.forEach(function (line) {
+                            queuedLines.forEach(function (line, index) {
                                 var stepIndex = battle.stepQueue.length;
                                 nativeBattleLogGenerationByStep[stepIndex] = generation === undefined ? null : Number(generation) || 0;
+                                nativeBattleLogMessageIdsByStep[stepIndex] = queuedMessageIds[index];
                                 battle.add(line);
                             });
                         }
@@ -907,15 +947,15 @@ class ShowdownMoveEffectsView(
                                 nativeBattleLogGeneration = 0;
                                 battle.scene.animationOff();
                                 nativeSeedAnimationOff = barrierToken > 0;
-                                add(lines, 0, false, barrierToken);
+                                add(lines, 0, false, [], barrierToken);
                                 battle.play();
                                 if (!nativeSeedAnimationOff) battle.scene.animationOn();
                             },
-                            receive: function (lines, generation, synchronizeBattleLog, effectsBarrierToken) {
+                            receive: function (lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken) {
                                 clearNativeIdlePauseTimer();
                                 if (!battle || lines.some(function (line) { return line.indexOf('|init|battle') === 0; })) createBattle();
                                 captureNativeBattleLog = true;
-                                add(lines, generation, synchronizeBattleLog, effectsBarrierToken);
+                                add(lines, generation, synchronizeBattleLog, protocolMessageIdsByLine, effectsBarrierToken);
                                 if (battle.paused) battle.play();
                             },
                             setSpeed: function (speed) {
@@ -1003,15 +1043,21 @@ class ShowdownMoveEffectsView(
     }
 
     private class NativeBattleLogBridge(
-        private val callback: (String, Long) -> Unit,
+        private val callback: (String, Long, List<Long>) -> Unit,
         private val markupCallback: (String, String, Long) -> Unit,
         private val syncCallback: (Long) -> Unit,
         private val effectsIdleCallback: (Long) -> Unit
     ) {
         @JavascriptInterface
-        fun entry(value: String, generation: Long) {
+        fun entry(value: String, generation: Long, protocolMessageIdsJson: String) {
             val entries = ShowdownBattleLogFilter.visibleEntries(value)
-            if (entries.isNotEmpty()) callback(entries.joinToString("<br />"), generation)
+            if (entries.isNotEmpty()) {
+                val protocolMessageIds = runCatching {
+                    val ids = JSONArray(protocolMessageIdsJson)
+                    List(ids.length()) { index -> ids.getLong(index) }
+                }.getOrDefault(emptyList())
+                callback(entries.joinToString("<br />"), generation, protocolMessageIds)
+            }
         }
 
         @JavascriptInterface

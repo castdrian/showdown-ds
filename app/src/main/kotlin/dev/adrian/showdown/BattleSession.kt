@@ -334,7 +334,7 @@ class BattleSession {
     }
 
     fun interface ProtocolListener {
-        fun onProtocol(lines: List<String>)
+        fun onProtocol(lines: List<String>, messageIdsByLine: List<List<Long>>)
     }
 
     fun interface BattleEventListener {
@@ -573,6 +573,7 @@ class BattleSession {
     private var protocolEventCollector: MutableList<String>? = null
     private var activeProtocolPacket = emptyList<String>()
     private var activeProtocolLineIndex = -1
+    private var activeProtocolMessageIdsByLine = emptyList<MutableList<Long>>()
     private var protocolLogSuppressed = false
     private val protocolHistory = mutableListOf<String>()
     private val showdownBattleLogEntries = mutableListOf<ShowdownBattleLogEntry>()
@@ -1120,9 +1121,17 @@ class BattleSession {
         notifyListeners()
     }
 
-    fun appendShowdownBattleLog(value: String, generation: Long = battleLogGeneration) {
+    fun appendShowdownBattleLog(
+        value: String,
+        generation: Long = battleLogGeneration,
+        protocolMessageIds: List<Long> = emptyList()
+    ) {
         if (!acceptsNativeBattleLogGeneration(generation)) return
-        val entries = normalizedShowdownEntries(value, generation = generation)
+        val entries = normalizedShowdownEntries(
+            value,
+            generation = generation,
+            protocolMessageIds = protocolMessageIds
+        )
         if (entries.isEmpty()) return
         appendNormalizedShowdownEntries(entries)
         if (!nativeBattleLogPending) nativeBattleLogGeneration = battleLogGeneration
@@ -1980,8 +1989,10 @@ class BattleSession {
         if (packet.any { it.startsWith("|init|battle") }) protocolHistory.clear()
         protocolHistory += packet
         val events = mutableListOf<String>()
+        val protocolMessageIdsByLine = MutableList(packet.size) { mutableListOf<Long>() }
         protocolEventCollector = events
         activeProtocolPacket = packet
+        activeProtocolMessageIdsByLine = protocolMessageIdsByLine
         try {
             packet.forEachIndexed { lineIndex, line ->
                 activeProtocolLineIndex = lineIndex
@@ -2272,6 +2283,7 @@ class BattleSession {
             protocolEventCollector = null
             activeProtocolPacket = emptyList()
             activeProtocolLineIndex = -1
+            activeProtocolMessageIdsByLine = emptyList()
             protocolLogSuppressed = false
         }
         val packetGeneration = battleLogGeneration
@@ -2279,7 +2291,8 @@ class BattleSession {
             .asSequence()
             .filter { it >= firstMessageIdInPacket }
             .forEach { protocolPacketGenerationByMessageId[it] = packetGeneration }
-        protocolListeners.toList().forEach { it.onProtocol(packet) }
+        val capturedProtocolMessageIdsByLine = protocolMessageIdsByLine.map { it.toList() }
+        protocolListeners.toList().forEach { it.onProtocol(packet, capturedProtocolMessageIdsByLine) }
         if (events.isNotEmpty()) {
             if (battleEventListeners.isEmpty()) {
                 latestBattleEvent = events.last()
@@ -6020,6 +6033,7 @@ class BattleSession {
         val message = capitalizeBattleActorAtSentenceStart(entry)
         battleFeedVisible = true
         val messageId = newBattleFeedMessageId()
+        activeProtocolMessageIdsByLine.getOrNull(activeProtocolLineIndex)?.add(messageId)
         battleLog += message
         battleLogMessageIds += messageId
         if (!includeInBattleFeed) battleFeedExcludedMessageIds += messageId
@@ -6209,7 +6223,8 @@ class BattleSession {
     private fun normalizedShowdownEntries(
         value: String,
         previous: List<ShowdownBattleLogEntry> = emptyList(),
-        generation: Long = battleLogGeneration
+        generation: Long = battleLogGeneration,
+        protocolMessageIds: List<Long> = emptyList()
     ): List<ShowdownBattleLogEntry> {
         val plainEntries = ShowdownBattleLogFilter
             .visibleEntries(value.replace("**", ""))
@@ -6229,7 +6244,20 @@ class BattleSession {
                     BattleFeedMessageIdentity.matchesProtocolFallback(it.plainText, plainText, sideNames.values)
                 }
                 ?.id
-            val protocolIndex = if (previousId == null) {
+            val protocolIndex = if (previousId == null && protocolMessageIds.isNotEmpty()) {
+                val sourceIndexes = protocolMessageIds.mapNotNull { messageId ->
+                    battleLogMessageIds.indexOf(messageId).takeIf { it >= 0 }
+                }
+                sourceIndexes.firstOrNull { candidateIndex ->
+                    val candidateId = battleLogMessageIds[candidateIndex]
+                    candidateId !in claimedProtocolIds &&
+                        BattleFeedMessageIdentity.matchesProtocolFallback(
+                            battleLog[candidateIndex], plainText, sideNames.values
+                        )
+                } ?: sourceIndexes.singleOrNull()?.takeIf { candidateIndex ->
+                    battleLogMessageIds[candidateIndex] !in claimedProtocolIds
+                }
+            } else if (previousId == null) {
                 val matchesUnclaimedProtocolEntry: (Int) -> Boolean = { candidateIndex ->
                     val candidateId = battleLogMessageIds[candidateIndex]
                     candidateId !in claimedProtocolIds &&

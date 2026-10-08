@@ -88,4 +88,21 @@ class ShowdownMoveEffectsQueueTest {
             queue.poll()
         )
     }
+
+    @Test
+    fun receivePacketPreservesProtocolMessageIdentityForEachLine() {
+        val queue = ShowdownMoveEffectsQueue()
+        val protocolMessageIdsByLine = listOf(listOf(17L), emptyList())
+
+        queue.add(
+            listOf("|move|p1a: Pikachu|Thunderbolt|p2a: Eevee", "|-damage|p2a: Eevee|90/100"),
+            battleLogGeneration = 12L,
+            protocolMessageIdsByLine = protocolMessageIdsByLine
+        )
+
+        assertEquals(
+            protocolMessageIdsByLine,
+            (queue.poll() as ShowdownMoveEffectsQueue.Packet.Receive).protocolMessageIdsByLine
+        )
+    }
 }

@@ -27,6 +27,63 @@ class ShowdownBattleLogRendererParityTest {
     val activityRule = ActivityScenarioRule(ShowdownLogParityHarnessActivity::class.java)
 
     @Test
+    fun nativeMoveLogRetainsItsSourceProtocolIdentityAfterTheActivePokemonChanges() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity {
+            activity = it
+            it.renderer.setPerspective("p1")
+        }
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER")
+            setReplayMode(true)
+        }
+        var protocolMessageIdsByLine = emptyList<List<Long>>()
+        session.addProtocolListener { _, messageIds -> protocolMessageIdsByLine = messageIds }
+        val transcript = listOf(
+            "|init|battle",
+            "|player|p1|PLAYER||",
+            "|player|p2|OPPONENT||",
+            "|gametype|singles",
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|move|p1a: Pikachu|Thunderbolt|p2a: Eevee"
+        )
+        session.applyProtocolPacket(transcript)
+        val sourceGeneration = session.battleLogGeneration()
+        val moveLineIndex = transcript.indexOfFirst { it.startsWith("|move|") }
+        val sourceMessageId = protocolMessageIdsByLine[moveLineIndex].single()
+        val entryCount = activity.nativeEntries.size
+        val syncCount = activity.synchronizedGenerations.size
+
+        activity.renderer.applyProtocol(
+            transcript,
+            sourceGeneration,
+            protocolMessageIdsByLine = protocolMessageIdsByLine
+        )
+        awaitSynchronization(activity, syncCount, sourceGeneration)
+        session.applyProtocolPacket(listOf("|switch|p1a: Gengar|Gengar, L50|100/100"))
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+
+        val nativeRows = activity.nativeEntries.drop(entryCount)
+        val nativeMessageIds = activity.nativeProtocolMessageIds.drop(entryCount)
+        val moveEntryIndex = nativeRows.indexOfFirst { it.second.contains("Thunderbolt") }
+        assertTrue("The upstream renderer did not emit the Thunderbolt move", moveEntryIndex >= 0)
+        assertEquals(listOf(sourceMessageId), nativeMessageIds[moveEntryIndex])
+        session.appendShowdownBattleLog(
+            nativeRows[moveEntryIndex].second,
+            sourceGeneration,
+            nativeMessageIds[moveEntryIndex]
+        )
+
+        val nativeMove = session.battleFeedMessages().single { it.id == sourceMessageId }
+        assertTrue(nativeMove.text.contains("Thunderbolt"))
+        assertEquals(
+            "Pikachu",
+            nativeMove.sceneContext?.snapshot?.playerCombatants?.single()?.name
+        )
+    }
+
+    @Test
     fun nativeNarrationKeepsMultiBattlePartnerOnTheLocalSide() {
         lateinit var activity: ShowdownLogParityHarnessActivity
         activityRule.scenario.onActivity {
