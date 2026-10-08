@@ -16,6 +16,75 @@ import org.junit.Test
 
 class ShowdownLoginClientTest {
     @Test
+    fun loginPostsTheOfficialChallengeAndReturnsTheSignedAssertion() {
+        val request = AtomicReference<Request>()
+        val completed = CountDownLatch(1)
+        val result = AtomicReference<Result<String>>()
+        val savedCookies = AtomicReference<Map<String, String>>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            request.set(chain.request())
+            Response.Builder()
+                .request(chain.request())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("Set-Cookie", "sid=new-session; Path=/")
+                .body("]{\"actionsuccess\":true,\"assertion\":\"signed-assertion\",\"curuser\":{\"loggedin\":true,\"username\":\"Adrian\",\"userid\":\"adrian\"}}".toResponseBody("application/json".toMediaType()))
+                .build()
+        }.build()
+        val loginClient = ShowdownLoginClient(client, mapOf("sid" to "old-session")) {
+            savedCookies.set(it)
+        }
+        val endpoint = checkNotNull(
+            ShowdownServerEndpoint.fromInput("wss://sim3.psim.us/showdown/websocket")
+        )
+
+        loginClient.login(endpoint, ShowdownCredentials("Adrian", "secret"), "4|challenge|suffix") {
+            result.set(it)
+            completed.countDown()
+        }
+
+        assertTrue(completed.await(2, TimeUnit.SECONDS))
+        assertEquals("POST", request.get().method)
+        assertEquals("https://play.pokemonshowdown.com/api/login", request.get().url.toString())
+        assertEquals("sid=old-session", request.get().header("Cookie"))
+        val body = Buffer()
+        request.get().body!!.writeTo(body)
+        val encoded = body.readUtf8()
+        assertTrue(encoded.contains("name=Adrian"))
+        assertTrue(encoded.contains("pass=secret"))
+        assertTrue(encoded.contains("challstr=4%7Cchallenge%7Csuffix"))
+        assertEquals("signed-assertion", result.get().getOrThrow())
+        assertEquals(mapOf("sid" to "new-session"), savedCookies.get())
+    }
+
+    @Test
+    fun loginSurfacesOfficialLoginServerRejection() {
+        val completed = CountDownLatch(1)
+        val result = AtomicReference<Result<String>>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            Response.Builder()
+                .request(chain.request())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("]{\"actionerror\":\"Invalid password.\"}".toResponseBody("application/json".toMediaType()))
+                .build()
+        }.build()
+        val endpoint = checkNotNull(
+            ShowdownServerEndpoint.fromInput("wss://sim3.psim.us/showdown/websocket")
+        )
+
+        ShowdownLoginClient(client).login(endpoint, ShowdownCredentials("Adrian", "wrong"), "4|challenge") {
+            result.set(it)
+            completed.countDown()
+        }
+
+        assertTrue(completed.await(2, TimeUnit.SECONDS))
+        assertEquals("Invalid password.", result.get().exceptionOrNull()?.message)
+    }
+
+    @Test
     fun upkeepUsesThePersistedSessionCookieAndChallenge() {
         val request = AtomicReference<Request>()
         val completed = CountDownLatch(1)
