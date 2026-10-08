@@ -48,18 +48,28 @@ class MainActivityReadmeCaptureTest {
                 assertEquals(BattleSession.Panel.MOVES, session.panel)
             }
 
-            val spriteDeadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(30)
-            var bothHighResolutionAnimatedSpritesLoaded = false
-            while (!bothHighResolutionAnimatedSpritesLoaded && SystemClock.elapsedRealtime() < spriteDeadline) {
+            val visualAssetDeadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(30)
+            val ladderBadgeAssetPaths = setOf(
+                "sprites/misc/ou_gold.png",
+                "sprites/misc/randombattle_silver.png"
+            )
+            var visualAssetsLoaded = false
+            while (!visualAssetsLoaded && SystemClock.elapsedRealtime() < visualAssetDeadline) {
                 activeScenario.onActivity { activity ->
                     val battleScene = privateField(activity, "battleScene") as BattleSceneView
                     val playerSprite = privateField(battleScene, "playerSprite") as? ShowdownSpriteCache.SpriteAsset
                     val opponentSprite = privateField(battleScene, "opponentSprite") as? ShowdownSpriteCache.SpriteAsset
-                    bothHighResolutionAnimatedSpritesLoaded =
-                        hasHighResolutionAnimatedFrame(playerSprite) && hasHighResolutionAnimatedFrame(opponentSprite)
+                    val ladderBadgeSprites = privateField(battleScene, "ladderBadgeSprites") as Map<*, *>
+                    val ladderBadgesLoaded = ladderBadgeAssetPaths.all { path ->
+                        ladderBadgeSprites[path] is ShowdownSpriteCache.SpriteAsset
+                    }
+                    visualAssetsLoaded = hasHighResolutionAnimatedFrame(playerSprite) &&
+                        hasHighResolutionAnimatedFrame(opponentSprite) &&
+                        ladderBadgesLoaded
                 }
-                if (!bothHighResolutionAnimatedSpritesLoaded) SystemClock.sleep(250L)
+                if (!visualAssetsLoaded) SystemClock.sleep(250L)
             }
+            assertTrue("The battle sprites and Showdown ladder badges did not load within 30 seconds", visualAssetsLoaded)
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             activeScenario.onActivity { activity ->
                 val session = privateField(activity, "session") as BattleSession
@@ -162,6 +172,8 @@ class MainActivityReadmeCaptureTest {
         "|init|battle",
         "|player|p1|ADRIAN|1|",
         "|player|p2|MIRA|2|",
+        "|badge|p1|gold|gen9ou|10-11",
+        "|badge|p2|silver|gen9randombattle|100-11",
         "|gametype|singles",
         "|gen|9",
         "|tier|[Gen 9] OU",
