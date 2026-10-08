@@ -56,7 +56,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(constrainedCommunityIndex > constrainedRegularIndex)
         assertTrue(constrainedLocalIndex > constrainedRegularIndex)
         assertTrue(constrainedCommunityIndex < constrainedLocalIndex)
-        assertTrue(cacheSource.contains("private fun requestStaticSpriteFallback("))
+        assertFalse(cacheSource.contains("private fun requestStaticSpriteFallback("))
         assertFalse(cacheSource.contains("requestStaticShowdownBackFallback(request, receiver)"))
         assertTrue(cacheSource.contains("totalMem < 2L * 1024L * 1024L * 1024L"))
         assertTrue(gifSource.contains("val canvasPixels = IntArray(outputWidth * outputHeight)"))
@@ -302,15 +302,32 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun modernSpriteResolutionStartsTheNameBasedFallbackAlongsideDexLookup() {
+    fun modernSpriteResolutionUsesOnlyAnimatedFallbacks() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val resolver = source.substringAfter("private fun requestModernAnimatedSpriteResolution(")
-            .substringBefore("private fun requestStaticSpriteFallback(")
+            .substringBefore("private fun requestPreviewAnimatedSpriteResolution(")
 
-        assertTrue(resolver.contains("requestStaticShowdownFallback(request, resolutionGate::fallback)"))
-        assertTrue(resolver.contains("requestPokeApiStaticSprite(request.species, request.shiny, baseSpeciesFirst = true, receiver = resolutionGate::fallback)"))
-        assertTrue(source.contains("private val fallbackSpriteExecutor = ThreadPoolExecutor(0, 1, 10L, TimeUnit.SECONDS, LinkedBlockingQueue())"))
-        assertTrue(source.contains("executor = fallbackSpriteExecutor"))
+        assertTrue(resolver.contains("requestSmallSpriteResolution(request)"))
+        assertTrue(resolver.contains("resolutionGate.fallback(null)"))
+        assertFalse(resolver.contains("requestStaticShowdownFallback"))
+        assertFalse(resolver.contains("requestPokeApiStaticSprite"))
+        assertFalse(source.contains("fallbackSpriteExecutor"))
+    }
+
+    @Test
+    fun battleSpriteResolutionNeverDisplaysStaticArtwork() {
+        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        val pokemonResolver = source.substringAfter("fun requestPokemon(")
+            .substringBefore("fun requestTeamPreviewPokemon(")
+        val modernResolver = source.substringAfter("private fun requestModernAnimatedSpriteResolution(")
+            .substringBefore("private fun requestPreviewAnimatedSpriteResolution(")
+        val frontResolver = source.substringAfter("private fun requestFrontSpriteResolution(")
+            .substringBefore("private fun requestScrapedFrontSpriteResolution(")
+
+        assertTrue(pokemonResolver.contains("asset?.takeIf { it.isAnimated }"))
+        assertFalse(modernResolver.contains("requestStaticShowdownFallback"))
+        assertFalse(modernResolver.contains("requestPokeApiStaticSprite"))
+        assertFalse(frontResolver.contains("requestStaticSpriteFallback"))
     }
 
     @Test
@@ -320,7 +337,7 @@ class ShowdownSpriteCacheContractTest {
 
         assertTrue(source.contains("private val resolvedPokemonCache = LruCache<BattleSpriteRequest, WeakReference<SpriteAsset>>(16)"))
         assertTrue(requestSource.contains("resolvedPokemonCache.get(request)"))
-        assertTrue(requestSource.contains("resolvedPokemonCache.put(request, WeakReference(asset))"))
+        assertTrue(requestSource.contains("resolvedPokemonCache.put(request, WeakReference(it))"))
         assertTrue(source.contains("resolvedPokemonCache.evictAll()"))
     }
 
@@ -428,7 +445,7 @@ class ShowdownSpriteCacheContractTest {
         assertTrue(frontCommunityIndex >= 0)
         assertTrue(frontRegularIndex < frontAnimatedIndex)
         assertTrue(frontCommunityIndex > frontAnimatedIndex)
-        assertTrue(frontCommunityIndex < source.indexOf("requestModernAnimatedSpriteResolution(request, plan) {", frontIndex))
+        assertTrue(frontCommunityIndex < source.indexOf("requestModernAnimatedSpriteResolution(request, plan, receiver)", frontIndex))
         assertTrue(animatedFallbackIndex > localIndex)
         assertTrue(localIndex >= 0)
         assertTrue(localIndex < animatedFallbackIndex)
@@ -459,38 +476,15 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun neverUsesAMirroredStaticFrontSpriteAsAPlayerBackSprite() {
+    fun everyBattleSpriteRequestRejectsStaticArtwork() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
 
-        assertFalse(
-            allowsStaticShowdownFallback(
-                BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
-            )
-        )
-        assertTrue(
-            allowsStaticShowdownFallback(
-                BattleSpriteRequest.forOpponent("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)
-            )
-        )
-        assertTrue(source.contains("allowsStaticShowdownFallback(request)"))
+        assertTrue(source.contains("asset?.takeIf { it.isAnimated }"))
+        assertFalse(source.contains("allowsStaticShowdownFallback"))
+        assertFalse(source.contains("requestStaticShowdownFallback"))
+        assertFalse(source.contains("requestStaticSpriteFallback"))
+        assertFalse(source.contains("staticBattleSpriteCandidates"))
         assertFalse(source.contains("withMirrorWhenDrawn"))
-    }
-
-    @Test
-    fun staticShowdownArtworkIsOnlyTheFinalOpponentFacingFallback() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
-        val modernLocalIndex = source.indexOf("requestAnimatedSpriteCandidates(modernLocalCandidates)")
-        val animatedIndex = source.indexOf("requestSmallSpriteResolution(request)", modernLocalIndex)
-        val staticIndex = source.indexOf("requestStaticShowdownFallback(request, receiver)", animatedIndex)
-
-        assertTrue(modernLocalIndex >= 0)
-        assertTrue(animatedIndex > modernLocalIndex)
-        assertTrue(staticIndex > animatedIndex)
-        assertTrue(source.contains("ShowdownAssetPaths.staticBattleSpriteCandidates(request.species, request.shiny)"))
-        assertTrue(source.contains("it.startsWith(\"sprites/dex/\") || it.startsWith(\"sprites/dex-shiny/\")"))
-        assertTrue(source.contains(".filterNot(::isHighResolutionSpritePath)"))
-        assertTrue(source.contains("allowsStaticShowdownFallback(request)"))
-        assertTrue(source.contains("requestAnimatedSpriteCandidates"))
     }
 
     @Test
@@ -516,20 +510,19 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun playerBackFallbackStopsBeforeStaticFrontArtwork() {
+    fun playerBackFallbackUsesAnimatedSourcesOnly() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val backResolver = source.substringAfter("private fun requestBackSpriteResolution")
             .substringBefore("private fun requestAnimatedBackSpriteResolution")
-        val localResolver = source.substringAfter("private fun requestStaticSpriteFallback")
-            .substringBefore("private fun requestRegularRemoteSpriteResolution")
+        val modernResolver = source.substringAfter("private fun requestModernAnimatedSpriteResolution(")
+            .substringBefore("private fun requestPreviewAnimatedSpriteResolution(")
         val animatedResolution = source.indexOf("requestModernAnimatedSpriteResolution(request, plan) { asset -> gate.fallback(asset) }")
-        val staticFallback = source.indexOf("ShowdownAssetPaths.staticBattleSpriteCandidates(request.species, request.shiny)")
 
         assertTrue(backResolver.contains("requestAnimatedBackSpriteResolution(request, plan, receiver, includeRegularScrapedBack = true)"))
         assertTrue(animatedResolution >= 0)
-        assertTrue(staticFallback > animatedResolution)
-        assertTrue(localResolver.contains("if (allowsStaticShowdownFallback(request))"))
-        assertTrue(localResolver.contains("receiver(null)"))
+        assertTrue(modernResolver.contains("resolutionGate.fallback(null)"))
+        assertFalse(modernResolver.contains("requestPokeApiStaticSprite"))
+        assertFalse(source.contains("staticBattleSpriteCandidates"))
     }
 
     private fun testGif(frameCount: Int, identicalFrames: Boolean = false): ByteArray {

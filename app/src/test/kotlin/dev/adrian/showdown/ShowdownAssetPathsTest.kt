@@ -57,18 +57,6 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
-    fun battleStaticFallbacksPrioritizeTheBaseSpeciesImage() {
-        assertEquals(
-            listOf(
-                "sprites/dex/ogerpon.png",
-                "sprites/dex/ogerpon-wellspring.png",
-                "sprites/dex/ogerponwellspring.png"
-            ),
-            ShowdownAssetPaths.staticBattleSpriteCandidates("Ogerpon-Wellspring")
-        )
-    }
-
-    @Test
     fun fallsBackToTheBaseSpeciesForUnavailableFormSprites() {
         val candidates = ShowdownAssetPaths.battleSpriteCandidates(
             BattleSpriteRequest.forOpponent("Furfrou-La Reine", BattleSession.SpriteStyle.MODERN_3D)

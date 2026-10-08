@@ -380,14 +380,6 @@ object ShowdownAssetPaths {
         }
         .distinct()
 
-    fun staticBattleSpriteCandidates(species: String, shiny: Boolean = false): List<String> {
-        val baseSpecies = species.substringBefore('-').trim()
-        return buildList {
-            if (baseSpecies.isNotEmpty()) addAll(staticDexSpriteCandidates(baseSpecies, shiny))
-            addAll(staticDexSpriteCandidates(species, shiny))
-        }.distinct()
-    }
-
     fun trainer(trainer: String) = "sprites/trainers/${animationId(trainer)}.png"
 
     fun itemSprite(item: String): String? {

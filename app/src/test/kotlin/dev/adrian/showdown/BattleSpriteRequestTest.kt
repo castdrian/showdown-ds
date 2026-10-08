@@ -88,12 +88,16 @@ class BattleSpriteRequestTest {
     }
 
     @Test
-    fun missingAnimatedPlayerArtworkDoesNotUseStaticBackArtwork() {
+    fun missingAnimatedArtworkNeverFallsBackToStaticBattleArtwork() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
+        assertTrue(source.contains("requestAnimatedSpriteCandidates(plan.allCandidates, receiver)"))
+        assertTrue(source.contains("asset?.takeIf { it.isAnimated }"))
         assertFalse(source.contains("requestStaticShowdownBackFallback"))
         assertFalse(source.contains("ShowdownAssetPaths.staticBackSpriteCandidates"))
+        assertFalse(source.contains("ShowdownAssetPaths.staticBattleSpriteCandidates"))
+        assertFalse(source.contains("requestStaticShowdownFallback"))
+        assertFalse(source.contains("requestStaticSpriteFallback"))
         assertFalse(source.contains("sprites/gen5-back"))
-        assertFalse(allowsStaticShowdownFallback(BattleSpriteRequest.forPlayer("Iron Valiant", BattleSession.SpriteStyle.MODERN_3D)))
     }
 
     @Test
@@ -142,7 +146,7 @@ class BattleSpriteRequestTest {
         assertTrue(communityIndex >= 0)
         assertTrue(regularIndex < frontAnimatedIndex)
         assertTrue(communityIndex > frontAnimatedIndex)
-        assertTrue(communityIndex < source.indexOf("requestModernAnimatedSpriteResolution(request, plan) {", frontIndex))
+        assertTrue(communityIndex < source.indexOf("requestModernAnimatedSpriteResolution(request, plan, receiver)", frontIndex))
         assertTrue(animatedFallbackIndex > localFallbackIndex)
         assertTrue(localFallbackIndex >= 0)
         assertFalse(source.contains("requestPokeApiModernHdSprite"))

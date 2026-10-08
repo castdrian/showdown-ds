@@ -26,9 +26,6 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -59,8 +56,6 @@ internal fun isAnimatedSpritePath(path: String): Boolean =
 
 internal fun requiresAnimatedSprite(path: String, animatedOnly: Boolean): Boolean =
     animatedOnly || isAnimatedSpritePath(path)
-
-internal fun allowsStaticShowdownFallback(request: BattleSpriteRequest): Boolean = !request.backFacing
 
 internal class SpriteResolutionGate<T>(
     private val receiver: (T?) -> Unit,
@@ -437,7 +432,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val downloadExecutor = Executors.newFixedThreadPool(2)
     private val moveDataExecutor = Executors.newSingleThreadExecutor()
-    private val fallbackSpriteExecutor = ThreadPoolExecutor(0, 1, 10L, TimeUnit.SECONDS, LinkedBlockingQueue())
     private val decodeExecutor = Executors.newSingleThreadExecutor()
     private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
         ?.let { manager -> ActivityManager.MemoryInfo().also(manager::getMemoryInfo).totalMem < 2L * 1024L * 1024L * 1024L }
@@ -490,7 +484,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             mainHandler.post { receiver(null) }
             return
         }
-        resolvedPokemonCache.get(request)?.get()?.let { asset ->
+        resolvedPokemonCache.get(request)?.get()?.takeIf { it.isAnimated }?.let { asset ->
             mainHandler.post { receiver(asset) }
             return
         } ?: resolvedPokemonCache.remove(request)
@@ -498,10 +492,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             request = request,
             plan = ShowdownAssetPaths.battleSpriteResolutionPlan(request),
             receiver = { asset ->
-                if (asset != null && (asset.isAnimated || !request.backFacing)) {
-                    resolvedPokemonCache.put(request, WeakReference(asset))
-                }
-                receiver(asset)
+                val animatedAsset = asset?.takeIf { it.isAnimated }
+                animatedAsset?.let { resolvedPokemonCache.put(request, WeakReference(it)) }
+                receiver(animatedAsset)
             }
         )
     }
@@ -642,7 +635,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         if (!closed.compareAndSet(false, true)) return
         downloadExecutor.shutdownNow()
         moveDataExecutor.shutdownNow()
-        fallbackSpriteExecutor.shutdownNow()
         decodeExecutor.shutdownNow()
         memoryCache.evictAll()
         resolvedPokemonCache.evictAll()
@@ -757,7 +749,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             return
         }
         if (!plan.usesModernAnimatedFallback) {
-            requestSpriteCandidates(plan.allCandidates, receiver)
+            requestAnimatedSpriteCandidates(plan.allCandidates, receiver)
             return
         }
         if (request.backFacing) {
@@ -1014,13 +1006,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                                             if (communityAsset != null) {
                                                 receiver(communityAsset)
                                             } else {
-                                                requestModernAnimatedSpriteResolution(request, plan) { modernAsset ->
-                                                    if (modernAsset != null) {
-                                                        receiver(modernAsset)
-                                                    } else {
-                                                        requestStaticSpriteFallback(request, receiver)
-                                                    }
-                                                }
+                                                requestModernAnimatedSpriteResolution(request, plan, receiver)
                                             }
                                         }
                                     }
@@ -1122,25 +1108,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 }
             }
         }
-        if (allowsStaticShowdownFallback(request)) {
-            requestStaticShowdownFallback(request, resolutionGate::fallback)
-            requestPokeApiStaticSprite(request.species, request.shiny, baseSpeciesFirst = true, receiver = resolutionGate::fallback)
-        } else {
-            resolutionGate.fallback(null)
-        }
-    }
-
-    private fun requestStaticSpriteFallback(
-        request: BattleSpriteRequest,
-        receiver: (SpriteAsset?) -> Unit
-    ) {
-        if (allowsStaticShowdownFallback(request)) {
-            requestPokeApiStaticSprite(request.species, request.shiny) { staticAsset ->
-                if (staticAsset != null) receiver(staticAsset) else requestStaticShowdownFallback(request, receiver)
-            }
-        } else {
-            receiver(null)
-        }
+        resolutionGate.fallback(null)
     }
 
     private fun requestPreviewAnimatedSpriteResolution(
@@ -1228,16 +1196,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 receiver(null)
             }
         }
-    }
-
-    private fun requestStaticShowdownFallback(
-        request: BattleSpriteRequest,
-        receiver: (SpriteAsset?) -> Unit
-    ) {
-        val standardCandidates = ShowdownAssetPaths.staticBattleSpriteCandidates(request.species, request.shiny)
-            .filter { it.startsWith("sprites/dex/") || it.startsWith("sprites/dex-shiny/") }
-            .filterNot(::isHighResolutionSpritePath)
-        requestSpriteCandidates(standardCandidates, animatedOnly = false, executor = fallbackSpriteExecutor, receiver = receiver)
     }
 
     private fun isModernLocalCandidate(path: String) =
