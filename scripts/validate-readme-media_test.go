@@ -84,43 +84,6 @@ func TestREADMEAssetsShowCorrespondingBattleScreens(t *testing.T) {
 			t.Fatalf("validateReadmeScreenPair rejected corresponding screenshots: %v", err)
 		}
 	}
-	if err := validateSharedUpperBattle(
-		"../media/showdown-battle-live-both-sides.png",
-		"../media/showdown-battle-party-live-both-sides.png",
-	); err != nil {
-		t.Fatalf("validateSharedUpperBattle rejected the matching upper battle: %v", err)
-	}
-}
-
-func TestREADMEAssetsRejectDifferentUpperBattles(t *testing.T) {
-	sourcePath := "../media/showdown-battle-live-both-sides.png"
-	file, err := os.Open(sourcePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, _, err := image.Decode(file)
-	file.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	modified := image.NewNRGBA(source.Bounds())
-	draw.Draw(modified, modified.Bounds(), source, source.Bounds().Min, draw.Src)
-	modified.Set(10, 10, color.NRGBA{R: 255, G: 0, B: 0, A: 255})
-	modifiedPath := filepath.Join(t.TempDir(), "different-upper-battle.png")
-	modifiedFile, err := os.Create(modifiedPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := png.Encode(modifiedFile, modified); err != nil {
-		modifiedFile.Close()
-		t.Fatal(err)
-	}
-	if err := modifiedFile.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := validateSharedUpperBattle(sourcePath, modifiedPath); err == nil || !strings.Contains(err.Error(), "same upper battle") {
-		t.Fatalf("validateSharedUpperBattle accepted unrelated upper battle screenshots: %v", err)
-	}
 }
 
 func TestREADMEPrimaryScreenshotShowsLiveMoveChoice(t *testing.T) {

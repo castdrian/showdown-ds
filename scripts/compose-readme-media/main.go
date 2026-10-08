@@ -13,7 +13,21 @@ import (
 func main() {
 	var liveBattle image.Image
 	var partyView image.Image
-	if len(os.Args) == 4 {
+	if len(os.Args) == 5 {
+		battleUpper := readImage(os.Args[1])
+		moveChoiceLower := readImage(os.Args[2])
+		partyUpper := readImage(os.Args[3])
+		partyLower := readImage(os.Args[4])
+		var err error
+		liveBattle, err = composeDualScreenPanels(battleUpper, moveChoiceLower)
+		if err != nil {
+			fail(fmt.Errorf("live battle panels: %w", err))
+		}
+		partyView, err = composeDualScreenPanels(partyUpper, partyLower)
+		if err != nil {
+			fail(fmt.Errorf("party view panels: %w", err))
+		}
+	} else if len(os.Args) == 4 {
 		upper := readImage(os.Args[1])
 		moveChoiceLower := readImage(os.Args[2])
 		partyLower := readImage(os.Args[3])
@@ -30,7 +44,7 @@ func main() {
 		liveBattle = readImage(os.Args[1])
 		partyView = readImage(os.Args[2])
 	} else {
-		fail(fmt.Errorf("usage: go run scripts/compose-readme-media/main.go upper.png move-choice-lower.png party-lower.png"))
+		fail(fmt.Errorf("usage: go run scripts/compose-readme-media/main.go battle-upper.png move-choice-lower.png party-upper.png party-lower.png"))
 	}
 	writeReadmeMedia(liveBattle, partyView)
 }
