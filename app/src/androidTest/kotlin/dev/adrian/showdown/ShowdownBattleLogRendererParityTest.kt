@@ -37,8 +37,8 @@ class ShowdownBattleLogRendererParityTest {
             setLocalUsername("PLAYER")
             setReplayMode(true)
         }
-        var protocolMessageIdsByLine = emptyList<List<Long>>()
-        session.addProtocolListener { _, messageIds -> protocolMessageIdsByLine = messageIds }
+        var identitiesByLine = emptyList<BattleSession.ProtocolLineIdentity>()
+        session.addProtocolListener { _, identities -> identitiesByLine = identities }
         val transcript = listOf(
             "|init|battle",
             "|player|p1|PLAYER||",
@@ -51,27 +51,31 @@ class ShowdownBattleLogRendererParityTest {
         session.applyProtocolPacket(transcript)
         val sourceGeneration = session.battleLogGeneration()
         val moveLineIndex = transcript.indexOfFirst { it.startsWith("|move|") }
-        val sourceMessageId = protocolMessageIdsByLine[moveLineIndex].single()
+        val sourceIdentity = identitiesByLine[moveLineIndex]
+        val sourceMessageId = sourceIdentity.messageIds.single()
         val entryCount = activity.nativeEntries.size
         val syncCount = activity.synchronizedGenerations.size
 
         activity.renderer.applyProtocol(
             transcript,
             sourceGeneration,
-            protocolMessageIdsByLine = protocolMessageIdsByLine
+            identitiesByLine = identitiesByLine
         )
         awaitSynchronization(activity, syncCount, sourceGeneration)
         session.applyProtocolPacket(listOf("|switch|p1a: Gengar|Gengar, L50|100/100"))
         session.markNativeBattleLogSynchronized(session.battleLogGeneration())
 
         val nativeRows = activity.nativeEntries.drop(entryCount)
+        val nativeEventIds = activity.nativeProtocolEventIds.drop(entryCount)
         val nativeMessageIds = activity.nativeProtocolMessageIds.drop(entryCount)
         val moveEntryIndex = nativeRows.indexOfFirst { it.second.contains("Thunderbolt") }
         assertTrue("The upstream renderer did not emit the Thunderbolt move", moveEntryIndex >= 0)
+        assertEquals(sourceIdentity.eventId, nativeEventIds[moveEntryIndex])
         assertEquals(listOf(sourceMessageId), nativeMessageIds[moveEntryIndex])
         session.appendShowdownBattleLog(
             nativeRows[moveEntryIndex].second,
             sourceGeneration,
+            nativeEventIds[moveEntryIndex],
             nativeMessageIds[moveEntryIndex]
         )
 

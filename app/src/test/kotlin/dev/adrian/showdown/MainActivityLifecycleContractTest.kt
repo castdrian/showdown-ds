@@ -447,7 +447,7 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(listener.contains("runOnUiThread {"))
         assertTrue(listener.contains("applyBattleProtocolToEffects("))
-        assertTrue(listener.contains("messageIdsByLine,"))
+        assertTrue(listener.contains("identitiesByLine,"))
         assertTrue(source.contains("val effectsAlreadyCreated = showdownMoveEffects != null"))
         assertTrue(source.contains("if (!effectsAlreadyCreated && battleInit) return"))
     }

@@ -277,7 +277,7 @@ class MainActivity : Activity() {
     private var controllerHorizontal = 0
     private var controllerVertical = 0
     private val sessionListener = BattleSession.Listener { refreshDisplays() }
-    private val protocolListener = BattleSession.ProtocolListener { lines, messageIdsByLine ->
+    private val protocolListener = BattleSession.ProtocolListener { lines, identitiesByLine ->
         runOnUiThread {
             if (lines.any { it.startsWith("|init|battle") || it.startsWith("|request|") }) {
                 ensureBattleMoveInfoLoaded()
@@ -287,7 +287,7 @@ class MainActivity : Activity() {
             } else {
                 applyBattleProtocolToEffects(
                     lines,
-                    messageIdsByLine,
+                    identitiesByLine,
                     applyingBattleEffectsBarrierToken ?: 0L
                 )
             }
@@ -746,9 +746,14 @@ class MainActivity : Activity() {
             audioMoveResetter = battleAudio::beginBattleMove,
             announcerCueListener = battleAudio::playAnnouncerCue,
             announcerCueResetter = battleAudio::resetAnnouncerCues,
-            battleLogListener = { value, generation, protocolMessageIds ->
+            battleLogListener = { value, generation, protocolEventId, protocolMessageIds ->
                 runOnUiThread {
-                    session.appendShowdownBattleLog(value, generation, protocolMessageIds)
+                    session.appendShowdownBattleLog(
+                        value,
+                        generation,
+                        protocolEventId,
+                        protocolMessageIds
+                    )
                 }
             },
             battleMarkupListener = { key, value, generation ->
@@ -918,7 +923,7 @@ class MainActivity : Activity() {
 
     private fun applyBattleProtocolToEffects(
         lines: List<String>,
-        messageIdsByLine: List<List<Long>>,
+        identitiesByLine: List<BattleSession.ProtocolLineIdentity>,
         effectsBarrierToken: Long = 0L
     ) {
         val historyBeforePacket = session.protocolHistoryBeforePacket(lines)
@@ -942,7 +947,7 @@ class MainActivity : Activity() {
             lines,
             session.battleLogGeneration(),
             effectsBarrierToken,
-            messageIdsByLine
+            identitiesByLine
         )
     }
 

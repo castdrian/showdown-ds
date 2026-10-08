@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 
 class ShowdownLogParityHarnessActivity : Activity() {
     val nativeEntries = CopyOnWriteArrayList<Pair<Long, String>>()
+    val nativeProtocolEventIds = CopyOnWriteArrayList<Long?>()
     val nativeProtocolMessageIds = CopyOnWriteArrayList<List<Long>>()
     val synchronizedGenerations = CopyOnWriteArrayList<Long>()
     private val synchronizationMonitor = java.lang.Object()
@@ -18,8 +19,9 @@ class ShowdownLogParityHarnessActivity : Activity() {
         renderer = ShowdownMoveEffectsView(
             context = this,
             audioCueListener = {},
-            battleLogListener = { value, generation, protocolMessageIds ->
+            battleLogListener = { value, generation, protocolEventId, protocolMessageIds ->
                 nativeEntries += generation to value
+                nativeProtocolEventIds += protocolEventId
                 nativeProtocolMessageIds += protocolMessageIds
             },
             battleLogSyncListener = { generation ->

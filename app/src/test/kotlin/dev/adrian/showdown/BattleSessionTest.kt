@@ -743,7 +743,7 @@ class BattleSessionTest {
         session.appendShowdownBattleLog(
             "Official Showdown wording for Thunderbolt",
             sourceGeneration,
-            listOf(protocolMessage.id)
+            protocolMessageIds = listOf(protocolMessage.id)
         )
 
         val nativeMessage = session.battleFeedMessages().last()
@@ -752,6 +752,39 @@ class BattleSessionTest {
         assertEquals(
             "Pikachu",
             nativeMessage.sceneContext?.snapshot?.playerCombatants?.single()?.name
+        )
+    }
+
+    @Test
+    fun nativeLogWithoutAProtocolFallbackUsesItsSourceLineScene() {
+        val session = BattleSession()
+        var lineIdentities = emptyList<BattleSession.ProtocolLineIdentity>()
+        session.addProtocolListener { _, identities -> lineIdentities = identities }
+        val packet = listOf(
+            "|init|battle",
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100",
+            "|future|p2a: Eevee|upstream-only-event"
+        )
+        session.applyProtocolPacket(packet)
+        val sourceGeneration = session.battleLogGeneration()
+        val sourceIdentity = lineIdentities.last()
+        assertTrue(sourceIdentity.messageIds.isEmpty())
+
+        session.applyProtocolPacket(listOf("|switch|p2a: Dragapult|Dragapult, L50|100/100"))
+        session.markNativeBattleLogSynchronized(session.battleLogGeneration())
+        session.appendShowdownBattleLog(
+            "The opposing Eevee used an upstream-only event!",
+            sourceGeneration,
+            sourceIdentity.eventId,
+            sourceIdentity.messageIds
+        )
+
+        val nativeMessage = session.battleFeedMessages().last()
+        assertEquals("The opposing Eevee used an upstream-only event!", nativeMessage.text)
+        assertEquals(
+            "Eevee",
+            nativeMessage.sceneContext?.snapshot?.opponentCombatants?.single()?.name
         )
     }
 
@@ -3428,8 +3461,8 @@ class BattleSessionTest {
         val session = BattleSession()
         val received = mutableListOf<Pair<List<String>, List<List<Long>>>>()
         session.applyProtocolLine("|turn|1")
-        session.addProtocolListener { lines, messageIdsByLine ->
-            received += lines to messageIdsByLine
+        session.addProtocolListener { lines, identitiesByLine ->
+            received += lines to identitiesByLine.map(BattleSession.ProtocolLineIdentity::messageIds)
         }
 
         session.applyProtocolPacket(listOf("A moderator paused the battle.", "|move|p1a: Incineroar|Flare Blitz|p2a: Tapu Koko"))
