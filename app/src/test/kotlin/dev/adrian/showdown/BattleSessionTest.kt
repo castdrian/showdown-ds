@@ -3848,6 +3848,29 @@ class BattleSessionTest {
     }
 
     @Test
+    fun serverFormatCatalogParsesCurrentChampionsCapabilityMasks() {
+        val formats = BattleSession.parseServerFormats(
+            "|formats|,1|Champions|[Gen 9 Champions] Random Battle,4f|[Gen 9 Champions] VGC 2026 Reg M-C (Bo3),1e|[Gen 9 Champions] Draft,11c"
+        )
+
+        assertEquals(
+            listOf(
+                "gen9championsrandombattle",
+                "gen9championsvgc2026regmcbo3",
+                "gen9championsdraft"
+            ),
+            formats.map { it.id }
+        )
+        assertTrue(formats[0].usesRandomTeams)
+        assertTrue(formats[0].canSearch)
+        assertTrue(formats[0].canChallenge)
+        assertTrue(formats[1].canSearch)
+        assertTrue(formats[1].canChallenge)
+        assertFalse(formats[2].canSearch)
+        assertTrue(formats[2].canChallenge)
+    }
+
+    @Test
     fun unavailableSavedFormatFallsBackToTheServerDefault() {
         val session = BattleSession()
         session.setMatchFormat(BattleSession.MatchFormat("gen9multirandombattle", "[Gen 9] Multi Random Battle"))
