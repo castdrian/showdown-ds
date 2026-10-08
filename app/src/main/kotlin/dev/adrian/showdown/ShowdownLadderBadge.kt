@@ -49,4 +49,14 @@ object ShowdownLadderBadgePresentation {
     private const val MAX_VISIBLE_BADGES = 3
 
     fun visible(badges: List<ShowdownLadderBadge>) = badges.take(MAX_VISIBLE_BADGES)
+
+    fun forStatusCard(
+        side: String,
+        previouslyShownSides: Set<String>,
+        badgesBySide: Map<String, List<ShowdownLadderBadge>>
+    ) = if (side in previouslyShownSides) {
+        emptyList()
+    } else {
+        visible(badgesBySide[side].orEmpty())
+    }
 }

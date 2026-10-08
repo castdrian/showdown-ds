@@ -605,7 +605,7 @@ class BattleSceneView(
                     switchOutVisual,
                     sceneSnapshot?.playerDetailsBySlot.orEmpty(),
                     playerPartyDetails,
-                    ladderBadges = battleInfo.ladderBadgesBySide[statusCardSide(true, playerCombatants.firstOrNull())].orEmpty()
+                    ladderBadgesBySide = battleInfo.ladderBadgesBySide
                 )
             }
             if (singles) {
@@ -638,7 +638,7 @@ class BattleSceneView(
                     sceneSnapshot?.opponentDetailsBySlot.orEmpty(),
                     opponentPartyDetails,
                     sceneSnapshot?.opponentPartyDetailsBySlot ?: session.opponentPartyDetailsBySlot(),
-                    battleInfo.ladderBadgesBySide[statusCardSide(false, opponentCombatants.firstOrNull())].orEmpty()
+                    battleInfo.ladderBadgesBySide
                 )
             }
             drawBattleFeed(canvas, width, height, scale, battleFeedFrame)
@@ -909,6 +909,7 @@ class BattleSceneView(
         )
         val centerY = height * if (player) 0.67f else 0.42f
         val centeredSlot = BattleCombatantLayout.centeredSlot(session.isTriplesCentered(), combatants)
+        val shownBadgeSides = mutableSetOf<String>()
         combatants.forEachIndexed { index, combatant ->
             val details = displayedDetailsForActiveCombatant(player, combatant.slot) ?: return@forEachIndexed
             val centerX = BattleCombatantLayout.x(width, player, index, combatants.size, centeredSlot, combatant.slot)
@@ -922,12 +923,14 @@ class BattleSceneView(
             bounds.union(cardBounds)
             val name = BattleSession.displayPokemonName(details.name, details.species)
             val idBase = if (player) ACCESSIBLE_PLAYER_PARTY_BASE else ACCESSIBLE_OPPONENT_PARTY_BASE
+            val side = combatant.slot.take(2)
+            val badgeSide = side.takeIf { shownBadgeSides.add(side) }
             addAccessibilityNode(
                 nodes,
                 idBase + index,
                 withLadderBadgeAccessibility(
                     "${if (player) "Your" else "Opponent's"} active Pokémon, ${pokemonAccessibilitySummary(details)}",
-                    combatant.slot.take(2).takeIf { index == 0 }
+                    badgeSide
                 ),
                 bounds,
                 selected = inspectedPlayer == player && inspectedSlot == combatant.slot
@@ -2817,14 +2820,22 @@ class BattleSceneView(
         detailsBySlot: Map<String, BattleSession.PokemonDetails> = emptyMap(),
         partyDetails: List<BattleSession.PokemonDetails>,
         partyDetailsBySlot: Map<String, List<BattleSession.PokemonDetails>> = emptyMap(),
-        ladderBadges: List<ShowdownLadderBadge> = emptyList()
+        ladderBadgesBySide: Map<String, List<ShowdownLadderBadge>> = emptyMap()
     ) {
         val layout = BattleCardLayout.compactFor(combatants.size)
         val nowNanos = System.nanoTime()
+        val shownBadgeSides = mutableSetOf<String>()
         combatants.forEachIndexed { index, combatant ->
             val alpha = statusCardAlpha(combatant.name, combatant.condition, nowNanos) *
                 BattleSceneTiming.summonStatusCardAlpha(combatant.entryAtNanos, nowNanos)
             if (alpha > 0f) {
+                val side = combatant.slot.take(2)
+                val badges = ShowdownLadderBadgePresentation.forStatusCard(
+                    side,
+                    shownBadgeSides,
+                    ladderBadgesBySide
+                )
+                shownBadgeSides += side
                 drawCompactStatusCard(
                     canvas,
                     BattleCardLayout.compactBoundsFor(width, height, player, index, combatants.size).toRectF(),
@@ -2841,7 +2852,7 @@ class BattleSceneView(
                     alpha,
                     layout,
                     partyDetailsBySlot[combatant.slot] ?: partyDetails,
-                    ladderBadges.takeIf { index == 0 }.orEmpty()
+                    badges
                 )
             }
         }

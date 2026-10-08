@@ -52,6 +52,32 @@ class ShowdownLadderBadgeTest {
     }
 
     @Test
+    fun keepsBadgesWithEachTrainerWhenOpponentCardsAreReordered() {
+        val badgesBySide = mapOf(
+            "p2" to listOf(checkNotNull(ShowdownLadderBadge.fromProtocolValue("bronze|gen9ou|100-11"))),
+            "p3" to listOf(checkNotNull(ShowdownLadderBadge.fromProtocolValue("silver|gen9ou|100-11"))),
+            "p4" to listOf(checkNotNull(ShowdownLadderBadge.fromProtocolValue("gold|gen9ou|100-11")))
+        )
+
+        assertEquals(
+            listOf("gold"),
+            ShowdownLadderBadgePresentation.forStatusCard("p4", emptySet(), badgesBySide).map { it.type }
+        )
+        assertEquals(
+            listOf("silver"),
+            ShowdownLadderBadgePresentation.forStatusCard("p3", setOf("p4"), badgesBySide).map { it.type }
+        )
+        assertEquals(
+            listOf("bronze"),
+            ShowdownLadderBadgePresentation.forStatusCard("p2", setOf("p4", "p3"), badgesBySide).map { it.type }
+        )
+        assertEquals(
+            emptyList<ShowdownLadderBadge>(),
+            ShowdownLadderBadgePresentation.forStatusCard("p4", setOf("p4", "p3", "p2"), badgesBySide)
+        )
+    }
+
+    @Test
     fun storesDistinctBadgesByShowdownSideWithoutAddingBattleLogText() {
         val session = BattleSession().apply { setLocalUsername("ADRIAN") }
         val opponentBadge = "bronze|gen9randombattle|100-11"
