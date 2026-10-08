@@ -79,7 +79,7 @@ jobs:
             --tests dev.adrian.showdown.ShowdownAssetPathsTest
 
       - name: Run full unit suite and build debug APK
-        run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest :app:assembleDebug
+        run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin
 
       - name: Upload JUnit results
         if: always()
