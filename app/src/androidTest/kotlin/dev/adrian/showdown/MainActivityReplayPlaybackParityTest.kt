@@ -162,7 +162,9 @@ class MainActivityReplayPlaybackParityTest {
         val replayLines = completeReplay.log.lines()
         val finalReplayLine = replayLines.indexOfFirst { it.startsWith("|-hitcount|p1a: Dewgong|3") }
         assertTrue("The official replay fixture is missing its expected multi-hit event", finalReplayLine >= 0)
-        val replay = completeReplay.copy(log = replayLines.take(finalReplayLine + 1).joinToString("\n"))
+        val replayLinesToPlay = replayLines.take(finalReplayLine + 1)
+        val replay = completeReplay.copy(log = replayLinesToPlay.joinToString("\n"))
+        val knownPokemonNames = replayPokemonNames(replayLinesToPlay)
         val preferences = targetContext.getSharedPreferences("showdown_live", 0)
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
         val observedFrames = linkedMapOf<Long, ReplayFrameObservation>()
@@ -213,7 +215,7 @@ class MainActivityReplayPlaybackParityTest {
                     latestProtocolGeneration = session.battleLogGeneration()
                     observeDisplayedReplayMessage(
                         activity,
-                        setOf("Gliscor", "Swanna", "Weavile", "Dewgong"),
+                        knownPokemonNames,
                         observedFrames,
                         canvas
                     )
@@ -294,7 +296,7 @@ class MainActivityReplayPlaybackParityTest {
                 assertEquals(frame.text, frame.message.text)
                 assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
                 assertEquals(frame.message.sceneContext?.switchOutVisual, frame.displayedSwitchOutVisual)
-                assertVisiblePokemonNamesBelongToDisplayedScene(frame)
+                assertVisiblePokemonNamesBelongToDisplayedScene(frame, knownPokemonNames)
                 val snapshot = frame.displayedScene ?: return@forEach
                 val switchOutVisual = frame.displayedSwitchOutVisual
                 val playerCombatants = BattleFeedSceneState.combatantsForMessage(
@@ -752,7 +754,31 @@ class MainActivityReplayPlaybackParityTest {
                     "Visible replay entry '${frame.text}' names $identity outside the displayed scene $identities",
                     identities.any { it.equals(identity, ignoreCase = true) }
                 )
+        }
+    }
+
+    private fun replayPokemonNames(lines: List<String>): Set<String> = buildSet {
+        val actorPattern = Regex("^p[1-4][a-z]:\\s*(.+)$", RegexOption.IGNORE_CASE)
+        val speciesActions = setOf("switch", "drag", "replace", "detailschange", "-formechange")
+        lines.forEach { line ->
+            val fields = line.split('|')
+            fields.drop(2).forEach { field ->
+                actorPattern.matchEntire(field)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::add)
             }
+            if (fields.getOrNull(1) in speciesActions) {
+                fields.getOrNull(3)
+                    ?.substringBefore(',')
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::add)
+            }
+        }
     }
 
     private fun observeDisplayedReplayMessage(
