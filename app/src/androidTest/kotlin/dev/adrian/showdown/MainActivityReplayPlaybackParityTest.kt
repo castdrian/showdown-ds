@@ -51,6 +51,8 @@ class MainActivityReplayPlaybackParityTest {
         val preferences = targetContext.getSharedPreferences("showdown_live", 0)
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
         val observedFrames = linkedMapOf<Long, ReplayFrameObservation>()
+        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
         var latestNativeLog = emptyList<String>()
         var latestProtocolLog = emptyList<String>()
         var latestNativeGeneration = -1L
@@ -90,10 +92,16 @@ class MainActivityReplayPlaybackParityTest {
                     latestProtocolLog = session.battleLog()
                     latestNativeGeneration = privateField(session, "nativeBattleLogGeneration") as Long
                     latestProtocolGeneration = session.battleLogGeneration()
-                    scene.invalidate()
-                    val text = privateField(scene, "cachedBattleFeedVisibleText") as? String ?: return@onActivity
+                    observeDisplayedReplayMessage(
+                        activity,
+                        setOf("Gliscor", "Swanna", "Weavile", "Dewgong"),
+                        observedFrames,
+                        canvas
+                    )
+                    val frame = observedFrames.values.lastOrNull() ?: return@onActivity
                     val message = privateField(feedPresentation, "currentMessage") as? BattleFeedMessage ?: return@onActivity
-                    if (message.text != text) return@onActivity
+                    if (message.id != frame.message.id || message.text != frame.text) return@onActivity
+                    val text = frame.text
                     if (text.contains("Triple Axel", true) && text.contains("Weavile", true) && targetVisibleAt == null) {
                         targetVisibleAt = SystemClock.elapsedRealtime()
                     }
@@ -101,7 +109,7 @@ class MainActivityReplayPlaybackParityTest {
                         latestNativeLog.any { it.contains("Triple Axel", true) && it.contains("Weavile", true) }
                     val pendingMessages = privateField(feedPresentation, "pendingMessages") as? Collection<*>
                     val pendingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
-                    val state = "visible=$text#${message.id}; protocolGen=$latestProtocolGeneration; " +
+                    val state = "visible=$text#${frame.message.id}; protocolGen=$latestProtocolGeneration; " +
                         "nativeGen=$latestNativeGeneration; nativeTail=${latestNativeLog.takeLast(3)}; " +
                         "protocolTail=${latestProtocolLog.takeLast(3)}; feedPending=${pendingMessages?.size}; " +
                         "packetPending=${pendingPackets?.size}; scheduled=${privateField(activity, "battlePacketPlaybackScheduled")}; " +
@@ -109,15 +117,6 @@ class MainActivityReplayPlaybackParityTest {
                         "stalled=${privateField(activity, "rendererRecoveryStalled")}; lightweight=${privateField(activity, "lightweightBattlePlayback")}"
                     if (playbackTimeline.lastOrNull() != state) playbackTimeline.add(state)
                     latestPlaybackState = state
-                    observedFrames[message.id] = ReplayFrameObservation(
-                        text = text,
-                        message = message,
-                        displayedScene = privateField(scene, "displayedBattleSceneSnapshot") as? BattleSession.BattleSceneSnapshot,
-                        displayedSwitchOutVisual = privateField(scene, "displayedSwitchOutVisual") as? BattleSession.SwitchOutVisual,
-                        spriteStyle = session.spriteStyle,
-                        playerSprite = privateField(scene, "requestedPlayerSprite") as? BattleSpriteRequest,
-                        opponentSprite = privateField(scene, "requestedOpponentSprite") as? BattleSpriteRequest
-                    )
                 }
                 Thread.sleep(40L)
             }
@@ -167,6 +166,7 @@ class MainActivityReplayPlaybackParityTest {
             }
         } finally {
             scenario?.close()
+            bitmap.recycle()
             preferences.edit().putBoolean("maintain_connection", previousConnectionPreference).commit()
         }
     }
