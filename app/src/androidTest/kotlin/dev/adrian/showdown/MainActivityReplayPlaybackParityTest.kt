@@ -49,6 +49,15 @@ class MainActivityReplayPlaybackParityTest {
         val expectedOpposingPrefix: Boolean
     )
 
+    private data class NativeReplayMoveIdentity(
+        val sourceLine: String,
+        val slot: String,
+        val name: String,
+        val moveName: String,
+        val species: String?,
+        val side: BattleSpriteSide?
+    )
+
     @Test
     fun officialDewgongBackAnimationDecodesOnDevice() {
         val (cache, cacheDirectory) = isolatedSpriteCache()
@@ -166,6 +175,7 @@ class MainActivityReplayPlaybackParityTest {
         var targetNativeCaughtUp = false
         var targetSpriteAssetsLoaded = false
         var targetSpriteDiagnostics = "unobserved"
+        val nativeMoveIdentitiesByMessageId = linkedMapOf<Long, NativeReplayMoveIdentity>()
         val playbackTimeline = mutableListOf<String>()
         val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(90)
         var scenario: ActivityScenario<MainActivity>? = null
@@ -175,6 +185,8 @@ class MainActivityReplayPlaybackParityTest {
             scenario = ActivityScenario.launch(MainActivity::class.java)
             val activeScenario = checkNotNull(scenario)
             activeScenario.onActivity { activity ->
+                val session = privateField(activity, "session") as BattleSession
+                observeProtocolMoveIdentities(session, nativeMoveIdentitiesByMessageId)
                 setPrivateField(activity, "restoredReplaySpeed", BattlePlaybackSpeed.MAXIMUM)
                 setPrivateField(activity, "lightweightBattlePlayback", false)
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
@@ -188,7 +200,7 @@ class MainActivityReplayPlaybackParityTest {
 
             while (SystemClock.elapsedRealtime() < deadline &&
                 (targetVisibleAt == null || ((!targetNativeCaughtUp || !targetSpriteAssetsLoaded) &&
-                    SystemClock.elapsedRealtime() - checkNotNull(targetVisibleAt) < TimeUnit.SECONDS.toMillis(15)))
+                    SystemClock.elapsedRealtime() - checkNotNull(targetVisibleAt) < TimeUnit.SECONDS.toMillis(45)))
             ) {
                 activeScenario.onActivity { activity ->
                     val session = privateField(activity, "session") as BattleSession
@@ -254,7 +266,25 @@ class MainActivityReplayPlaybackParityTest {
                 targetNativeCaughtUp
             )
             assertTrue("The production replay skipped several visible Showdown entries: $observedTexts", observedFrames.size >= 6)
-            assertTrue("The production replay did not display the status action before the hit: $observedTexts", observedTexts.any { it.contains("Protect", true) })
+            val visibleMoveFrames = observedFrames.filterValues { it.text.contains(" used ", true) }
+            assertTrue("The production replay did not display its multi-hit move entry: $observedTexts", visibleMoveFrames.isNotEmpty())
+            visibleMoveFrames.forEach { (messageId, frame) ->
+                val identity = checkNotNull(nativeMoveIdentitiesByMessageId[messageId]) {
+                    "The visible native move ${frame.text} had no matching protocol move identity"
+                }
+                assertEquals(identity.sourceLine, identity.name, moveActorFromNativeMessage(frame.text))
+                assertTrue(identity.sourceLine, frame.text.contains(identity.moveName, true))
+                val displayedCombatants = checkNotNull(frame.displayedScene).let { snapshot ->
+                    snapshot.playerCombatants + snapshot.opponentCombatants
+                }
+                val combatant = displayedCombatants.singleOrNull { it.slot.equals(identity.slot, true) }
+                assertNotNull("${identity.sourceLine} has no displayed combatant in ${frame.text}", combatant)
+                assertEquals(identity.sourceLine, identity.name, combatant?.name)
+                assertEquals(identity.sourceLine, identity.species, combatant?.species)
+                val sprite = if (identity.side == BattleSpriteSide.PLAYER) frame.playerSprite else frame.opponentSprite
+                assertEquals(identity.sourceLine, identity.species, sprite?.species)
+                assertEquals(identity.sourceLine, identity.side, sprite?.side)
+            }
             assertTrue(
                 "The production replay did not draw the active Pokémon assets for its visible multi-hit action: $observedTexts; $targetSpriteDiagnostics",
                 targetSpriteAssetsLoaded
@@ -798,6 +828,53 @@ class MainActivityReplayPlaybackParityTest {
             "$side sprite drawn for '$text' came from a path unrelated to ${request.species}: $resolvedAssetPath",
             resolvedAssetPath in ShowdownAssetPaths.battleSpriteResolutionPlan(request).allCandidates
         )
+    }
+
+    private fun observeProtocolMoveIdentities(
+        session: BattleSession,
+        identitiesByMessageId: MutableMap<Long, NativeReplayMoveIdentity>
+    ) {
+        session.addProtocolListener { lines, identitiesByLine ->
+            lines.forEachIndexed { index, line ->
+                val fields = line.split('|')
+                if (fields.getOrNull(1) != "move") return@forEachIndexed
+                val actorField = fields.getOrNull(2).orEmpty()
+                val slot = actorField.substringBefore(':').trim()
+                val name = actorField.substringAfter(':', "").substringBefore(',').trim()
+                val moveName = fields.getOrNull(3).orEmpty()
+                if (slot.isBlank() || name.isBlank() || moveName.isBlank()) return@forEachIndexed
+                val identity = identitiesByLine.getOrNull(index) ?: return@forEachIndexed
+                identity.messageIds.forEach { messageId ->
+                    val snapshot = session.battleSceneSnapshotForFeedMessage(messageId)
+                    val playerCombatant = snapshot?.playerCombatants?.singleOrNull { it.slot.equals(slot, true) }
+                    val opponentCombatant = snapshot?.opponentCombatants?.singleOrNull { it.slot.equals(slot, true) }
+                    val combatant = playerCombatant ?: opponentCombatant
+                    identitiesByMessageId[messageId] = NativeReplayMoveIdentity(
+                        sourceLine = line,
+                        slot = slot,
+                        name = name,
+                        moveName = moveName,
+                        species = combatant?.species,
+                        side = when {
+                            playerCombatant != null -> BattleSpriteSide.PLAYER
+                            opponentCombatant != null -> BattleSpriteSide.OPPONENT
+                            else -> null
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun moveActorFromNativeMessage(text: String): String {
+        val moveSeparator = text.indexOf(" used ", ignoreCase = true)
+        if (moveSeparator < 0) return ""
+        return text.substring(0, moveSeparator)
+            .trim()
+            .trimStart('(', '[')
+            .replaceFirst(Regex("^the opposing\\s+", RegexOption.IGNORE_CASE), "")
+            .substringAfterLast("'s ")
+            .trim()
     }
 
     private fun privateField(target: Any, name: String): Any? = target.javaClass

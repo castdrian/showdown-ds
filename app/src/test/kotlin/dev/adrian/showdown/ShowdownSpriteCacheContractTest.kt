@@ -308,15 +308,16 @@ class ShowdownSpriteCacheContractTest {
             .substringBefore("private fun requestPreviewAnimatedSpriteResolution(")
 
         assertTrue(resolver.contains("requestSmallSpriteResolution(request,"))
-        assertTrue(resolver.contains("requestOfficialAnimatedBackFallback(request, plan)"))
+        assertTrue(resolver.contains("requestAnimatedSpriteCandidates(modernLocalCandidates, fallbackSpriteExecutor)"))
         assertTrue(
-            resolver.indexOf("requestOfficialAnimatedBackFallback(request, plan)") <
-                resolver.indexOf("requestSmallSpriteResolution(request,")
+            resolver.contains("requestOfficialAnimatedBackFallback(request, plan, fallbackSpriteExecutor)")
         )
+        assertTrue(resolver.contains("primaryCanReplaceFallback = { it.isAnimated }"))
         assertTrue(resolver.contains("resolutionGate.fallback(null)"))
+        assertTrue(source.contains("private val fallbackSpriteExecutor = Executors.newFixedThreadPool(2)"))
+        assertTrue(source.contains("fallbackSpriteExecutor.shutdownNow()"))
         assertFalse(resolver.contains("requestStaticShowdownFallback"))
         assertFalse(resolver.contains("requestPokeApiStaticSprite"))
-        assertFalse(source.contains("fallbackSpriteExecutor"))
     }
 
     @Test

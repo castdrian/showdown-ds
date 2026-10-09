@@ -437,6 +437,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val appContext = context.applicationContext
     private val downloadExecutor = Executors.newFixedThreadPool(2)
+    private val fallbackSpriteExecutor = Executors.newFixedThreadPool(2)
     private val moveDataExecutor = Executors.newSingleThreadExecutor()
     private val decodeExecutor = Executors.newSingleThreadExecutor()
     private val memoryConstrained = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
@@ -644,6 +645,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         downloadExecutor.shutdownNow()
+        fallbackSpriteExecutor.shutdownNow()
         moveDataExecutor.shutdownNow()
         decodeExecutor.shutdownNow()
         memoryCache.evictAll()
@@ -728,7 +730,15 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     }
 
     private fun requestAnimatedSpriteCandidates(paths: List<String>, receiver: (SpriteAsset?) -> Unit) {
-        requestSpriteCandidates(paths, animatedOnly = true, receiver = receiver)
+        requestAnimatedSpriteCandidates(paths, downloadExecutor, receiver)
+    }
+
+    private fun requestAnimatedSpriteCandidates(
+        paths: List<String>,
+        executor: Executor,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        requestSpriteCandidates(paths, animatedOnly = true, executor = executor, receiver = receiver)
     }
 
     private fun requestSpriteCandidates(
@@ -1100,6 +1110,23 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         plan: ShowdownSpriteResolutionPlan,
         receiver: (SpriteAsset?) -> Unit
     ) {
+        val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
+        if (request.backFacing) {
+            val backResolutionGate = SpriteResolutionGate<SpriteAsset>(
+                receiver = { asset ->
+                    if (asset != null) receiver(asset) else requestSmallSpriteResolution(request, receiver)
+                },
+                primaryCanReplaceFallback = { it.isAnimated },
+                releaseRejectedAsset = { it.stopAnimation() }
+            )
+            requestAnimatedSpriteCandidates(modernLocalCandidates, fallbackSpriteExecutor) { asset ->
+                backResolutionGate.primary(asset)
+            }
+            requestOfficialAnimatedBackFallback(request, plan, fallbackSpriteExecutor) { asset ->
+                backResolutionGate.fallback(asset)
+            }
+            return
+        }
         val resolutionGate = SpriteResolutionGate<SpriteAsset>(
             receiver = receiver,
             primaryCanReplaceFallback = { it.isAnimated },
@@ -1107,18 +1134,9 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             releaseRejectedAsset = { it.stopAnimation() }
         )
         val primaryReceiver: (SpriteAsset?) -> Unit = resolutionGate::primary
-        val modernLocalCandidates = plan.fallbackCandidates.filter(::isModernLocalCandidate)
         requestAnimatedSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
             if (modernLocalAsset != null) {
                 primaryReceiver(modernLocalAsset)
-            } else if (request.backFacing) {
-                requestOfficialAnimatedBackFallback(request, plan) { officialBackAsset ->
-                    if (officialBackAsset != null) {
-                        primaryReceiver(officialBackAsset)
-                    } else {
-                        requestSmallSpriteResolution(request, primaryReceiver)
-                    }
-                }
             } else {
                 requestSmallSpriteResolution(request, primaryReceiver)
             }
@@ -1129,6 +1147,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private fun requestOfficialAnimatedBackFallback(
         request: BattleSpriteRequest,
         plan: ShowdownSpriteResolutionPlan,
+        executor: Executor,
         receiver: (SpriteAsset?) -> Unit
     ) {
         if (!request.backFacing) {
@@ -1136,7 +1155,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             return
         }
         val officialAnimatedBackCandidates = plan.fallbackCandidates.filter { it.startsWith("sprites/ani-back") }
-        requestAnimatedSpriteCandidates(officialAnimatedBackCandidates, receiver)
+        requestAnimatedSpriteCandidates(officialAnimatedBackCandidates, executor, receiver)
     }
 
     private fun requestPreviewAnimatedSpriteResolution(
