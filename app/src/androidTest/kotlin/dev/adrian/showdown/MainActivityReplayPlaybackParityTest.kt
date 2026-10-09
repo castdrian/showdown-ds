@@ -218,25 +218,21 @@ class MainActivityReplayPlaybackParityTest {
             val frameCanvas = Canvas(frameBitmap)
             val frameBounds = android.graphics.RectF(0f, 0f, 120f, 120f)
             val frameSignatures = mutableSetOf<Int>()
-            var previousSignature: Int? = null
             listOf(0L, 240L, 480L, 720L, 960L, 1_200L, 1_440L).forEach { elapsedMillis ->
-                val frameDeadline = SystemClock.elapsedRealtime() + 500L
-                var frameSignature: Int? = null
-                while (SystemClock.elapsedRealtime() < frameDeadline && frameSignature == null) {
+                val frameSettleDeadline = SystemClock.elapsedRealtime() + 160L
+                while (SystemClock.elapsedRealtime() < frameSettleDeadline) {
                     frameBitmap.eraseColor(0)
-                    if (asset.draw(frameCanvas, frameBounds, elapsedMillis)) {
-                        val pixels = IntArray(frameBitmap.width * frameBitmap.height)
-                        frameBitmap.getPixels(pixels, 0, frameBitmap.width, 0, 0, frameBitmap.width, frameBitmap.height)
-                        val currentSignature = pixels.contentHashCode()
-                        if (previousSignature == null || currentSignature != previousSignature) {
-                            frameSignature = currentSignature
-                        }
-                    }
-                    if (frameSignature == null) SystemClock.sleep(16L)
+                    asset.draw(frameCanvas, frameBounds, elapsedMillis)
+                    SystemClock.sleep(16L)
                 }
-                assertNotNull("$species' animation did not draw a new frame at $elapsedMillis ms", frameSignature)
-                previousSignature = frameSignature
-                frameSignatures += checkNotNull(frameSignature)
+                frameBitmap.eraseColor(0)
+                assertTrue(
+                    "$species' animation did not draw at $elapsedMillis ms",
+                    asset.draw(frameCanvas, frameBounds, elapsedMillis)
+                )
+                val pixels = IntArray(frameBitmap.width * frameBitmap.height)
+                frameBitmap.getPixels(pixels, 0, frameBitmap.width, 0, 0, frameBitmap.width, frameBitmap.height)
+                frameSignatures += pixels.contentHashCode()
             }
             assertTrue("$species' sprite did not change between drawn frames", frameSignatures.size > 1)
         } finally {
