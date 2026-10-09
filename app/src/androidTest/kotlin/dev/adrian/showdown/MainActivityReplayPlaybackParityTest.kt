@@ -15,6 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -146,6 +147,100 @@ class MainActivityReplayPlaybackParityTest {
         } finally {
             cache.close()
             cacheDirectory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun reportedFlareonBackSpriteResolvesAsAnAnimation() {
+        val (cache, cacheDirectory) = isolatedSpriteCache()
+        val request = BattleSpriteRequest.forPlayer("Flareon", BattleSession.SpriteStyle.MODERN_3D)
+
+        try {
+            val asset = requestAnimatedBattleSprite(cache, request)
+            assertAnimationChanges(asset, "Flareon")
+        } finally {
+            cache.close()
+            cacheDirectory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun reportedBanetteFrontSpriteResolvesAsAnAnimation() {
+        val (cache, cacheDirectory) = isolatedSpriteCache()
+        val request = BattleSpriteRequest.forOpponent("Banette", BattleSession.SpriteStyle.MODERN_3D)
+
+        try {
+            val asset = requestAnimatedBattleSprite(cache, request)
+            assertAnimationChanges(asset, "Banette")
+        } finally {
+            cache.close()
+            cacheDirectory.deleteRecursively()
+        }
+    }
+
+    private fun requestAnimatedBattleSprite(
+        cache: ShowdownSpriteCache,
+        request: BattleSpriteRequest
+    ): ShowdownSpriteCache.SpriteAsset {
+        val animatedSpriteReady = CountDownLatch(1)
+        val highResolutionAnimationReady = CountDownLatch(1)
+        val resolvedPaths = ConcurrentLinkedQueue<String>()
+        val resolvedAsset = AtomicReference<ShowdownSpriteCache.SpriteAsset?>()
+        val highResolutionAsset = AtomicReference<ShowdownSpriteCache.SpriteAsset?>()
+        cache.requestPokemon(request) { asset ->
+            if (asset != null) {
+                val path = asset.resolvedAssetPath.orEmpty()
+                resolvedPaths += path
+                resolvedAsset.set(asset)
+                animatedSpriteReady.countDown()
+                if (isHdSpritePath(path)) {
+                    highResolutionAsset.set(asset)
+                    highResolutionAnimationReady.countDown()
+                }
+            }
+        }
+        val animatedSpriteResolved = animatedSpriteReady.await(45, TimeUnit.SECONDS)
+        assertTrue(
+            "The ${request.species} sprite request did not resolve an animation. " +
+                "Resolved paths: ${resolvedPaths.joinToString()}. " +
+                "Pending files: ${(privateField(cache, "pendingFileReceivers") as Map<*, *>).keys}. " +
+                "Pending sprites: ${(privateField(cache, "pendingSpriteReceivers") as Map<*, *>).keys}",
+            animatedSpriteResolved
+        )
+        highResolutionAnimationReady.await(10, TimeUnit.SECONDS)
+        return checkNotNull(highResolutionAsset.get() ?: resolvedAsset.get())
+    }
+
+    private fun assertAnimationChanges(asset: ShowdownSpriteCache.SpriteAsset, species: String) {
+        assertTrue("$species' sprite was not animated", asset.isAnimated)
+        val frameBitmap = Bitmap.createBitmap(120, 120, Bitmap.Config.ARGB_8888)
+        try {
+            val frameCanvas = Canvas(frameBitmap)
+            val frameBounds = android.graphics.RectF(0f, 0f, 120f, 120f)
+            val frameSignatures = mutableSetOf<Int>()
+            var previousSignature: Int? = null
+            listOf(0L, 240L, 480L, 720L, 960L, 1_200L, 1_440L).forEach { elapsedMillis ->
+                val frameDeadline = SystemClock.elapsedRealtime() + 500L
+                var frameSignature: Int? = null
+                while (SystemClock.elapsedRealtime() < frameDeadline && frameSignature == null) {
+                    frameBitmap.eraseColor(0)
+                    if (asset.draw(frameCanvas, frameBounds, elapsedMillis)) {
+                        val pixels = IntArray(frameBitmap.width * frameBitmap.height)
+                        frameBitmap.getPixels(pixels, 0, frameBitmap.width, 0, 0, frameBitmap.width, frameBitmap.height)
+                        val currentSignature = pixels.contentHashCode()
+                        if (previousSignature == null || currentSignature != previousSignature) {
+                            frameSignature = currentSignature
+                        }
+                    }
+                    if (frameSignature == null) SystemClock.sleep(16L)
+                }
+                assertNotNull("$species' animation did not draw a new frame at $elapsedMillis ms", frameSignature)
+                previousSignature = frameSignature
+                frameSignatures += checkNotNull(frameSignature)
+            }
+            assertTrue("$species' sprite did not change between drawn frames", frameSignatures.size > 1)
+        } finally {
+            frameBitmap.recycle()
         }
     }
 
