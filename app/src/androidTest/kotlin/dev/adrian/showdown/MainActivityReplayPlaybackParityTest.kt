@@ -478,24 +478,57 @@ class MainActivityReplayPlaybackParityTest {
 
     @Test
     fun productionMultiReplayKeepsEachMoveActorPairedWithItsVisibleSprite() {
+        assertNativeProductionReplayMovesPairedWithVisibleSprites(
+            replayFileName = "gen9multirandombattle-2641276114.json",
+            finalMoveLinePrefix = "|move|p3b: Granbull|Play Rough|p2a: Iron Hands",
+            expectedMoves = listOf(
+                MultiReplayMoveExpectation("p2a", "Iron Hands", "Fake Out", BattleSpriteSide.OPPONENT, true),
+                MultiReplayMoveExpectation("p1a", "Quagsire", "Yawn", BattleSpriteSide.PLAYER, false),
+                MultiReplayMoveExpectation("p4b", "Vaporeon", "Yawn", BattleSpriteSide.OPPONENT, true),
+                MultiReplayMoveExpectation("p3b", "Granbull", "Play Rough", BattleSpriteSide.PLAYER, false)
+            )
+        )
+    }
+
+    @Test
+    fun productionDoublesReplayKeepsNativeMoveActorsPairedWithVisibleSprites() {
+        assertNativeProductionReplayMovesPairedWithVisibleSprites(
+            replayFileName = "gen9doublesou-2691960998.json",
+            finalMoveLinePrefix = "|move|p1b: Blaziken|Aura Sphere|p2b: Porygon2",
+            expectedMoves = listOf(
+                MultiReplayMoveExpectation("p1a", "Delibird", "Fake Out", BattleSpriteSide.PLAYER, false),
+                MultiReplayMoveExpectation("p1b", "Blaziken", "Aura Sphere", BattleSpriteSide.PLAYER, false)
+            )
+        )
+    }
+
+    @Test
+    fun productionFreeForAllReplayKeepsNativeMoveActorsPairedWithVisibleSprites() {
+        assertNativeProductionReplayMovesPairedWithVisibleSprites(
+            replayFileName = "gen9freeforallrandombattle-2547390602.json",
+            finalMoveLinePrefix = "|move|p3b: Galvantula|Sticky Web|p4b: Passimian",
+            expectedMoves = listOf(
+                MultiReplayMoveExpectation("p4b", "Passimian", "Rock Slide", BattleSpriteSide.OPPONENT, true),
+                MultiReplayMoveExpectation("p3b", "Galvantula", "Sticky Web", BattleSpriteSide.OPPONENT, true)
+            )
+        )
+    }
+
+    private fun assertNativeProductionReplayMovesPairedWithVisibleSprites(
+        replayFileName: String,
+        finalMoveLinePrefix: String,
+        expectedMoves: List<MultiReplayMoveExpectation>
+    ) {
         val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
         val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
-            .open("gen9multirandombattle-2641276114.json")
+            .open(replayFileName)
             .bufferedReader()
             .use { it.readText() }
         val completeReplay = ShowdownReplayImporter.payload(replayJson)
         val replayLines = completeReplay.log.lines()
-        val finalReplayLine = replayLines.indexOfFirst {
-            it.startsWith("|move|p3b: Granbull|Play Rough|p2a: Iron Hands")
-        }
-        assertTrue("The official multiplayer replay is missing its fourth opening move", finalReplayLine >= 0)
+        val finalReplayLine = replayLines.indexOfFirst { it.startsWith(finalMoveLinePrefix) }
+        assertTrue("$replayFileName is missing its final expected opening move", finalReplayLine >= 0)
         val replay = completeReplay.copy(log = replayLines.take(finalReplayLine + 1).joinToString("\n"))
-        val expectedMoves = listOf(
-            MultiReplayMoveExpectation("p2a", "Iron Hands", "Fake Out", BattleSpriteSide.OPPONENT, true),
-            MultiReplayMoveExpectation("p1a", "Quagsire", "Yawn", BattleSpriteSide.PLAYER, false),
-            MultiReplayMoveExpectation("p4b", "Vaporeon", "Yawn", BattleSpriteSide.OPPONENT, true),
-            MultiReplayMoveExpectation("p3b", "Granbull", "Play Rough", BattleSpriteSide.PLAYER, false)
-        )
         val preferences = targetContext.getSharedPreferences("showdown_live", 0)
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
         val observedFrames = linkedMapOf<String, ReplayFrameObservation>()
@@ -505,7 +538,15 @@ class MainActivityReplayPlaybackParityTest {
         var latestNativeLog = emptyList<String>()
         var latestProtocolLog = emptyList<String>()
         var latestPlaybackState = "unobserved"
-        var replayPlaybackDrained = false
+        var expectedMovesObserved = false
+        var nativeMovesObserved = false
+        var nativeReplayCaughtUp = false
+        var latestFeedState = emptyList<Pair<Long, String>>()
+        var lastDrainedNativeGeneration = Long.MIN_VALUE
+        var lastProgressState = ""
+        var lastProgressAt = SystemClock.elapsedRealtime()
+        var playbackStalled = false
+        val playbackDeadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(60)
         var scenario: ActivityScenario<MainActivity>? = null
 
         try {
@@ -514,44 +555,82 @@ class MainActivityReplayPlaybackParityTest {
             val activeScenario = checkNotNull(scenario)
             activeScenario.onActivity { activity ->
                 setPrivateField(activity, "restoredReplaySpeed", BattlePlaybackSpeed.MAXIMUM)
-                setPrivateField(activity, "lightweightBattlePlayback", true)
+                setPrivateField(activity, "lightweightBattlePlayback", false)
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
                     .apply { isAccessible = true }
                     .invoke(activity, replay)
-                val session = privateField(activity, "session") as BattleSession
-                val scene = privateField(activity, "battleScene") as BattleSceneView
-                val maximumSteps = BattlePlaybackTiming.chunks(replayLines).size + 4
-                val advanceMethod = MainActivity::class.java.getDeclaredMethod("advanceBattlePlayback")
-                    .apply { isAccessible = true }
-                var step = 0
-                while (step++ < maximumSteps && !replayPlaybackDrained) {
+                assertNotNull(
+                    "The native Showdown renderer was not created for $replayFileName",
+                    privateField(activity, "showdownMoveEffects")
+                )
+            }
+
+            while (SystemClock.elapsedRealtime() < playbackDeadline &&
+                (!expectedMovesObserved || !nativeMovesObserved || !nativeReplayCaughtUp) && !playbackStalled
+            ) {
+                activeScenario.onActivity { activity ->
+                    val session = privateField(activity, "session") as BattleSession
+                    val scene = privateField(activity, "battleScene") as BattleSceneView
+                    latestNativeLog = session.showdownBattleLog()
+                    latestProtocolLog = session.battleLog()
+                    val nativeGeneration = privateField(session, "nativeBattleLogGeneration") as Long
+                    val feedState = session.battleFeedMessages(Int.MAX_VALUE).map { it.id to it.text }
+                    if (feedState != latestFeedState || nativeGeneration != lastDrainedNativeGeneration) {
+                        drainDisplayedReplayMessages(
+                            activity,
+                            expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::actorName),
+                            emptyMap(),
+                            displayedFrames,
+                            canvas
+                        )
+                        latestFeedState = feedState
+                        lastDrainedNativeGeneration = nativeGeneration
+                    }
                     val pendingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
                     val scheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
-                    if (scheduled || !pendingPackets.isNullOrEmpty()) {
-                        val handler = privateField(activity, "battleEventHandler") as android.os.Handler
-                        val advanceRunnable = privateField(activity, "playbackAdvanceRunnable") as Runnable
-                        handler.removeCallbacks(advanceRunnable)
-                        advanceMethod.invoke(activity)
-                    }
-                    drainDisplayedReplayMessages(
-                        activity,
-                        expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::actorName),
-                        emptyMap(),
-                        displayedFrames,
-                        canvas
+                    val activeBarrierToken = privateField(activity, "activeBattleEffectsBarrierToken")
+                    val playbackBarrier = privateField(activity, "battlePlaybackBarrier") as BattlePlaybackBarrier
+                    val effectsView = privateField(activity, "showdownMoveEffects") as ShowdownMoveEffectsView
+                    nativeReplayCaughtUp = nativeGeneration == session.battleLogGeneration()
+                    val observedMoveSlots = expectedMoves.filter { expectedMove ->
+                        displayedFrames.values.any { frame ->
+                            frame.text.contains(expectedMove.actorName, true) &&
+                                frame.text.contains("used ${expectedMove.moveName}", true)
+                        }
+                    }.mapTo(linkedSetOf(), MultiReplayMoveExpectation::slot)
+                    expectedMovesObserved = observedMoveSlots == expectedMoves.mapTo(
+                        linkedSetOf(),
+                        MultiReplayMoveExpectation::slot
                     )
-                    val remainingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
-                    val playbackScheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
-                    replayPlaybackDrained = remainingPackets.isNullOrEmpty() && !playbackScheduled
+                    nativeMovesObserved = expectedMoves.all { expectedMove ->
+                        latestNativeLog.any {
+                            it.contains(expectedMove.actorName, true) &&
+                                it.contains("used ${expectedMove.moveName}", true)
+                        }
+                    }
                     latestPlaybackState = "paused=${privateField(activity, "replayPaused")}; " +
-                        "scheduled=$playbackScheduled; pending=${remainingPackets?.size}; " +
+                        "protocolGeneration=${session.battleLogGeneration()}; nativeGeneration=$nativeGeneration; " +
+                        "nativeCaughtUp=$nativeReplayCaughtUp; pending=${pendingPackets?.size}; " +
+                        "scheduled=$scheduled; barrier=$activeBarrierToken; " +
+                        "awaited=${privateField(playbackBarrier, "awaitedToken")}; " +
+                        "recoveries=${playbackBarrier.recoveryAttempts()}; " +
+                        "activityResumed=${privateField(activity, "activityResumed")}; " +
+                        "effectsLoaded=${privateField(effectsView, "pageLoaded")}; " +
+                        "effectsSize=${effectsView.width}x${effectsView.height}; " +
+                        "effectsAttached=${effectsView.isAttachedToWindow}; " +
                         "rendererStalled=${privateField(activity, "rendererRecoveryStalled")}; " +
                         "lightweight=${privateField(activity, "lightweightBattlePlayback")}; " +
                         "visible=${privateField(scene, "cachedBattleFeedVisibleText")}; " +
-                        "observed=${displayedFrames.size}"
+                        "observed=${displayedFrames.size}; moveSlots=$observedMoveSlots; " +
+                        "nativeTail=${latestNativeLog.takeLast(3)}"
+                    val now = SystemClock.elapsedRealtime()
+                    if (latestPlaybackState != lastProgressState) {
+                        lastProgressState = latestPlaybackState
+                        lastProgressAt = now
+                    }
+                    playbackStalled = now - lastProgressAt >= TimeUnit.SECONDS.toMillis(40)
                 }
-                latestNativeLog = session.showdownBattleLog()
-                latestProtocolLog = session.battleLog()
+                Thread.sleep(100L)
             }
 
             displayedFrames.values.forEach { frame ->
@@ -563,12 +642,20 @@ class MainActivityReplayPlaybackParityTest {
             }
             val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
             assertTrue(
-                "The production multiplayer replay did not drain its scheduled packets. " +
+                "$replayFileName skipped one or more opening move actors in the visible feed. " +
                     "native=$latestNativeLog; protocol=$latestProtocolLog; playback=$latestPlaybackState",
-                replayPlaybackDrained
+                expectedMovesObserved
+            )
+            assertTrue(
+                "$replayFileName native Showdown did not emit all expected moves: $latestNativeLog",
+                nativeMovesObserved
+            )
+            assertTrue(
+                "$replayFileName native log did not synchronize with the visible move feed: $latestPlaybackState",
+                nativeReplayCaughtUp
             )
             assertEquals(
-                "The production multiplayer replay skipped one or more opening move actors. " +
+                "$replayFileName native replay skipped one or more opening move actors. " +
                     "visible=$observedTexts; native=$latestNativeLog; protocol=$latestProtocolLog; " +
                     "playback=$latestPlaybackState",
                 expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::slot),
