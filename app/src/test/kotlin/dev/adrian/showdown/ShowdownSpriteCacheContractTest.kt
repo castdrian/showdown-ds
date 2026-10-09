@@ -307,7 +307,12 @@ class ShowdownSpriteCacheContractTest {
         val resolver = source.substringAfter("private fun requestModernAnimatedSpriteResolution(")
             .substringBefore("private fun requestPreviewAnimatedSpriteResolution(")
 
-        assertTrue(resolver.contains("requestSmallSpriteResolution(request)"))
+        assertTrue(resolver.contains("requestSmallSpriteResolution(request,"))
+        assertTrue(resolver.contains("requestOfficialAnimatedBackFallback(request, plan)"))
+        assertTrue(
+            resolver.indexOf("requestOfficialAnimatedBackFallback(request, plan)") <
+                resolver.indexOf("requestSmallSpriteResolution(request,")
+        )
         assertTrue(resolver.contains("resolutionGate.fallback(null)"))
         assertFalse(resolver.contains("requestStaticShowdownFallback"))
         assertFalse(resolver.contains("requestPokeApiStaticSprite"))

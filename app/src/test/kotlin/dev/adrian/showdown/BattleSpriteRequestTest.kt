@@ -69,7 +69,7 @@ class BattleSpriteRequestTest {
 
         val playerCandidates = ShowdownAssetPaths.battleSpriteCandidates(player)
         assertTrue(playerCandidates.none { it.endsWith(".png") })
-        assertEquals("sprites/xyani-back/ironvaliant.gif", playerCandidates.last())
+        assertEquals("sprites/ani-back/ironvaliant.gif", playerCandidates.last())
         assertTrue(playerCandidates.none { it.contains("/FRONT/") })
         assertEquals(
             "sprites/xyani/ironvaliant.gif",

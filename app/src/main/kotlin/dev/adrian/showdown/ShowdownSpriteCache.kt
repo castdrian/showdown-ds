@@ -281,8 +281,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         private var animatedFrameTime = Long.MIN_VALUE
         private var bitmapHasVisiblePixels: Boolean? = null
         private var animatedFrameHasVisiblePixels = false
+        var resolvedAssetPath: String? = null
+            private set
 
         val isAnimated get() = movie != null || streamingGif?.isAnimated == true
+
+        internal fun recordResolvedAssetPath(path: String) {
+            resolvedAssetPath = path
+        }
 
         fun stopAnimation() = Unit
 
@@ -317,7 +323,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
                 null,
                 right - left + 1,
                 image.height
-            )
+            ).also { it.resolvedAssetPath = resolvedAssetPath }
         }
 
         fun draw(
@@ -707,7 +713,10 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
             asset?.stopAnimation()
             return
         }
-        if (asset != null) memoryCache.put(path, asset)
+        if (asset != null) {
+            asset.recordResolvedAssetPath(path)
+            memoryCache.put(path, asset)
+        }
         mainHandler.post {
             if (!closed.get()) receivers.forEach { it(asset) }
             else asset?.stopAnimation()
@@ -1102,17 +1111,32 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         requestAnimatedSpriteCandidates(modernLocalCandidates) { modernLocalAsset ->
             if (modernLocalAsset != null) {
                 primaryReceiver(modernLocalAsset)
-            } else {
-                requestSmallSpriteResolution(request) { animatedAsset ->
-                    if (animatedAsset != null) {
-                        primaryReceiver(animatedAsset)
+            } else if (request.backFacing) {
+                requestOfficialAnimatedBackFallback(request, plan) { officialBackAsset ->
+                    if (officialBackAsset != null) {
+                        primaryReceiver(officialBackAsset)
                     } else {
-                        primaryReceiver(null)
+                        requestSmallSpriteResolution(request, primaryReceiver)
                     }
                 }
+            } else {
+                requestSmallSpriteResolution(request, primaryReceiver)
             }
         }
         resolutionGate.fallback(null)
+    }
+
+    private fun requestOfficialAnimatedBackFallback(
+        request: BattleSpriteRequest,
+        plan: ShowdownSpriteResolutionPlan,
+        receiver: (SpriteAsset?) -> Unit
+    ) {
+        if (!request.backFacing) {
+            receiver(null)
+            return
+        }
+        val officialAnimatedBackCandidates = plan.fallbackCandidates.filter { it.startsWith("sprites/ani-back") }
+        requestAnimatedSpriteCandidates(officialAnimatedBackCandidates, receiver)
     }
 
     private fun requestPreviewAnimatedSpriteResolution(

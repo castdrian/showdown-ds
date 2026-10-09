@@ -1,5 +1,6 @@
 package dev.adrian.showdown
 
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.SystemClock
@@ -11,10 +12,18 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityReplayPlaybackParityTest {
+    private companion object {
+        const val REPLAY_FRAME_CAPTURE_WIDTH = 480
+        const val REPLAY_FRAME_CAPTURE_HEIGHT = 270
+    }
+
     private data class ReplayFrameObservation(
         val text: String,
         val message: BattleFeedMessage,
@@ -25,7 +34,11 @@ class MainActivityReplayPlaybackParityTest {
         val opponentSprite: BattleSpriteRequest?,
         val singlesBattle: Boolean = true,
         val playerActiveSprites: Map<String, BattleSpriteRequest> = emptyMap(),
-        val opponentActiveSprites: Map<String, BattleSpriteRequest> = emptyMap()
+        val opponentActiveSprites: Map<String, BattleSpriteRequest> = emptyMap(),
+        val playerSpriteAssetPath: String? = null,
+        val opponentSpriteAssetPath: String? = null,
+        val playerActiveSpriteAssetPaths: Map<String, String> = emptyMap(),
+        val opponentActiveSpriteAssetPaths: Map<String, String> = emptyMap()
     )
 
     private data class MultiReplayMoveExpectation(
@@ -37,8 +50,99 @@ class MainActivityReplayPlaybackParityTest {
     )
 
     @Test
+    fun officialDewgongBackAnimationDecodesOnDevice() {
+        val (cache, cacheDirectory) = isolatedSpriteCache()
+        val completed = CountDownLatch(1)
+        var decodedAsset: ShowdownSpriteCache.SpriteAsset? = null
+        val requestSprite = ShowdownSpriteCache::class.java.declaredMethods.single {
+            it.name == "requestSprite" && it.parameterTypes.size == 2
+        }.apply { isAccessible = true }
+        val receiver: (ShowdownSpriteCache.SpriteAsset?) -> Unit = { asset ->
+            decodedAsset = asset
+            completed.countDown()
+        }
+
+        try {
+            requestSprite.invoke(cache, "sprites/ani-back/dewgong.gif", receiver)
+            assertTrue("The direct animated Dewgong back-sprite request timed out", completed.await(30, TimeUnit.SECONDS))
+            assertNotNull("The device sprite decoder rejected the official animated Dewgong back sprite", decodedAsset)
+            assertTrue("The official Dewgong back sprite was not animated", decodedAsset?.isAnimated == true)
+            assertEquals("sprites/ani-back/dewgong.gif", decodedAsset?.resolvedAssetPath)
+        } finally {
+            cache.close()
+            cacheDirectory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun modernDewgongBackSpriteResolvesAlongsideOtherBattleActors() {
+        val (cache, cacheDirectory) = isolatedSpriteCache()
+        val completed = CountDownLatch(1)
+        val request = BattleSpriteRequest.forPlayer("Dewgong", BattleSession.SpriteStyle.MODERN_3D)
+        var resolvedAsset: ShowdownSpriteCache.SpriteAsset? = null
+        val battleRequests = listOf(
+            BattleSpriteRequest.forPlayer("Gliscor", BattleSession.SpriteStyle.MODERN_3D),
+            BattleSpriteRequest.forOpponent("Swanna", BattleSession.SpriteStyle.MODERN_3D),
+            BattleSpriteRequest.forOpponent("Weavile", BattleSession.SpriteStyle.MODERN_3D),
+            request
+        )
+
+        try {
+            battleRequests.forEach { battleRequest ->
+                cache.requestPokemon(battleRequest) { asset ->
+                    if (battleRequest == request) {
+                        resolvedAsset = asset
+                        completed.countDown()
+                    }
+                }
+            }
+            val completedWithinTime = completed.await(30, TimeUnit.SECONDS)
+            val pendingFiles = (privateField(cache, "pendingFileReceivers") as Map<*, *>).keys
+            assertTrue("The modern Dewgong sprite request timed out; pending files: $pendingFiles", completedWithinTime)
+            assertNotNull("The modern Dewgong battle request did not resolve a back sprite", resolvedAsset)
+            assertTrue("The modern Dewgong battle request resolved a non-animated asset", resolvedAsset?.isAnimated == true)
+            assertTrue(
+                "The modern Dewgong battle request resolved an unplanned asset: ${resolvedAsset?.resolvedAssetPath}",
+                resolvedAsset?.resolvedAssetPath in ShowdownAssetPaths.battleSpriteResolutionPlan(request).allCandidates
+            )
+        } finally {
+            cache.close()
+            cacheDirectory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun modernCorviknightBackSpritePrefersAvailableHdAnimation() {
+        val (cache, cacheDirectory) = isolatedSpriteCache()
+        val completed = CountDownLatch(1)
+        val request = BattleSpriteRequest.forPlayer("Corviknight", BattleSession.SpriteStyle.MODERN_3D)
+        var resolvedAsset: ShowdownSpriteCache.SpriteAsset? = null
+
+        try {
+            cache.requestPokemon(request) { asset ->
+                resolvedAsset = asset
+                completed.countDown()
+            }
+            assertTrue("The HD Corviknight back-sprite request timed out", completed.await(30, TimeUnit.SECONDS))
+            assertNotNull("The modern Corviknight battle request did not resolve a back sprite", resolvedAsset)
+            assertTrue("The modern Corviknight battle request resolved a non-animated asset", resolvedAsset?.isAnimated == true)
+            assertTrue(
+                "The available HD Corviknight back sprite was not selected: ${resolvedAsset?.resolvedAssetPath}",
+                resolvedAsset?.resolvedAssetPath?.contains("/animados-gigante/") == true
+            )
+        } finally {
+            cache.close()
+            cacheDirectory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun productionReplayKeepsEachVisibleLogEntryPairedWithItsDisplayedPokemon() {
         val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        clearCachedSpriteResolutionPlan(
+            targetContext,
+            BattleSpriteRequest.forPlayer("Dewgong", BattleSession.SpriteStyle.MODERN_3D)
+        )
         val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
             .open("gen9randombattle-2691989691.json")
             .bufferedReader()
@@ -51,7 +155,7 @@ class MainActivityReplayPlaybackParityTest {
         val preferences = targetContext.getSharedPreferences("showdown_live", 0)
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
         val observedFrames = linkedMapOf<Long, ReplayFrameObservation>()
-        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(REPLAY_FRAME_CAPTURE_WIDTH, REPLAY_FRAME_CAPTURE_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         var latestNativeLog = emptyList<String>()
         var latestProtocolLog = emptyList<String>()
@@ -60,6 +164,8 @@ class MainActivityReplayPlaybackParityTest {
         var latestPlaybackState = ""
         var targetVisibleAt: Long? = null
         var targetNativeCaughtUp = false
+        var targetSpriteAssetsLoaded = false
+        var targetSpriteDiagnostics = "unobserved"
         val playbackTimeline = mutableListOf<String>()
         val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(90)
         var scenario: ActivityScenario<MainActivity>? = null
@@ -81,7 +187,7 @@ class MainActivityReplayPlaybackParityTest {
             }
 
             while (SystemClock.elapsedRealtime() < deadline &&
-                (targetVisibleAt == null || (!targetNativeCaughtUp &&
+                (targetVisibleAt == null || ((!targetNativeCaughtUp || !targetSpriteAssetsLoaded) &&
                     SystemClock.elapsedRealtime() - checkNotNull(targetVisibleAt) < TimeUnit.SECONDS.toMillis(15)))
             ) {
                 activeScenario.onActivity { activity ->
@@ -104,6 +210,21 @@ class MainActivityReplayPlaybackParityTest {
                     val text = frame.text
                     if (text.contains("Triple Axel", true) && text.contains("Weavile", true) && targetVisibleAt == null) {
                         targetVisibleAt = SystemClock.elapsedRealtime()
+                    }
+                    if (
+                        targetVisibleAt != null &&
+                        frame.playerSprite?.species.equals("Dewgong", true) &&
+                        frame.opponentSprite?.species.equals("Weavile", true)
+                    ) {
+                        targetSpriteAssetsLoaded = frame.playerSpriteAssetPath != null && frame.opponentSpriteAssetPath != null
+                        val spriteCache = checkNotNull(privateField(scene, "spriteCache"))
+                        val pendingFiles = (privateField(spriteCache, "pendingFileReceivers") as Map<*, *>).keys
+                        val pendingSprites = (privateField(spriteCache, "pendingSpriteReceivers") as Map<*, *>).keys
+                        targetSpriteDiagnostics = "playerLoaded=${privateField(scene, "playerSprite") != null}; " +
+                            "playerAsset=${frame.playerSpriteAssetPath}; opponentLoaded=${privateField(scene, "opponentSprite") != null}; " +
+                            "pendingFiles=$pendingFiles; pendingSprites=$pendingSprites; " +
+                            "opponentAsset=${frame.opponentSpriteAssetPath}; playerRequest=${frame.playerSprite}; " +
+                            "opponentRequest=${frame.opponentSprite}"
                     }
                     targetNativeCaughtUp = latestNativeGeneration == latestProtocolGeneration &&
                         latestNativeLog.any { it.contains("Triple Axel", true) && it.contains("Weavile", true) }
@@ -134,6 +255,10 @@ class MainActivityReplayPlaybackParityTest {
             )
             assertTrue("The production replay skipped several visible Showdown entries: $observedTexts", observedFrames.size >= 6)
             assertTrue("The production replay did not display the status action before the hit: $observedTexts", observedTexts.any { it.contains("Protect", true) })
+            assertTrue(
+                "The production replay did not draw the active Pokémon assets for its visible multi-hit action: $observedTexts; $targetSpriteDiagnostics",
+                targetSpriteAssetsLoaded
+            )
             observedFrames.values.forEach { frame ->
                 assertEquals(frame.text, frame.message.text)
                 assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
@@ -354,7 +479,7 @@ class MainActivityReplayPlaybackParityTest {
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
         val observedFrames = linkedMapOf<String, ReplayFrameObservation>()
         val displayedFrames = linkedMapOf<Long, ReplayFrameObservation>()
-        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(REPLAY_FRAME_CAPTURE_WIDTH, REPLAY_FRAME_CAPTURE_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         var latestNativeLog = emptyList<String>()
         var latestProtocolLog = emptyList<String>()
@@ -572,7 +697,15 @@ class MainActivityReplayPlaybackParityTest {
         val session = privateField(activity, "session") as BattleSession
         val scene = privateField(activity, "battleScene") as BattleSceneView
         val presentation = privateField(scene, "battleFeedPresentation") as BattleFeedPresentation
+        if (scene.width <= 0 || scene.height <= 0) return
+        val captureBounds = canvas.clipBounds
+        canvas.save()
+        canvas.scale(
+            captureBounds.width().toFloat() / scene.width,
+            captureBounds.height().toFloat() / scene.height
+        )
         scene.draw(canvas)
+        canvas.restore()
         val text = privateField(scene, "cachedBattleFeedVisibleText") as? String
         val message = privateField(presentation, "currentMessage") as? BattleFeedMessage
         if (text == null || message == null || message.text != text) return
@@ -586,7 +719,11 @@ class MainActivityReplayPlaybackParityTest {
             playerSprite = privateField(scene, "requestedPlayerSprite") as? BattleSpriteRequest,
             opponentSprite = privateField(scene, "requestedOpponentSprite") as? BattleSpriteRequest,
             playerActiveSprites = privateSpriteRequests(scene, "requestedPlayerActiveSprites"),
-            opponentActiveSprites = privateSpriteRequests(scene, "requestedOpponentActiveSprites")
+            opponentActiveSprites = privateSpriteRequests(scene, "requestedOpponentActiveSprites"),
+            playerSpriteAssetPath = (privateField(scene, "playerSprite") as? ShowdownSpriteCache.SpriteAsset)?.resolvedAssetPath,
+            opponentSpriteAssetPath = (privateField(scene, "opponentSprite") as? ShowdownSpriteCache.SpriteAsset)?.resolvedAssetPath,
+            playerActiveSpriteAssetPaths = privateSpriteAssetPaths(scene, "playerActiveSprites"),
+            opponentActiveSpriteAssetPaths = privateSpriteAssetPaths(scene, "opponentActiveSprites")
         )
         assertEquals(frame.text, frame.message.text)
         assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
@@ -618,14 +755,75 @@ class MainActivityReplayPlaybackParityTest {
             if (spriteRequests.opponentLead != null) {
                 assertEquals(frame.text, spriteRequests.opponentLead.species, frame.opponentSprite?.species)
             }
+            assertRenderedSpriteAssetMatchesRequest(
+                frame.text,
+                "player",
+                spriteRequests.playerLead,
+                frame.playerSpriteAssetPath
+            )
+            assertRenderedSpriteAssetMatchesRequest(
+                frame.text,
+                "opponent",
+                spriteRequests.opponentLead,
+                frame.opponentSpriteAssetPath
+            )
+            spriteRequests.playerActive.forEach { request ->
+                assertRenderedSpriteAssetMatchesRequest(
+                    frame.text,
+                    "player slot ${request.slot}",
+                    request.request,
+                    frame.playerActiveSpriteAssetPaths[request.slot]
+                )
+            }
+            spriteRequests.opponentActive.forEach { request ->
+                assertRenderedSpriteAssetMatchesRequest(
+                    frame.text,
+                    "opponent slot ${request.slot}",
+                    request.request,
+                    frame.opponentActiveSpriteAssetPaths[request.slot]
+                )
+            }
         }
-        observedFrames.putIfAbsent(message.id, frame)
+        observedFrames[message.id] = frame
+    }
+
+    private fun assertRenderedSpriteAssetMatchesRequest(
+        text: String,
+        side: String,
+        request: BattleSpriteRequest?,
+        resolvedAssetPath: String?
+    ) {
+        if (request == null || resolvedAssetPath == null) return
+        assertTrue(
+            "$side sprite drawn for '$text' came from a path unrelated to ${request.species}: $resolvedAssetPath",
+            resolvedAssetPath in ShowdownAssetPaths.battleSpriteResolutionPlan(request).allCandidates
+        )
     }
 
     private fun privateField(target: Any, name: String): Any? = target.javaClass
         .getDeclaredField(name)
         .apply { isAccessible = true }
         .get(target)
+
+    private fun clearCachedSpriteResolutionPlan(context: android.content.Context, request: BattleSpriteRequest) {
+        val diskCache = File(context.cacheDir, "showdown-resources")
+        val digest = MessageDigest.getInstance("SHA-256")
+        ShowdownAssetPaths.battleSpriteResolutionPlan(request).allCandidates.forEach { path ->
+            val filename = digest.digest(path.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) } + ".${showdownCacheExtension(path)}"
+            File(diskCache, filename).delete()
+        }
+    }
+
+    private fun isolatedSpriteCache(): Pair<ShowdownSpriteCache, File> {
+        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val cacheDirectory = File(targetContext.cacheDir, "sprite-test-${SystemClock.elapsedRealtimeNanos()}")
+        assertTrue("Could not create an isolated sprite cache", cacheDirectory.mkdirs())
+        val cacheContext = object : ContextWrapper(targetContext) {
+            override fun getCacheDir(): File = cacheDirectory
+        }
+        return ShowdownSpriteCache(cacheContext) to cacheDirectory
+    }
 
     private fun setPrivateField(target: Any, name: String, value: Any?) {
         target.javaClass.getDeclaredField(name)
@@ -639,4 +837,13 @@ class MainActivityReplayPlaybackParityTest {
                 if (slot is String && request is BattleSpriteRequest) slot to request else null
             }
             .toMap()
+
+    private fun privateSpriteAssetPaths(target: Any, name: String): Map<String, String> =
+        ((privateField(target, name) as? Map<*, *>) ?: emptyMap<Any, Any>())
+            .mapNotNull { (slot, asset) ->
+                val path = (asset as? ShowdownSpriteCache.SpriteAsset)?.resolvedAssetPath
+                if (slot is String && path != null) slot to path else null
+            }
+            .toMap()
+
 }

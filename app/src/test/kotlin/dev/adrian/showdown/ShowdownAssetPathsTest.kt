@@ -259,6 +259,20 @@ class ShowdownAssetPathsTest {
     }
 
     @Test
+    fun modernBackSpritePlanKeepsOfficialAnimationAfterModernBackArt() {
+        val plan = ShowdownAssetPaths.battleSpriteResolutionPlan(
+            BattleSpriteRequest.forPlayer("Dewgong", BattleSession.SpriteStyle.MODERN_3D)
+        )
+        val modernBack = "sprites/xyani-back/dewgong.gif"
+        val officialAnimatedBack = "sprites/ani-back/dewgong.gif"
+
+        assertTrue(plan.fallbackCandidates.indexOf(modernBack) >= 0)
+        assertTrue(plan.fallbackCandidates.indexOf(officialAnimatedBack) > plan.fallbackCandidates.indexOf(modernBack))
+        assertTrue(plan.allCandidates.indexOf(officialAnimatedBack) > plan.allCandidates.indexOf(modernBack))
+        assertTrue(plan.allCandidates.none { it.endsWith(".png") })
+    }
+
+    @Test
     fun everyBattleResolutionPlanRejectsLegacyGen5Artwork() {
         val requests = listOf(
             BattleSpriteRequest.forOpponent("Alcremie", BattleSession.SpriteStyle.MODERN_3D),
@@ -289,7 +303,7 @@ class ShowdownAssetPathsTest {
         )
         assertTrue(candidates.none { it.contains("/FRONT/") })
         assertTrue(candidates.none { it.endsWith(".png") })
-        assertEquals("sprites/xyani-back/ironvaliant.gif", candidates.last())
+        assertEquals("sprites/ani-back/ironvaliant.gif", candidates.last())
     }
 
     @Test
@@ -301,7 +315,7 @@ class ShowdownAssetPathsTest {
         assertFalse(frontCandidates.any { it.contains("gen5") })
         assertTrue(backCandidates.none { it.contains("/FRONT/") })
         assertTrue(backCandidates.none { it.endsWith(".png") })
-        assertEquals("sprites/xyani-back/ironvaliant.gif", backCandidates.last())
+        assertEquals("sprites/ani-back/ironvaliant.gif", backCandidates.last())
     }
 
     @Test

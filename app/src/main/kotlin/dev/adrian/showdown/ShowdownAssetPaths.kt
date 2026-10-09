@@ -129,6 +129,9 @@ object ShowdownAssetPaths {
         collections.forEach { collection ->
             speciesNames.forEach { name -> candidates += animatedBattleSprite(name, request.side, collection, request.shiny) }
         }
+        if (request.style == BattleSession.SpriteStyle.MODERN_3D && request.backFacing) {
+            speciesNames.forEach { name -> candidates += animatedBattleSprite(name, request.side, "ani", request.shiny) }
+        }
         return candidates.toList()
     }
 
