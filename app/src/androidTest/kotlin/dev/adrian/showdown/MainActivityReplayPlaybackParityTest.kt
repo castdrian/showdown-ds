@@ -513,10 +513,15 @@ class MainActivityReplayPlaybackParityTest {
         val canvas = Canvas(bitmap)
         var latestNativeLog = emptyList<String>()
         var latestProtocolLog = emptyList<String>()
+        var latestFeedMessages = emptyList<BattleFeedMessage>()
         var latestPlaybackState = "unobserved"
         var expectedMovesObserved = false
         var nativeMovesObserved = false
         var nativeReplayCaughtUp = false
+        val feedTimeline = mutableListOf<String>()
+        val feedInputTimeline = mutableListOf<String>()
+        var lastFeedInputState = ""
+        var lastFeedQueueState = ""
         var lastProgressState = ""
         var lastProgressAt = SystemClock.elapsedRealtime()
         var playbackStalled = false
@@ -528,7 +533,7 @@ class MainActivityReplayPlaybackParityTest {
             scenario = ActivityScenario.launch(MainActivity::class.java)
             val activeScenario = checkNotNull(scenario)
             activeScenario.onActivity { activity ->
-                setPrivateField(activity, "restoredReplaySpeed", BattlePlaybackSpeed.MAXIMUM)
+                setPrivateField(activity, "restoredReplaySpeed", 0.75f)
                 setPrivateField(activity, "lightweightBattlePlayback", false)
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
                     .apply { isAccessible = true }
@@ -545,9 +550,17 @@ class MainActivityReplayPlaybackParityTest {
                 activeScenario.onActivity { activity ->
                     val session = privateField(activity, "session") as BattleSession
                     val scene = privateField(activity, "battleScene") as BattleSceneView
+                    val feedPresentation = checkNotNull(privateField(scene, "battleFeedPresentation"))
                     latestNativeLog = session.showdownBattleLog()
                     latestProtocolLog = session.battleLog()
+                    latestFeedMessages = session.battleFeedMessages()
                     val nativeGeneration = privateField(session, "nativeBattleLogGeneration") as Long
+                    val feedInputState = "$nativeGeneration/${session.battleLogGeneration()}:" +
+                        latestFeedMessages.map { it.id to it.text }
+                    if (feedInputState != lastFeedInputState) {
+                        feedInputTimeline += "${SystemClock.elapsedRealtime()}:$feedInputState"
+                        lastFeedInputState = feedInputState
+                    }
                     observeDisplayedReplayMessage(
                         activity,
                         expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::actorName),
@@ -556,6 +569,14 @@ class MainActivityReplayPlaybackParityTest {
                     )
                     val pendingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
                     val scheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
+                    val currentFeedMessage = privateField(feedPresentation, "currentMessage") as? BattleFeedMessage
+                    val pendingFeedMessages = privateField(feedPresentation, "pendingMessages") as? Collection<*>
+                    val feedQueueState = "${currentFeedMessage?.id}:${currentFeedMessage?.text}; " +
+                        "pending=${pendingFeedMessages?.map { (it as? BattleFeedMessage)?.id to (it as? BattleFeedMessage)?.text }}"
+                    if (feedQueueState != lastFeedQueueState) {
+                        feedTimeline += "${SystemClock.elapsedRealtime()}:$feedQueueState"
+                        lastFeedQueueState = feedQueueState
+                    }
                     val activeBarrierToken = privateField(activity, "activeBattleEffectsBarrierToken")
                     val playbackBarrier = privateField(activity, "battlePlaybackBarrier") as BattlePlaybackBarrier
                     val effectsView = privateField(activity, "showdownMoveEffects") as ShowdownMoveEffectsView
@@ -588,6 +609,8 @@ class MainActivityReplayPlaybackParityTest {
                         "effectsAttached=${effectsView.isAttachedToWindow}; " +
                         "rendererStalled=${privateField(activity, "rendererRecoveryStalled")}; " +
                         "lightweight=${privateField(activity, "lightweightBattlePlayback")}; " +
+                        "feedCurrent=${currentFeedMessage?.id}:${currentFeedMessage?.text}; " +
+                        "feedPending=${pendingFeedMessages?.map { (it as? BattleFeedMessage)?.text }}; " +
                         "visible=${privateField(scene, "cachedBattleFeedVisibleText")}; " +
                         "observed=${displayedFrames.size}; moveSlots=$observedMoveSlots; " +
                         "nativeTail=${latestNativeLog.takeLast(3)}"
@@ -596,7 +619,19 @@ class MainActivityReplayPlaybackParityTest {
                         lastProgressState = latestPlaybackState
                         lastProgressAt = now
                     }
-                    playbackStalled = now - lastProgressAt >= TimeUnit.SECONDS.toMillis(40)
+                    val playbackReadyAndIdle =
+                        privateField(effectsView, "pageLoaded") as Boolean &&
+                        nativeReplayCaughtUp &&
+                        pendingPackets?.isEmpty() == true &&
+                        !scheduled &&
+                        activeBarrierToken == null &&
+                        currentFeedMessage == null && pendingFeedMessages?.isEmpty() == true
+                    val stallWindowMillis = if (playbackReadyAndIdle) {
+                        TimeUnit.SECONDS.toMillis(4)
+                    } else {
+                        TimeUnit.SECONDS.toMillis(40)
+                    }
+                    playbackStalled = now - lastProgressAt >= stallWindowMillis
                 }
                 Thread.sleep(100L)
             }
@@ -611,7 +646,9 @@ class MainActivityReplayPlaybackParityTest {
             val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
             assertTrue(
                 "$replayFileName skipped one or more opening move actors in the visible feed. " +
-                    "native=$latestNativeLog; protocol=$latestProtocolLog; playback=$latestPlaybackState",
+                    "native=$latestNativeLog; protocol=$latestProtocolLog; displayed=${displayedFrames.values.map { it.message.id to it.text }}; " +
+                    "feed=${latestFeedMessages.map { it.id to it.text }}; inputs=$feedInputTimeline; " +
+                    "queue=$feedTimeline; playback=$latestPlaybackState",
                 expectedMovesObserved
             )
             assertTrue(
