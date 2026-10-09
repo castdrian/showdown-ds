@@ -53,6 +53,12 @@ class MainActivityReplayPlaybackParityTest {
         val observedFrames = linkedMapOf<Long, ReplayFrameObservation>()
         var latestNativeLog = emptyList<String>()
         var latestProtocolLog = emptyList<String>()
+        var latestNativeGeneration = -1L
+        var latestProtocolGeneration = -1L
+        var latestPlaybackState = ""
+        var targetVisibleAt: Long? = null
+        var targetNativeCaughtUp = false
+        val playbackTimeline = mutableListOf<String>()
         val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(90)
         var scenario: ActivityScenario<MainActivity>? = null
 
@@ -62,24 +68,47 @@ class MainActivityReplayPlaybackParityTest {
             val activeScenario = checkNotNull(scenario)
             activeScenario.onActivity { activity ->
                 setPrivateField(activity, "restoredReplaySpeed", BattlePlaybackSpeed.MAXIMUM)
+                setPrivateField(activity, "lightweightBattlePlayback", false)
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
                     .apply { isAccessible = true }
                     .invoke(activity, replay)
+                assertNotNull(
+                    "The replay did not create the native Showdown renderer",
+                    privateField(activity, "showdownMoveEffects")
+                )
             }
 
-            while (SystemClock.elapsedRealtime() < deadline && observedFrames.values.none {
-                    it.text.contains("Triple Axel", true) && it.text.contains("Weavile", true)
-                }) {
+            while (SystemClock.elapsedRealtime() < deadline &&
+                (targetVisibleAt == null || (!targetNativeCaughtUp &&
+                    SystemClock.elapsedRealtime() - checkNotNull(targetVisibleAt) < TimeUnit.SECONDS.toMillis(15)))
+            ) {
                 activeScenario.onActivity { activity ->
                     val session = privateField(activity, "session") as BattleSession
                     val scene = privateField(activity, "battleScene") as BattleSceneView
                     val feedPresentation = checkNotNull(privateField(scene, "battleFeedPresentation"))
                     latestNativeLog = session.showdownBattleLog()
                     latestProtocolLog = session.battleLog()
+                    latestNativeGeneration = privateField(session, "nativeBattleLogGeneration") as Long
+                    latestProtocolGeneration = session.battleLogGeneration()
                     scene.invalidate()
                     val text = privateField(scene, "cachedBattleFeedVisibleText") as? String ?: return@onActivity
                     val message = privateField(feedPresentation, "currentMessage") as? BattleFeedMessage ?: return@onActivity
                     if (message.text != text) return@onActivity
+                    if (text.contains("Triple Axel", true) && text.contains("Weavile", true) && targetVisibleAt == null) {
+                        targetVisibleAt = SystemClock.elapsedRealtime()
+                    }
+                    targetNativeCaughtUp = latestNativeGeneration == latestProtocolGeneration &&
+                        latestNativeLog.any { it.contains("Triple Axel", true) && it.contains("Weavile", true) }
+                    val pendingMessages = privateField(feedPresentation, "pendingMessages") as? Collection<*>
+                    val pendingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
+                    val state = "visible=$text#${message.id}; protocolGen=$latestProtocolGeneration; " +
+                        "nativeGen=$latestNativeGeneration; nativeTail=${latestNativeLog.takeLast(3)}; " +
+                        "protocolTail=${latestProtocolLog.takeLast(3)}; feedPending=${pendingMessages?.size}; " +
+                        "packetPending=${pendingPackets?.size}; scheduled=${privateField(activity, "battlePacketPlaybackScheduled")}; " +
+                        "barrier=${privateField(privateField(activity, "battlePlaybackBarrier")!!, "awaitedToken")}; " +
+                        "stalled=${privateField(activity, "rendererRecoveryStalled")}; lightweight=${privateField(activity, "lightweightBattlePlayback")}"
+                    if (playbackTimeline.lastOrNull() != state) playbackTimeline.add(state)
+                    latestPlaybackState = state
                     observedFrames[message.id] = ReplayFrameObservation(
                         text = text,
                         message = message,
@@ -96,8 +125,13 @@ class MainActivityReplayPlaybackParityTest {
             val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
             assertTrue(
                 "The production replay never displayed its expected multi-hit Pokémon action. " +
-                    "visible=$observedTexts; native=$latestNativeLog; protocol=$latestProtocolLog",
+                    "visible=$observedTexts; state=$latestPlaybackState; native=$latestNativeLog; protocol=$latestProtocolLog",
                 observedTexts.any { it.contains("Triple Axel", true) && it.contains("Weavile", true) }
+            )
+            assertTrue(
+                "The native Showdown renderer did not catch up to its visible multi-hit action within 15 seconds. " +
+                    "state=$latestPlaybackState; timeline=${playbackTimeline.takeLast(40)}; native=$latestNativeLog; protocol=$latestProtocolLog",
+                targetNativeCaughtUp
             )
             assertTrue("The production replay skipped several visible Showdown entries: $observedTexts", observedFrames.size >= 6)
             assertTrue("The production replay did not display the status action before the hit: $observedTexts", observedTexts.any { it.contains("Protect", true) })
