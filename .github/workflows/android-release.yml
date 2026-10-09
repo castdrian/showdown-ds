@@ -164,9 +164,11 @@ jobs:
           notes_path="$RUNNER_TEMP/showdown-release-notes.md"
           features_path="$RUNNER_TEMP/showdown-release-features.md"
           fixes_path="$RUNNER_TEMP/showdown-release-fixes.md"
+          performance_path="$RUNNER_TEMP/showdown-release-performance.md"
           other_path="$RUNNER_TEMP/showdown-release-other.md"
           : > "$features_path"
           : > "$fixes_path"
+          : > "$performance_path"
           : > "$other_path"
           commit_range="HEAD"
           if [[ -n "$previous_tag" ]]; then
@@ -181,15 +183,24 @@ jobs:
             case "$commit_type" in
               feat) printf '%s\n' "$line" >> "$features_path" ;;
               fix) printf '%s\n' "$line" >> "$fixes_path" ;;
+              perf) printf '%s\n' "$line" >> "$performance_path" ;;
+              test|docs|ci|style) continue ;;
+              build|chore)
+                if [[ "$subject" != *"(deps)"* ]]; then
+                  continue
+                fi
+                printf '%s\n' "$line" >> "$other_path"
+                ;;
               *) printf '%s\n' "$line" >> "$other_path" ;;
             esac
           done < <(git log --no-merges --format='%s%x09%H' "$commit_range")
           {
             echo "## What's changed"
-            for category_path in "$features_path" "$fixes_path" "$other_path"; do
+            for category_path in "$features_path" "$fixes_path" "$performance_path" "$other_path"; do
               case "$category_path" in
                 "$features_path") category_title="Features" ;;
                 "$fixes_path") category_title="Fixes" ;;
+                "$performance_path") category_title="Performance" ;;
                 *) category_title="Other Changes" ;;
               esac
               if [[ -s "$category_path" ]]; then
