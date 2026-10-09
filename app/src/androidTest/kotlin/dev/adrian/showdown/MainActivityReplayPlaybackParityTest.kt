@@ -4,6 +4,7 @@ import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.SystemClock
+import android.view.ViewTreeObserver
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -16,6 +17,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityReplayPlaybackParityTest {
@@ -167,6 +169,8 @@ class MainActivityReplayPlaybackParityTest {
         val knownPokemonNames = replayPokemonNames(replayLinesToPlay)
         val preferences = targetContext.getSharedPreferences("showdown_live", 0)
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
+        val prewarmedSpriteReady = CountDownLatch(1)
+        var prewarmedDewgongSprite: ShowdownSpriteCache.SpriteAsset? = null
         val observedFrames = linkedMapOf<Long, ReplayFrameObservation>()
         val bitmap = Bitmap.createBitmap(REPLAY_FRAME_CAPTURE_WIDTH, REPLAY_FRAME_CAPTURE_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -181,13 +185,33 @@ class MainActivityReplayPlaybackParityTest {
         var targetSpriteDiagnostics = "unobserved"
         val nativeMoveIdentitiesByMessageId = linkedMapOf<Long, NativeReplayMoveIdentity>()
         val playbackTimeline = mutableListOf<String>()
-        val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(90)
+        var deadline = 0L
         var scenario: ActivityScenario<MainActivity>? = null
+        var drawObserver: ViewTreeObserver? = null
+        var drawListener: ViewTreeObserver.OnDrawListener? = null
+        val drawObservationFailure = AtomicReference<Throwable?>()
 
         try {
             preferences.edit().putBoolean("maintain_connection", false).commit()
             scenario = ActivityScenario.launch(MainActivity::class.java)
             val activeScenario = checkNotNull(scenario)
+            activeScenario.onActivity { activity ->
+                val scene = privateField(activity, "battleScene") as BattleSceneView
+                val spriteCache = privateField(scene, "spriteCache") as ShowdownSpriteCache
+                spriteCache.requestPokemon(
+                    BattleSpriteRequest.forPlayer("Dewgong", BattleSession.SpriteStyle.MODERN_3D)
+                ) { asset ->
+                    prewarmedDewgongSprite = asset
+                    prewarmedSpriteReady.countDown()
+                }
+            }
+            assertTrue(
+                "The production replay could not warm its animated Dewgong back sprite",
+                prewarmedSpriteReady.await(45, TimeUnit.SECONDS)
+            )
+            assertNotNull("The production replay could not resolve an animated Dewgong back sprite", prewarmedDewgongSprite)
+            assertTrue("The production replay resolved a non-animated Dewgong back sprite", prewarmedDewgongSprite?.isAnimated == true)
+            deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(90)
             activeScenario.onActivity { activity ->
                 val session = privateField(activity, "session") as BattleSession
                 observeProtocolMoveIdentities(session, nativeMoveIdentitiesByMessageId)
@@ -196,6 +220,25 @@ class MainActivityReplayPlaybackParityTest {
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
                     .apply { isAccessible = true }
                     .invoke(activity, replay)
+                val scene = privateField(activity, "battleScene") as BattleSceneView
+                val listener = ViewTreeObserver.OnDrawListener {
+                    val presentation = privateField(scene, "battleFeedPresentation") as BattleFeedPresentation
+                    val message = privateField(presentation, "currentMessage") as? BattleFeedMessage
+                    if (drawObservationFailure.get() == null && message != null && message.id !in observedFrames) {
+                        runCatching {
+                            observeDisplayedReplayMessage(
+                                activity,
+                                knownPokemonNames,
+                                observedFrames,
+                                canvas,
+                                drawScene = false
+                            )
+                        }.onFailure { failure -> drawObservationFailure.compareAndSet(null, failure) }
+                    }
+                }
+                drawObserver = scene.viewTreeObserver
+                drawListener = listener
+                drawObserver?.addOnDrawListener(listener)
                 val effectsView = privateField(activity, "showdownMoveEffects") as? ShowdownMoveEffectsView
                 assertNotNull("The replay did not create the native Showdown renderer", effectsView)
                 checkNotNull(effectsView).setAnimationsDisabledForTesting(true)
@@ -223,7 +266,10 @@ class MainActivityReplayPlaybackParityTest {
                     val message = privateField(feedPresentation, "currentMessage") as? BattleFeedMessage ?: return@onActivity
                     if (message.id != frame.message.id || message.text != frame.text) return@onActivity
                     val text = frame.text
-                    if (text.contains("Triple Axel", true) && text.contains("Weavile", true) && targetVisibleAt == null) {
+                    if (observedFrames.values.any {
+                            it.text.contains("Triple Axel", true) && it.text.contains("Weavile", true)
+                        } && targetVisibleAt == null
+                    ) {
                         targetVisibleAt = SystemClock.elapsedRealtime()
                     }
                     if (
@@ -256,6 +302,10 @@ class MainActivityReplayPlaybackParityTest {
                 }
                 Thread.sleep(250L)
             }
+            removeReplayFeedDrawListener(activeScenario, drawObserver, drawListener)
+            drawObserver = null
+            drawListener = null
+            drawObservationFailure.get()?.let { throw AssertionError("Replay frame capture failed", it) }
 
             val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
             assertTrue(
@@ -323,6 +373,7 @@ class MainActivityReplayPlaybackParityTest {
                 if (expectedOpponent != null) assertEquals(frame.text, expectedOpponent.species, frame.opponentSprite?.species)
             }
         } finally {
+            removeReplayFeedDrawListener(scenario, drawObserver, drawListener)
             scenario?.close()
             bitmap.recycle()
             preferences.edit().putBoolean("maintain_connection", previousConnectionPreference).commit()
@@ -785,20 +836,23 @@ class MainActivityReplayPlaybackParityTest {
         activity: MainActivity,
         knownPokemonNames: Set<String>,
         observedFrames: MutableMap<Long, ReplayFrameObservation>,
-        canvas: Canvas
+        canvas: Canvas,
+        drawScene: Boolean = true
     ) {
         val session = privateField(activity, "session") as BattleSession
         val scene = privateField(activity, "battleScene") as BattleSceneView
         val presentation = privateField(scene, "battleFeedPresentation") as BattleFeedPresentation
         if (scene.width <= 0 || scene.height <= 0) return
-        val captureBounds = canvas.clipBounds
-        canvas.save()
-        canvas.scale(
-            captureBounds.width().toFloat() / scene.width,
-            captureBounds.height().toFloat() / scene.height
-        )
-        scene.draw(canvas)
-        canvas.restore()
+        if (drawScene) {
+            val captureBounds = canvas.clipBounds
+            canvas.save()
+            canvas.scale(
+                captureBounds.width().toFloat() / scene.width,
+                captureBounds.height().toFloat() / scene.height
+            )
+            scene.draw(canvas)
+            canvas.restore()
+        }
         val text = privateField(scene, "cachedBattleFeedVisibleText") as? String
         val message = privateField(presentation, "currentMessage") as? BattleFeedMessage
         if (text == null || message == null || message.text != text) return
@@ -953,6 +1007,15 @@ class MainActivityReplayPlaybackParityTest {
                 .joinToString("") { "%02x".format(it.toInt() and 0xff) } + ".${showdownCacheExtension(path)}"
             File(diskCache, filename).delete()
         }
+    }
+
+    private fun removeReplayFeedDrawListener(
+        scenario: ActivityScenario<MainActivity>?,
+        observer: ViewTreeObserver?,
+        listener: ViewTreeObserver.OnDrawListener?
+    ) {
+        if (observer?.isAlive != true || listener == null) return
+        scenario?.onActivity { observer.removeOnDrawListener(listener) }
     }
 
     private fun isolatedSpriteCache(): Pair<ShowdownSpriteCache, File> {
