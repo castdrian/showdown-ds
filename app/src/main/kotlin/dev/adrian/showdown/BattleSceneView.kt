@@ -3244,9 +3244,10 @@ class BattleSceneView(
         val contentTop = bounds.top + padding + (viewportHeight - contentHeight).coerceAtLeast(0f) / 2f
         canvas.save()
         canvas.clipRect(bounds)
+        val textColor = if (frame.tone == BattleFeedTone.ERROR) Color.rgb(255, 112, 112) else Color.WHITE
         lines.forEachIndexed { index, line ->
             val baseline = contentTop + index * lineHeight + (lineHeight - paint.ascent() - paint.descent()) / 2f
-            drawBattleFeedLine(canvas, line, left + 24f * scale, baseline, scale, outlineAlpha, textAlpha)
+            drawBattleFeedLine(canvas, line, left + 24f * scale, baseline, scale, outlineAlpha, textAlpha, textColor)
         }
         canvas.restore()
         if (battleFeedPresentation.needsAnimation(nowMillis)) postInvalidateDelayed(RenderCadence.animatedFrameDelayMillis)
@@ -3264,7 +3265,8 @@ class BattleSceneView(
         baseline: Float,
         scale: Float,
         outlineAlpha: Float,
-        textAlpha: Float
+        textAlpha: Float,
+        textColor: Int
     ) {
         var x = startX
         runs.forEach { run ->
@@ -3280,7 +3282,12 @@ class BattleSceneView(
         runs.forEach { run ->
             paint.typeface = if (run.emphasized) battleFeedBoldTypeface else battleFeedTypeface
             paint.style = Paint.Style.FILL
-            paint.color = Color.argb((255f * textAlpha).toInt(), 255, 255, 255)
+            paint.color = Color.argb(
+                (255f * textAlpha).toInt(),
+                Color.red(textColor),
+                Color.green(textColor),
+                Color.blue(textColor)
+            )
             canvas.drawText(run.text, x, baseline, paint)
             x += paint.measureText(run.text)
         }

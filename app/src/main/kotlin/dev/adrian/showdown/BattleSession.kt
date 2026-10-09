@@ -586,6 +586,7 @@ class BattleSession {
     private val protocolBattleFeedMarkupEntries = mutableListOf<ShowdownBattleLogEntry>()
     private val battleLogMessageIds = mutableListOf(0L, 1L, 2L)
     private val battleFeedExcludedMessageIds = mutableSetOf<Long>()
+    private val battleFeedTonesByMessageId = mutableMapOf<Long, BattleFeedTone>()
     private var nextBattleFeedMessageId = 3L
     private var nextProtocolLineEventId = 1L
     private val switchOutVisualsByMessageId = mutableMapOf<Long, SwitchOutVisual>()
@@ -1088,7 +1089,9 @@ class BattleSession {
         BattleFeedSceneContext(
             battleSceneSnapshotsByMessageId[messageId],
             switchOutVisualsByMessageId[messageId]
-        )
+        ),
+        battleFeedTonesByMessageId[messageId]
+            ?: if (BATTLE_FEED_ERROR_TONE.matches(text.trim())) BattleFeedTone.ERROR else BattleFeedTone.STANDARD
     )
 
     fun latestBattleFeedEntry() = battleFeedEntries(1).lastOrNull()
@@ -1601,6 +1604,7 @@ class BattleSession {
         battleLog.clear()
         battleLogMessageIds.clear()
         battleFeedExcludedMessageIds.clear()
+        battleFeedTonesByMessageId.clear()
         switchOutVisualsByMessageId.clear()
         battleSceneSnapshotsByMessageId.clear()
         protocolLineSceneContextsByEventId.clear()
@@ -1644,6 +1648,7 @@ class BattleSession {
         battleLog.clear()
         battleLogMessageIds.clear()
         battleFeedExcludedMessageIds.clear()
+        battleFeedTonesByMessageId.clear()
         battleLog += "Loading replay…"
         battleLogMessageIds += newBattleFeedMessageId()
         clearBattleFeedEntriesCache()
@@ -2270,23 +2275,23 @@ class BattleSession {
                     "warning" -> appendSystemNotice("Warning", fields.drop(2).joinToString("|"))
                     "popup" -> appendSystemNotice("Notice", fields.drop(2).joinToString("|"))
                     "inactive" -> {
-                        val message = fields.drop(2).joinToString("|")
+                        val message = sanitizeMarkup(fields.drop(2).joinToString("|"))
                         battleTimerEnabled = true
-                        val clock = parseBattleClock(message)
+                        val clock = message?.let(::parseBattleClock)
                         clock?.let {
                             battleClock = it
                             battleClockUpdatedAtNanos = System.nanoTime()
                         }
-                        if (clock == null) message.takeIf { it.isNotBlank() }?.let(::appendLog)
+                        message?.takeIf(String::isNotBlank)?.let {
+                            appendLog(it, tone = BattleFeedTone.ERROR)
+                        }
                     }
                     "inactiveoff" -> {
                         clearBattleClock()
                         battleTimerEnabled = false
-                        fields.drop(2).joinToString("|")
-                            .takeIf(String::isNotBlank)
-                            ?.let(::sanitizeMarkup)
+                        sanitizeMarkup(fields.drop(2).joinToString("|"))
                             ?.takeIf(String::isNotBlank)
-                            ?.let(::appendLog)
+                            ?.let { appendLog(it, tone = BattleFeedTone.ERROR) }
                     }
                     "message" -> sanitizeMarkup(fields.drop(2).joinToString("|"))?.let(::appendLog)
                     "raw", "html" -> appendMarkup(fields.drop(2).joinToString("|"))
@@ -2376,6 +2381,7 @@ class BattleSession {
         battleLog.clear()
         battleLogMessageIds.clear()
         battleFeedExcludedMessageIds.clear()
+        battleFeedTonesByMessageId.clear()
         switchOutVisualsByMessageId.clear()
         battleSceneSnapshotsByMessageId.clear()
         protocolPacketGenerationByMessageId.clear()
@@ -4482,7 +4488,7 @@ class BattleSession {
 
     private fun applyBattleError(fields: List<String>) {
         val message = fields.drop(2).joinToString("|").ifBlank { "The server rejected that choice." }
-        appendLog(message)
+        appendLog(message, tone = BattleFeedTone.ERROR)
         if (battleFinished || requestId == null || decisionKind == DecisionKind.WAIT) return
         if (decisionKind == DecisionKind.MOVE && activeRequests.size > 1) {
             activeChoices.clear()
@@ -6014,6 +6020,7 @@ class BattleSession {
             battleLog.removeAt(logIndex)
             val messageId = battleLogMessageIds.removeAt(logIndex)
             battleFeedExcludedMessageIds.remove(messageId)
+            battleFeedTonesByMessageId.remove(messageId)
             switchOutVisualsByMessageId.remove(messageId)
             battleSceneSnapshotsByMessageId.remove(messageId)
             protocolPacketGenerationByMessageId.remove(messageId)
@@ -6057,7 +6064,8 @@ class BattleSession {
         entry: String,
         feedMarkup: String = entry,
         switchOutVisual: SwitchOutVisual? = null,
-        includeInBattleFeed: Boolean = true
+        includeInBattleFeed: Boolean = true,
+        tone: BattleFeedTone = BattleFeedTone.STANDARD
     ): Long? {
         if (protocolLogSuppressed) return null
         val message = capitalizeBattleActorAtSentenceStart(entry)
@@ -6067,6 +6075,7 @@ class BattleSession {
         battleLog += message
         battleLogMessageIds += messageId
         if (!includeInBattleFeed) battleFeedExcludedMessageIds += messageId
+        if (tone != BattleFeedTone.STANDARD) battleFeedTonesByMessageId[messageId] = tone
         switchOutVisual?.let { switchOutVisualsByMessageId[messageId] = it }
         battleSceneSnapshotsByMessageId[messageId] = createBattleSceneSnapshot()
         if (feedMarkup != message) protocolBattleFeedMarkupEntries += ShowdownBattleLogEntry(messageId, message, feedMarkup)
@@ -6074,6 +6083,7 @@ class BattleSession {
             val removed = battleLog.removeAt(0)
             val removedMessageId = battleLogMessageIds.removeAt(0)
             battleFeedExcludedMessageIds.remove(removedMessageId)
+            battleFeedTonesByMessageId.remove(removedMessageId)
             switchOutVisualsByMessageId.remove(removedMessageId)
             battleSceneSnapshotsByMessageId.remove(removedMessageId)
             protocolPacketGenerationByMessageId.remove(removedMessageId)
@@ -6187,6 +6197,7 @@ class BattleSession {
                 battleLog.removeAt(logIndex)
                 val oldMessageId = battleLogMessageIds.removeAt(logIndex)
                 battleFeedExcludedMessageIds.remove(oldMessageId)
+                battleFeedTonesByMessageId.remove(oldMessageId)
                 switchOutVisualsByMessageId.remove(oldMessageId)
                 battleSceneSnapshotsByMessageId.remove(oldMessageId)
                 protocolPacketGenerationByMessageId.remove(oldMessageId)
@@ -7262,7 +7273,10 @@ class BattleSession {
         private const val SHOWDOWN_BATTLE_FEED_WINDOW_LIMIT = 32
         private val BATTLE_FEED_TURN_MARKER = Regex("^(?:Turn\\s+\\d+\\.?|==\\s*Turn\\s+\\d+\\s*==)$", RegexOption.IGNORE_CASE)
         private val BATTLE_FEED_NON_ACTION_ENTRY = Regex(
-            "(?i)^(?:Battle started\\.|.+ has \\d+ seconds? left(?: this turn)?\\.?|.+ also wants the timer to be on\\.|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle timer is (?:on|off):?.*|The battle timer is off\\.?|Battle type: .+|Generation \\d+ battle\\.|.+ team size: \\d+)$"
+            "(?i)^(?:Battle started\\.|.+['’]s rating:\\s*\\d+\\s*→\\s*\\d+.*|Battle type: .+|Generation \\d+ battle\\.|.+ team size: \\d+)$"
+        )
+        private val BATTLE_FEED_ERROR_TONE = Regex(
+            "(?i)^(?:Time left:.*|.+ has \\d+ seconds? left(?: this turn)?\\.?|.+ also wants the timer to be on\\.?|Battle timer is (?:on|off):?.*|The battle timer is off\\.?)$"
         )
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
         private val SHOWDOWN_ACTIVATE_BLOCK_EFFECTS = setOf(

@@ -63,7 +63,10 @@ class BattleFieldStateTest {
 
         assertEquals(BattleSession.BattleClock(150, 150, 60), session.battleClock())
         assertTrue(session.battleClockSeconds()!! in 149..150)
-        assertFalse(session.battleLog().any { it.contains("Time left") })
+        assertEquals(
+            "Time left: 150 sec this turn | 150 sec total | 60 sec grace",
+            session.battleFeedEntries().last()
+        )
 
         session.applyProtocolLine("|inactiveoff|")
 

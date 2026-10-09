@@ -111,13 +111,17 @@ class BattleSessionTest {
     }
 
     @Test
-    fun upperBattleFeedOmitsTimerAndRatingMetadataWhileActivityKeepsIt() {
+    fun upperBattleFeedKeepsTimerNotificationsAndOmitsRatingMetadata() {
         val session = BattleSession()
         session.appendShowdownBattleLog(
             "Pikachu used Thunderbolt!<br />Guest 26464262 has 15 seconds left.<br />ADRIAN's rating: 1053 → 1080"
         )
 
-        assertEquals(listOf("Pikachu used Thunderbolt!"), session.battleFeedEntries())
+        assertEquals(
+            listOf("Pikachu used Thunderbolt!", "Guest 26464262 has 15 seconds left."),
+            session.battleFeedEntries()
+        )
+        assertEquals(BattleFeedTone.ERROR, session.battleFeedMessages().last().tone)
         assertEquals(
             listOf(
                 "Pikachu used Thunderbolt!",
@@ -129,13 +133,26 @@ class BattleSessionTest {
     }
 
     @Test
-    fun upperBattleFeedOmitsBattleTimerAnnouncementsWhileActivityKeepsThem() {
+    fun upperBattleFeedKeepsBattleTimerAnnouncements() {
         val session = BattleSession()
         session.appendShowdownBattleLog(
             "Battle timer is ON: inactive players will automatically lose when time's up. (requested by Guest)<br />Guest also wants the timer to be on.<br />Guest has 30 seconds left this turn.<br />Pikachu used Thunderbolt!<br />The battle timer is off."
         )
 
-        assertEquals(listOf("Pikachu used Thunderbolt!"), session.battleFeedEntries())
+        assertEquals(
+            listOf(
+                "Battle timer is ON: inactive players will automatically lose when time's up. (requested by Guest)",
+                "Guest also wants the timer to be on.",
+                "Guest has 30 seconds left this turn.",
+                "Pikachu used Thunderbolt!",
+                "The battle timer is off."
+            ),
+            session.battleFeedEntries()
+        )
+        assertTrue(
+            session.battleFeedMessages().filter { it.text != "Pikachu used Thunderbolt!" }
+                .all { it.tone == BattleFeedTone.ERROR }
+        )
         assertEquals(
             listOf(
                 "Battle timer is ON: inactive players will automatically lose when time's up. (requested by Guest)",
@@ -3908,6 +3925,47 @@ class BattleSessionTest {
 
         session.applyProtocolLine("|inactiveoff|")
         assertFalse(session.isBattleTimerEnabled())
+    }
+
+    @Test
+    fun timerNotificationsRemainInTheBattleFeedWithShowdownErrorTone() {
+        val session = BattleSession()
+        var identitiesByLine = emptyList<BattleSession.ProtocolLineIdentity>()
+        session.addProtocolListener { _, identities -> identitiesByLine = identities }
+        session.applyProtocolPacket(
+            listOf(
+                "|init|battle",
+                "|inactive|Time left: 60 sec this turn | 300 sec total | 30 sec grace",
+                "|inactiveoff|The battle timer is off."
+            )
+        )
+
+        val messages = session.battleFeedMessages()
+        assertEquals(
+            listOf(
+                "Time left: 60 sec this turn | 300 sec total | 30 sec grace",
+                "The battle timer is off."
+            ),
+            messages.map(BattleFeedMessage::text)
+        )
+        assertTrue(messages.all { it.tone == BattleFeedTone.ERROR })
+
+        val presentation = BattleFeedPresentation().apply { updateMessages(messages, true, 0L) }
+        assertEquals(BattleFeedTone.ERROR, presentation.frame(0L)?.tone)
+
+        val generation = session.battleLogGeneration()
+        messages.forEachIndexed { index, message ->
+            val identity = identitiesByLine[index + 1]
+            session.appendShowdownBattleLog(
+                message.text,
+                generation,
+                identity.eventId,
+                identity.messageIds
+            )
+        }
+        session.markNativeBattleLogSynchronized(generation)
+
+        assertTrue(session.battleFeedMessages().all { it.tone == BattleFeedTone.ERROR })
     }
 
     @Test

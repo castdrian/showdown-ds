@@ -3,18 +3,25 @@ package dev.adrian.showdown
 import java.util.ArrayDeque
 import kotlin.math.ceil
 
+enum class BattleFeedTone {
+    STANDARD,
+    ERROR
+}
+
 data class BattleFeedFrame(
     val text: String,
     val alpha: Float,
     val visibleText: String,
     val messageId: Long? = null,
-    val sceneContext: BattleFeedSceneContext? = null
+    val sceneContext: BattleFeedSceneContext? = null,
+    val tone: BattleFeedTone = BattleFeedTone.STANDARD
 )
 
 data class BattleFeedMessage(
     val id: Long,
     val text: String,
-    val sceneContext: BattleFeedSceneContext? = null
+    val sceneContext: BattleFeedSceneContext? = null,
+    val tone: BattleFeedTone = BattleFeedTone.STANDARD
 )
 
 data class BattleFeedSceneContext(
@@ -255,7 +262,8 @@ class BattleFeedPresentation(
             alpha = alpha.coerceIn(0f, 1f),
             visibleText = message.text,
             messageId = message.id,
-            sceneContext = message.sceneContext
+            sceneContext = message.sceneContext,
+            tone = message.tone
         )
     }
 
