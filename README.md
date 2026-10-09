@@ -2,7 +2,7 @@
 
 Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
-<p align="center"><img width="49%" src="media/showdown-battle-live-both-sides.png?v=d6f1255af83ab215" alt="Live Gen 9 battle with both Pokémon visible, paired with its matching move-selection screen"> <img width="49%" src="media/showdown-battle-party-live-both-sides.png?v=48c152236d5a937e" alt="The same live battle with both Pokémon visible, paired with its matching six-Pokémon party screen"></p>
+<p align="center"><img width="49%" src="media/showdown-battle-live-both-sides.png?v=0939a1c03583a548" alt="Live Gen 9 battle with both Pokémon visible, paired with its matching move-selection screen"> <img width="49%" src="media/showdown-battle-party-live-both-sides.png?v=80084308bb40d10f" alt="The same live battle with both Pokémon visible, paired with its matching six-Pokémon party screen"></p>
 
 ## Hardware target
 
