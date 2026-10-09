@@ -29,6 +29,7 @@ class ShowdownMoveEffectsView(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingPackets = ShowdownMoveEffectsQueue()
     private var pageLoaded = false
+    private var javascriptReady = false
     private var playbackPaused = false
     private var playbackSpeed = 1f
     private var battlePerspective = "p1"
@@ -37,7 +38,7 @@ class ShowdownMoveEffectsView(
     private var cleanupCompleted = false
     private val releaseFallbackRunnable = Runnable { cleanupOnMainThread() }
     private val nativeIdlePauseRunnable = Runnable {
-        if (!released && pageLoaded && !playbackPaused) {
+        if (!released && javascriptReady && !playbackPaused) {
             runJavascript("window.ShowdownNativeEffects.pauseWhenIdle();")
         }
     }
@@ -52,7 +53,8 @@ class ShowdownMoveEffectsView(
         battleLogListener,
         battleMarkupListener,
         battleLogSyncListener,
-        battleEffectsIdleListener
+        battleEffectsIdleListener,
+        { mainHandler.post { markJavascriptReady() } }
     )
 
     init {
@@ -72,13 +74,7 @@ class ShowdownMoveEffectsView(
             override fun onPageFinished(view: WebView, url: String) {
                 if (released) return
                 pageLoaded = true
-                runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
-                runJavascript("window.ShowdownNativeEffects.setPerspective('$battlePerspective');")
-                if (animationsDisabledForTesting) {
-                    runJavascript("window.ShowdownNativeEffects.setAnimationsDisabledForTesting(true);")
-                }
-                if (playbackPaused) runJavascript("window.ShowdownNativeEffects.pause();")
-                flushPendingPackets()
+                initializeJavascriptIfReady()
             }
         }
         loadDataWithBaseURL(BASE_URL, DOCUMENT, "text/html", "UTF-8", null)
@@ -202,7 +198,7 @@ class ShowdownMoveEffectsView(
         pendingPackets.clear()
         mainHandler.postDelayed(releaseFallbackRunnable, RELEASE_FALLBACK_DELAY_MILLIS)
         val cleanup = { cleanupOnMainThread() }
-        if (pageLoaded) {
+        if (javascriptReady) {
             evaluateJavascript("window.ShowdownNativeEffects.release();") { mainHandler.post(cleanup) }
         } else {
             cleanup()
@@ -212,7 +208,7 @@ class ShowdownMoveEffectsView(
     override fun onTouchEvent(event: MotionEvent): Boolean = false
 
     private fun flushPendingPackets(allowSeedWhilePaused: Boolean = false) {
-        if ((!allowSeedWhilePaused && playbackPaused) || !pageLoaded) return
+        if ((!allowSeedWhilePaused && playbackPaused) || !javascriptReady) return
         var dispatched = false
         while (true) {
             when (val packet = pendingPackets.poll() ?: break) {
@@ -231,13 +227,30 @@ class ShowdownMoveEffectsView(
 
     private fun scheduleNativeIdlePause() {
         mainHandler.removeCallbacks(nativeIdlePauseRunnable)
-        if (!released && pageLoaded && !playbackPaused) {
+        if (!released && javascriptReady && !playbackPaused) {
             mainHandler.postDelayed(nativeIdlePauseRunnable, NATIVE_IDLE_CHECK_DELAY_MILLIS)
         }
     }
 
     private fun runJavascript(script: String) {
-        if (pageLoaded) evaluateJavascript(script, null)
+        if (javascriptReady) evaluateJavascript(script, null)
+    }
+
+    private fun markJavascriptReady() {
+        if (released || javascriptReady) return
+        javascriptReady = true
+        initializeJavascriptIfReady()
+    }
+
+    private fun initializeJavascriptIfReady() {
+        if (released || !pageLoaded || !javascriptReady) return
+        runJavascript("window.ShowdownNativeEffects.setSpeed($playbackSpeed);")
+        runJavascript("window.ShowdownNativeEffects.setPerspective('$battlePerspective');")
+        if (animationsDisabledForTesting) {
+            runJavascript("window.ShowdownNativeEffects.setAnimationsDisabledForTesting(true);")
+        }
+        if (playbackPaused) runJavascript("window.ShowdownNativeEffects.pause();")
+        flushPendingPackets()
     }
 
     private fun protocolLineIdentitiesJson(identitiesByLine: List<BattleSession.ProtocolLineIdentity>) = JSONArray().apply {
@@ -254,6 +267,7 @@ class ShowdownMoveEffectsView(
         cleanupCompleted = true
         mainHandler.removeCallbacks(releaseFallbackRunnable)
         pageLoaded = false
+        javascriptReady = false
         stopLoading()
         destroy()
     }
@@ -993,6 +1007,7 @@ class ShowdownMoveEffectsView(
                                 destroyBattle();
                             }
                         };
+                        window.ShowdownNativeBattleLog.ready();
                     }());
                 </script>
             </body>
@@ -1049,8 +1064,14 @@ class ShowdownMoveEffectsView(
         private val callback: (String, Long, Long?, List<Long>) -> Unit,
         private val markupCallback: (String, String, Long) -> Unit,
         private val syncCallback: (Long) -> Unit,
-        private val effectsIdleCallback: (Long) -> Unit
+        private val effectsIdleCallback: (Long) -> Unit,
+        private val readyCallback: () -> Unit
     ) {
+        @JavascriptInterface
+        fun ready() {
+            readyCallback()
+        }
+
         @JavascriptInterface
         fun entry(value: String, generation: Long, protocolLineIdentityJson: String) {
             val entries = ShowdownBattleLogFilter.visibleEntries(value)

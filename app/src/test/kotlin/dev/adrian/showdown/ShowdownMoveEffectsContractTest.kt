@@ -198,7 +198,11 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(pageFinishedStart >= 0)
         assertTrue(pageFinishedEnd > pageFinishedStart)
         assertFalse(pageFinished.contains("seed("))
-        assertTrue(pageFinished.contains("flushPendingPackets()"))
+        assertTrue(pageFinished.contains("initializeJavascriptIfReady()"))
+        assertTrue(source.contains("private var javascriptReady = false"))
+        assertTrue(source.contains("fun ready()"))
+        assertTrue(source.contains("window.ShowdownNativeBattleLog.ready();"))
+        assertTrue(source.contains("if ((!allowSeedWhilePaused && playbackPaused) || !javascriptReady) return"))
         assertTrue(source.contains("effectsBarrierToken: Long = 0L"))
         assertTrue(source.contains("pendingPackets.add("))
     }

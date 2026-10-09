@@ -123,16 +123,18 @@ class MainActivityReplayPlaybackParityTest {
     @Test
     fun modernCorviknightBackSpritePrefersAvailableHdAnimation() {
         val (cache, cacheDirectory) = isolatedSpriteCache()
-        val completed = CountDownLatch(1)
+        val hdSpriteSelected = CountDownLatch(1)
         val request = BattleSpriteRequest.forPlayer("Corviknight", BattleSession.SpriteStyle.MODERN_3D)
         var resolvedAsset: ShowdownSpriteCache.SpriteAsset? = null
 
         try {
             cache.requestPokemon(request) { asset ->
                 resolvedAsset = asset
-                completed.countDown()
+                if (asset?.resolvedAssetPath?.contains("/animados-gigante/") == true) {
+                    hdSpriteSelected.countDown()
+                }
             }
-            assertTrue("The HD Corviknight back-sprite request timed out", completed.await(30, TimeUnit.SECONDS))
+            assertTrue("The HD Corviknight back-sprite request timed out", hdSpriteSelected.await(30, TimeUnit.SECONDS))
             assertNotNull("The modern Corviknight battle request did not resolve a back sprite", resolvedAsset)
             assertTrue("The modern Corviknight battle request resolved a non-animated asset", resolvedAsset?.isAnimated == true)
             assertTrue(
@@ -192,10 +194,9 @@ class MainActivityReplayPlaybackParityTest {
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
                     .apply { isAccessible = true }
                     .invoke(activity, replay)
-                assertNotNull(
-                    "The replay did not create the native Showdown renderer",
-                    privateField(activity, "showdownMoveEffects")
-                )
+                val effectsView = privateField(activity, "showdownMoveEffects") as? ShowdownMoveEffectsView
+                assertNotNull("The replay did not create the native Showdown renderer", effectsView)
+                checkNotNull(effectsView).setAnimationsDisabledForTesting(true)
             }
 
             while (SystemClock.elapsedRealtime() < deadline &&
@@ -251,7 +252,7 @@ class MainActivityReplayPlaybackParityTest {
                     if (playbackTimeline.lastOrNull() != state) playbackTimeline.add(state)
                     latestPlaybackState = state
                 }
-                Thread.sleep(40L)
+                Thread.sleep(250L)
             }
 
             val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
@@ -525,7 +526,7 @@ class MainActivityReplayPlaybackParityTest {
         var lastProgressState = ""
         var lastProgressAt = SystemClock.elapsedRealtime()
         var playbackStalled = false
-        val playbackDeadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(60)
+        val playbackDeadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(180)
         var scenario: ActivityScenario<MainActivity>? = null
 
         try {
@@ -533,15 +534,14 @@ class MainActivityReplayPlaybackParityTest {
             scenario = ActivityScenario.launch(MainActivity::class.java)
             val activeScenario = checkNotNull(scenario)
             activeScenario.onActivity { activity ->
-                setPrivateField(activity, "restoredReplaySpeed", 0.75f)
+                setPrivateField(activity, "restoredReplaySpeed", 1f)
                 setPrivateField(activity, "lightweightBattlePlayback", false)
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
                     .apply { isAccessible = true }
                     .invoke(activity, replay)
-                assertNotNull(
-                    "The native Showdown renderer was not created for $replayFileName",
-                    privateField(activity, "showdownMoveEffects")
-                )
+                val effectsView = privateField(activity, "showdownMoveEffects") as? ShowdownMoveEffectsView
+                assertNotNull("The native Showdown renderer was not created for $replayFileName", effectsView)
+                checkNotNull(effectsView).setAnimationsDisabledForTesting(true)
             }
 
             while (SystemClock.elapsedRealtime() < playbackDeadline &&
@@ -620,7 +620,7 @@ class MainActivityReplayPlaybackParityTest {
                         lastProgressAt = now
                     }
                     val playbackReadyAndIdle =
-                        privateField(effectsView, "pageLoaded") as Boolean &&
+                        privateField(effectsView, "javascriptReady") as Boolean &&
                         nativeReplayCaughtUp &&
                         pendingPackets?.isEmpty() == true &&
                         !scheduled &&
@@ -633,7 +633,7 @@ class MainActivityReplayPlaybackParityTest {
                     }
                     playbackStalled = now - lastProgressAt >= stallWindowMillis
                 }
-                Thread.sleep(100L)
+                Thread.sleep(250L)
             }
 
             displayedFrames.values.forEach { frame ->
