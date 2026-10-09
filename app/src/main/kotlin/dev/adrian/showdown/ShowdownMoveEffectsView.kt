@@ -398,7 +398,8 @@ class ShowdownMoveEffectsView(
                         }
                         function nativeBattleLog(value, className) {
                             if (!captureNativeBattleLog || !window.ShowdownNativeBattleLog || !value) return;
-                            if (String(className || '').split(/\s+/).indexOf('chat') >= 0) return;
+                            var classes = String(className || '').split(/\s+/);
+                            if (classes.indexOf('chat') >= 0 && classes.indexOf('message-error') < 0) return;
                             window.ShowdownNativeBattleLog.entry(
                                 String(value),
                                 nativeBattleLogGeneration,
