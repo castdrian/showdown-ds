@@ -462,6 +462,89 @@ class ShowdownConnectionLifecycleTest {
     }
 
     @Test
+    fun dispatchesNativeShowdownBattlePacketsWithCorrectActorsAndChoices() {
+        val server = LoopbackWebSocketServer()
+        val battleRoom = "battle-gen9ou-1"
+        val battleStateReady = CountDownLatch(1)
+        val moveRequestReady = CountDownLatch(1)
+        val connected = CountDownLatch(1)
+        val session = BattleSession().apply { setLocalUsername("ADRIAN") }
+        lateinit var connection: ShowdownConnection
+        val listener = object : ShowdownConnection.Listener {
+            override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
+                if (state == ShowdownConnection.State.CONNECTED) connected.countDown()
+            }
+
+            override fun onProtocol(roomId: String?, lines: List<String>) {
+                if (roomId != battleRoom) return
+                session.applyProtocolPacket(lines)
+                if (lines.any { it.startsWith("|move|") }) battleStateReady.countDown()
+                if (lines.any { it.startsWith("|request|") }) moveRequestReady.countDown()
+            }
+        }
+        connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            testHttpClient()
+        )
+        session.addDecisionListener { command -> assertTrue(connection.send(battleRoom, command)) }
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+            server.sendText(socket, "|updateuser| Guest 1|0|1")
+            assertTrue(connected.await(2, TimeUnit.SECONDS))
+
+            val setupPacket = listOf(
+                "|init|battle",
+                "|player|p1|ADRIAN||",
+                "|player|p2|OPPONENT||",
+                "|gametype|singles",
+                "|gen|9",
+                "|start",
+                "|switch|p1a: Phantom|Dragapult, L50|100/100",
+                "|switch|p2a: Specter|Rotom, L50|100/100"
+            )
+            server.sendText(socket, ">$battleRoom\n${setupPacket.joinToString("\n")}")
+            server.sendText(socket, ">$battleRoom\n|move|p1a: Phantom|Shadow Ball|p2a: Specter")
+
+            assertTrue(battleStateReady.await(2, TimeUnit.SECONDS))
+
+            assertEquals("Phantom", session.playerActiveCombatants().single().name)
+            assertEquals("Dragapult", session.playerActiveCombatants().single().species)
+            assertEquals("Specter", session.opponentActiveCombatants().single().name)
+            assertEquals("Rotom", session.opponentActiveCombatants().single().species)
+            val moveMessage = session.battleFeedMessages().last { it.text == "Phantom used Shadow Ball!" }
+            val snapshot = checkNotNull(moveMessage.sceneContext?.snapshot)
+            assertEquals("Phantom", snapshot.playerCombatants.single().name)
+            assertEquals("Dragapult", snapshot.playerCombatants.single().species)
+            assertEquals("Specter", snapshot.opponentCombatants.single().name)
+            assertEquals("Rotom", snapshot.opponentCombatants.single().species)
+            val spriteRequests = BattleSpriteRequests.forScene(
+                snapshot.playerCombatants,
+                snapshot.opponentCombatants,
+                true,
+                session.spriteStyle,
+                session.playerPokemon,
+                session.opponentPokemon
+            )
+            assertEquals("Dragapult", spriteRequests.playerLead?.species)
+            assertEquals(BattleSpriteSide.PLAYER, spriteRequests.playerLead?.side)
+            assertEquals("Rotom", spriteRequests.opponentLead?.species)
+            assertEquals(BattleSpriteSide.OPPONENT, spriteRequests.opponentLead?.side)
+
+            val moveRequest = """{"rqid":44,"active":[{"moves":[{"move":"Shadow Ball","pp":15}]}]}"""
+            server.sendText(socket, ">$battleRoom\n|request|$moveRequest")
+            assertTrue(moveRequestReady.await(2, TimeUnit.SECONDS))
+            session.selectMoveWithTouch(0)
+
+            assertEquals("$battleRoom|/choose move 1|44", server.readClientText(socket))
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
+    @Test
     fun ignoresFramesFromAReplacedSocket() {
         val server = LoopbackWebSocketServer()
         val listener = RecordingListener()
@@ -706,6 +789,7 @@ class ShowdownConnectionLifecycleTest {
         }
 
         fun readClientText(socket: Socket): String {
+            socket.soTimeout = 5_000
             val input = socket.getInputStream()
             val first = input.read()
             val second = input.read()
