@@ -59,7 +59,8 @@ class MainActivityReplayPlaybackParityTest {
         val name: String,
         val moveName: String,
         val species: String?,
-        val side: BattleSpriteSide?
+        val side: BattleSpriteSide?,
+        val isMagicBounceReflection: Boolean
     )
 
     private fun MultiReplayMoveExpectation.identityKey() = "$slot:$moveName"
@@ -1032,7 +1033,16 @@ class MainActivityReplayPlaybackParityTest {
         protocolMoveIdentitiesByMessageId[frame.message.id]?.let { identity ->
             val expectedSide = checkNotNull(identity.side) { "${identity.sourceLine} has no source side" }
             val expectedSpecies = checkNotNull(identity.species) { "${identity.sourceLine} has no source species" }
-            assertEquals(identity.sourceLine, identity.name, moveActorFromNativeMessage(frame.text, identity.moveName))
+            if (identity.isMagicBounceReflection) {
+                val actorText = if (expectedSide == BattleSpriteSide.OPPONENT) {
+                    "The opposing ${identity.name}"
+                } else {
+                    identity.name
+                }
+                assertEquals(identity.sourceLine, "[$actorText's Magic Bounce]", frame.text)
+            } else {
+                assertEquals(identity.sourceLine, identity.name, moveActorFromNativeMessage(frame.text, identity.moveName))
+            }
             val snapshot = checkNotNull(frame.displayedScene)
             val playerCombatants = BattleFeedSceneState.combatantsForMessage(
                 snapshot.playerCombatants,
@@ -1158,6 +1168,7 @@ class MainActivityReplayPlaybackParityTest {
                         name = name,
                         moveName = moveName,
                         species = combatant?.species,
+                        isMagicBounceReflection = line.contains("|[from] ability: Magic Bounce", true),
                         side = when {
                             playerCombatant != null -> BattleSpriteSide.PLAYER
                             opponentCombatant != null -> BattleSpriteSide.OPPONENT
