@@ -51,16 +51,19 @@ class ShowdownBattleLogRendererParityTest {
         activity.renderer.applyProtocol(transcript, generation)
         awaitSynchronization(activity, syncCount, generation)
 
-        val diagnostics = JSONObject(activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2)))
+        val diagnosticsJson = activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2))
+        val diagnostics = JSONObject(diagnosticsJson)
 
+        assertTrue("Native playback diagnostics omitted animation state: $diagnosticsJson", diagnostics.has("animationsOff"))
         assertTrue("Test playback animations were re-enabled: $diagnostics", diagnostics.getBoolean("animationsOff"))
         assertTrue("Test playback did not install its reversible animation override: $diagnostics", diagnostics.getBoolean("testAnimationOverridesActive"))
 
         activity.renderer.setAnimationsDisabledForTesting(false)
 
-        val restoredDiagnostics = JSONObject(activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2)))
+        val restoredDiagnosticsJson = activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2))
+        val restoredDiagnostics = JSONObject(restoredDiagnosticsJson)
 
-        assertFalse("Test playback left animations disabled after restoring: $restoredDiagnostics", restoredDiagnostics.getBoolean("animationsOff"))
+        assertFalse("Test playback left animations disabled after restoring: $restoredDiagnosticsJson", restoredDiagnostics.optBoolean("animationsOff", false))
         assertFalse(
             "Test playback left its animation override installed after restoring: $restoredDiagnostics",
             restoredDiagnostics.getBoolean("testAnimationOverridesActive")
@@ -469,7 +472,7 @@ class ShowdownBattleLogRendererParityTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {
             sceneView = BattleSceneView(activity, session, spriteCache)
-            sceneView.setPlaybackSpeed(1f)
+            sceneView.setPlaybackSpeed(2f)
             sceneView.layout(0, 0, bitmap.width, bitmap.height)
             val requests = BattleSpriteRequests.forScene(
                 session.playerActiveCombatants(),
