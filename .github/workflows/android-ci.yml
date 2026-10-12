@@ -85,12 +85,16 @@ jobs:
         working-directory: upstream-pokemon-showdown
         run: npm ci --no-audit --no-fund
 
+      - name: Configure upstream Showdown for local compatibility tests
+        working-directory: upstream-pokemon-showdown
+        run: cp ../tools/showdown-upstream-ci/config.js config/config.js
+
       - name: Verify native connection against upstream Showdown
         env:
           SHOWDOWN_TEST_SERVER_URL: ws://127.0.0.1:8000/showdown/websocket
         run: |
           cd upstream-pokemon-showdown
-          node pokemon-showdown --no-security 8000 > "$RUNNER_TEMP/showdown-server.log" 2>&1 &
+          node pokemon-showdown 8000 > "$RUNNER_TEMP/showdown-server.log" 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in {1..60}; do
