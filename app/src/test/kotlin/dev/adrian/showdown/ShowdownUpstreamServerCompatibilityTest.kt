@@ -14,11 +14,7 @@ import org.junit.Test
 class ShowdownUpstreamServerCompatibilityTest {
     @Test
     fun connectsToUpstreamServerAndJoinsLobby() {
-        val webSocketUrl = System.getenv("SHOWDOWN_TEST_SERVER_URL")?.takeIf(String::isNotBlank)
-        assumeTrue("Upstream Showdown server URL was not configured", webSocketUrl != null)
-
-        val endpoint = ShowdownServerEndpoint.fromInput(webSocketUrl!!)
-            ?: error("Configured Showdown server URL is invalid")
+        val endpoint = configuredEndpoint()
         val client = UpstreamBattleClient("PSClient", "PSClientPeer", endpoint, AtomicBoolean(false))
 
         try {
@@ -34,11 +30,7 @@ class ShowdownUpstreamServerCompatibilityTest {
 
     @Test
     fun startsRandomBattleAndKeepsServerMoveActorsAlignedWithTheirSceneSprites() {
-        val webSocketUrl = System.getenv("SHOWDOWN_TEST_SERVER_URL")?.takeIf(String::isNotBlank)
-        assumeTrue("Upstream Showdown server URL was not configured", webSocketUrl != null)
-
-        val endpoint = ShowdownServerEndpoint.fromInput(webSocketUrl!!)
-            ?: error("Configured Showdown server URL is invalid")
+        val endpoint = configuredEndpoint()
         val moveObserved = AtomicBoolean(false)
         val challenger = UpstreamBattleClient("PSParityAlpha", "PSParityBeta", endpoint, moveObserved)
         val opponent = UpstreamBattleClient("PSParityBeta", "PSParityAlpha", endpoint, moveObserved)
@@ -83,6 +75,13 @@ class ShowdownUpstreamServerCompatibilityTest {
             challenger.close()
             opponent.close()
         }
+    }
+
+    private fun configuredEndpoint(): ShowdownServerEndpoint {
+        val webSocketUrl = System.getenv("SHOWDOWN_TEST_SERVER_URL")?.takeIf(String::isNotBlank)
+        assumeTrue("Upstream Showdown server URL was not configured", webSocketUrl != null)
+        return ShowdownServerEndpoint.fromInput(checkNotNull(webSocketUrl))
+            ?: error("Configured Showdown server URL is invalid")
     }
 
     private fun assertMoveActorsMatchActiveCombatantsAndSprites(client: UpstreamBattleClient) {
