@@ -545,6 +545,78 @@ class ShowdownConnectionLifecycleTest {
     }
 
     @Test
+    fun dispatchesNativeMultiBattleAllyMovesWithTheCorrectVisualSide() {
+        val server = LoopbackWebSocketServer()
+        val battleRoom = "battle-gen9multirandombattle-1"
+        val battleStateReady = CountDownLatch(1)
+        val connected = CountDownLatch(1)
+        val session = BattleSession().apply { setLocalUsername("RED") }
+        val listener = object : ShowdownConnection.Listener {
+            override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
+                if (state == ShowdownConnection.State.CONNECTED) connected.countDown()
+            }
+
+            override fun onProtocol(roomId: String?, lines: List<String>) {
+                if (roomId != battleRoom) return
+                session.applyProtocolPacket(lines)
+                if (lines.any { it.startsWith("|move|") }) battleStateReady.countDown()
+            }
+        }
+        val connection = ShowdownConnection(
+            ShowdownServerEndpoint("Loopback", "ws://127.0.0.1:${server.port}/showdown/websocket"),
+            listener,
+            testHttpClient()
+        )
+        try {
+            connection.connect()
+            val socket = server.awaitClient()
+            server.sendText(socket, "|updateuser| Guest 1|0|1")
+            assertTrue(connected.await(2, TimeUnit.SECONDS))
+
+            val setupPacket = listOf(
+                "|init|battle",
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|player|p3|GREEN||",
+                "|player|p4|GOLD||",
+                "|gametype|multi",
+                "|start",
+                "|switch|p1a: Wing|Moltres, L50|100/100",
+                "|switch|p2a: Spark|Magmar, L50|100/100",
+                "|switch|p3b: Cinder|Skeledirge, L50|100/100",
+                "|switch|p4b: Shell|Drednaw, L50|100/100"
+            )
+            server.sendText(socket, ">$battleRoom\n${setupPacket.joinToString("\n")}")
+            server.sendText(socket, ">$battleRoom\n|move|p3b: Cinder|Torch Song|p4b: Shell")
+
+            assertTrue(battleStateReady.await(2, TimeUnit.SECONDS))
+
+            val moveMessage = session.battleFeedMessages().last { it.text == "Cinder used Torch Song!" }
+            val snapshot = checkNotNull(moveMessage.sceneContext?.snapshot)
+            val actor = snapshot.playerCombatants.single { it.slot == "p3b" }
+            assertEquals("Cinder", actor.name)
+            assertEquals("Skeledirge", actor.species)
+            assertEquals("Shell", snapshot.opponentCombatants.single { it.slot == "p4b" }.name)
+
+            val spriteRequests = BattleSpriteRequests.forScene(
+                snapshot.playerCombatants,
+                snapshot.opponentCombatants,
+                false,
+                session.spriteStyle,
+                session.playerPokemon,
+                session.opponentPokemon
+            )
+            val actorSprite = spriteRequests.playerActive.single { it.slot == "p3b" }.request
+            assertEquals("Skeledirge", actorSprite.species)
+            assertEquals(BattleSpriteSide.PLAYER, actorSprite.side)
+            assertTrue(spriteRequests.opponentActive.any { it.slot == "p4b" && it.request.species == "Drednaw" })
+        } finally {
+            connection.close()
+            server.close()
+        }
+    }
+
+    @Test
     fun ignoresFramesFromAReplacedSocket() {
         val server = LoopbackWebSocketServer()
         val listener = RecordingListener()
