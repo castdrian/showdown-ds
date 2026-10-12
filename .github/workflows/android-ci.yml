@@ -69,6 +69,47 @@ jobs:
       - name: Set up Gradle caching
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Set up Node.js for the upstream server
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Check out the upstream Showdown server
+        uses: actions/checkout@v7
+        with:
+          repository: smogon/pokemon-showdown
+          ref: 942cda71d14bf0618bd57991708a2e2734b6daba
+          path: upstream-pokemon-showdown
+
+      - name: Install upstream Showdown server dependencies
+        working-directory: upstream-pokemon-showdown
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify native connection against upstream Showdown
+        env:
+          SHOWDOWN_TEST_SERVER_URL: ws://127.0.0.1:8000/showdown/websocket
+        run: |
+          cd upstream-pokemon-showdown
+          node pokemon-showdown --no-security 8000 > "$RUNNER_TEMP/showdown-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:8000/; then
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              tail -n 100 "$RUNNER_TEMP/showdown-server.log"
+              exit 1
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              tail -n 100 "$RUNNER_TEMP/showdown-server.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest \
+            --tests dev.adrian.showdown.ShowdownUpstreamServerCompatibilityTest
+
       - name: Validate Showdown protocol contracts
         run: |
           gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest \
