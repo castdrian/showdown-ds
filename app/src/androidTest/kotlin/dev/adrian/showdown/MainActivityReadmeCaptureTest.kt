@@ -4,8 +4,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.SurfaceTexture
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.view.Surface
 import android.view.View
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -24,14 +29,34 @@ import java.util.concurrent.TimeUnit
 class MainActivityReadmeCaptureTest {
     @Test
     fun capturesLiveBattleAndMatchingMoveAndPartyDisplays() {
-        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val targetContext = instrumentation.targetContext
         val livePreferences = targetContext.getSharedPreferences("showdown_live", 0)
         val previousMaintainConnection = livePreferences.getBoolean("maintain_connection", false)
+        val originalDisplaySize = runShellCommand(instrumentation, "wm size")
+        val originalDisplayDensity = runShellCommand(instrumentation, "wm density")
         val outputDirectory = checkNotNull(targetContext.getExternalFilesDir("readme-capture"))
         assertTrue(outputDirectory.mkdirs() || outputDirectory.isDirectory)
         var scenario: ActivityScenario<MainActivity>? = null
+        var lowerDisplayTexture: SurfaceTexture? = null
+        var lowerDisplaySurface: Surface? = null
+        var lowerDisplay: VirtualDisplay? = null
 
         try {
+            runShellCommand(instrumentation, "wm size 1920x1080")
+            runShellCommand(instrumentation, "wm density 420")
+            lowerDisplayTexture = SurfaceTexture(false).apply { setDefaultBufferSize(1240, 1080) }
+            lowerDisplaySurface = Surface(lowerDisplayTexture)
+            lowerDisplay = checkNotNull(
+                targetContext.getSystemService(DisplayManager::class.java).createVirtualDisplay(
+                    "Showdown lower display",
+                    1240,
+                    1080,
+                    420,
+                    lowerDisplaySurface,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
+                )
+            )
             livePreferences.edit().putBoolean("maintain_connection", false).commit()
             scenario = ActivityScenario.launch(MainActivity::class.java)
             val activeScenario = checkNotNull(scenario)
@@ -109,8 +134,34 @@ class MainActivityReadmeCaptureTest {
             publishCaptures(targetContext, outputDirectory)
         } finally {
             scenario?.close()
+            lowerDisplay?.release()
+            lowerDisplaySurface?.release()
+            lowerDisplayTexture?.release()
+            restoreDisplayConfiguration(instrumentation, originalDisplaySize, originalDisplayDensity)
             livePreferences.edit().putBoolean("maintain_connection", previousMaintainConnection).commit()
         }
+    }
+
+    private fun runShellCommand(instrumentation: android.app.Instrumentation, command: String): String =
+        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+            .bufferedReader()
+            .use { it.readText() }
+
+    private fun restoreDisplayConfiguration(
+        instrumentation: android.app.Instrumentation,
+        originalSize: String,
+        originalDensity: String
+    ) {
+        val originalSizeOverride = Regex("(?i)override size:\\s*(\\d+x\\d+)")
+            .find(originalSize)
+            ?.groupValues
+            ?.get(1)
+        val originalDensityOverride = Regex("(?i)override density:\\s*(\\d+)")
+            .find(originalDensity)
+            ?.groupValues
+            ?.get(1)
+        runShellCommand(instrumentation, originalSizeOverride?.let { "wm size $it" } ?: "wm size reset")
+        runShellCommand(instrumentation, originalDensityOverride?.let { "wm density $it" } ?: "wm density reset")
     }
 
     private fun saveView(view: View, destination: File) {
