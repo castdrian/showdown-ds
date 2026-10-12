@@ -5,7 +5,9 @@ import android.graphics.Canvas
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -25,6 +27,76 @@ class ShowdownBattleLogRendererParityTest {
 
     @get:Rule
     val activityRule = ActivityScenarioRule(ShowdownLogParityHarnessActivity::class.java)
+
+    @Test
+    fun nativePlaybackAnimationsCanBeDisabledWithoutBlockingQueue() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity { activity = it }
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER")
+            setReplayMode(true)
+        }
+        val transcript = listOf(
+            "|init|battle",
+            "|player|p1|PLAYER||",
+            "|player|p2|OPPONENT||",
+            "|gametype|singles",
+            "|start",
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100"
+        )
+        session.applyProtocolPacket(transcript)
+        val generation = session.battleLogGeneration()
+        val syncCount = activity.synchronizedGenerations.size
+        activity.renderer.applyProtocol(transcript, generation)
+        awaitSynchronization(activity, syncCount, generation)
+
+        val diagnostics = JSONObject(activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2)))
+
+        assertTrue("Test playback animations were re-enabled: $diagnostics", diagnostics.getBoolean("animationsOff"))
+        assertTrue("Test playback did not install its reversible animation override: $diagnostics", diagnostics.getBoolean("testAnimationOverridesActive"))
+
+        activity.renderer.setAnimationsDisabledForTesting(false)
+
+        val restoredDiagnostics = JSONObject(activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2)))
+
+        assertFalse("Test playback left animations disabled after restoring: $restoredDiagnostics", restoredDiagnostics.getBoolean("animationsOff"))
+        assertFalse(
+            "Test playback left its animation override installed after restoring: $restoredDiagnostics",
+            restoredDiagnostics.getBoolean("testAnimationOverridesActive")
+        )
+    }
+
+    @Test
+    fun disabledNativePlaybackAnimationsProcessSwitchesAndWeather() {
+        lateinit var activity: ShowdownLogParityHarnessActivity
+        activityRule.scenario.onActivity { activity = it }
+        val session = BattleSession().apply {
+            setLocalUsername("PLAYER")
+            setReplayMode(true)
+        }
+        val transcript = listOf(
+            "|init|battle",
+            "|player|p1|PLAYER||",
+            "|player|p2|OPPONENT||",
+            "|gametype|singles",
+            "|gen|5",
+            "|start",
+            "|switch|p1a: Ferrothorn|Ferrothorn, F|100/100",
+            "|switch|p2a: Cromwell|Abomasnow, M|100/100",
+            "|-weather|Hail|[from] ability: Snow Warning|[of] p2a: Cromwell",
+            "|turn|1"
+        )
+        session.applyProtocolPacket(transcript)
+        val generation = session.battleLogGeneration()
+        val syncCount = activity.synchronizedGenerations.size
+        activity.renderer.applyProtocol(transcript, generation)
+
+        awaitSynchronization(activity, syncCount, generation, TimeUnit.SECONDS.toMillis(10))
+
+        val diagnostics = JSONObject(activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2)))
+        assertTrue("Test playback animations were re-enabled: $diagnostics", diagnostics.getBoolean("animationsOff"))
+    }
 
     @Test
     fun nativeMoveLogRetainsItsSourceProtocolIdentityAfterTheActivePokemonChanges() {
@@ -973,11 +1045,16 @@ class ShowdownBattleLogRendererParityTest {
     private fun awaitSynchronization(
         activity: ShowdownLogParityHarnessActivity,
         previousCount: Int,
-        generation: Long
+        generation: Long,
+        timeoutMillis: Long = maximumNativeReplayDurationMillis
     ) {
+        val synchronized = activity.awaitBattleLogSynchronization(previousCount, generation, timeoutMillis)
         assertTrue(
-            "The upstream renderer did not finish protocol generation $generation; synchronized ${activity.synchronizedGenerations.drop(previousCount)}",
-            activity.awaitBattleLogSynchronization(previousCount, generation, TimeUnit.MINUTES.toMillis(2))
+            "The upstream renderer did not finish protocol generation $generation; " +
+                "synchronized ${activity.synchronizedGenerations.drop(previousCount)}; " +
+                "native=${activity.nativePlaybackDiagnostics(TimeUnit.SECONDS.toMillis(2))}; " +
+                "javascript=${activity.javascriptErrors}",
+            synchronized
         )
     }
 

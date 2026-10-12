@@ -183,7 +183,7 @@ class ShowdownMoveEffectsView(
         }
         if (released) return
         animationsDisabledForTesting = disabled
-        if (disabled) runJavascript("window.ShowdownNativeEffects.setAnimationsDisabledForTesting(true);")
+        runJavascript("window.ShowdownNativeEffects.setAnimationsDisabledForTesting($disabled);")
     }
 
     fun release() {
@@ -312,6 +312,7 @@ class ShowdownMoveEffectsView(
                         var nativeBattlePerspectivePending = false;
                         var animationSpeed = 1;
                         var animationsDisabledForTesting = false;
+                        var testAnimationOverrides = null;
                         var captureNativeBattleLog = true;
                         var nativeSeedAnimationOff = false;
                         var chromeObserver = null;
@@ -909,13 +910,14 @@ class ShowdownMoveEffectsView(
                                     if (nativeBattlePerspectivePending) {
                                         nativeBattlePerspectivePending = !applyNativeBattlePerspective();
                                     }
+                                    if (animationsDisabledForTesting) disableTestAnimations();
                                     nativeBattleEffectsReachedQueueEnd();
                                 }
                             };
                             nativeBattlePerspectivePending = !applyNativeBattlePerspective();
                             battle.setMute(true);
                             var scene = battle.scene;
-                            if (animationsDisabledForTesting) disableTestAnimations(scene);
+                            if (animationsDisabledForTesting) disableTestAnimations();
                             var updateAcceleration = scene.updateAcceleration;
                             scene.updateAcceleration = function () {
                                 updateAcceleration.call(scene);
@@ -925,9 +927,22 @@ class ShowdownMoveEffectsView(
                             observeChrome();
                             layout();
                         }
-                        function disableTestAnimations(scene) {
-                            scene.animationOff();
-                            scene.finishAnimations = function () {};
+                        function disableTestAnimations() {
+                            if (!testAnimationOverrides) {
+                                testAnimationOverrides = { fxOff: $.fx.off, delay: $.fn.delay };
+                            }
+                            $.fx.off = true;
+                            $.fn.delay = function (duration, type) {
+                                return this.queue(type || 'fx', function (next) {
+                                    setTimeout(next, 0);
+                                });
+                            };
+                        }
+                        function restoreTestAnimations() {
+                            if (!testAnimationOverrides) return;
+                            $.fx.off = testAnimationOverrides.fxOff;
+                            $.fn.delay = testAnimationOverrides.delay;
+                            testAnimationOverrides = null;
                         }
                         function add(lines, generation, synchronizeBattleLog, protocolLineIdentities, effectsBarrierToken) {
                             var queuedLines = [];
@@ -982,7 +997,8 @@ class ShowdownMoveEffectsView(
                             },
                             setAnimationsDisabledForTesting: function (disabled) {
                                 animationsDisabledForTesting = !!disabled;
-                                if (battle && animationsDisabledForTesting) disableTestAnimations(battle.scene);
+                                if (animationsDisabledForTesting) disableTestAnimations();
+                                else restoreTestAnimations();
                             },
                             setPerspective: function (side) {
                                 if (${ShowdownBattlePerspective.javascriptGuard}) return;
@@ -1008,6 +1024,37 @@ class ShowdownMoveEffectsView(
                                 destroyBattle();
                             }
                         };
+                        if (${BuildConfig.DEBUG}) {
+                            window.ShowdownNativeEffects.diagnostics = function () {
+                                return {
+                                    currentStep: battle ? battle.currentStep : null,
+                                    queueLength: battle ? battle.stepQueue.length : null,
+                                    atQueueEnd: battle ? battle.atQueueEnd : null,
+                                    paused: battle ? battle.paused : null,
+                                    turn: battle ? battle.turn : null,
+                                    seeking: battle ? battle.seeking : null,
+                                    animating: battle ? battle.scene.animating : null,
+                                    activeAnimationCount: battle ? battle.scene.activeAnimations.length : null,
+                                    activeAnimations: battle ? battle.scene.activeAnimations.toArray().map(function (element) {
+                                        return {
+                                            tag: element.tagName,
+                                            id: element.id,
+                                            className: element.className,
+                                            animated: $(element).is(':animated'),
+                                            queueLength: $(element).queue().length
+                                        };
+                                    }) : null,
+                                    animationsOff: $.fx.off,
+                                    testAnimationOverridesActive: !!testAnimationOverrides,
+                                    interruptionCount: battle ? battle.scene.interruptionCount : null,
+                                    timeOffset: battle ? battle.scene.timeOffset : null,
+                                    minDelay: battle ? battle.scene.minDelay : null,
+                                    messagebarOpen: battle ? battle.scene.messagebarOpen : null,
+                                    previousLine: battle && battle.stepQueue[battle.currentStep - 1] || '',
+                                    pendingLine: battle && battle.stepQueue[battle.currentStep] || ''
+                                };
+                            };
+                        }
                         window.ShowdownNativeBattleLog.ready();
                     }());
                 </script>

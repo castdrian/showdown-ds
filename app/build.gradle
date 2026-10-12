@@ -10,6 +10,9 @@ def releaseVersionCode = (System.getenv('SHOWDOWN_VERSION_CODE') ?: '1').toInteg
 android {
     namespace 'dev.adrian.showdown'
     compileSdk 36
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId 'dev.adrian.showdown'
         minSdk 26

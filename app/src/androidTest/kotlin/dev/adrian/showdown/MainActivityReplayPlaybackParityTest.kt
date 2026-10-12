@@ -49,7 +49,8 @@ class MainActivityReplayPlaybackParityTest {
         val actorName: String,
         val moveName: String,
         val side: BattleSpriteSide,
-        val expectedOpposingPrefix: Boolean
+        val expectedOpposingPrefix: Boolean,
+        val narrationPhrase: String = "used $moveName"
     )
 
     private data class NativeReplayMoveIdentity(
@@ -60,6 +61,54 @@ class MainActivityReplayPlaybackParityTest {
         val species: String?,
         val side: BattleSpriteSide?
     )
+
+    private fun MultiReplayMoveExpectation.identityKey() = "$slot:$moveName"
+
+    private fun MultiReplayMoveExpectation.matchesNarration(text: String) =
+        text.contains(actorName, true) && text.contains(narrationPhrase, true)
+
+    @Test
+    fun firstLiveBattlePacketInitializesTheLazilyCreatedNativeRenderer() {
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        val initialBattlePacket = listOf(
+            "|init|battle",
+            "|player|p1|PLAYER||",
+            "|player|p2|OPPONENT||",
+            "|gametype|singles",
+            "|gen|9",
+            "|tier|[Gen 9] Custom Game",
+            "|start",
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+            "|switch|p2a: Eevee|Eevee, L50|100/100"
+        )
+        var latestNativeLog = emptyList<String>()
+
+        try {
+            scenario.onActivity { activity ->
+                setPrivateField(activity, "lightweightBattlePlayback", false)
+                assertTrue("The native renderer should be lazy before the first battle packet", privateField(activity, "showdownMoveEffects") == null)
+                val session = privateField(activity, "session") as BattleSession
+                session.setLocalUsername("PLAYER")
+                session.applyProtocolPacket(initialBattlePacket)
+            }
+
+            val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(15)
+            while (SystemClock.elapsedRealtime() < deadline && latestNativeLog.none { it.contains("Go! Pikachu!", true) }) {
+                scenario.onActivity { activity ->
+                    val session = privateField(activity, "session") as BattleSession
+                    latestNativeLog = session.showdownBattleLog()
+                }
+                Thread.sleep(100L)
+            }
+
+            assertTrue(
+                "The lazily created upstream renderer did not receive the initial switch packet: $latestNativeLog",
+                latestNativeLog.any { it.contains("Go! Pikachu!", true) }
+            )
+        } finally {
+            scenario.close()
+        }
+    }
 
     @Test
     fun officialDewgongBackAnimationDecodesOnDevice() {
@@ -322,7 +371,8 @@ class MainActivityReplayPlaybackParityTest {
                                 knownPokemonNames,
                                 observedFrames,
                                 canvas,
-                                drawScene = false
+                                drawScene = false,
+                                protocolMoveIdentitiesByMessageId = nativeMoveIdentitiesByMessageId
                             )
                         }.onFailure { failure -> drawObservationFailure.compareAndSet(null, failure) }
                     }
@@ -351,7 +401,8 @@ class MainActivityReplayPlaybackParityTest {
                         activity,
                         knownPokemonNames,
                         observedFrames,
-                        canvas
+                        canvas,
+                        protocolMoveIdentitiesByMessageId = nativeMoveIdentitiesByMessageId
                     )
                     val frame = observedFrames.values.lastOrNull() ?: return@onActivity
                     val message = privateField(feedPresentation, "currentMessage") as? BattleFeedMessage ?: return@onActivity
@@ -416,7 +467,7 @@ class MainActivityReplayPlaybackParityTest {
                 val identity = checkNotNull(nativeMoveIdentitiesByMessageId[messageId]) {
                     "The visible native move ${frame.text} had no matching protocol move identity"
                 }
-                assertEquals(identity.sourceLine, identity.name, moveActorFromNativeMessage(frame.text))
+                assertEquals(identity.sourceLine, identity.name, moveActorFromNativeMessage(frame.text, identity.moveName))
                 assertTrue(identity.sourceLine, frame.text.contains(identity.moveName, true))
                 val displayedCombatants = checkNotNull(frame.displayedScene).let { snapshot ->
                     snapshot.playerCombatants + snapshot.opponentCombatants
@@ -604,10 +655,20 @@ class MainActivityReplayPlaybackParityTest {
     fun productionFreeForAllReplayKeepsNativeMoveActorsPairedWithVisibleSprites() {
         assertNativeProductionReplayMovesPairedWithVisibleSprites(
             replayFileName = "gen9freeforallrandombattle-2547390602.json",
-            finalMoveLinePrefix = "|move|p3b: Galvantula|Sticky Web|p4b: Passimian",
+            finalMoveLinePrefix = "|move|p1a: Swalot|Poison Gas|p3b: Galvantula",
             expectedMoves = listOf(
                 MultiReplayMoveExpectation("p4b", "Passimian", "Rock Slide", BattleSpriteSide.OPPONENT, true),
-                MultiReplayMoveExpectation("p3b", "Galvantula", "Sticky Web", BattleSpriteSide.OPPONENT, true)
+                MultiReplayMoveExpectation("p3b", "Galvantula", "Sticky Web", BattleSpriteSide.OPPONENT, true),
+                MultiReplayMoveExpectation(
+                    "p3b",
+                    "Galvantula",
+                    "Protect",
+                    BattleSpriteSide.OPPONENT,
+                    true,
+                    "protected itself"
+                ),
+                MultiReplayMoveExpectation("p2a", "Espeon", "Psychic", BattleSpriteSide.OPPONENT, true),
+                MultiReplayMoveExpectation("p1a", "Swalot", "Poison Gas", BattleSpriteSide.PLAYER, false)
             )
         )
     }
@@ -654,6 +715,7 @@ class MainActivityReplayPlaybackParityTest {
         val previousConnectionPreference = preferences.getBoolean("maintain_connection", false)
         val observedFrames = linkedMapOf<String, ReplayFrameObservation>()
         val displayedFrames = linkedMapOf<Long, ReplayFrameObservation>()
+        val nativeMoveIdentitiesByMessageId = linkedMapOf<Long, NativeReplayMoveIdentity>()
         val bitmap = Bitmap.createBitmap(REPLAY_FRAME_CAPTURE_WIDTH, REPLAY_FRAME_CAPTURE_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         var latestNativeLog = emptyList<String>()
@@ -678,6 +740,8 @@ class MainActivityReplayPlaybackParityTest {
             scenario = ActivityScenario.launch(MainActivity::class.java)
             val activeScenario = checkNotNull(scenario)
             activeScenario.onActivity { activity ->
+                val session = privateField(activity, "session") as BattleSession
+                observeProtocolMoveIdentities(session, nativeMoveIdentitiesByMessageId)
                 setPrivateField(activity, "restoredReplaySpeed", 1f)
                 setPrivateField(activity, "lightweightBattlePlayback", false)
                 MainActivity::class.java.getDeclaredMethod("showReplay", ShowdownReplayPayload::class.java)
@@ -709,7 +773,8 @@ class MainActivityReplayPlaybackParityTest {
                         activity,
                         expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::actorName),
                         displayedFrames,
-                        canvas
+                        canvas,
+                        protocolMoveIdentitiesByMessageId = nativeMoveIdentitiesByMessageId
                     )
                     val pendingPackets = privateField(activity, "pendingBattlePackets") as? Collection<*>
                     val scheduled = privateField(activity, "battlePacketPlaybackScheduled") as Boolean
@@ -725,20 +790,17 @@ class MainActivityReplayPlaybackParityTest {
                     val playbackBarrier = privateField(activity, "battlePlaybackBarrier") as BattlePlaybackBarrier
                     val effectsView = privateField(activity, "showdownMoveEffects") as ShowdownMoveEffectsView
                     nativeReplayCaughtUp = nativeGeneration == session.battleLogGeneration()
-                    val observedMoveSlots = expectedMoves.filter { expectedMove ->
+                    val observedMoveIdentities = expectedMoves.filter { expectedMove ->
                         displayedFrames.values.any { frame ->
-                            frame.text.contains(expectedMove.actorName, true) &&
-                                frame.text.contains("used ${expectedMove.moveName}", true)
+                            expectedMove.matchesNarration(frame.text)
                         }
-                    }.mapTo(linkedSetOf(), MultiReplayMoveExpectation::slot)
-                    expectedMovesObserved = observedMoveSlots == expectedMoves.mapTo(
-                        linkedSetOf(),
-                        MultiReplayMoveExpectation::slot
-                    )
+                    }.mapTo(linkedSetOf()) { it.identityKey() }
+                    expectedMovesObserved = observedMoveIdentities == expectedMoves.mapTo(
+                        linkedSetOf()
+                    ) { it.identityKey() }
                     nativeMovesObserved = expectedMoves.all { expectedMove ->
                         latestNativeLog.any {
-                            it.contains(expectedMove.actorName, true) &&
-                                it.contains("used ${expectedMove.moveName}", true)
+                            expectedMove.matchesNarration(it)
                         }
                     }
                     latestPlaybackState = "paused=${privateField(activity, "replayPaused")}; " +
@@ -756,7 +818,7 @@ class MainActivityReplayPlaybackParityTest {
                         "feedCurrent=${currentFeedMessage?.id}:${currentFeedMessage?.text}; " +
                         "feedPending=${pendingFeedMessages?.map { (it as? BattleFeedMessage)?.text }}; " +
                         "visible=${privateField(scene, "cachedBattleFeedVisibleText")}; " +
-                        "observed=${displayedFrames.size}; moveSlots=$observedMoveSlots; " +
+                        "observed=${displayedFrames.size}; moveIdentities=$observedMoveIdentities; " +
                         "nativeTail=${latestNativeLog.takeLast(3)}"
                     val now = SystemClock.elapsedRealtime()
                     if (latestPlaybackState != lastProgressState) {
@@ -782,10 +844,9 @@ class MainActivityReplayPlaybackParityTest {
 
             displayedFrames.values.forEach { frame ->
                 val expectedMove = expectedMoves.firstOrNull { candidate ->
-                    frame.text.contains(candidate.actorName, true) &&
-                        frame.text.contains("used ${candidate.moveName}", true)
+                    candidate.matchesNarration(frame.text)
                 } ?: return@forEach
-                observedFrames.putIfAbsent(expectedMove.slot, frame)
+                observedFrames.putIfAbsent(expectedMove.identityKey(), frame)
             }
             val observedTexts = observedFrames.values.map(ReplayFrameObservation::text)
             assertTrue(
@@ -807,11 +868,11 @@ class MainActivityReplayPlaybackParityTest {
                 "$replayFileName native replay skipped one or more opening move actors. " +
                     "visible=$observedTexts; native=$latestNativeLog; protocol=$latestProtocolLog; " +
                     "playback=$latestPlaybackState",
-                expectedMoves.mapTo(linkedSetOf(), MultiReplayMoveExpectation::slot),
+                expectedMoves.mapTo(linkedSetOf()) { it.identityKey() },
                 observedFrames.keys
             )
-            observedFrames.forEach { (slot, frame) ->
-                val expectedMove = expectedMoves.single { it.slot == slot }
+            observedFrames.forEach { (identity, frame) ->
+                val expectedMove = expectedMoves.single { it.identityKey() == identity }
                 assertEquals(frame.text, frame.message.text)
                 assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
                 assertEquals(frame.message.sceneContext?.switchOutVisual, frame.displayedSwitchOutVisual)
@@ -828,10 +889,10 @@ class MainActivityReplayPlaybackParityTest {
                     frame.displayedSwitchOutVisual
                 )
                 val activeCombatants = playerCombatants + opponentCombatants
-                val combatant = activeCombatants.singleOrNull { it.slot.equals(slot, true) }
+                val combatant = activeCombatants.singleOrNull { it.slot.equals(expectedMove.slot, true) }
                 assertEquals(frame.text, expectedMove.actorName, combatant?.name)
                 assertEquals(frame.text, expectedMove.actorName, combatant?.species)
-                val playerSide = playerCombatants.any { it.slot.equals(slot, true) }
+                val playerSide = playerCombatants.any { it.slot.equals(expectedMove.slot, true) }
                 assertEquals(frame.text, expectedMove.side == BattleSpriteSide.PLAYER, playerSide)
                 assertEquals(
                     frame.text,
@@ -839,7 +900,7 @@ class MainActivityReplayPlaybackParityTest {
                     frame.text.startsWith("The opposing ", ignoreCase = true)
                 )
                 val spriteRequests = if (playerSide) frame.playerActiveSprites else frame.opponentActiveSprites
-                val spriteRequest = spriteRequests[slot]
+                val spriteRequest = spriteRequests[expectedMove.slot]
                 assertEquals(frame.text, expectedMove.actorName, spriteRequest?.species)
                 assertEquals(frame.text, expectedMove.side, spriteRequest?.side)
                 val expectedPlayerSprites = BattleSpriteRequests.active(
@@ -928,7 +989,8 @@ class MainActivityReplayPlaybackParityTest {
         knownPokemonNames: Set<String>,
         observedFrames: MutableMap<Long, ReplayFrameObservation>,
         canvas: Canvas,
-        drawScene: Boolean = true
+        drawScene: Boolean = true,
+        protocolMoveIdentitiesByMessageId: Map<Long, NativeReplayMoveIdentity> = emptyMap()
     ) {
         val session = privateField(activity, "session") as BattleSession
         val scene = privateField(activity, "battleScene") as BattleSceneView
@@ -967,6 +1029,39 @@ class MainActivityReplayPlaybackParityTest {
         assertEquals(frame.message.sceneContext?.snapshot, frame.displayedScene)
         assertEquals(frame.message.sceneContext?.switchOutVisual, frame.displayedSwitchOutVisual)
         assertVisiblePokemonNamesBelongToDisplayedScene(frame, knownPokemonNames)
+        protocolMoveIdentitiesByMessageId[frame.message.id]?.let { identity ->
+            val expectedSide = checkNotNull(identity.side) { "${identity.sourceLine} has no source side" }
+            val expectedSpecies = checkNotNull(identity.species) { "${identity.sourceLine} has no source species" }
+            assertEquals(identity.sourceLine, identity.name, moveActorFromNativeMessage(frame.text, identity.moveName))
+            val snapshot = checkNotNull(frame.displayedScene)
+            val playerCombatants = BattleFeedSceneState.combatantsForMessage(
+                snapshot.playerCombatants,
+                true,
+                frame.displayedSwitchOutVisual
+            )
+            val opponentCombatants = BattleFeedSceneState.combatantsForMessage(
+                snapshot.opponentCombatants,
+                false,
+                frame.displayedSwitchOutVisual
+            )
+            val combatant = (playerCombatants + opponentCombatants)
+                .singleOrNull { it.slot.equals(identity.slot, true) }
+            assertNotNull(identity.sourceLine, combatant)
+            assertEquals(identity.sourceLine, identity.name, combatant?.name)
+            assertEquals(identity.sourceLine, expectedSpecies, combatant?.species)
+            val spriteRequests = if (expectedSide == BattleSpriteSide.PLAYER) {
+                frame.playerActiveSprites
+            } else {
+                frame.opponentActiveSprites
+            }
+            val spriteRequest = spriteRequests[identity.slot] ?: if (frame.singlesBattle) {
+                if (expectedSide == BattleSpriteSide.PLAYER) frame.playerSprite else frame.opponentSprite
+            } else {
+                null
+            }
+            assertEquals(identity.sourceLine, expectedSpecies, spriteRequest?.species)
+            assertEquals(identity.sourceLine, expectedSide, spriteRequest?.side)
+        }
         frame.displayedScene?.let { snapshot ->
             val switchOutVisual = frame.displayedSwitchOutVisual
             val playerCombatants = BattleFeedSceneState.combatantsForMessage(
@@ -1074,10 +1169,15 @@ class MainActivityReplayPlaybackParityTest {
         }
     }
 
-    private fun moveActorFromNativeMessage(text: String): String {
+    private fun moveActorFromNativeMessage(text: String, moveName: String? = null): String {
         val moveSeparator = text.indexOf(" used ", ignoreCase = true)
-        if (moveSeparator < 0) return ""
-        return text.substring(0, moveSeparator)
+        val actorText = when {
+            moveSeparator >= 0 -> text.substring(0, moveSeparator)
+            moveName.equals("Protect", ignoreCase = true) && text.contains(" protected itself", ignoreCase = true) ->
+                text.substringBefore(" protected itself", missingDelimiterValue = "")
+            else -> return ""
+        }
+        return actorText
             .trim()
             .trimStart('(', '[')
             .replaceFirst(Regex("^the opposing\\s+", RegexOption.IGNORE_CASE), "")

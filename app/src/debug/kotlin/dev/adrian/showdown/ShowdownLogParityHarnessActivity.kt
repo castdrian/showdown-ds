@@ -2,14 +2,19 @@ package dev.adrian.showdown
 
 import android.app.Activity
 import android.os.Bundle
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class ShowdownLogParityHarnessActivity : Activity() {
     val nativeEntries = CopyOnWriteArrayList<Pair<Long, String>>()
     val nativeProtocolEventIds = CopyOnWriteArrayList<Long?>()
     val nativeProtocolMessageIds = CopyOnWriteArrayList<List<Long>>()
     val synchronizedGenerations = CopyOnWriteArrayList<Long>()
+    val javascriptErrors = CopyOnWriteArrayList<String>()
     private val synchronizationMonitor = java.lang.Object()
     lateinit var renderer: ShowdownMoveEffectsView
         private set
@@ -31,6 +36,14 @@ class ShowdownLogParityHarnessActivity : Activity() {
                 }
             }
         )
+        renderer.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    javascriptErrors += "${message.sourceId()}:${message.lineNumber()} ${message.message()}"
+                }
+                return true
+            }
+        }
         setContentView(renderer)
         renderer.setPerspective("p1")
         renderer.setPlaybackSpeed(BattlePlaybackSpeed.MAXIMUM)
@@ -47,6 +60,19 @@ class ShowdownLogParityHarnessActivity : Activity() {
             }
         }
         return true
+    }
+
+    fun nativePlaybackDiagnostics(timeoutMillis: Long): String {
+        val result = AtomicReference("unavailable")
+        val latch = CountDownLatch(1)
+        runOnUiThread {
+            renderer.evaluateJavascript("window.ShowdownNativeEffects.diagnostics()") {
+                result.set(it.orEmpty())
+                latch.countDown()
+            }
+        }
+        if (!latch.await(timeoutMillis, TimeUnit.MILLISECONDS)) return "unavailable"
+        return result.get()
     }
 
     override fun onDestroy() {
