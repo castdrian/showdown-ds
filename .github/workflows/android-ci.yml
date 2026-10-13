@@ -111,6 +111,7 @@ jobs:
             fi
             sleep 1
           done
+          cd "$GITHUB_WORKSPACE"
           gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest \
             --tests dev.adrian.showdown.ShowdownUpstreamServerCompatibilityTest
 
