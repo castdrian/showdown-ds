@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: smogon/pokemon-showdown
-          ref: 942cda71d14bf0618bd57991708a2e2734b6daba
+          ref: b8f23c99629132611ba59e99480cb148ea8c5d3d
           path: upstream-pokemon-showdown
 
       - name: Install upstream Showdown server dependencies
