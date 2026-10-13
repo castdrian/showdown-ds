@@ -1,6 +1,7 @@
 package dev.adrian.showdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -29,5 +30,8 @@ class ScavioAnimatedSpriteIndexTest {
             ScavioAnimatedSpriteIndex.candidates(body)
         )
         assertTrue(ScavioAnimatedSpriteIndex.candidates(body).all { it.endsWith(".gif") })
+        assertTrue(ScavioAnimatedSpriteIndex.isCandidate("https://64.media.tumblr.com/a/post/s640x960/one.gif"))
+        assertFalse(ScavioAnimatedSpriteIndex.isCandidate("https://64.media.tumblr.com/a/post/s250x400/one.gif"))
+        assertFalse(ScavioAnimatedSpriteIndex.isCandidate("https://example.com/sprites/one.gif"))
     }
 }

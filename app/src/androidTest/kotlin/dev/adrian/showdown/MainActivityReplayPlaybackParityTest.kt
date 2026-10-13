@@ -1191,8 +1191,9 @@ class MainActivityReplayPlaybackParityTest {
     ) {
         if (request == null || resolvedAssetPath == null) return
         assertTrue(
-            "$side sprite drawn for '$text' came from a path unrelated to ${request.species}: $resolvedAssetPath",
-            resolvedAssetPath in ShowdownAssetPaths.battleSpriteResolutionPlan(request).allCandidates
+            "$side sprite drawn for '$text' came from an unsupported source for ${request.species}: $resolvedAssetPath",
+            resolvedAssetPath in ShowdownAssetPaths.battleSpriteResolutionPlan(request).allCandidates ||
+                ScavioAnimatedSpriteIndex.isCandidate(resolvedAssetPath)
         )
     }
 

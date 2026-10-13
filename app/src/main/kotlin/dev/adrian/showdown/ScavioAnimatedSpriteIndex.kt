@@ -15,4 +15,6 @@ object ScavioAnimatedSpriteIndex {
         .map { it.value }
         .distinct()
         .toList()
+
+    fun isCandidate(path: String): Boolean = mediaUrlPattern.matches(path)
 }
