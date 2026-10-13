@@ -50,7 +50,8 @@ class MainActivityReplayPlaybackParityTest {
         val moveName: String,
         val side: BattleSpriteSide,
         val expectedOpposingPrefix: Boolean,
-        val narrationPhrase: String = "used $moveName"
+        val narrationPhrase: String = "used $moveName",
+        val actorSpecies: String = actorName
     )
 
     private data class NativeReplayMoveIdentity(
@@ -674,18 +675,70 @@ class MainActivityReplayPlaybackParityTest {
         )
     }
 
+    @Test
+    fun productionReplayKeepsDuplicateNicknamesPairedWithTheirExactSpeciesAndSlots() {
+        val replay = ShowdownReplayPayload(
+            id = "duplicate-nickname-doubles",
+            format = "gen9doublesou",
+            players = listOf("RED", "BLUE"),
+            log = listOf(
+                "|player|p1|RED||",
+                "|player|p2|BLUE||",
+                "|gametype|doubles",
+                "|gen|9",
+                "|tier|[Gen 9] Doubles",
+                "|start",
+                "|switch|p1a: Sparky|Pikachu, L50|100/100",
+                "|switch|p1b: Sparky|Raichu, L50|100/100",
+                "|switch|p2a: Wrench|Magnemite, L50|100/100",
+                "|switch|p2b: Wrench|Magneton, L50|100/100",
+                "|turn|1",
+                "|move|p1a: Sparky|Quick Attack|p2a: Wrench",
+                "|-damage|p2a: Wrench|90/100",
+                "|move|p1b: Sparky|Thunderbolt|p2b: Wrench",
+                "|-damage|p2b: Wrench|80/100"
+            ).joinToString("\n")
+        )
+
+        assertNativeProductionReplayMovesPairedWithVisibleSprites(
+            replayFileName = "duplicate-nickname-doubles",
+            finalMoveLinePrefix = "|-damage|p2b: Wrench|",
+            expectedMoves = listOf(
+                MultiReplayMoveExpectation(
+                    slot = "p1a",
+                    actorName = "Sparky",
+                    moveName = "Quick Attack",
+                    side = BattleSpriteSide.PLAYER,
+                    expectedOpposingPrefix = false,
+                    actorSpecies = "Pikachu"
+                ),
+                MultiReplayMoveExpectation(
+                    slot = "p1b",
+                    actorName = "Sparky",
+                    moveName = "Thunderbolt",
+                    side = BattleSpriteSide.PLAYER,
+                    expectedOpposingPrefix = false,
+                    actorSpecies = "Raichu"
+                )
+            ),
+            replayOverride = replay
+        )
+    }
+
     private fun assertNativeProductionReplayMovesPairedWithVisibleSprites(
         replayFileName: String,
         finalMoveLinePrefix: String,
         expectedMoves: List<MultiReplayMoveExpectation>,
-        minimalDoublesOpening: Boolean = false
+        minimalDoublesOpening: Boolean = false,
+        replayOverride: ShowdownReplayPayload? = null
     ) {
         val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
-        val replayJson = InstrumentationRegistry.getInstrumentation().context.assets
-            .open(replayFileName)
-            .bufferedReader()
-            .use { it.readText() }
-        val completeReplay = ShowdownReplayImporter.payload(replayJson)
+        val completeReplay = replayOverride ?: ShowdownReplayImporter.payload(
+            InstrumentationRegistry.getInstrumentation().context.assets
+                .open(replayFileName)
+                .bufferedReader()
+                .use { it.readText() }
+        )
         val replayLines = completeReplay.log.lines()
         val finalReplayLine = replayLines.indexOfFirst { it.startsWith(finalMoveLinePrefix) }
         assertTrue("$replayFileName is missing its final expected opening move", finalReplayLine >= 0)
@@ -892,7 +945,7 @@ class MainActivityReplayPlaybackParityTest {
                 val activeCombatants = playerCombatants + opponentCombatants
                 val combatant = activeCombatants.singleOrNull { it.slot.equals(expectedMove.slot, true) }
                 assertEquals(frame.text, expectedMove.actorName, combatant?.name)
-                assertEquals(frame.text, expectedMove.actorName, combatant?.species)
+                assertEquals(frame.text, expectedMove.actorSpecies, combatant?.species)
                 val playerSide = playerCombatants.any { it.slot.equals(expectedMove.slot, true) }
                 assertEquals(frame.text, expectedMove.side == BattleSpriteSide.PLAYER, playerSide)
                 assertEquals(
@@ -902,7 +955,7 @@ class MainActivityReplayPlaybackParityTest {
                 )
                 val spriteRequests = if (playerSide) frame.playerActiveSprites else frame.opponentActiveSprites
                 val spriteRequest = spriteRequests[expectedMove.slot]
-                assertEquals(frame.text, expectedMove.actorName, spriteRequest?.species)
+                assertEquals(frame.text, expectedMove.actorSpecies, spriteRequest?.species)
                 assertEquals(frame.text, expectedMove.side, spriteRequest?.side)
                 val expectedPlayerSprites = BattleSpriteRequests.active(
                     playerCombatants,
