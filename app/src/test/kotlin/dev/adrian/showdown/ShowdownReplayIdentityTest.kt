@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 
 class ShowdownReplayIdentityTest {
     @Test
@@ -314,6 +315,103 @@ class ShowdownReplayIdentityTest {
         assertEquals(listOf("Sparky", "Sparky"), session.opponentPartyDetails().map { it.name })
         assertEquals("Raichu", opponentSpriteRequest.species)
         assertTrue(session.battleLog().contains("The opposing Sparky used Tackle!"))
+    }
+
+    @Test
+    fun replayMoveNarrationKeepsItsSlotSpeciesAcrossDoubleBattleTransitions() {
+        val slots = listOf("p1a", "p1b", "p2a", "p2b")
+        val speciesOptions = listOf(
+            "Pikachu",
+            "Raichu",
+            "Raichu-Alola",
+            "Charizard",
+            "Charizard-Mega-X",
+            "Aegislash-Blade",
+            "Cramorant-Gulping",
+            "Zacian-Crowned"
+        )
+
+        repeat(48) { seed ->
+            val random = Random(seed)
+            val expectedSpeciesBySlot = linkedMapOf(
+                "p1a" to "Pikachu",
+                "p1b" to "Raichu",
+                "p2a" to "Charizard",
+                "p2b" to "Aegislash-Blade"
+            )
+            val session = BattleSession().apply {
+                setLocalUsername("RED")
+                setReplayMode(true)
+            }
+            session.applyProtocolPacket(
+                listOf(
+                    "|init|battle",
+                    "|player|p1|RED||",
+                    "|player|p2|BLUE||",
+                    "|gametype|doubles",
+                    "|switch|p1a: Sparky|Pikachu, L50|100/100",
+                    "|switch|p1b: Sparky|Raichu, L50|100/100",
+                    "|switch|p2a: Sparky|Charizard, L50|100/100",
+                    "|switch|p2b: Sparky|Aegislash-Blade, L50|100/100"
+                )
+            )
+
+            repeat(24) { step ->
+                when (random.nextInt(3)) {
+                    0 -> {
+                        val side = if (random.nextBoolean()) "p1" else "p2"
+                        val firstSlot = "${side}a"
+                        val secondSlot = "${side}b"
+                        val firstSpecies = expectedSpeciesBySlot.getValue(firstSlot)
+                        expectedSpeciesBySlot[firstSlot] = expectedSpeciesBySlot.getValue(secondSlot)
+                        expectedSpeciesBySlot[secondSlot] = firstSpecies
+                        session.applyProtocolPacket(listOf("|swap|$firstSlot: Sparky|1"))
+                    }
+
+                    1 -> {
+                        val slot = slots[random.nextInt(slots.size)]
+                        val species = speciesOptions[random.nextInt(speciesOptions.size)]
+                        expectedSpeciesBySlot[slot] = species
+                        session.applyProtocolPacket(listOf("|switch|$slot: Sparky|$species, L50|100/100"))
+                    }
+
+                    else -> {
+                        val slot = slots[random.nextInt(slots.size)]
+                        val species = speciesOptions[random.nextInt(speciesOptions.size)]
+                        expectedSpeciesBySlot[slot] = species
+                        session.applyProtocolPacket(listOf("|detailschange|$slot: Sparky|$species, L50|100/100"))
+                    }
+                }
+
+                val actorSlot = slots[random.nextInt(slots.size)]
+                val targetSlot = slots.filter { it.take(2) != actorSlot.take(2) }[random.nextInt(2)]
+                session.applyProtocolPacket(
+                    listOf("|move|$actorSlot: Sparky|Thunderbolt|$targetSlot: Sparky")
+                )
+
+                val moveMessage = session.battleFeedMessages(1).single()
+                val expectedNarration = if (actorSlot.startsWith("p1")) {
+                    "Sparky used Thunderbolt!"
+                } else {
+                    "The opposing Sparky used Thunderbolt!"
+                }
+                val snapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(moveMessage.id))
+                val playerSide = actorSlot.startsWith("p1")
+                val combatants = if (playerSide) snapshot.playerCombatants else snapshot.opponentCombatants
+                val actor = combatants.single { it.slot == actorSlot }
+                val side = if (playerSide) BattleSpriteSide.PLAYER else BattleSpriteSide.OPPONENT
+                val sprite = BattleSpriteRequests.active(
+                    combatants,
+                    side,
+                    BattleSession.SpriteStyle.MODERN_3D
+                ).single { it.slot == actorSlot }.request
+
+                assertEquals("seed=$seed step=$step", expectedNarration, moveMessage.text)
+                assertEquals("seed=$seed step=$step actor=$actorSlot", expectedSpeciesBySlot[actorSlot], actor.species)
+                assertEquals("seed=$seed step=$step sprite=$actorSlot", actor.species, sprite.species)
+                assertEquals("seed=$seed step=$step side=$actorSlot", side, sprite.side)
+            }
+        }
     }
 
     @Test
