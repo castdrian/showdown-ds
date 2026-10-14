@@ -7,6 +7,11 @@ import org.junit.Test
 import kotlin.random.Random
 
 class ShowdownReplayIdentityTest {
+    private data class ExpectedReplayPokemon(
+        val nickname: String,
+        val species: String
+    )
+
     @Test
     fun preservesFullShowdownNamesInBattleTranscriptWithoutChangingCompactLabels() {
         val session = BattleSession().apply { setLocalUsername("RED") }
@@ -332,13 +337,7 @@ class ShowdownReplayIdentityTest {
 
         repeat(48) { seed ->
             val random = Random(seed)
-            val expectedSpeciesBySlot = linkedMapOf(
-                "p1a" to "Pikachu",
-                "p1b" to "Raichu",
-                "p2a" to "Charizard",
-                "p2b" to "Aegislash"
-            )
-            val expectedNicknameBySlot = if (seed % 2 == 0) {
+            val initialNicknames = if (seed % 2 == 0) {
                 linkedMapOf(
                     "p1a" to "RedLead$seed",
                     "p1b" to "RedPartner$seed",
@@ -348,6 +347,12 @@ class ShowdownReplayIdentityTest {
             } else {
                 linkedMapOf("p1a" to "Sparky", "p1b" to "Sparky", "p2a" to "Sparky", "p2b" to "Sparky")
             }
+            val expectedPokemonBySlot = linkedMapOf(
+                "p1a" to ExpectedReplayPokemon(initialNicknames.getValue("p1a"), "Pikachu"),
+                "p1b" to ExpectedReplayPokemon(initialNicknames.getValue("p1b"), "Raichu"),
+                "p2a" to ExpectedReplayPokemon(initialNicknames.getValue("p2a"), "Charizard"),
+                "p2b" to ExpectedReplayPokemon(initialNicknames.getValue("p2b"), "Aegislash")
+            )
             var nextReplacementNickname = 0
             val session = BattleSession().apply {
                 setLocalUsername("RED")
@@ -359,10 +364,10 @@ class ShowdownReplayIdentityTest {
                     "|player|p1|RED||",
                     "|player|p2|BLUE||",
                     "|gametype|doubles",
-                    "|switch|p1a: ${expectedNicknameBySlot.getValue("p1a")}|Pikachu, L50|100/100",
-                    "|switch|p1b: ${expectedNicknameBySlot.getValue("p1b")}|Raichu, L50|100/100",
-                    "|switch|p2a: ${expectedNicknameBySlot.getValue("p2a")}|Charizard, L50|100/100",
-                    "|switch|p2b: ${expectedNicknameBySlot.getValue("p2b")}|Aegislash, L50|100/100"
+                    "|switch|p1a: ${expectedPokemonBySlot.getValue("p1a").nickname}|Pikachu, L50|100/100",
+                    "|switch|p1b: ${expectedPokemonBySlot.getValue("p1b").nickname}|Raichu, L50|100/100",
+                    "|switch|p2a: ${expectedPokemonBySlot.getValue("p2a").nickname}|Charizard, L50|100/100",
+                    "|switch|p2b: ${expectedPokemonBySlot.getValue("p2b").nickname}|Aegislash, L50|100/100"
                 )
             )
             var protocolIdentitiesByLine = emptyList<BattleSession.ProtocolLineIdentity>()
@@ -374,13 +379,11 @@ class ShowdownReplayIdentityTest {
                         val side = if (random.nextBoolean()) "p1" else "p2"
                         val firstSlot = "${side}a"
                         val secondSlot = "${side}b"
-                        val firstSpecies = expectedSpeciesBySlot.getValue(firstSlot)
-                        val firstNickname = expectedNicknameBySlot.getValue(firstSlot)
-                        expectedSpeciesBySlot[firstSlot] = expectedSpeciesBySlot.getValue(secondSlot)
-                        expectedSpeciesBySlot[secondSlot] = firstSpecies
-                        expectedNicknameBySlot[firstSlot] = expectedNicknameBySlot.getValue(secondSlot)
-                        expectedNicknameBySlot[secondSlot] = firstNickname
-                        session.applyProtocolPacket(listOf("|swap|$firstSlot: $firstNickname|1"))
+                        val firstPokemon = expectedPokemonBySlot.getValue(firstSlot)
+                        val secondPokemon = expectedPokemonBySlot.getValue(secondSlot)
+                        expectedPokemonBySlot[firstSlot] = secondPokemon
+                        expectedPokemonBySlot[secondSlot] = firstPokemon
+                        session.applyProtocolPacket(listOf("|swap|$firstSlot: ${firstPokemon.nickname}|1"))
                     }
 
                     1 -> {
@@ -391,8 +394,7 @@ class ShowdownReplayIdentityTest {
                         } else {
                             "Sparky"
                         }
-                        expectedSpeciesBySlot[slot] = species
-                        expectedNicknameBySlot[slot] = nickname
+                        expectedPokemonBySlot[slot] = ExpectedReplayPokemon(nickname, species)
                         session.applyProtocolPacket(listOf("|switch|$slot: $nickname|$species, L50|100/100"))
                     }
 
@@ -403,7 +405,7 @@ class ShowdownReplayIdentityTest {
                         } else {
                             "Sparky"
                         }
-                        expectedNicknameBySlot[slot] = nickname
+                        expectedPokemonBySlot[slot] = ExpectedReplayPokemon(nickname, "Charizard-Mega-X")
                         session.applyProtocolPacket(
                             listOf(
                                 "|switch|$slot: $nickname|Charizard, L50|100/100",
@@ -411,24 +413,23 @@ class ShowdownReplayIdentityTest {
                                 "|-mega|$slot: $nickname|Charizard|Charizardite X"
                             )
                         )
-                        expectedSpeciesBySlot[slot] = "Charizard-Mega-X"
                     }
                 }
 
                 val actorSlot = slots[random.nextInt(slots.size)]
                 val targetSlot = slots.filter { it.take(2) != actorSlot.take(2) }[random.nextInt(2)]
-                val actorNickname = expectedNicknameBySlot.getValue(actorSlot)
-                val targetNickname = expectedNicknameBySlot.getValue(targetSlot)
+                val expectedActor = expectedPokemonBySlot.getValue(actorSlot)
+                val expectedTarget = expectedPokemonBySlot.getValue(targetSlot)
                 session.applyProtocolPacket(
-                    listOf("|move|$actorSlot: $actorNickname|Thunderbolt|$targetSlot: $targetNickname")
+                    listOf("|move|$actorSlot: ${expectedActor.nickname}|Thunderbolt|$targetSlot: ${expectedTarget.nickname}")
                 )
 
                 val moveMessageId = protocolIdentitiesByLine.single().messageIds.single()
                 val moveMessage = session.battleFeedMessages().single { it.id == moveMessageId }
                 val expectedNarration = if (actorSlot.startsWith("p1")) {
-                    "$actorNickname used Thunderbolt!"
+                    "${expectedActor.nickname} used Thunderbolt!"
                 } else {
-                    "The opposing $actorNickname used Thunderbolt!"
+                    "The opposing ${expectedActor.nickname} used Thunderbolt!"
                 }
                 val snapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(moveMessage.id))
                 val playerSide = actorSlot.startsWith("p1")
@@ -442,7 +443,8 @@ class ShowdownReplayIdentityTest {
                 ).single { it.slot == actorSlot }.request
 
                 assertEquals("seed=$seed step=$step", expectedNarration, moveMessage.text)
-                assertEquals("seed=$seed step=$step actor=$actorSlot", expectedSpeciesBySlot[actorSlot], actor.species)
+                assertEquals("seed=$seed step=$step nickname=$actorSlot", expectedActor.nickname, actor.name)
+                assertEquals("seed=$seed step=$step actor=$actorSlot", expectedActor.species, actor.species)
                 assertEquals("seed=$seed step=$step sprite=$actorSlot", actor.species, sprite.species)
                 assertEquals("seed=$seed step=$step side=$actorSlot", side, sprite.side)
             }
