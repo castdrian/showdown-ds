@@ -320,15 +320,14 @@ class ShowdownReplayIdentityTest {
     @Test
     fun replayMoveNarrationKeepsItsSlotSpeciesAcrossDoubleBattleTransitions() {
         val slots = listOf("p1a", "p1b", "p2a", "p2b")
-        val speciesOptions = listOf(
+        val switchInSpeciesOptions = listOf(
             "Pikachu",
             "Raichu",
             "Raichu-Alola",
             "Charizard",
-            "Charizard-Mega-X",
-            "Aegislash-Blade",
-            "Cramorant-Gulping",
-            "Zacian-Crowned"
+            "Aegislash",
+            "Cramorant",
+            "Zacian"
         )
 
         repeat(48) { seed ->
@@ -337,8 +336,19 @@ class ShowdownReplayIdentityTest {
                 "p1a" to "Pikachu",
                 "p1b" to "Raichu",
                 "p2a" to "Charizard",
-                "p2b" to "Aegislash-Blade"
+                "p2b" to "Aegislash"
             )
+            val expectedNicknameBySlot = if (seed % 2 == 0) {
+                linkedMapOf(
+                    "p1a" to "RedLead$seed",
+                    "p1b" to "RedPartner$seed",
+                    "p2a" to "BlueLead$seed",
+                    "p2b" to "BluePartner$seed"
+                )
+            } else {
+                linkedMapOf("p1a" to "Sparky", "p1b" to "Sparky", "p2a" to "Sparky", "p2b" to "Sparky")
+            }
+            var nextReplacementNickname = 0
             val session = BattleSession().apply {
                 setLocalUsername("RED")
                 setReplayMode(true)
@@ -349,12 +359,14 @@ class ShowdownReplayIdentityTest {
                     "|player|p1|RED||",
                     "|player|p2|BLUE||",
                     "|gametype|doubles",
-                    "|switch|p1a: Sparky|Pikachu, L50|100/100",
-                    "|switch|p1b: Sparky|Raichu, L50|100/100",
-                    "|switch|p2a: Sparky|Charizard, L50|100/100",
-                    "|switch|p2b: Sparky|Aegislash-Blade, L50|100/100"
+                    "|switch|p1a: ${expectedNicknameBySlot.getValue("p1a")}|Pikachu, L50|100/100",
+                    "|switch|p1b: ${expectedNicknameBySlot.getValue("p1b")}|Raichu, L50|100/100",
+                    "|switch|p2a: ${expectedNicknameBySlot.getValue("p2a")}|Charizard, L50|100/100",
+                    "|switch|p2b: ${expectedNicknameBySlot.getValue("p2b")}|Aegislash, L50|100/100"
                 )
             )
+            var protocolIdentitiesByLine = emptyList<BattleSession.ProtocolLineIdentity>()
+            session.addProtocolListener { _, identities -> protocolIdentitiesByLine = identities }
 
             repeat(24) { step ->
                 when (random.nextInt(3)) {
@@ -363,37 +375,60 @@ class ShowdownReplayIdentityTest {
                         val firstSlot = "${side}a"
                         val secondSlot = "${side}b"
                         val firstSpecies = expectedSpeciesBySlot.getValue(firstSlot)
+                        val firstNickname = expectedNicknameBySlot.getValue(firstSlot)
                         expectedSpeciesBySlot[firstSlot] = expectedSpeciesBySlot.getValue(secondSlot)
                         expectedSpeciesBySlot[secondSlot] = firstSpecies
-                        session.applyProtocolPacket(listOf("|swap|$firstSlot: Sparky|1"))
+                        expectedNicknameBySlot[firstSlot] = expectedNicknameBySlot.getValue(secondSlot)
+                        expectedNicknameBySlot[secondSlot] = firstNickname
+                        session.applyProtocolPacket(listOf("|swap|$firstSlot: $firstNickname|1"))
                     }
 
                     1 -> {
                         val slot = slots[random.nextInt(slots.size)]
-                        val species = speciesOptions[random.nextInt(speciesOptions.size)]
+                        val species = switchInSpeciesOptions[random.nextInt(switchInSpeciesOptions.size)]
+                        val nickname = if (seed % 2 == 0) {
+                            "Replacement${seed}_${nextReplacementNickname++}"
+                        } else {
+                            "Sparky"
+                        }
                         expectedSpeciesBySlot[slot] = species
-                        session.applyProtocolPacket(listOf("|switch|$slot: Sparky|$species, L50|100/100"))
+                        expectedNicknameBySlot[slot] = nickname
+                        session.applyProtocolPacket(listOf("|switch|$slot: $nickname|$species, L50|100/100"))
                     }
 
                     else -> {
                         val slot = slots[random.nextInt(slots.size)]
-                        val species = speciesOptions[random.nextInt(speciesOptions.size)]
-                        expectedSpeciesBySlot[slot] = species
-                        session.applyProtocolPacket(listOf("|detailschange|$slot: Sparky|$species, L50|100/100"))
+                        val nickname = if (seed % 2 == 0) {
+                            "Replacement${seed}_${nextReplacementNickname++}"
+                        } else {
+                            "Sparky"
+                        }
+                        expectedNicknameBySlot[slot] = nickname
+                        session.applyProtocolPacket(
+                            listOf(
+                                "|switch|$slot: $nickname|Charizard, L50|100/100",
+                                "|detailschange|$slot: $nickname|Charizard-Mega-X, L50|100/100",
+                                "|-mega|$slot: $nickname|Charizard|Charizardite X"
+                            )
+                        )
+                        expectedSpeciesBySlot[slot] = "Charizard-Mega-X"
                     }
                 }
 
                 val actorSlot = slots[random.nextInt(slots.size)]
                 val targetSlot = slots.filter { it.take(2) != actorSlot.take(2) }[random.nextInt(2)]
+                val actorNickname = expectedNicknameBySlot.getValue(actorSlot)
+                val targetNickname = expectedNicknameBySlot.getValue(targetSlot)
                 session.applyProtocolPacket(
-                    listOf("|move|$actorSlot: Sparky|Thunderbolt|$targetSlot: Sparky")
+                    listOf("|move|$actorSlot: $actorNickname|Thunderbolt|$targetSlot: $targetNickname")
                 )
 
-                val moveMessage = session.battleFeedMessages(1).single()
+                val moveMessageId = protocolIdentitiesByLine.single().messageIds.single()
+                val moveMessage = session.battleFeedMessages().single { it.id == moveMessageId }
                 val expectedNarration = if (actorSlot.startsWith("p1")) {
-                    "Sparky used Thunderbolt!"
+                    "$actorNickname used Thunderbolt!"
                 } else {
-                    "The opposing Sparky used Thunderbolt!"
+                    "The opposing $actorNickname used Thunderbolt!"
                 }
                 val snapshot = checkNotNull(session.battleSceneSnapshotForFeedMessage(moveMessage.id))
                 val playerSide = actorSlot.startsWith("p1")
