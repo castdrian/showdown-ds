@@ -62,7 +62,7 @@ android {
 }
 
 dependencies {
-    implementation 'com.squareup.okhttp3:okhttp-jvm:5.5.0'
+    implementation 'com.squareup.okhttp3:okhttp-jvm:5.5.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260814'
     androidTestImplementation 'androidx.test:runner:1.7.0'
