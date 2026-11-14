@@ -775,6 +775,7 @@ class MainActivity : Activity() {
         effectsView = effects
         showdownMoveEffects = effects
         frame.addView(effects, FrameLayout.LayoutParams(-1, -1))
+        if (WEBVIEW_ONLY_EXPERIMENT) battleScene?.visibility = View.INVISIBLE
         effects.setPerspective(session.battlePlayerSlot())
         effects.setPlaybackSpeed(replaySpeed)
         effects.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
@@ -786,6 +787,7 @@ class MainActivity : Activity() {
         val effects = showdownMoveEffects ?: return
         showdownMoveEffects = null
         primaryFrame?.removeView(effects)
+        battleScene?.visibility = View.VISIBLE
         effects.release()
     }
 

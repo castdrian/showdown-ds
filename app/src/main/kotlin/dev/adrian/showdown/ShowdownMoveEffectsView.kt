@@ -14,6 +14,9 @@ import android.os.Looper
 import org.json.JSONArray
 
 @SuppressLint("SetJavaScriptEnabled")
+/** EXPERIMENT: render the full Showdown client scene in the WebView instead of a transparent effects overlay. */
+internal const val WEBVIEW_ONLY_EXPERIMENT = true
+
 class ShowdownMoveEffectsView(
     context: Context,
     private val audioCueListener: (BattleAudioCue) -> Unit,
@@ -58,7 +61,7 @@ class ShowdownMoveEffectsView(
     )
 
     init {
-        setBackgroundColor(Color.TRANSPARENT)
+        setBackgroundColor(if (WEBVIEW_ONLY_EXPERIMENT) Color.BLACK else Color.TRANSPARENT)
         setLayerType(View.LAYER_TYPE_HARDWARE, null)
         isClickable = false
         isFocusable = false
@@ -852,6 +855,7 @@ class ShowdownMoveEffectsView(
                             document.getElementById('battle').style.transform = 'translate(' + left + 'px,' + top + 'px) scale(' + scale + ')';
                         }
                         function hideChrome() {
+                            if (${WEBVIEW_ONLY_EXPERIMENT}) return;
                             var scene = battle.scene;
                             [scene.${'$'}bg, scene.${'$'}terrain, scene.${'$'}sprite, scene.${'$'}stat, scene.${'$'}leftbar, scene.${'$'}rightbar, scene.${'$'}turn, scene.${'$'}messagebar, scene.${'$'}delay, scene.${'$'}tooltips].forEach(function (element) {
                                 element.addClass('native-effects-hidden').css('visibility', 'hidden');
