@@ -125,7 +125,7 @@ jobs:
             --tests dev.adrian.showdown.ShowdownAssetPathsTest
 
       - name: Run full unit suite and build debug APK
-        run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin
+        run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest :app:assembleDebug :app:compileLocalAndroidTestKotlin
 
       - name: Enable KVM
         run: |
@@ -145,7 +145,7 @@ jobs:
           cores: 2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: gradle --no-daemon --stacktrace --console=plain :app:connectedDebugAndroidTest
+          script: gradle --no-daemon --stacktrace --console=plain :app:connectedLocalAndroidTest
 
       - name: Upload JUnit results
         if: always()

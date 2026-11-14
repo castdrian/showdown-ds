@@ -9,6 +9,7 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld (K
 | Build (debug) | `./build.sh` |
 | Build + all tests | `./build.sh --test` |
 | JVM unit tests only | `./gradlew :app:testDebugUnitTest` |
+| Instrumented tests (emulator) | `./gradlew :app:connectedLocalAndroidTest` (runs against the `local` build, never the `.debug` install) |
 | Emulator + install + launch | `./emulate.sh` (default `local` variant) |
 | Local Showdown server | `./scripts/local-showdown.sh` (port 8000, guest logins) |
 | Bot opponent | `node tools/local-showdown/bot.ts --mode search` (Node 22.18+; `--stall-after-turn N` leaves a battle unfinished) |
@@ -31,8 +32,8 @@ Needs JDK 17, the Android SDK (`./scripts/setup-android.sh`) and, for the Go too
 
 ## Layout
 
-- `app/src/main/kotlin/dev/adrian/showdown/`: app code. `MainActivity` wires everything; `BattleSession` is the battle state machine; `CommandDeckView` is the lower-screen UI; `ShowdownMoveEffectsView` hosts the Showdown client WebView.
-- `app/src/test`: JVM tests (replay fixtures in `test/resources/showdown-replays`). `app/src/androidTest`: instrumented tests.
+- `app/src/main/kotlin/dev/adrian/showdown/`: app code. `MainActivity` wires everything; `BattleSession` is the battle state machine; `CommandDeckView` is the lower-screen UI; `ShowdownMoveEffectsView` hosts the Showdown client WebView (page in `app/src/main/assets/showdown-battle-scene.html`); `LobbyView` draws the upper screen outside battles.
+- `app/src/test`: JVM tests (replay fixtures in `test/resources/showdown-replays`). `app/src/androidTest`: instrumented tests (`testBuildType` is `local`). `app/src/local`: the log-parity harness activity used by them.
 - `scripts/`, `tools/`: emulator profile, local server, Go helpers for assets and README media.
 - `context/`: working notes, decisions and known inconsistencies.
 
