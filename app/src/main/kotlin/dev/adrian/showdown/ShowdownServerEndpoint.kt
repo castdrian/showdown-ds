@@ -27,6 +27,10 @@ data class ShowdownServerEndpoint(
         val playShowdown = ShowdownServerEndpoint("Pokémon Showdown", "wss://sim3.psim.us/showdown/websocket")
         val emulatorLocal = ShowdownServerEndpoint("This Mac", "ws://10.0.2.2:8000/showdown/websocket")
 
+        /** The endpoint a fresh install connects to; local builds target the dev server on the emulator host. */
+        fun defaultFor(useLocalServer: Boolean): ShowdownServerEndpoint =
+            if (useLocalServer) emulatorLocal else playShowdown
+
         fun fromInput(input: String): ShowdownServerEndpoint? {
             val value = input.trim().takeIf { it.isNotEmpty() } ?: return null
             val withScheme = if ("://" in value) value else "wss://$value"

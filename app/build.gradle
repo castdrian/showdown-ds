@@ -20,6 +20,7 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         versionCode releaseVersionCode
         versionName releaseVersionName
+        buildConfigField 'boolean', 'USE_LOCAL_SERVER', 'false'
 
     }
 
@@ -42,6 +43,13 @@ android {
         debug {
             applicationIdSuffix '.debug'
             versionNameSuffix '-debug'
+        }
+        local {
+            initWith debug
+            applicationIdSuffix '.local'
+            versionNameSuffix '-local'
+            matchingFallbacks = ['debug']
+            buildConfigField 'boolean', 'USE_LOCAL_SERVER', 'true'
         }
         release {
             minifyEnabled false

@@ -6413,7 +6413,7 @@ class MainActivity : Activity() {
 
     private fun loadServerEndpoint(): ShowdownServerEndpoint {
         val saved = getSharedPreferences("showdown", MODE_PRIVATE).getString("server_endpoint", null)
-        return saved?.let(ShowdownServerEndpoint::fromInput) ?: ShowdownServerEndpoint.playShowdown
+        return saved?.let(ShowdownServerEndpoint::fromInput) ?: ShowdownServerEndpoint.defaultFor(BuildConfig.USE_LOCAL_SERVER)
     }
 
     private fun loadMatchFormat(): BattleSession.MatchFormat {
