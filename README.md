@@ -26,6 +26,35 @@ Requires JDK 17 and the Android SDK (`./scripts/setup-android.sh` installs what 
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Sign and publish a release APK
+
+Android only installs signed APKs. Debug builds use an automatic debug key; release builds need a key you create once and keep. Updates only install over an existing app if they are signed with the same key, so back the keystore and its passwords up and never commit them.
+
+1. Create the keystore (keep it outside the repository):
+
+   ```sh
+   keytool -genkeypair -v -keystore showdown-release.jks -alias showdown \
+     -keyalg RSA -keysize 2048 -validity 10000
+   base64 -w0 showdown-release.jks > keystore.b64
+   ```
+
+2. Add four GitHub Actions secrets (Settings > Secrets and variables > Actions):
+
+   ```sh
+   gh secret set SHOWDOWN_KEYSTORE_BASE64 < keystore.b64
+   gh secret set SHOWDOWN_KEYSTORE_PASSWORD
+   gh secret set SHOWDOWN_KEY_ALIAS --body showdown
+   gh secret set SHOWDOWN_KEY_PASSWORD
+   ```
+
+3. Push a version tag: `vX.Y.Z` (stable release) or `vX.Y.Z-alpha.N` / `vX.Y.Z-beta.N` (pre-release). The `Android release package` workflow builds the signed APK and attaches `showdown-<tag>.apk` to a GitHub release, with notes generated from the conventional commits since the previous tag.
+
+   ```sh
+   git tag v0.2.0-alpha.1 && git push origin v0.2.0-alpha.1
+   ```
+
+To build a signed APK locally instead, export `SHOWDOWN_KEYSTORE_PATH`, `SHOWDOWN_KEYSTORE_PASSWORD`, `SHOWDOWN_KEY_ALIAS` and `SHOWDOWN_KEY_PASSWORD` and run `./gradlew :app:assembleRelease`. Verify a result with `apksigner verify --print-certs <apk>`.
+
 ## Develop without the hardware
 
 `./emulate.sh` starts the AYN Thor emulator profile, builds the `local` variant (its own app id, data and saved login, defaulting to a local Showdown server) and installs it. The first run needs the emulator profile:
