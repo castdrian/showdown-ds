@@ -112,6 +112,7 @@ class MainActivity : Activity() {
     private var activeBattleRoomId: String? = null
     private val unfinishedBattles = ShowdownUnfinishedBattles()
     private var unfinishedBattlesPromptShown = false
+    private var fastForwardingBattleHistory = false
     private var devLoginUsername: String? = null
     private var battleWasRegistered = false
     private var battleWasParticipant = false
@@ -877,6 +878,7 @@ class MainActivity : Activity() {
         identitiesByLine: List<BattleSession.ProtocolLineIdentity>,
         effectsBarrierToken: Long = 0L
     ) {
+        if (fastForwardingBattleHistory) return
         val historyBeforePacket = session.protocolHistoryBeforePacket(lines)
         if (showdownMoveEffectsNeedsReload && activityResumed) {
             showdownMoveEffectsNeedsReload = false
@@ -3020,7 +3022,12 @@ class MainActivity : Activity() {
         connection.connect()
     }
 
-    private fun applyBattleRoomPacket(connection: ShowdownConnection, roomId: String, lines: List<String>) {
+    private fun applyBattleRoomPacket(
+        connection: ShowdownConnection,
+        roomId: String,
+        lines: List<String>,
+        fastForward: Boolean = false
+    ) {
         val noInitMessage = ShowdownLobbyState.noInitReason(lines)
         if (noInitMessage != null && roomId != leftBattleRoomId &&
             (roomId == activeBattleRoomId || roomId == pendingBattleJoinRoomId)
@@ -3074,7 +3081,7 @@ class MainActivity : Activity() {
         if (battleIsSpectator) session.setSpectatorMode(true)
         if (!battleIsSpectator && battleWasParticipant) session.setBattleParticipant(true)
         reconcilePendingDecisionCommand(lines)
-        enqueueBattlePlayback(connection, roomId, lines)
+        if (fastForward) applyBattlePacketsInstantly(connection, roomId, lines) else enqueueBattlePlayback(connection, roomId, lines)
     }
 
     private fun joinMatchedBattle(connection: ShowdownConnection, roomId: String) {
@@ -6263,6 +6270,27 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun applyBattlePacketsInstantly(connection: ShowdownConnection, roomId: String, lines: List<String>) {
+        if (lines.any { it.startsWith("|init|battle") }) clearBattlePlayback()
+        BattlePlaybackTiming.chunks(lines).filter { it.isNotEmpty() }.forEach { chunk ->
+            session.applyProtocolPacket(chunk)
+            handleAppliedBattlePacket(PendingBattlePacket(connection, roomId, chunk))
+        }
+    }
+
+    /** Applies a battle's whole history at once and shows its current state, instead of replaying it with animations. */
+    private fun fastForwardBattle(connection: ShowdownConnection, roomId: String, packets: List<List<String>>) {
+        fastForwardingBattleHistory = true
+        try {
+            packets.forEach { applyBattleRoomPacket(connection, roomId, it, fastForward = true) }
+        } finally {
+            fastForwardingBattleHistory = false
+        }
+        releaseShowdownMoveEffects()
+        battleEffectsBarrierSequence += 1L
+        ensureShowdownMoveEffects(emptyList())?.recoverFromProtocolHistory(session.protocolHistory(), battleEffectsBarrierSequence)
+    }
+
     private fun resumeUnfinishedBattle(roomId: String) {
         val connection = showdownConnection
         if (connection == null || !unfinishedBattles.isHeld(roomId)) {
@@ -6272,7 +6300,7 @@ class MainActivity : Activity() {
         val packets = unfinishedBattles.release(roomId)
         publishUnfinishedBattleCount()
         beginBattleParticipation(roomId)
-        packets.forEach { applyBattleRoomPacket(connection, roomId, it) }
+        fastForwardBattle(connection, roomId, packets)
     }
 
     private fun confirmForfeitUnfinishedBattle(entry: ShowdownUnfinishedBattles.Entry) {

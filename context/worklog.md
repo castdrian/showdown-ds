@@ -2,6 +2,12 @@
 
 Newest first.
 
+## Follow-up: Resume fast-forwards instead of replaying
+
+- Reported on the developer's real battle: after Resume the battle "restarted" and no sprites showed. Cause: Resume fed the whole buffered history through normal paced playback, replaying the battle from turn 1 with every animation. Resume now applies the history to the session at once (`applyBattlePacketsInstantly`) and seeds the web scene silently from the full protocol history with a non-zero barrier token (`fastForwardBattle`, same recovery call as the background-resume path). The scene reaches the current state in about 10 s on the slow emulator (the first frames still show the start of the battle while the web client steps through the history).
+- The first `.debug` reinstall also replayed the battle without a prompt: state left by the older build (that install predates the held-battle logic). A fresh relaunch with temporary logging showed the real server's order matches the recording and the battle is held.
+- Verified locally with a named user (`--login ResumeUser1`), a bot challenge accepted in the app, two played turns, relaunch and Resume. No automated test: the wiring lives in `MainActivity`.
+
 ## Step 5: cleanup, lint, docs
 
 - Dead code after the native scene went: `BattleSceneTiming` (its summon duration moved into `BattleSession`, the animation pause into `BattlePlaybackTiming`), the always-zero `feedPlaybackBudgetMillis` parameter of `BattlePlaybackTiming.pauseAfter`, `ShowdownSpriteCache.requestItem/requestLadderBadge/requestBackdrop`, the cache's decoded `fallbackBackdrop` bitmap and its drawable. Removed their tests (`BattleSceneTimingTest`, the feed-budget test, the backdrop contract test); the replay parity tests no longer pass the budget and still pass.
