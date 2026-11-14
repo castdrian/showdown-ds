@@ -64,7 +64,7 @@ class MainActivity : Activity() {
     private val secondaryDisplayRetry = Runnable {
         if (secondaryPresentationRequested && activityResumed && !isFinishing) showSecondaryDisplay()
     }
-    private var battleScene: BattleSceneView? = null
+    private var battleScene: LobbyView? = null
     private var primaryFrame: FrameLayout? = null
     private var showdownMoveEffects: ShowdownMoveEffectsView? = null
     private var commandDeck: CommandDeckView? = null
@@ -170,7 +170,6 @@ class MainActivity : Activity() {
     private var selectedPokedexEntry: ShowdownPokedex.Entry? = null
     private var pokedexSpriteNeedsReload = false
     private var pokedexSpriteRequestToken = 0L
-    private var battleSceneNeedsReload = false
     private var showdownMoveEffectsNeedsReload = false
     private var pokedexLoading = false
     private var privateMessageDialog: ShowdownDialog? = null
@@ -446,7 +445,6 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         activityResumed = false
-        battleScene?.releaseRetainedResources()
         commandDeck?.releaseRetainedResources()
         commandDeck = null
         dismissSecondaryDisplay()
@@ -575,7 +573,6 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         activityResumed = false
-        battleScene?.setPlaybackPaused(true)
         commandDeck?.setAnimationsPaused(true)
         pokedexSprite?.setAnimationsPaused(true)
         pauseReplayForLifecycle()
@@ -618,17 +615,12 @@ class MainActivity : Activity() {
             }
         }
         commandDeck?.refreshResourceRequests()
-        if (battleSceneNeedsReload) {
-            battleSceneNeedsReload = false
-            battleScene?.refreshResourceRequests()
-        }
         commandDeck?.setAnimationsPaused(false)
         pokedexSprite?.setAnimationsPaused(false)
         if (pokedexSpriteNeedsReload) reloadSelectedPokedexSprite()
         if (::battleAudio.isInitialized && ::session.isInitialized) battleAudio.updateOptions(session)
         resumeReplayForLifecycle()
         resumeLivePlaybackForLifecycle()
-        battleScene?.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)
         resumeBattleAudioIfActive()
         if (::session.isInitialized && shouldMaintainConnection && showdownConnection == null && !isFinishing) connectLobbySocket()
     }
@@ -646,9 +638,6 @@ class MainActivity : Activity() {
     }
 
     private fun releaseRetainedArtworkForLifecycle() {
-        battleScene?.releaseRetainedResources()
-        battleScene?.refreshResourceRequests()
-        battleSceneNeedsReload = battleScene != null
         showdownMoveEffectsNeedsReload = showdownMoveEffectsNeedsReload || showdownMoveEffects != null
         releaseShowdownMoveEffects()
         commandDeck?.releaseRetainedResources()
@@ -685,8 +674,7 @@ class MainActivity : Activity() {
 
     private fun createPrimaryScreen(): View {
         val frame = FrameLayout(this).also { primaryFrame = it }
-        battleScene = BattleSceneView(this, session, spriteCache)
-        battleScene?.setPlaybackSpeed(replaySpeed)
+        battleScene = LobbyView(this, session)
         frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))
         return frame
     }
@@ -862,7 +850,6 @@ class MainActivity : Activity() {
         if (::battleAudio.isInitialized && ::session.isInitialized) {
             battleAudio.updateOptions(session)
         }
-        battleScene?.refreshResourceRequests()
         commandDeck?.refreshResourceRequests()
         displayRefreshScheduler.request()
     }
@@ -896,7 +883,6 @@ class MainActivity : Activity() {
             ensureShowdownMoveEffects(historyBeforePacket)
         }
         val battleInit = lines.any { it.startsWith("|init|battle") }
-        if (battleInit) battleScene?.resetBattleFeed()
         if (battleInit) {
             if (activityResumed) {
                 ensureShowdownMoveEffects(historyBeforePacket)
@@ -949,10 +935,7 @@ class MainActivity : Activity() {
         }
         handleAppliedBattlePacket(packet)
         val generatedMessageCount = session.battleFeedMessages().count { it.id !in previousMessageIds }
-        val feedPlaybackBudgetMillis = battleScene?.remainingBattleFeedPlaybackBudgetMillis() ?: 0L
-        scheduleBattlePlayback(
-            BattlePlaybackTiming.pauseAfter(packet.lines, generatedMessageCount, feedPlaybackBudgetMillis)
-        )
+        scheduleBattlePlayback(BattlePlaybackTiming.pauseAfter(packet.lines, generatedMessageCount))
     }
 
     private fun createBattleEffectsBarrierToken(packet: PendingBattlePacket): Long? {
@@ -1057,7 +1040,6 @@ class MainActivity : Activity() {
             replaySpeed = nextSpeed
         }
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
-        battleScene?.setPlaybackSpeed(replaySpeed)
         battleAudio.setPlaybackSpeed(replaySpeed)
         getSharedPreferences("showdown", MODE_PRIVATE).edit().putFloat("battle_speed", replaySpeed).apply()
         if (session.isReplayMode()) updateReplayStatus() else session.setConnectionStatus("Battle playback speed: ${replaySpeed.trimTrailingZero()}×")
@@ -6179,7 +6161,6 @@ class MainActivity : Activity() {
         battleAudio.setPlaybackSpeed(replaySpeed)
         ensureShowdownMoveEffects()
         showdownMoveEffects?.setPlaybackSpeed(replaySpeed)
-        battleScene?.setPlaybackSpeed(replaySpeed)
         showdownMoveEffects?.setPlaybackPaused(false)
         val replayLines = replay.log.lines().let { lines ->
             if (lines.any { it.startsWith("|init|battle") }) lines else listOf("|init|battle") + lines

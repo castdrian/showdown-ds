@@ -4,6 +4,7 @@ Behavior that looks wrong or inconsistent, found while working. Newest first.
 
 ## Open
 
+- **Dev login can fall back to a guest** on a no-security local server: when the app reconnects (for example to search) while the server still holds the previous connection for the same name, the empty-token `/trn` is refused and the user stays `Guest N`. Real accounts authenticate with a token and merge connections, so this only affects `--login`.
 - **Showdown's `games` map marks some battles with a trailing `*`** (`allowRenames` is false, i.e. ladder-style games), e.g. `[Gen 9] Random Battle*`. The lobby's room list shows the raw string; only the unfinished-battle prompt strips it.
 - **`|updatesearch|` arrives before the room's `|init|battle`** for a reconnecting account, so anything built from the `games` list alone has no opponent name yet. The prompt waits for the `|title|` packet.
 - **Guests cannot be tested for unfinished battles**: a reconnecting guest gets a new identity, so only named users (real accounts, or `--login NAME` on the local server) keep battles across reconnects.

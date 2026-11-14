@@ -2,6 +2,13 @@
 
 Newest first.
 
+## Step 3: WebView-core top screen
+
+- 3a: the Showdown client WebView is the permanent battle scene (opaque, full chrome). Its page moved from an 780-line Kotlin string to `assets/showdown-battle-scene.html` rendered by `ShowdownBattleSceneDocument` (placeholders for playback speed bounds, perspective guard, debug flag); chrome-hiding JS removed. Lightweight (no-WebView) playback and `BattlePlaybackPolicy` removed; a missing WebView reports a clear status.
+- 3b: `BattleSceneView` (3.3k lines of native battle drawing, inspect sheet, feed, team preview, touch handling) replaced by `LobbyView` (lobby card + replay-loading screen + accessibility description). Deleted nine files used only by it (`BattleCardContent`, `BattleCardLayout`, `BattleClockPresentation`, `BattleCombatantLayout`, `BattleFieldVisualComposer`, `BattleMoveVisualStyleResolver`, `BattleTeamPreviewLayout`, `ShowdownBattleLayout`, `ShowdownBattleMovePresentation`) and their tests.
+- Tests removed because the feature they covered is gone: `BattlePlaybackPolicyTest`, `BattleSceneEffectsContractTest`, the two low-memory playback tests, chrome-hiding and `MutationObserver` assertions, native status-card assertions in `ShowdownReplayPlaybackParityTest`, native scene lifecycle assertions in `MainActivityLifecycleContractTest`/`ShowdownSpriteCacheContractTest`; instrumented `MainActivityReadmeCaptureTest`, `MainActivityReplayPlaybackParityTest` and two native-scene tests in `ShowdownBattleLogRendererParityTest`. Contract tests that grep the page now read the Kotlin view plus the asset (assertions unchanged).
+- Follow-ups: README screenshots show the old native scene and need regenerating; `BattleAudio` still has a low-memory mode that nothing enables; `ShowdownSpriteCache.requestTeamPreviewPokemon` and related fallbacks are unused; `BattlePlaybackTiming.pauseAfter` still takes a feed budget that is always 0.
+
 ## Step 2: reopening battle, Resume and Forfeit
 
 **Root cause.** Three paths auto-opened any battle the account was in:

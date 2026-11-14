@@ -46,8 +46,6 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("if (replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle) return"))
         assertTrue(source.contains("pauseBattleAudio()"))
         assertTrue(source.contains("resumeBattleAudioIfActive()"))
-        assertTrue(source.contains("battleScene?.setPlaybackPaused(true)"))
-        assertTrue(source.contains("battleScene?.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)"))
         assertTrue(source.contains("displayRefreshScheduler.cancel()"))
         assertTrue(source.contains("battleAudio.pauseBattleCues()"))
         assertTrue(source.contains("battleAudio.resumeBattleCues()"))
@@ -63,9 +61,6 @@ class MainActivityLifecycleContractTest {
 
         assertTrue(trim.contains("ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW"))
         assertTrue(trim.contains("releaseRetainedArtworkForLifecycle()"))
-        assertTrue(release.contains("battleScene?.releaseRetainedResources()"))
-        assertTrue(release.contains("battleScene?.refreshResourceRequests()"))
-        assertTrue(release.contains("battleSceneNeedsReload = battleScene != null"))
         assertTrue(release.contains("showdownMoveEffectsNeedsReload = showdownMoveEffectsNeedsReload || showdownMoveEffects != null"))
         assertTrue(release.contains("releaseShowdownMoveEffects()"))
         assertTrue(release.contains("commandDeck?.releaseRetainedResources()"))
@@ -80,8 +75,6 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
 
-        assertTrue(resume.indexOf("resumeReplayForLifecycle()") < resume.indexOf("battleScene?.setPlaybackPaused(replayPaused || replayPausedForLifecycle || livePlaybackPausedForLifecycle)"))
-        assertFalse(resume.contains("battleScene?.setPlaybackPaused(false)"))
     }
 
     @Test
@@ -270,11 +263,6 @@ class MainActivityLifecycleContractTest {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
         val resume = source.substringAfter("override fun onResume() {").substringBefore("override fun onWindowFocusChanged")
 
-        assertTrue(source.contains("private var battleSceneNeedsReload = false"))
-        assertTrue(source.contains("battleSceneNeedsReload = battleScene != null"))
-        assertTrue(resume.contains("if (battleSceneNeedsReload)"))
-        assertTrue(resume.contains("battleSceneNeedsReload = false"))
-        assertTrue(resume.contains("battleScene?.refreshResourceRequests()"))
     }
 
     @Test
@@ -333,7 +321,6 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("val battleInit = lines.any { it.startsWith(\"|init|battle\") }"))
         assertTrue(source.contains("if (battleInit)"))
         assertTrue(source.contains("frame.addView(effects, FrameLayout.LayoutParams(-1, -1))"))
-        assertTrue(screenFactory.contains("frame.addView(battleScene, FrameLayout.LayoutParams(-1, -1))"))
         assertFalse(screenFactory.contains("ShowdownMoveEffectsView("))
     }
 
