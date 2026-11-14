@@ -853,10 +853,10 @@ class ShowdownMoveEffectsView(
                         }
                         function hideChrome() {
                             var scene = battle.scene;
-                            [scene.${'$'}bg, scene.${'$'}sprite, scene.${'$'}stat, scene.${'$'}leftbar, scene.${'$'}rightbar, scene.${'$'}turn, scene.${'$'}messagebar, scene.${'$'}delay, scene.${'$'}tooltips].forEach(function (element) {
+                            [scene.${'$'}bg, scene.${'$'}terrain, scene.${'$'}sprite, scene.${'$'}stat, scene.${'$'}leftbar, scene.${'$'}rightbar, scene.${'$'}turn, scene.${'$'}messagebar, scene.${'$'}delay, scene.${'$'}tooltips].forEach(function (element) {
                                 element.addClass('native-effects-hidden').css('visibility', 'hidden');
                             });
-                            [scene.${'$'}terrain, scene.${'$'}weather].forEach(function (element) {
+                            [scene.${'$'}weather].forEach(function (element) {
                                 element.css('pointer-events', 'none');
                             });
                             scene.${'$'}sprites.concat(scene.${'$'}spritesFront).forEach(function (element) {

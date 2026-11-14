@@ -7,14 +7,16 @@ import org.junit.Test
 
 class ShowdownMoveEffectsContractTest {
     @Test
-    fun fullShowdownSceneKeepsWeatherAndTerrainLayersVisible() {
+    fun opaqueTerrainBackgroundIsHiddenButWeatherLayerStaysVisible() {
         val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
         val hideChrome = source.substringAfter("function hideChrome()").substringBefore("function observeChrome()")
         val hiddenElements = hideChrome.substringBefore("].forEach(function (element)")
 
+        // The web terrain layer is an opaque full-scene sheet that would cover the native sprites underneath.
+        assertTrue(hiddenElements.contains("scene.\${'$'}terrain"))
+        // The weather layer carries the field-condition label and the author's weather tint, so it stays visible.
         assertFalse(hiddenElements.contains("scene.\${'$'}weather"))
-        assertFalse(hiddenElements.contains("scene.\${'$'}terrain"))
-        assertTrue(hideChrome.contains("scene.\${'$'}terrain, scene.\${'$'}weather"))
+        assertTrue(hideChrome.contains("[scene.\${'$'}weather].forEach"))
     }
 
     @Test
