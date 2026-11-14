@@ -7,21 +7,8 @@ import org.junit.Test
 
 class ShowdownMoveEffectsContractTest {
     @Test
-    fun opaqueTerrainBackgroundIsHiddenButWeatherLayerStaysVisible() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
-        val hideChrome = source.substringAfter("function hideChrome()").substringBefore("function observeChrome()")
-        val hiddenElements = hideChrome.substringBefore("].forEach(function (element)")
-
-        // The web terrain layer is an opaque full-scene sheet that would cover the native sprites underneath.
-        assertTrue(hiddenElements.contains("scene.\${'$'}terrain"))
-        // The weather layer carries the field-condition label and the author's weather tint, so it stays visible.
-        assertFalse(hiddenElements.contains("scene.\${'$'}weather"))
-        assertTrue(hideChrome.contains("[scene.\${'$'}weather].forEach"))
-    }
-
-    @Test
     fun incrementalBattleStartsPausedAndUsesTheNativePlaybackClock() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val source = effectsSource()
 
         assertTrue(source.contains("private val mainHandler = Handler(Looper.getMainLooper())"))
         assertTrue(source.contains("if (Looper.myLooper() != Looper.getMainLooper())"))
@@ -113,8 +100,6 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("add(lines, generation, synchronizeBattleLog, protocolLineIdentities, effectsBarrierToken);"))
         assertTrue(source.contains("ShowdownBattleLogFilter.visibleEntries(value)"))
         assertTrue(source.contains("const val NATIVE_BATTLE_LOG_BRIDGE = \"ShowdownNativeBattleLog\""))
-        assertTrue(source.contains("new MutationObserver(function ()"))
-        assertTrue(source.contains("chromeObserver.observe(document.getElementById('battle'), { childList: true, subtree: true });"))
         assertTrue(source.contains("function destroyBattle()"))
         assertTrue(source.contains("if (battle.scene) {"))
         assertTrue(source.contains("battle.scene.stopAnimation();"))
@@ -124,7 +109,7 @@ class ShowdownMoveEffectsContractTest {
         assertFalse(source.contains("var hideFrame = 0;"))
         assertTrue(source.contains("updateAcceleration.call(scene);"))
         assertTrue(source.contains("scene.acceleration = animationSpeed;"))
-        assertTrue(source.contains("Math.max(\${BattlePlaybackSpeed.MINIMUM}, Math.min(\${BattlePlaybackSpeed.MAXIMUM}, Number(speed) || 1))"))
+        assertTrue(source.contains("Math.max(__PLAYBACK_SPEED_MINIMUM__, Math.min(__PLAYBACK_SPEED_MAXIMUM__, Number(speed) || 1))"))
         assertFalse(source.contains("scene.acceleration *= animationSpeed;"))
         assertTrue(source.contains("this.scene.__showdownNativeDamageArmed = moveCanDamage(move);"))
         assertTrue(source.contains("this.scene.__showdownNativeDamageWindow = this.scene.__showdownNativeDamageArmed;"))
@@ -193,7 +178,7 @@ class ShowdownMoveEffectsContractTest {
 
     @Test
     fun webViewLoadPreservesQueuedProtocolPacketsAndBarrierTokens() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val source = effectsSource()
         val pageFinishedStart = source.indexOf("override fun onPageFinished")
         val pageFinishedEnd = source.indexOf("loadDataWithBaseURL", pageFinishedStart)
         val pageFinished = source.substring(pageFinishedStart, pageFinishedEnd)
@@ -212,7 +197,7 @@ class ShowdownMoveEffectsContractTest {
 
     @Test
     fun rendererRecoveryReseedsHistorySilentlyAndKeepsItsBarrierToken() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val source = effectsSource()
 
         assertTrue(source.contains("fun recoverFromProtocolHistory(lines: List<String>, effectsBarrierToken: Long)"))
         assertTrue(source.contains("pendingPackets.resetWith(packet, effectsBarrierToken)"))
@@ -226,7 +211,7 @@ class ShowdownMoveEffectsContractTest {
 
     @Test
     fun nativeBattleLogUsesTheGenerationOfItsQueuedShowdownStep() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val source = effectsSource()
         val runHookStart = source.indexOf("Battle.prototype.run = function")
         assertTrue(runHookStart >= 0)
         val runHookEnd = source.indexOf("};", runHookStart)
@@ -244,7 +229,7 @@ class ShowdownMoveEffectsContractTest {
 
     @Test
     fun nativeBattleLogSyncWaitsUntilItsLastQueuedStepIsParsed() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val source = effectsSource()
         val runHookStart = source.indexOf("Battle.prototype.run = function")
         val receiveStart = source.indexOf("receive: function (lines, generation, synchronizeBattleLog, protocolLineIdentities, effectsBarrierToken)")
         val receiveEnd = source.indexOf("setSpeed: function (speed)", receiveStart)
@@ -261,7 +246,7 @@ class ShowdownMoveEffectsContractTest {
 
     @Test
     fun nativeBattleLogCarriesTheProtocolLineIdentityThatProducedIt() {
-        val effectsSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val effectsSource = effectsSource()
         val sessionSource = File("src/main/kotlin/dev/adrian/showdown/BattleSession.kt").readText()
         val runHookStart = effectsSource.indexOf("Battle.prototype.run = function")
         val runHook = effectsSource.substring(runHookStart, effectsSource.indexOf("};", runHookStart))
@@ -278,7 +263,7 @@ class ShowdownMoveEffectsContractTest {
 
     @Test
     fun nativeEffectsBarrierWaitsForShowdownQueueEnd() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val source = effectsSource()
         val creation = source.substringAfter("function createBattle()").substringBefore("function add(lines")
         val receive = source.substringAfter("function add(lines, generation, synchronizeBattleLog, effectsBarrierToken)")
             .substringBefore("window.addEventListener('resize', layout)")
@@ -304,7 +289,7 @@ class ShowdownMoveEffectsContractTest {
 
     @Test
     fun releasesNativeWebViewWithABoundedFallback() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText()
+        val source = effectsSource()
 
         assertTrue(source.contains("private var cleanupCompleted = false"))
         assertTrue(source.contains("private val releaseFallbackRunnable = Runnable { cleanupOnMainThread() }"))
@@ -312,4 +297,9 @@ class ShowdownMoveEffectsContractTest {
         assertTrue(source.contains("if (cleanupCompleted) return"))
         assertTrue(source.contains("const val RELEASE_FALLBACK_DELAY_MILLIS = 250L"))
     }
+
+    /** The view's Kotlin plus the battle scene page it loads from assets. */
+    private fun effectsSource(): String =
+        File("src/main/kotlin/dev/adrian/showdown/ShowdownMoveEffectsView.kt").readText() +
+            File("src/main/assets/showdown-battle-scene.html").readText()
 }

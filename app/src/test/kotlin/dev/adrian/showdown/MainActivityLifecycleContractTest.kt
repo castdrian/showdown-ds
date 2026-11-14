@@ -347,32 +347,7 @@ class MainActivityLifecycleContractTest {
         assertTrue(source.contains("announcerCueResetter = battleAudio::resetAnnouncerCues"))
     }
 
-    @Test
-    fun lowMemoryPlaybackKeepsTheAnnouncerProtocolFallback() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val lightweight = source.substringAfter("private fun applyLightweightBattleProtocol").substringBefore("private fun playLightweightDamageCue")
 
-        assertTrue(lightweight.contains("BattleAnnouncerCueResolver.cuesForProtocol("))
-        assertTrue(lightweight.contains("directDamageTargetsByLine.keys"))
-        assertTrue(lightweight.contains("battleAudio::playAnnouncerCue"))
-        assertTrue(lightweight.contains("impactCueByLine"))
-        assertTrue(lightweight.contains("latestDamageLineIndex"))
-        assertTrue(source.contains("setLightweightImpactSoundListener"))
-        assertTrue(source.contains("battleAudio.playBattleCue(BattleAudioCue.GENERIC_DAMAGE)"))
-    }
-
-    @Test
-    fun lowMemoryPlaybackKeepsEffectivenessCuesAcrossSplitDamagePackets() {
-        val activitySource = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val sceneSource = File("src/main/kotlin/dev/adrian/showdown/BattleSceneView.kt").readText()
-
-        assertTrue(activitySource.contains("lateListener = battleAudio::playBattleCue"))
-        assertTrue(sceneSource.contains("lightweightLateImpactSoundCue"))
-        assertTrue(sceneSource.contains("lightweightLateImpactSoundListener"))
-        assertTrue(sceneSource.contains("\"-supereffective\", \"-resisted\""))
-        assertTrue(sceneSource.contains("if (lightweightImpactSoundPending)"))
-        assertTrue(sceneSource.contains("lightweightLateImpactSoundListener?.invoke(cue)"))
-    }
 
     @Test
     fun releasesTheAnimationWebViewAfterFinishedPlaybackDrains() {
