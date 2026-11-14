@@ -17,6 +17,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
@@ -436,6 +437,7 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val appContext = context.applicationContext
+    private val hostCooldown = ShowdownHostCooldown()
     private val downloadExecutor = Executors.newFixedThreadPool(2)
     private val fallbackSpriteExecutor = Executors.newFixedThreadPool(2)
     private val moveDataExecutor = Executors.newSingleThreadExecutor()
@@ -1542,6 +1544,8 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     private fun downloadTo(file: File, path: String): Boolean {
         val url = if (path.startsWith("https://")) path else "https://play.pokemonshowdown.com/$path"
+        val host = URL(url).host
+        if (hostCooldown.isCoolingDown(host)) return false
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 12000
@@ -1551,7 +1555,14 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
         val temporary = File(file.parentFile, "${file.name}.part")
         temporary.delete()
         return try {
-            if (connection.responseCode != HttpURLConnection.HTTP_OK || connection.contentLength > MAX_FILE_BYTES) return false
+            val responseCode = try {
+                connection.responseCode
+            } catch (error: IOException) {
+                hostCooldown.recordUnreachable(host)
+                throw error
+            }
+            hostCooldown.recordReachable(host)
+            if (responseCode != HttpURLConnection.HTTP_OK || connection.contentLength > MAX_FILE_BYTES) return false
             connection.inputStream.use { input ->
                 FileOutputStream(temporary).use { output ->
                     val buffer = ByteArray(8192)
