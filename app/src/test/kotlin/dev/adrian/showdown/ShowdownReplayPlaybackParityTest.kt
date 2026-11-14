@@ -182,8 +182,7 @@ class ShowdownReplayPlaybackParityTest {
                         val pauseMillis = BattlePlaybackTiming.scaledPause(
                             BattlePlaybackTiming.pauseAfter(
                                 packet,
-                                messages.count { it.id !in previousMessageIds },
-                                presentation.remainingPlaybackBudgetMillis(nowMillis)
+                                messages.count { it.id !in previousMessageIds }
                             ),
                             1f
                         )
@@ -466,8 +465,7 @@ class ShowdownReplayPlaybackParityTest {
             val pauseMillis = BattlePlaybackTiming.scaledPause(
                 BattlePlaybackTiming.pauseAfter(
                     packet,
-                    generatedMessageCount,
-                    presentation.remainingPlaybackBudgetMillis(nowMillis)
+                    generatedMessageCount
                 ),
                 0.75f
             )
@@ -1020,8 +1018,7 @@ class ShowdownReplayPlaybackParityTest {
             val pauseMillis = BattlePlaybackTiming.scaledPause(
                 BattlePlaybackTiming.pauseAfter(
                     packet,
-                    generatedMessages.size,
-                    presentation.remainingPlaybackBudgetMillis(nowMillis)
+                    generatedMessages.size
                 ),
                 speed
             )

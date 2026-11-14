@@ -1,0 +1,9 @@
+.git
+.gradle
+.android
+.emulator-overlay
+**/build
+local.properties
+context
+media
+*.apk

@@ -190,15 +190,6 @@ class ShowdownSpriteCacheContractTest {
     }
 
     @Test
-    fun keepsBattleBackdropsVisibleWhileRemoteArtworkLoads() {
-        val source = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
-
-        assertTrue(source.contains("R.drawable.battle_background_fallback"))
-        assertTrue(source.contains("mainHandler.post { receiver(fallback) }"))
-        assertTrue(source.contains("?: fallbackBackdrop"))
-    }
-
-    @Test
     fun modernRequestsResolveHdArtworkBeforeShowdownFallbacks() {
         val cacheSource = File("src/main/kotlin/dev/adrian/showdown/ShowdownSpriteCache.kt").readText()
         val requestSource = cacheSource.substringAfter("fun requestPokemon").substringBefore("fun requestDexSprite")

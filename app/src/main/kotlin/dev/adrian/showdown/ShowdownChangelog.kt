@@ -10,6 +10,9 @@ object ShowdownChangelog {
         ShowdownChangelogEntry(
             currentVersion,
             listOf(
+                "During battles the upper screen now shows the Showdown web client's own battle scene.",
+                "Unfinished battles are no longer reopened automatically; the app offers to resume or forfeit them.",
+                "Team cards on the Pokémon tab now show the held item, stat boosts and status, and species types now load during battles.",
                 "The team panel now switches between your party and the opponent’s revealed Pokémon, including active and fainted states.",
                 "Battle-log fades now stay in step with the action timeline, and lightweight damage cues land with the attack impact.",
                 "The team builder now leaves format-specific legality checks to Showdown.",

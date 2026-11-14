@@ -124,8 +124,8 @@ jobs:
             --tests dev.adrian.showdown.ShowdownServerEndpointTest \
             --tests dev.adrian.showdown.ShowdownAssetPathsTest
 
-      - name: Run full unit suite and build debug APK
-        run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest :app:assembleDebug :app:compileLocalAndroidTestKotlin
+      - name: Lint, run the full unit suite and build debug APK
+        run: gradle --no-daemon --stacktrace --console=plain :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:compileLocalAndroidTestKotlin
 
       - name: Enable KVM
         run: |

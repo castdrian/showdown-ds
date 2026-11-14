@@ -240,21 +240,9 @@ class BattlePlaybackTimingTest {
     }
 
     @Test
-    fun keepsLaterBattlePacketsBehindMessagesAlreadyQueuedForDisplay() {
-        assertEquals(
-            8_400L,
-            BattlePlaybackTiming.pauseAfter(
-                listOf("|switch|p2a: Perrserker|Perrserker, L80|100/100"),
-                generatedMessageCount = 1,
-                feedPlaybackBudgetMillis = 8_400L
-            )
-        )
-    }
-
-    @Test
     fun givesStandaloneAnimationPacketsHumanReadableTiming() {
         assertEquals(
-            BattleSceneTiming.lightweightMoveDurationNanos / 1_000_000L,
+            1_200L,
             BattlePlaybackTiming.pauseAfter(listOf("|-anim|p1a: Pikachu|Thunderbolt|p2a: Eevee"))
         )
     }

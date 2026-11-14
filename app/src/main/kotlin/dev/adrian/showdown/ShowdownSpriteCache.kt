@@ -481,7 +481,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
     private var pokedexNumbersLoaded = false
     private var pokedexNumbersLoading = false
     private val diskCache = File(context.cacheDir, "showdown-resources").apply { mkdirs() }
-    private val fallbackBackdrop = BitmapFactory.decodeResource(context.resources, R.drawable.battle_background_fallback)
     private val closed = AtomicBoolean(false)
 
     fun requestPokemon(request: BattleSpriteRequest, receiver: (SpriteAsset?) -> Unit) {
@@ -562,29 +561,6 @@ class ShowdownSpriteCache(context: Context) : AutoCloseable {
 
     fun requestTrainer(trainer: String, receiver: (SpriteAsset?) -> Unit) {
         requestSprite(ShowdownAssetPaths.trainer(trainer)) { receiver(it?.trimHorizontalTransparentPadding()) }
-    }
-
-    fun requestItem(item: String, receiver: (SpriteAsset?) -> Unit) {
-        val paths = ShowdownAssetPaths.itemSpriteCandidates(item)
-        if (paths.isEmpty()) {
-            mainHandler.post { receiver(null) }
-            return
-        }
-        requestSpriteCandidates(paths, receiver)
-    }
-
-    fun requestLadderBadge(badge: ShowdownLadderBadge, receiver: (SpriteAsset?) -> Unit) {
-        requestSprite(badge.assetPath, receiver)
-    }
-
-    fun requestBackdrop(name: String = "bg-aquacordetown.jpg", receiver: (Bitmap?) -> Unit) {
-        fallbackBackdrop?.let { fallback ->
-            mainHandler.post { receiver(fallback) }
-        }
-        requestBytes("sprites/gen6bgs/$name") { file ->
-            val bitmap = file?.let { BitmapFactory.decodeFile(it.path) }
-            receiver(bitmap ?: fallbackBackdrop)
-        }
     }
 
     fun requestEffect(name: String, receiver: (Bitmap?) -> Unit) {

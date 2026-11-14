@@ -3217,7 +3217,7 @@ class BattleSession {
         val nowNanos = System.nanoTime()
         val entranceAtNanos = when (openingEntrances) {
             0 -> nowNanos
-            1 -> maxOf(nowNanos, latestOpeningEntranceAtNanos + BattleSceneTiming.summonDurationNanos)
+            1 -> maxOf(nowNanos, latestOpeningEntranceAtNanos + SUMMON_DURATION_NANOS)
             else -> nowNanos
         }
         if (playerSide) playerEntryAtNanos = entranceAtNanos else opponentEntryAtNanos = entranceAtNanos
@@ -7300,6 +7300,7 @@ class BattleSession {
         private val BATTLE_FEED_ERROR_TONE = Regex(
             "(?i)^(?:Time left:.*|.+ has \\d+ seconds? left(?: this turn)?\\.?|.+ also wants the timer to be on\\.?|Battle timer is (?:on|off):?.*|The battle timer is off\\.?)$"
         )
+        private const val SUMMON_DURATION_NANOS = 1_000_000_000L
         private val BOOST_STATS = setOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
         private val SHOWDOWN_ACTIVATE_BLOCK_EFFECTS = setOf(
             "ingrain",

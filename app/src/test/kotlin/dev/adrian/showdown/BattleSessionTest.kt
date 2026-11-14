@@ -1951,7 +1951,7 @@ class BattleSessionTest {
             )
         )
 
-        assertTrue(session.playerEntryAtNanos - session.opponentEntryAtNanos >= BattleSceneTiming.summonDurationNanos)
+        assertTrue(session.playerEntryAtNanos - session.opponentEntryAtNanos >= SUMMON_DURATION_NANOS)
         assertEquals("Go! Incineroar!", session.sendOutMessage("Incineroar", true))
         assertEquals("OPPONENT sent out Tapu Koko!", session.sendOutMessage("Tapu Koko", false))
     }
@@ -4548,5 +4548,9 @@ class BattleSessionTest {
                 "|request|{\"rqid\":59,$targetableField\"active\":[{\"moves\":[{\"move\":\"Tackle\",\"pp\":35,\"target\":\"$target\"}]}]}"
             )
         )
+    }
+
+    private companion object {
+        const val SUMMON_DURATION_NANOS = 1_000_000_000L
     }
 }

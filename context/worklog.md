@@ -2,6 +2,13 @@
 
 Newest first.
 
+## Step 5: cleanup, lint, docs
+
+- Dead code after the native scene went: `BattleSceneTiming` (its summon duration moved into `BattleSession`, the animation pause into `BattlePlaybackTiming`), the always-zero `feedPlaybackBudgetMillis` parameter of `BattlePlaybackTiming.pauseAfter`, `ShowdownSpriteCache.requestItem/requestLadderBadge/requestBackdrop`, the cache's decoded `fallbackBackdrop` bitmap and its drawable. Removed their tests (`BattleSceneTimingTest`, the feed-budget test, the backdrop contract test); the replay parity tests no longer pass the budget and still pass.
+- Android Lint (`:app:lintDebug`) passes with no errors; `build.sh --test` and CI now run it. ktlint was not added (needs approval).
+- README rewritten for the new architecture and the `emulate.sh` / local server workflow; `AGENTS.md`, `Dockerfile` (+ `.dockerignore`) added; in-app changelog gained entries for the WebView scene, Resume/Forfeit and the richer team cards.
+- Left for later (all unused by the app now): `BattleSpriteRequestTracker`/`BattleSpriteRequests.forScene` (tests only), `BattleAudio` low-memory mode and `playCuePreview`/`diagnosticSnapshot`, README screenshots of the old native scene.
+
 ## Step 4: Pokémon-tab cards
 
 - Found and fixed a data bug: species types and item display names were only loaded by `ShowdownMoveDex.load()` (the team editor) and `loadTeamCoverageData()`, never by the battle path (`loadBattleDetails`), so in a battle the Pokémon tab showed no type chips and raw item ids. `loadBattleDetails` now also parses species types and item names from the files it already fetches (`ShowdownMoveDex.parseBattleDetailTables`, `applyBattleDetailTables`).

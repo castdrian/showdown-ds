@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the app, optionally running the test suites afterwards. CI uses the same entry point.
+# Builds the app, optionally linting and running the test suites afterwards.
 #
 # Usage: ./build.sh [--variant debug|local|release] [--test]
 
@@ -61,6 +61,6 @@ cd "$repo_root"
 ./gradlew --console=plain "$(gradle_task_for_variant)"
 
 if (( run_tests == 1 )); then
-    ./gradlew --console=plain :app:testDebugUnitTest
+    ./gradlew --console=plain :app:lintDebug :app:testDebugUnitTest
     run_go_tests
 fi

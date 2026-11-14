@@ -21,8 +21,7 @@ object BattlePlaybackTiming {
 
     fun pauseAfter(
         lines: List<String>,
-        generatedMessageCount: Int = 0,
-        feedPlaybackBudgetMillis: Long = 0L
+        generatedMessageCount: Int = 0
     ): Long {
         val actionPause = when {
             lines.any {
@@ -39,7 +38,7 @@ object BattlePlaybackTiming {
             else -> 0L
         }
         val messageCount = maxOf(readableMessageCount(lines), generatedMessageCount.coerceAtLeast(0).toLong())
-        return maxOf(actionPause, messageCount * MESSAGE_PAUSE_MILLIS, feedPlaybackBudgetMillis.coerceAtLeast(0L))
+        return maxOf(actionPause, messageCount * MESSAGE_PAUSE_MILLIS)
     }
 
     fun isDecisionChunk(lines: List<String>): Boolean = lines.any { it.startsWith("|request|") }
@@ -96,7 +95,7 @@ object BattlePlaybackTiming {
     }
 
     private const val MOVE_PAUSE_MILLIS = EVENT_PAUSE_MILLIS
-    private const val ANIMATION_CONTINUATION_PAUSE_MILLIS = BattleSceneTiming.lightweightMoveDurationNanos / 1_000_000L
+    private const val ANIMATION_CONTINUATION_PAUSE_MILLIS = 1_200L
     private const val FAINT_PAUSE_MILLIS = 3_200L
     private const val SWITCH_PAUSE_MILLIS = 2_800L
     private const val TURN_PAUSE_MILLIS = 2_000L

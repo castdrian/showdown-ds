@@ -12,16 +12,42 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld.
 
 The active panel areas are approximately 132.83 × 74.72 mm on top and 75.11 × 65.42 mm on the bottom, derived from the listed diagonals and native pixel aspect ratios.
 
+## How it works
+
+During a battle the upper screen is the Pokémon Showdown web client's battle scene, rendered in a WebView, and the lower screen holds the native controls (moves, party, activity log, menu). The Pokémon tab shows both teams with HP, held item, types, status and stat boosts. Outside battles the upper screen shows a lobby card. If your account has unfinished battles, the app offers to resume or forfeit them instead of reopening them.
+
 ## Build
+
+Requires JDK 17 and the Android SDK (`./scripts/setup-android.sh` installs what is needed).
+
+```sh
+./build.sh                    # debug APK
+./build.sh --test             # build, then lint and run the unit tests
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Develop without the hardware
+
+`./emulate.sh` starts the AYN Thor emulator profile, builds the `local` variant (its own app id, data and saved login, defaulting to a local Showdown server) and installs it. The first run needs the emulator profile:
 
 ```sh
 ./scripts/setup-android.sh
 ./scripts/create-ayn-thor-avd.sh
-AEMU_SOURCE_ROOT=/path/to/aemu ./scripts/build-ayn-thor-emulator-overlay.sh
-./scripts/run-ayn-thor-avd.sh
-./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+AEMU_SOURCE_ROOT=/path/to/aemu ./scripts/build-ayn-thor-emulator-overlay.sh   # patched emulator with the stacked Thor screens
+./emulate.sh
 ```
+
+Without the patched emulator, `emulate.sh` falls back to the stock emulator (both displays exist, but their arrangement is not guaranteed).
+
+Test against a local server instead of the real one:
+
+```sh
+./scripts/local-showdown.sh                                          # server on port 8000, guest logins
+node tools/local-showdown/bot.ts --mode search                       # bot opponent (Node 22.18+)
+./emulate.sh --login LocalUser                                       # sign the local build in as a named user
+```
+
+`--stall-after-turn N` makes the bot stop answering so a battle stays unfinished, which is how to exercise Resume and Forfeit. Instrumented tests run against the local build: `./gradlew :app:connectedLocalAndroidTest`.
 
 ## Support the project
 

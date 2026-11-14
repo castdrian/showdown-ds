@@ -7,7 +7,8 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld (K
 | Task | Command |
 | --- | --- |
 | Build (debug) | `./build.sh` |
-| Build + all tests | `./build.sh --test` |
+| Build + lint + all tests | `./build.sh --test` (Android Lint, unit tests, Go tool tests if Go is installed) |
+| Build in Docker | `docker build -t showdown-ds . && docker run --rm showdown-ds` |
 | JVM unit tests only | `./gradlew :app:testDebugUnitTest` |
 | Instrumented tests (emulator) | `./gradlew :app:connectedLocalAndroidTest` (runs against the `local` build, never the `.debug` install) |
 | Emulator + install + launch | `./emulate.sh` (default `local` variant) |
