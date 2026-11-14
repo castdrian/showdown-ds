@@ -4,6 +4,7 @@ Behavior that looks wrong or inconsistent, found while working. Newest first.
 
 ## Open
 
+- **Local server and live client can disagree.** The local server is pinned to a fixed upstream commit (the one CI tests) while the WebView loads the live Showdown client, so some data differs. Seen once: your own Deoxys back sprite rendered as a broken image because the client asked for `ani-back/deoxys-normal.gif` (404; `deoxys.gif` exists). Not reproducible against the real server.
 - **Which data a screen gets depends on which loader ran.** `ShowdownMoveDex` has four partial loaders (`load`, `loadMoveInfo`, `loadBattleDetails`, `loadTeamCoverageData`) that fill overlapping tables; battle code silently got empty type and item tables unless the team editor had been opened first. Fixed for types and items; other tables (`pokemonMoves`, learnsets, type chart) still only come from the full load.
 - **Searching for a battle can match a stale search from an earlier app run** on the local server (the app persists `pendingSearch`/`active_search_format` and re-searches on restart), so a bot may "win" in seconds against a ghost. Restart the local server between runs.
 - **Dev login can fall back to a guest** on a no-security local server: when the app reconnects (for example to search) while the server still holds the previous connection for the same name, the empty-token `/trn` is refused and the user stays `Guest N`. Real accounts authenticate with a token and merge connections, so this only affects `--login`.

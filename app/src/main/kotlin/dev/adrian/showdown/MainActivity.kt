@@ -2787,7 +2787,8 @@ class MainActivity : Activity() {
                     }
                     lines.mapNotNull(ShowdownAuthentication::challenge).firstOrNull()?.let { challenge ->
                         latestChallenge = challenge
-                        devLoginUsername?.let { connection.sendGlobal(ShowdownDevLogin.renameCommand(it)) }
+                        ShowdownDevLogin.signInUsername(devLoginUsername, credentialsStore.load() != null, loginClient.hasSession())
+                            ?.let { connection.sendGlobal(ShowdownDevLogin.renameCommand(it)) }
                         pendingRegistration?.takeUnless { registrationInFlight }?.let { registration ->
                             submitRegistration(connection, registration, challenge)
                         }

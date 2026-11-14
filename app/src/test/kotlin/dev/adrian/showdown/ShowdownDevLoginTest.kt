@@ -33,4 +33,32 @@ class ShowdownDevLoginTest {
 
         assertEquals("/trn LocalUser,0,", command)
     }
+
+    @Test
+    fun ShowdownDevLogin_SignInUsernameWithoutStoredLogin_ReturnsTheDevUsername() {
+        val name = ShowdownDevLogin.signInUsername("LocalUser", hasCredentials = false, hasSession = false)
+
+        assertEquals("LocalUser", name)
+    }
+
+    @Test
+    fun ShowdownDevLogin_SignInUsernameWithStoredCredentials_YieldsToTheRealLogin() {
+        val name = ShowdownDevLogin.signInUsername("LocalUser", hasCredentials = true, hasSession = false)
+
+        assertEquals(null, name)
+    }
+
+    @Test
+    fun ShowdownDevLogin_SignInUsernameWithASavedSession_YieldsToTheRealLogin() {
+        val name = ShowdownDevLogin.signInUsername("LocalUser", hasCredentials = false, hasSession = true)
+
+        assertEquals(null, name)
+    }
+
+    @Test
+    fun ShowdownDevLogin_SignInUsernameWithoutADevUsername_ReturnsNothing() {
+        val name = ShowdownDevLogin.signInUsername(null, hasCredentials = false, hasSession = false)
+
+        assertEquals(null, name)
+    }
 }

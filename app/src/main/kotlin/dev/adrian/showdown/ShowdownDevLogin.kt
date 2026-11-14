@@ -12,5 +12,9 @@ object ShowdownDevLogin {
     fun usernameFrom(extra: String?, localBuild: Boolean): String? =
         extra?.trim()?.takeIf { localBuild && it.isNotEmpty() }
 
+    /** The dev user to sign in as, unless a real credential or saved session exists, which always wins. */
+    fun signInUsername(devUsername: String?, hasCredentials: Boolean, hasSession: Boolean): String? =
+        devUsername.takeUnless { hasCredentials || hasSession }
+
     fun renameCommand(username: String): String = ShowdownAuthentication.renameCommand(username, "")
 }
