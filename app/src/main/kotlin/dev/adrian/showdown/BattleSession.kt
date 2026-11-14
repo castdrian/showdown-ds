@@ -293,6 +293,7 @@ class BattleSession {
         CHOOSE_FORMAT,
         OPEN_CHAT,
         FORFEIT,
+        RESUME_BATTLE,
         LEAVE_BATTLE,
         CHALLENGE_PLAYER,
         EXPORT_REPLAY,
@@ -766,6 +767,7 @@ class BattleSession {
     var opponentCondition = "READY"
         private set
     var gameType = "singles"
+    private var unfinishedBattleCount = 0
         private set
     private var triplesCentered = false
     var format = "[Gen 7] OU"
@@ -1473,6 +1475,13 @@ class BattleSession {
         status = entry
         latestBattleEvent = entry
         latestBattleEventAtNanos = System.nanoTime()
+        notifyListeners()
+    }
+
+    /** Number of unfinished battles waiting for the user to resume or forfeit them. */
+    fun setUnfinishedBattleCount(count: Int) {
+        if (unfinishedBattleCount == count) return
+        unfinishedBattleCount = count
         notifyListeners()
     }
 
@@ -6384,6 +6393,7 @@ class BattleSession {
         3 -> when {
             liveBattleActive && !replayMode && !spectatorMode && isBattleParticipant() -> "Forfeit"
             liveBattleActive && !replayMode -> "Leave battle"
+            unfinishedBattleCount > 0 -> "Resume battle"
             else -> "Challenge player"
         }
         4 -> "Sound effects ${if (soundEffectsEnabled) "on" else "off"}"
@@ -6424,6 +6434,9 @@ class BattleSession {
                             publishClientAction(ClientAction.LEAVE_BATTLE)
                             "Leave the spectated battle."
                         }
+                    } else if (unfinishedBattleCount > 0) {
+                        publishClientAction(ClientAction.RESUME_BATTLE)
+                        "Choose an unfinished battle."
                     } else {
                         publishClientAction(ClientAction.CHALLENGE_PLAYER)
                         "Challenge another player."

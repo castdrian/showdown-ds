@@ -51,7 +51,12 @@ fi
 
 fetch_server "$server_ref"
 install_server_dependencies
-cp "$server_config" "$server_dir/config/config.js"
+{
+    cat "$server_config"
+    printf '%s\n' "// Local development only: bots and the app share one IP and reconnect rapidly."
+    printf '%s\n' "exports.noipchecks = true;"
+    printf '%s\n' "exports.nothrottle = true;"
+} > "$server_dir/config/config.js"
 printf '%s\n' "Starting local Showdown server on port $server_port (guest logins allowed)"
 cd "$server_dir"
 exec node pokemon-showdown "$server_port"

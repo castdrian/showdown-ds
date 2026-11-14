@@ -16,3 +16,5 @@ Agreed with the developer before work started.
 12. **Embedded JS moves to assets.**
 13. **Order of work:** scaffolding, reopening-battle fix + Resume/Forfeit, WebView-core top screen, Pokémon-tab overlays, cleanup/tests/lint. Run to completion unless blocked.
 14. **`emulate.sh`:** default `local` variant, `--variant debug` opt-in, no hard-coded toolchain paths.
+15. **Held-battle rule (step 2).** Rooms reported in the first `updatesearch` after a named login that the app did not expect are held for the prompt; later battles open normally. Release builds still reopen the room they had persisted as active (continuity after a process restart); debuggable builds never do.
+16. **Dev login.** `./emulate.sh --login NAME` signs the `.local` build in as NAME on the local server (empty token, no password). It is gated on the local build so it cannot affect a real account or the `.debug` install.

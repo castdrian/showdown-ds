@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Starts the AYN Thor emulator (if it is not already running), builds the app and sideloads it.
 #
-# Usage: ./emulate.sh [--variant local|debug] [--no-build] [--restart-emulator]
+# Usage: ./emulate.sh [--variant local|debug] [--no-build] [--restart-emulator] [--login NAME]
 #
 # The default "local" variant has its own app id and data, talks to the local development
 # server, and never touches a saved Showdown login. "--variant debug" installs over the normal
 # debug app and reuses whatever login that install holds.
+#
+# "--login NAME" (local variant only) signs the app in as NAME on the local server, which needs no
+# password. A named user keeps its unfinished battles across reconnects, unlike a guest.
 
 set -euo pipefail
 
@@ -17,12 +20,13 @@ state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/showdown-ds"
 variant="local"
 build_app=1
 restart_emulator=0
+login_name=""
 boot_attempts=300
 server_port="${SHOWDOWN_SERVER_PORT:-8000}"
 main_activity="dev.adrian.showdown.MainActivity"
 
 usage() {
-    printf '%s\n' "Usage: ./emulate.sh [--variant local|debug] [--no-build] [--restart-emulator]"
+    printf '%s\n' "Usage: ./emulate.sh [--variant local|debug] [--no-build] [--restart-emulator] [--login NAME]"
 }
 
 parse_arguments() {
@@ -40,6 +44,10 @@ parse_arguments() {
                 restart_emulator=1
                 shift
                 ;;
+            --login)
+                login_name="${2:?--login needs a name}"
+                shift 2
+                ;;
             -h|--help)
                 usage
                 exit 0
@@ -52,6 +60,10 @@ parse_arguments() {
     done
     if [[ "$variant" != "local" && "$variant" != "debug" ]]; then
         usage
+        exit 1
+    fi
+    if [[ -n "$login_name" && "$variant" != "local" ]]; then
+        printf '%s\n' "--login is only available with the local variant."
         exit 1
     fi
 }
@@ -119,9 +131,20 @@ build_variant() {
     fi
 }
 
+launch_extras() {
+    if [[ -n "$login_name" ]]; then
+        printf '%s\n' "--es" "dev_login_username" "$login_name"
+    fi
+}
+
 install_and_launch() {
+    local -a extras
+    mapfile -t extras < <(launch_extras)
     "$adb_binary" install -r "$(apk_path)"
-    "$adb_binary" shell am start -n "$(application_id)/$main_activity"
+    if [[ -n "$login_name" ]]; then
+        "$adb_binary" shell am force-stop "$(application_id)"
+    fi
+    "$adb_binary" shell am start -n "$(application_id)/$main_activity" "${extras[@]}"
 }
 
 parse_arguments "$@"

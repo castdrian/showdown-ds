@@ -16,6 +16,10 @@ object ShowdownBattleRecovery {
         else -> Mode.SPECTATOR
     }
 
+    /** Debuggable builds never reopen a battle from a previous run; they offer it for resuming instead. */
+    fun restoredActiveRoomId(persisted: String?, debuggableBuild: Boolean): String? =
+        persisted.takeUnless { debuggableBuild }
+
     fun pendingDecisionCommand(mode: Mode, command: String?): String? = command.takeUnless {
         mode == Mode.GUEST_SPECTATOR
     }

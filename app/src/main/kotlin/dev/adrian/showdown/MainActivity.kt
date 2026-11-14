@@ -138,6 +138,9 @@ class MainActivity : Activity() {
     private var authenticated = false
     private var serverUserNamed = false
     private var activeBattleRoomId: String? = null
+    private val unfinishedBattles = ShowdownUnfinishedBattles()
+    private var unfinishedBattlesPromptShown = false
+    private var devLoginUsername: String? = null
     private var battleWasRegistered = false
     private var battleWasParticipant = false
     private var battleIsSpectator = false
@@ -342,6 +345,7 @@ class MainActivity : Activity() {
                 BattleSession.ClientAction.CHOOSE_FORMAT -> showFormatPicker()
                 BattleSession.ClientAction.OPEN_CHAT -> showChatComposer()
                 BattleSession.ClientAction.FORFEIT -> confirmForfeit()
+                BattleSession.ClientAction.RESUME_BATTLE -> showUnfinishedBattles()
                 BattleSession.ClientAction.LEAVE_BATTLE -> leaveBattle()
                 BattleSession.ClientAction.CHALLENGE_PLAYER -> showChallengeComposer()
                 BattleSession.ClientAction.EXPORT_REPLAY -> showReplayActions()
@@ -385,6 +389,7 @@ class MainActivity : Activity() {
         } ?: true
         serverEndpoint = loadServerEndpoint()
         credentialsStore = ShowdownCredentialsStore(this)
+        devLoginUsername = loadDevLoginUsername()
         sessionStore = ShowdownSessionStore(this)
         loginClient = ShowdownLoginClient(
             initialCookies = sessionStore.load(),
@@ -2671,7 +2676,10 @@ class MainActivity : Activity() {
         activeSearchFormat = (savedInstanceState?.getString("active_search_format") ?: preferences.getString("active_search_format", null))
             ?.let { ShowdownFormatCompatibility.canonicalId(it) }
         session.setBattleSearchActive(pendingSearch || activeSearchFormat != null)
-        activeBattleRoomId = savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null)
+        activeBattleRoomId = ShowdownBattleRecovery.restoredActiveRoomId(
+            savedInstanceState?.getString("active_battle_room") ?: preferences.getString("active_battle_room", null),
+            debuggableBuild = BuildConfig.DEBUG
+        )
         val hasSavedBattleIdentity = savedInstanceState?.containsKey("battle_participant") == true || preferences.contains("battle_participant")
         battleWasRegistered = if (savedInstanceState?.containsKey("battle_registered") == true) {
             savedInstanceState.getBoolean("battle_registered")
@@ -2832,6 +2840,9 @@ class MainActivity : Activity() {
         sessionRestorePending = loginClient.hasSession() && credentialsStore.load() == null
         registrationInFlight = false
         previousConnection?.close()
+        unfinishedBattles.onConnectionReset()
+        unfinishedBattlesPromptShown = false
+        publishUnfinishedBattleCount()
         lateinit var connection: ShowdownConnection
         connection = ShowdownConnection(serverEndpoint, object : ShowdownConnection.Listener {
             override fun onConnectionStateChanged(state: ShowdownConnection.State, detail: String) {
@@ -2907,6 +2918,7 @@ class MainActivity : Activity() {
                     lines.mapNotNull(ShowdownAuthentication::userUpdate).firstOrNull()?.let { update ->
                         session.setLocalUsername(update.username)
                         serverUserNamed = update.named
+                        if (update.named) unfinishedBattles.onNamedLogin()
                         val hasPendingLobbyWork = pendingSearch ||
                             activeSearchFormat != null ||
                             activeBattleRoomId != null ||
@@ -2928,6 +2940,7 @@ class MainActivity : Activity() {
                     }
                     lines.mapNotNull(ShowdownAuthentication::challenge).firstOrNull()?.let { challenge ->
                         latestChallenge = challenge
+                        devLoginUsername?.let { connection.sendGlobal(ShowdownDevLogin.renameCommand(it)) }
                         pendingRegistration?.takeUnless { registrationInFlight }?.let { registration ->
                             submitRegistration(connection, registration, challenge)
                         }
@@ -3104,10 +3117,16 @@ class MainActivity : Activity() {
                             renderLadderDialog()
                         }
                         if (lines.any { it.startsWith("|updatesearch|") }) {
+                            unfinishedBattles.onSearchUpdate(
+                                lobbyState.battles,
+                                setOfNotNull(activeBattleRoomId, pendingBattleJoinRoomId)
+                            )
+                            publishUnfinishedBattleCount(promptForNewBattles = true)
                             lobbyState.battleForReconnect(
                                 activeBattleRoomId,
                                 pendingBattleJoinRoomId,
-                                pendingBattleSearchFormat != null
+                                pendingBattleSearchFormat != null,
+                                unfinishedBattles.heldRoomIds()
                             )?.let { matchedRoomId ->
                                 joinMatchedBattle(connection, matchedRoomId)
                             }
@@ -3129,60 +3148,12 @@ class MainActivity : Activity() {
                         }
                     }
                     if (roomId?.startsWith("battle-") == true) {
-                        val noInitMessage = ShowdownLobbyState.noInitReason(lines)
-                        if (noInitMessage != null && roomId != leftBattleRoomId &&
-                            (roomId == activeBattleRoomId || roomId == pendingBattleJoinRoomId)
-                        ) {
-                            val searchFormat = pendingBattleSearchFormat
-                            val searchLabel = pendingBattleSearchLabel
-                            val searchUsesRandomTeams = pendingBattleSearchUsesRandomTeams
-                            val searchTeam = pendingBattleSearchTeamPacked
-                            reconnectHandler.removeCallbacks(battleRejoinTimeout)
-                            lobbyState.clearBattle(roomId)
-                            leftBattleRoomId = roomId
-                            clearBattleRoomState()
-                            if (searchFormat != null) {
-                                session.setConnectionStatus("That battle ended before you could join. Finding another battle…")
-                                beginBattleSearch(searchFormat, searchTeam, searchLabel, searchUsesRandomTeams)
-                            } else {
-                                session.setConnectionStatus(noInitMessage)
-                            }
+                        if (unfinishedBattles.isHeld(roomId)) {
+                            unfinishedBattles.holdPacket(roomId, lines)
+                            publishUnfinishedBattleCount(promptForNewBattles = true)
                             return@runOnUiThread
                         }
-                        val startsBattle = lines.any { it.startsWith("|init|battle") }
-                        val rejectedJoin = lines.any { it.startsWith("|noinit|") }
-                        if (rejectedJoin && pendingBattleJoinRoomId == roomId) pendingBattleJoinRoomId = null
-                        val confirmedJoin = startsBattle && pendingBattleJoinRoomId == roomId
-                        if (roomId == leftBattleRoomId) {
-                            if (!confirmedJoin) return@runOnUiThread
-                            leftBattleRoomId = null
-                        }
-                        if (confirmedJoin) {
-                            pendingBattleJoinRoomId = null
-                            pendingBattleSearchFormat = null
-                            pendingBattleSearchLabel = null
-                            pendingBattleSearchUsesRandomTeams = null
-                            pendingBattleSearchTeamPacked = null
-                        }
-                        if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
-                        activeBattleRoomId = roomId
-                        if (!battleIsSpectator) {
-                            battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)
-                        }
-                        battleProtocolPlayerSlot(lines)?.let(session::restoreBattlePlayerSlot)
-                        if (startsBattle) {
-                            rememberBattleIdentity()
-                            persistLobbyState(flushToDisk = true)
-                        }
-                        activeSearchFormat = null
-                        reconnectLobbyCommands = null
-                        if (startsBattle) battleProtocolReady = true
-                        if (startsBattle) session.setBattleSearchActive(false)
-                        session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
-                        if (battleIsSpectator) session.setSpectatorMode(true)
-                        if (!battleIsSpectator && battleWasParticipant) session.setBattleParticipant(true)
-                        reconcilePendingDecisionCommand(lines)
-                        enqueueBattlePlayback(connection, roomId, lines)
+                        applyBattleRoomPacket(connection, roomId, lines)
                     }
                     if (roomId != null && !roomId.startsWith("battle-") && !roomId.startsWith("view-friends-") && !roomId.startsWith("view-tournaments") && !roomId.startsWith("view-teams-") && (roomId != "lobby" || lines.any { it == "|init|chat" || it.startsWith("|title|") })) {
                         val changed = chatRoomState.applyProtocol(roomId, lines)
@@ -3201,8 +3172,69 @@ class MainActivity : Activity() {
         connection.connect()
     }
 
+    private fun applyBattleRoomPacket(connection: ShowdownConnection, roomId: String, lines: List<String>) {
+        val noInitMessage = ShowdownLobbyState.noInitReason(lines)
+        if (noInitMessage != null && roomId != leftBattleRoomId &&
+            (roomId == activeBattleRoomId || roomId == pendingBattleJoinRoomId)
+        ) {
+            val searchFormat = pendingBattleSearchFormat
+            val searchLabel = pendingBattleSearchLabel
+            val searchUsesRandomTeams = pendingBattleSearchUsesRandomTeams
+            val searchTeam = pendingBattleSearchTeamPacked
+            reconnectHandler.removeCallbacks(battleRejoinTimeout)
+            lobbyState.clearBattle(roomId)
+            leftBattleRoomId = roomId
+            clearBattleRoomState()
+            if (searchFormat != null) {
+                session.setConnectionStatus("That battle ended before you could join. Finding another battle…")
+                beginBattleSearch(searchFormat, searchTeam, searchLabel, searchUsesRandomTeams)
+            } else {
+                session.setConnectionStatus(noInitMessage)
+            }
+            return
+        }
+        val startsBattle = lines.any { it.startsWith("|init|battle") }
+        val rejectedJoin = lines.any { it.startsWith("|noinit|") }
+        if (rejectedJoin && pendingBattleJoinRoomId == roomId) pendingBattleJoinRoomId = null
+        val confirmedJoin = startsBattle && pendingBattleJoinRoomId == roomId
+        if (roomId == leftBattleRoomId) {
+            if (!confirmedJoin) return
+            leftBattleRoomId = null
+        }
+        if (confirmedJoin) {
+            pendingBattleJoinRoomId = null
+            pendingBattleSearchFormat = null
+            pendingBattleSearchLabel = null
+            pendingBattleSearchUsesRandomTeams = null
+            pendingBattleSearchTeamPacked = null
+        }
+        if (startsBattle) reconnectHandler.removeCallbacks(battleRejoinTimeout)
+        activeBattleRoomId = roomId
+        if (!battleIsSpectator) {
+            battleWasParticipant = battleWasParticipant || battleProtocolIdentifiesLocalPlayer(lines)
+        }
+        battleProtocolPlayerSlot(lines)?.let(session::restoreBattlePlayerSlot)
+        if (startsBattle) {
+            rememberBattleIdentity()
+            persistLobbyState(flushToDisk = true)
+        }
+        activeSearchFormat = null
+        reconnectLobbyCommands = null
+        if (startsBattle) battleProtocolReady = true
+        if (startsBattle) session.setBattleSearchActive(false)
+        session.setLiveBattleActive(activeBattleRoomId == roomId && battleProtocolReady)
+        if (battleIsSpectator) session.setSpectatorMode(true)
+        if (!battleIsSpectator && battleWasParticipant) session.setBattleParticipant(true)
+        reconcilePendingDecisionCommand(lines)
+        enqueueBattlePlayback(connection, roomId, lines)
+    }
+
     private fun joinMatchedBattle(connection: ShowdownConnection, roomId: String) {
         if (activeBattleRoomId != null || !connection.sendGlobal(ShowdownLobbyState.joinBattleCommand(roomId))) return
+        beginBattleParticipation(roomId)
+    }
+
+    private fun beginBattleParticipation(roomId: String) {
         session.prepareForLobby()
         pendingBattleJoinRoomId = roomId
         pendingBattleSearchFormat = activeSearchFormat
@@ -6349,6 +6381,68 @@ class MainActivity : Activity() {
         return normalizedFormat
     }
 
+    private fun publishUnfinishedBattleCount(promptForNewBattles: Boolean = false) {
+        val count = unfinishedBattles.entries().size
+        session.setUnfinishedBattleCount(count)
+        val shouldPrompt = promptForNewBattles && unfinishedBattles.isReadyToPresent() &&
+            activeBattleRoomId == null && !unfinishedBattlesPromptShown
+        if (!shouldPrompt) return
+        unfinishedBattlesPromptShown = true
+        showUnfinishedBattles()
+    }
+
+    private fun showUnfinishedBattles() {
+        val entries = unfinishedBattles.entries()
+        when {
+            entries.isEmpty() -> session.setConnectionStatus(ShowdownUnfinishedBattlePresentation.NONE_STATUS)
+            entries.size == 1 -> showUnfinishedBattleActions(entries.single())
+            else -> ShowdownDialogBuilder(this)
+                .setTitle(ShowdownUnfinishedBattlePresentation.LIST_TITLE)
+                .setItems(entries.map(ShowdownUnfinishedBattlePresentation::label).toTypedArray()) { _, index ->
+                    showUnfinishedBattleActions(entries[index])
+                }
+                .setNegativeButton(ShowdownUnfinishedBattlePresentation.LATER_BUTTON, null)
+                .show()
+        }
+    }
+
+    private fun showUnfinishedBattleActions(entry: ShowdownUnfinishedBattles.Entry) {
+        ShowdownDialogBuilder(this)
+            .setTitle(ShowdownUnfinishedBattlePresentation.ACTIONS_TITLE)
+            .setMessage(ShowdownUnfinishedBattlePresentation.actionsMessage(entry))
+            .setPositiveButton(ShowdownUnfinishedBattlePresentation.RESUME_BUTTON) { _, _ -> resumeUnfinishedBattle(entry.roomId) }
+            .setNeutralButton(ShowdownUnfinishedBattlePresentation.FORFEIT_BUTTON) { _, _ -> confirmForfeitUnfinishedBattle(entry) }
+            .setNegativeButton(ShowdownUnfinishedBattlePresentation.LATER_BUTTON, null)
+            .show()
+    }
+
+    private fun resumeUnfinishedBattle(roomId: String) {
+        val connection = showdownConnection
+        if (connection == null || !unfinishedBattles.isHeld(roomId)) {
+            session.setConnectionStatus(ShowdownUnfinishedBattlePresentation.RESUME_UNAVAILABLE_STATUS)
+            return
+        }
+        val packets = unfinishedBattles.release(roomId)
+        publishUnfinishedBattleCount()
+        beginBattleParticipation(roomId)
+        packets.forEach { applyBattleRoomPacket(connection, roomId, it) }
+    }
+
+    private fun confirmForfeitUnfinishedBattle(entry: ShowdownUnfinishedBattles.Entry) {
+        ShowdownDialogBuilder(this)
+            .setTitle(ShowdownUnfinishedBattlePresentation.FORFEIT_CONFIRM_TITLE)
+            .setMessage(ShowdownUnfinishedBattlePresentation.label(entry))
+            .setNegativeButton(ShowdownUnfinishedBattlePresentation.CANCEL_BUTTON, null)
+            .setPositiveButton(ShowdownUnfinishedBattlePresentation.FORFEIT_BUTTON) { _, _ ->
+                val sent = showdownConnection?.send(entry.roomId, "/forfeit") == true
+                session.setConnectionStatus(
+                    if (sent) ShowdownUnfinishedBattlePresentation.FORFEIT_REQUESTED_STATUS
+                    else ShowdownUnfinishedBattlePresentation.FORFEIT_FAILED_STATUS
+                )
+            }
+            .show()
+    }
+
     private fun confirmForfeit() {
         val roomId = activeBattleRoomId
         if (roomId == null) {
@@ -6409,6 +6503,13 @@ class MainActivity : Activity() {
         } else {
             session.setConnectionStatus("Unable to cancel your last choice.")
         }
+    }
+
+    private fun loadDevLoginUsername(): String? {
+        val preferences = getSharedPreferences(DEV_LOGIN_PREFERENCES, MODE_PRIVATE)
+        ShowdownDevLogin.usernameFrom(intent?.getStringExtra(ShowdownDevLogin.EXTRA_USERNAME), BuildConfig.USE_LOCAL_SERVER)
+            ?.let { preferences.edit().putString(DEV_LOGIN_USERNAME_KEY, it).apply() }
+        return ShowdownDevLogin.usernameFrom(preferences.getString(DEV_LOGIN_USERNAME_KEY, null), BuildConfig.USE_LOCAL_SERVER)
     }
 
     private fun loadServerEndpoint(): ShowdownServerEndpoint {
@@ -6636,6 +6737,8 @@ class MainActivity : Activity() {
     companion object {
         const val BATTLE_REJOIN_TIMEOUT_MILLIS = 15_000L
         const val SESSION_RESTORE_TIMEOUT_MILLIS = 5_000L
+        private const val DEV_LOGIN_PREFERENCES = "showdown_dev"
+        private const val DEV_LOGIN_USERNAME_KEY = "login"
         const val DEFAULT_BATTLE_SPEED = 0.75f
         private val TEAM_STAT_NAMES = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
     }

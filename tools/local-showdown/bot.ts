@@ -97,12 +97,18 @@ class Bot {
     if (line.startsWith("|challstr|")) this.send("", `/trn ${this.options.name},0,`);
     else if (line.startsWith(`|updateuser| ${this.options.name}|`)) this.onLoggedIn();
     else if (line.startsWith("|pm|")) this.onPrivateMessage(line);
+    else if (line.startsWith("|popup|") || line.startsWith("|nametaken|") || line.startsWith("|error|")) {
+      log("warning", `server said: ${line}`);
+    }
     else if (roomId.startsWith("battle-")) this.onBattleLine(roomId, line);
   }
 
   private onLoggedIn(): void {
     log("info", `logged in as ${this.options.name} (mode ${this.options.mode})`);
-    if (this.options.mode === "search") this.send("", `/search ${this.options.format}`);
+    if (this.options.mode === "search") {
+      this.send("", "/utm null");
+      this.send("", `/search ${this.options.format}`);
+    }
     if (this.options.mode === "challenge") {
       this.send("", `/challenge ${this.options.target}, ${this.options.format}`);
     }

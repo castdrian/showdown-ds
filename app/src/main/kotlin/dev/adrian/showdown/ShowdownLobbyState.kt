@@ -58,10 +58,15 @@ class ShowdownLobbyState {
 
     fun firstNewBattle(previousRoomIds: Set<String>): String? = battles.keys.firstOrNull { it !in previousRoomIds }
 
-    fun battleForReconnect(activeRoomId: String?, pendingRoomId: String?, allowPendingJoinRecovery: Boolean = false): String? {
+    fun battleForReconnect(
+        activeRoomId: String?,
+        pendingRoomId: String?,
+        allowPendingJoinRecovery: Boolean = false,
+        excludedRoomIds: Set<String> = emptySet()
+    ): String? {
         if (activeRoomId != null) return null
         if (pendingRoomId != null && !allowPendingJoinRecovery) return null
-        return battles.keys.firstOrNull()
+        return battles.keys.firstOrNull { it !in excludedRoomIds }
     }
 
     fun applyProtocol(lines: List<String>) {

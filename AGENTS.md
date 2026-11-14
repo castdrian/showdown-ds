@@ -11,14 +11,15 @@ Native Android Pokémon Showdown client for the AYN Thor dual-screen handheld (K
 | JVM unit tests only | `./gradlew :app:testDebugUnitTest` |
 | Emulator + install + launch | `./emulate.sh` (default `local` variant) |
 | Local Showdown server | `./scripts/local-showdown.sh` (port 8000, guest logins) |
-| Bot opponent | `node tools/local-showdown/bot.ts --mode search` (Node 22.18+) |
+| Bot opponent | `node tools/local-showdown/bot.ts --mode search` (Node 22.18+; `--stall-after-turn N` leaves a battle unfinished) |
+| Named dev user | `./emulate.sh --login LocalUser` (local variant only) |
 
 Needs JDK 17, the Android SDK (`./scripts/setup-android.sh`) and, for the Go tooling tests, Go 1.24.
 
 ## Build variants
 
 - `debug` (`dev.adrian.showdown.debug`): talks to the official server by default and keeps the developer's saved login.
-- `local` (`dev.adrian.showdown.local`): own app id and data; defaults to the local server at `ws://10.0.2.2:8000`. Use this for all automated and agent testing.
+- `local` (`dev.adrian.showdown.local`): own app id and data; defaults to the local server at `ws://10.0.2.2:8000`. Use this for all automated and agent testing. Driving the lower screen over adb: `adb shell input -d 2 tap X Y` (display 2), after tapping it once so it holds focus for `uiautomator dump`.
 - `release`: signed from `SHOWDOWN_*` environment variables.
 
 ## Rules for agents
