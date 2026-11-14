@@ -337,13 +337,15 @@ class MainActivityLifecycleContractTest {
 
 
     @Test
-    fun releasesTheAnimationWebViewAfterFinishedPlaybackDrains() {
+    fun keepsTheFinishedBattleSceneVisibleUntilTheBattleRoomIsCleared() {
         val source = File("src/main/kotlin/dev/adrian/showdown/MainActivity.kt").readText()
-        val playback = source.substringAfter("private fun advanceBattlePlayback()").substringBefore("private fun scheduleBattlePlayback")
+        val playback = source.substringAfter("private fun advanceBattlePlayback()")
+            .substringBefore("private fun restartShowdownMoveEffectsFromProtocolHistory")
+        val clearRoom = source.substringAfter("private fun clearBattleRoomState()").substringBefore("session.prepareForLobby()")
 
-        assertTrue(playback.contains("pendingBattlePackets.isEmpty()"))
-        assertTrue(playback.contains("session.isBattleFinished()"))
-        assertTrue(playback.contains("releaseShowdownMoveEffects()"))
+        assertFalse(playback.contains("releaseShowdownMoveEffects()"))
+        assertFalse(playback.contains("session.isBattleFinished()"))
+        assertTrue(clearRoom.contains("releaseShowdownMoveEffects()"))
         assertTrue(source.contains("primaryFrame?.removeView(effects)"))
         assertTrue(source.contains("effects.release()"))
     }

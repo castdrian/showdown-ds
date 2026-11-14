@@ -976,9 +976,6 @@ class MainActivity : Activity() {
             }
         }
         flushBattlePlayback()
-        if (!battlePacketPlaybackScheduled && pendingBattlePackets.isEmpty() && session.isBattleFinished()) {
-            releaseShowdownMoveEffects()
-        }
     }
 
     private fun restartShowdownMoveEffectsFromProtocolHistory(token: Long) {
@@ -2640,6 +2637,7 @@ class MainActivity : Activity() {
         pendingLobbyChatOpen = false
         clearPersistedLobbyState()
         clearBattlePlayback()
+        releaseShowdownMoveEffects()
         session.prepareForLobby()
     }
 
