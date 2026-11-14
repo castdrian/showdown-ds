@@ -251,41 +251,49 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
             if (executor.isShutdown) return@requestPokedex
             resourceCache.requestAbilities { abilitiesFile ->
                 if (executor.isShutdown) return@requestAbilities
-                resourceCache.requestBattleGenerationOverrides { generationOverridesContents ->
-                    if (executor.isShutdown) return@requestBattleGenerationOverrides
-                    executor.execute {
-                        val pokemonContents = pokedexFile?.readText().orEmpty()
-                        val abilityContents = abilitiesFile?.readText().orEmpty()
-                        val loadedPokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents)
-                        val loadedPokemonBaseStats = parsePokemonBaseStats(pokemonContents)
-                        val loadedGenerationOverrides = parseGenerationSpeciesOverrides(generationOverridesContents.orEmpty())
-                        val loadedAbilityNames = parseScriptNames(abilityContents)
-                        mainHandler.post {
-                            if (executor.isShutdown) return@post
-                            battleDetailsLoading = false
-                            pokemonAbilitySlots.putAll(loadedPokemonAbilitySlots)
-                            pokemonBaseStats.putAll(loadedPokemonBaseStats)
-                            generationSpeciesOverrides.putAll(loadedGenerationOverrides)
-                            battleDetailsLoaded = hasBattleDetailData(
-                                loadedPokemonAbilitySlots,
-                                loadedPokemonBaseStats,
-                                loadedGenerationOverrides
+                resourceCache.requestItems { itemsFile ->
+                    if (executor.isShutdown) return@requestItems
+                    resourceCache.requestBattleGenerationOverrides { generationOverridesContents ->
+                        if (executor.isShutdown) return@requestBattleGenerationOverrides
+                        executor.execute {
+                            val tables = parseBattleDetailTables(
+                                pokedexFile?.readText().orEmpty(),
+                                abilitiesFile?.readText().orEmpty(),
+                                itemsFile?.readText().orEmpty(),
+                                generationOverridesContents.orEmpty()
                             )
-                            abilityNames.clear()
-                            abilityNames += loadedAbilityNames
-                            val callbacks = battleDetailsListeners.toList()
-                            if (battleDetailsLoaded) {
-                                battleDetailsListeners.clear()
-                                battleDetailsRetryScheduled = false
-                                mainHandler.removeCallbacks(battleDetailsRetry)
-                            }
-                            callbacks.forEach { it() }
-                            if (!battleDetailsLoaded) scheduleBattleDetailsRetry()
+                            mainHandler.post { applyBattleDetailTables(tables) }
                         }
                     }
                 }
             }
         }
+    }
+
+    private fun applyBattleDetailTables(tables: BattleDetailTables) {
+        if (executor.isShutdown) return
+        battleDetailsLoading = false
+        pokemonAbilitySlots.putAll(tables.pokemonAbilitySlots)
+        pokemonBaseStats.putAll(tables.pokemonBaseStats)
+        pokemonTypes.putAll(tables.pokemonTypes)
+        generationSpeciesOverrides.putAll(tables.generationOverrides)
+        battleDetailsLoaded = hasBattleDetailData(
+            tables.pokemonAbilitySlots,
+            tables.pokemonBaseStats,
+            tables.generationOverrides
+        )
+        abilityNames.clear()
+        abilityNames += tables.abilityNames
+        itemNames.clear()
+        itemNames += tables.itemNames
+        val callbacks = battleDetailsListeners.toList()
+        if (battleDetailsLoaded) {
+            battleDetailsListeners.clear()
+            battleDetailsRetryScheduled = false
+            mainHandler.removeCallbacks(battleDetailsRetry)
+        }
+        callbacks.forEach { it() }
+        if (!battleDetailsLoaded) scheduleBattleDetailsRetry()
     }
 
     private val battleDetailsRetry = Runnable {
@@ -371,7 +379,31 @@ class ShowdownMoveDex(private val resourceCache: ShowdownSpriteCache) : AutoClos
         }
     }
 
+    /** Everything a battle needs from the Showdown data files to describe Pokémon. */
+    internal data class BattleDetailTables(
+        val pokemonTypes: Map<String, List<String>>,
+        val pokemonAbilitySlots: Map<String, Map<String, String>>,
+        val pokemonBaseStats: Map<String, ShowdownStatPresentation.BaseStats>,
+        val generationOverrides: Map<String, Map<String, BattleSpeciesOverride>>,
+        val abilityNames: List<String>,
+        val itemNames: List<String>
+    )
+
     companion object {
+        internal fun parseBattleDetailTables(
+            pokemonContents: String,
+            abilityContents: String,
+            itemContents: String,
+            generationOverridesContents: String
+        ) = BattleDetailTables(
+            pokemonTypes = parsePokemonTypes(pokemonContents),
+            pokemonAbilitySlots = parsePokemonAbilitySlots(pokemonContents),
+            pokemonBaseStats = parsePokemonBaseStats(pokemonContents),
+            generationOverrides = parseGenerationSpeciesOverrides(generationOverridesContents),
+            abilityNames = parseScriptNames(abilityContents),
+            itemNames = parseScriptNames(itemContents)
+        )
+
         private fun hasBattleDetailData(
             abilitySlots: Map<String, Map<String, String>>,
             baseStats: Map<String, ShowdownStatPresentation.BaseStats>,

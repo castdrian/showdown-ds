@@ -2,6 +2,13 @@
 
 Newest first.
 
+## Step 4: Pokémon-tab cards
+
+- Found and fixed a data bug: species types and item display names were only loaded by `ShowdownMoveDex.load()` (the team editor) and `loadTeamCoverageData()`, never by the battle path (`loadBattleDetails`), so in a battle the Pokémon tab showed no type chips and raw item ids. `loadBattleDetails` now also parses species types and item names from the files it already fetches (`ShowdownMoveDex.parseBattleDetailTables`, `applyBattleDetailTables`).
+- Cards on the lower-screen Pokémon tab (both teams) now show the held item next to level and gender, the active Pokémon's stat boosts, and a major status condition in the state chip (`TeamCardDetailsPresenter`; `BattleSession.activeBoostsFor`). Unknown items are omitted.
+- Verified on the emulator (lower display captured with `adb emu screenrecord screenshot --display 1`): type chips, proper item names and HP for your team and the opponent's revealed Pokémon. Boosts and status text are covered by unit tests only.
+- Tests: `ShowdownBattleDetailTablesTest`, `TeamCardDetailsPresenterTest`, `BattleSessionActiveBoostsTest`.
+
 ## Step 3: WebView-core top screen
 
 - 3a: the Showdown client WebView is the permanent battle scene (opaque, full chrome). Its page moved from an 780-line Kotlin string to `assets/showdown-battle-scene.html` rendered by `ShowdownBattleSceneDocument` (placeholders for playback speed bounds, perspective guard, debug flag); chrome-hiding JS removed. Lightweight (no-WebView) playback and `BattlePlaybackPolicy` removed; a missing WebView reports a clear status.

@@ -1216,6 +1216,15 @@ class BattleSession {
         emptyMap()
     }
 
+    /** Current stat stages of the on-field Pokémon of a side that is called [pokemon]; empty if it is benched or unboosted. */
+    fun activeBoostsFor(player: Boolean, pokemon: String): Map<String, Int> {
+        val active = if (player) playerActiveCombatants() else opponentActiveCombatants()
+        val combatant = active.firstOrNull { it.name.equals(pokemon, true) || it.species.equals(pokemon, true) }
+            ?: return emptyMap()
+        val boostsBySlot = if (player) playerBoostsBySlot else opponentBoostsBySlot
+        return boostsBySlot[combatant.slot].orEmpty().toMap()
+    }
+
     fun playerActiveCombatants(): List<ActiveCombatant> {
         if (playerActiveCombatantsViewDirty) {
             playerActiveCombatantsView = playerActiveCombatants.values.sortedBy { it.slot }

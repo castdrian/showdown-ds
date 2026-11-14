@@ -2347,7 +2347,7 @@ class CommandDeckView(
             canvas.clipRect(content.header.left, content.header.top, content.header.right, content.header.top + nameSlotHeight)
             canvas.drawText(name, content.header.left, centeredTextBaseline(content.header.top + nameSlotHeight / 2f), paint)
             canvas.restore()
-            val level = "Lv. ${details.level}${details.gender.ifBlank { "" }}"
+            val level = TeamCardDetailsPresenter.subtitle(details, session.activeBoostsFor(!opponentTeamVisible, pokemon))
             val levelArea = RectF(
                 content.header.left,
                 content.header.top + nameSlotHeight,
@@ -2389,7 +2389,7 @@ class CommandDeckView(
                 canvas.restore()
                 paint.textAlign = Paint.Align.LEFT
             }
-            val state = member.status
+            val state = TeamCardDetailsPresenter.stateLabel(member.status, details)
             val stateBounds = RectF(rowBounds.statusLeft, bottomRow.top, rowBounds.right, bottomRow.bottom)
             paint.color = if (details.condition.contains("FNT", true)) Color.rgb(95, 31, 66) else Color.rgb(12, 69, 82)
             canvas.drawRoundRect(stateBounds, 14f * scale, 14f * scale, paint)
